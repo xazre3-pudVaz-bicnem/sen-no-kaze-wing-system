@@ -4,13 +4,23 @@ import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import { createQuoteRevisionV25Action, fetchQuoteV25UnitsAction, type QuoteV25ActionState } from '@/lib/actions/quote-v25';
 import type { QuoteV25EditContext, QuoteV25RevisionLine } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
+import { pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import { computeQuoteV25Totals, quoteV25RowAmount, type QuoteV25Row, type QuoteV25Section } from '@/lib/domain/quote-v25';
-import { POR_FACE_REMARK_PREFIX, POR_REMARKS, porSelectionUnavailableReason, type QuoteLineState, type QuotePorSelectionState } from '@/lib/domain/quote-por';
-import type { Quote, QuoteItem } from '@/lib/domain/types';
+import {
+  findUnresolvedLines,
+  isPorMarkedLine,
+  LINE_STATE_KINDS,
+  POR_DESCRIPTION,
+  porSelectionUnavailableReason,
+  type QuoteLineCheckLine,
+  type QuoteLineState,
+  type QuotePorSelectionState,
+} from '@/lib/domain/quote-por';
+import type { OptionVariantChoice, OptionVariantGroup, Quote, QuoteItem } from '@/lib/domain/types';
 import { Alert, Badge, Button, Input, Select, Textarea } from '@/components/ui';
 import { QuotePorReview, type QuotePorReviewPatch, type QuotePorReviewRow } from './quote-por-review';
 
-/** 商品台帳の商品（固定した版の売価つき。原価は渡さない） */
+/** 商品台帳の商品（固定した版の売価つき。原価・旧来の追加金額は渡さない） */
 export interface QuoteV25Product {
   id: string;
   name: string;
@@ -18,7 +28,9 @@ export interface QuoteV25Product {
   section: 'interior_exterior' | 'option' | 'sitework';
   manufacturer: string;
   modelNo: string;
-  groups: { id: string; name: string; required: boolean; choices: { id: string; name: string }[] }[];
+  /** この商品の公開中の選択項目・選択肢（表示条件の判定に使う。選択肢の追加金額は 0 にして渡す） */
+  variantGroups: OptionVariantGroup[];
+  variantChoices: OptionVariantChoice[];
   defaultChoiceIds: string[];
   /** 標準の選択肢での売価単価（価格未確定は null） */
   defaultUnit: number | null;
@@ -35,13 +47,17 @@ type Row =
       kind: QuoteItem['kind'];
       name: string;
       description: string;
+      remark: string;
+      optionId: string | null;
       unit: string;
       parentUnitPrice: number;
       parentQuantity: number;
       parentAmount: number;
       quantity: string;
-      /** 前の版で別途見積（価格未確定）の行。担当者が売価を入れられる */
+      /** 前の版で別途見積（価格未確定）の行。担当者が売価を入れられる（集約の行を除く） */
       por: boolean;
+      /** 第 1 版の「価格未確定の商品」（選んだ商品の集約の行）。金額は入れず、扱いを決めるか外す */
+      aggregate: boolean;
       price: string;
       state: QuoteLineState | null;
       stateReason: string;
@@ -78,9 +94,12 @@ const SECTIONS: { code: QuoteV25Section; label: string }[] = [
   { code: 'sitework', label: '別途工事' },
 ];
 const EXPENSE_KINDS = new Set(['base_expense', 'interior_exterior_expense', 'option_expense']);
-const STATE_KINDS = new Set(['interior_exterior', 'option', 'installation', 'free']);
 const QUANTITY = /^\d+(\.\d{1,4})?$/;
 const PRICE = /^\d{1,9}$/;
+/** 別途見積の行に入れる売価（1 円以上。0 円にするときは「0円確定」） */
+const POR_PRICE = /^[1-9]\d{0,8}$/;
+
+const validQuantity = (value: string) => QUANTITY.test(value.trim()) && Number(value) > 0 && Number(value) <= 99999;
 
 function sectionOfKind(kind: QuoteItem['kind']): QuoteV25Section {
   if (kind === 'base') return 'base';
@@ -89,15 +108,8 @@ function sectionOfKind(kind: QuoteItem['kind']): QuoteV25Section {
   return 'sitework';
 }
 
-/** 別途見積（価格未確定）の目印のある 0 円の行（DB の quote_line_por_marked と同じ目印） */
-function isPorItem(item: QuoteItem): boolean {
-  if (item.unit_price !== 0) return false;
-  const remark = (item.remark ?? '').trim();
-  return (
-    (item.description ?? '').trim() === '設置場所確認後に別途お見積り' ||
-    (POR_REMARKS as readonly string[]).includes(remark) ||
-    remark.startsWith(POR_FACE_REMARK_PREFIX)
-  );
+function kindOfSection(section: QuoteV25Section): QuoteItem['kind'] {
+  return section === 'sitework' ? 'installation' : section;
 }
 
 let seq = 0;
@@ -106,7 +118,7 @@ const newKey = (prefix: string) => `${prefix}-${(seq += 1)}`;
 /**
  * v2.5 の標準見積から作った見積の第 2 版以降の編集画面（v2.5 PR-D1）。金額はサーバー（DB）が作り、ここは試算して見せるだけ：
  * 前の版の行は前の版の単価のまま（別途見積の行だけ売価を入れられる）、商品台帳の商品は固定した版の v2.5 の売価、自由明細は担当者の売価。
- * 経費・税はサーバーが計算する（千円未満の切り捨てはしない）
+ * 経費・税はサーバーが計算する（千円未満の切り捨てはしない）。金額未確定の判定は DB と同じ決まり（findUnresolvedLines）
  */
 export function QuoteV25RevisionForm({
   quote,
@@ -129,27 +141,33 @@ export function QuoteV25RevisionForm({
     items
       .filter((item) => !EXPENSE_KINDS.has(item.kind))
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((item) => ({
-        key: `parent-${item.id}`,
-        source: 'parent' as const,
-        itemId: item.id,
-        section: sectionOfKind(item.kind),
-        kind: item.kind,
-        name: item.name,
-        description: item.description ?? '',
-        unit: item.unit ?? '式',
-        parentUnitPrice: item.unit_price,
-        parentQuantity: item.quantity,
-        parentAmount: item.amount,
-        quantity: String(item.quantity),
-        por: isPorItem(item),
-        price: '',
-        state: null,
-        stateReason: '',
-        // 本体の行は総代理店・本部だけが変えられる（代理店の発行では、サーバーが前の版の本体をそのまま写す）
-        locked: item.kind === 'base' && !canEditBase,
-        isDelta: item.name.trim() === '選択商品の変更差額',
-      }))
+      .map((item) => {
+        const por = item.unit_price === 0 && isPorMarkedLine(item);
+        return {
+          key: `parent-${item.id}`,
+          source: 'parent' as const,
+          itemId: item.id,
+          section: sectionOfKind(item.kind),
+          kind: item.kind,
+          name: item.name,
+          description: item.description ?? '',
+          remark: item.remark ?? '',
+          optionId: item.option_id ?? null,
+          unit: item.unit ?? '式',
+          parentUnitPrice: item.unit_price,
+          parentQuantity: item.quantity,
+          parentAmount: item.amount,
+          quantity: String(item.quantity),
+          por,
+          aggregate: por && (item.description ?? '').includes('合計に含めていません'),
+          price: '',
+          state: null,
+          stateReason: '',
+          // 本体の行は総代理店・本部だけが変えられる（代理店の発行では、サーバーが前の版の本体をそのまま写す）
+          locked: item.kind === 'base' && !canEditBase,
+          isDelta: item.name.trim() === '選択商品の変更差額',
+        };
+      })
   );
   const [adjustment, setAdjustment] = useState(String(quote.adjustment));
   const [adjustmentReason, setAdjustmentReason] = useState(quote.adjustment_reason ?? context.standardAdjustmentReason ?? '');
@@ -193,36 +211,84 @@ export function QuoteV25RevisionForm({
     });
   }, [quote.id, rows]);
 
+  const porPriced = (row: Extract<Row, { source: 'parent' }>) => row.por && !row.aggregate && !row.state && POR_PRICE.test(row.price.trim());
   const adjustmentValue = /^-?\d{1,9}$/.test(adjustment.trim()) ? Number(adjustment.trim()) : null;
   const moneyRows: QuoteV25Row[] = rows.map((row) => {
+    const quantity = validQuantity(row.quantity) ? row.quantity.trim() : '0';
     if (row.source === 'parent') {
-      const priced = row.por && !row.state && PRICE.test(row.price.trim());
+      const priced = porPriced(row);
       const unitPrice = row.por && !row.state ? (priced ? Number(row.price.trim()) : null) : row.parentUnitPrice;
-      const unchanged = !row.state && !priced && QUANTITY.test(row.quantity) && Number(row.quantity) === row.parentQuantity;
-      return { section: row.section, unitPrice, quantity: QUANTITY.test(row.quantity) ? row.quantity : '0', state: row.state, unchangedAmount: unchanged ? row.parentAmount : undefined };
+      const unchanged = !row.state && !priced && validQuantity(row.quantity) && Number(row.quantity) === row.parentQuantity;
+      return { section: row.section, unitPrice, quantity, state: row.state, unchangedAmount: unchanged ? row.parentAmount : undefined };
     }
-    if (row.source === 'catalog') {
-      return { section: row.section, unitPrice: row.unit ?? null, quantity: QUANTITY.test(row.quantity) ? row.quantity : '0', state: null };
-    }
+    if (row.source === 'catalog') return { section: row.section, unitPrice: row.unit ?? null, quantity, state: null };
     const price = PRICE.test(row.price.trim()) ? Number(row.price.trim()) : null;
-    // 新しく足した 0 円の行は、状態（0円確定・対象外）を選ばない限り未確定（#529 と同じ）
-    return { section: row.section, unitPrice: price === 0 ? null : price, quantity: QUANTITY.test(row.quantity) ? row.quantity : '0', state: row.state };
+    return { section: row.section, unitPrice: price, quantity, state: row.state };
   });
   const totals = computeQuoteV25Totals(moneyRows, context.money, adjustmentValue ?? 0);
 
+  // 金額未確定の判定は DB（assert_quote_lines_resolved）と同じ決まり：発行する版の明細の形にして、前の版の明細と照らす
+  const issuedLines: (QuoteLineCheckLine & { rowKey: string })[] = rows.map((row) => {
+    if (row.source === 'parent') {
+      const priced = porPriced(row);
+      return {
+        rowKey: row.key,
+        kind: row.kind,
+        name: row.name,
+        description: priced && row.description.trim() === POR_DESCRIPTION ? null : row.description,
+        remark: priced ? null : row.remark,
+        unit_price: row.state ? 0 : priced ? Number(row.price.trim()) : row.parentUnitPrice,
+        option_id: row.optionId,
+        line_state: row.state,
+      };
+    }
+    if (row.source === 'catalog') {
+      const product = productById.get(row.productId);
+      return { rowKey: row.key, kind: kindOfSection(row.section), name: product?.name ?? '', description: product?.categoryName ?? null, remark: null, unit_price: row.unit ?? 0, option_id: row.productId, line_state: null };
+    }
+    return {
+      rowKey: row.key,
+      kind: kindOfSection(row.section),
+      name: row.name.trim(),
+      description: null,
+      remark: row.remark,
+      unit_price: row.state ? 0 : PRICE.test(row.price.trim()) ? Number(row.price.trim()) : 0,
+      line_state: row.state,
+    };
+  });
+  const unresolvedLines = findUnresolvedLines(issuedLines, { parentLines: items });
+  const unresolvedKeys = new Set([...unresolvedLines].map((line) => line.rowKey));
+
   const problems: string[] = [];
-  if (rows.some((row) => row.source !== 'catalog' && row.quantity.trim() !== '' && !QUANTITY.test(row.quantity.trim()))) {
-    problems.push('数量は 0 より大きい数（小数 4 桁まで）で入力してください');
-  }
+  if (rows.some((row) => !validQuantity(row.quantity))) problems.push('数量は 0 より大きく 99999 以下の数（小数 4 桁まで）で入力してください');
   if (rows.some((row) => row.source === 'catalog' && row.unit === undefined)) problems.push('商品の売価を計算しています');
   if (rows.some((row) => row.source === 'catalog' && row.unit === null)) {
     problems.push('価格未確定の商品があります。行を外して、自由明細で金額を入れてください');
   }
+  if (
+    rows.some((row) => {
+      if (row.source !== 'catalog') return false;
+      const product = productById.get(row.productId);
+      if (!product) return false;
+      return visibleVariantGroups(product.variantGroups, product.variantChoices, row.choiceIds).some(
+        (group) =>
+          group.is_required &&
+          product.variantChoices.some((choice) => choice.group_id === group.id) &&
+          !product.variantChoices.some((choice) => choice.group_id === group.id && row.choiceIds.includes(choice.id))
+      );
+    })
+  ) {
+    problems.push('商品の必須の仕様を選んでください');
+  }
   if (rows.some((row) => row.source === 'manual' && !row.name.trim())) problems.push('自由明細の品名を入力してください');
+  if (rows.some((row) => row.source === 'manual' && !row.state && !PRICE.test(row.price.trim()))) problems.push('自由明細の売価を整数円で入力してください');
+  if (rows.some((row) => row.source === 'parent' && row.por && !row.aggregate && !row.state && row.price.trim() !== '' && !POR_PRICE.test(row.price.trim()))) {
+    problems.push('別途見積の行の売価は 1 円以上の整数で入力してください（0 円にするときは「0円確定」を選びます）');
+  }
   if (rows.some((row) => row.source !== 'catalog' && row.state === 'zero_confirmed' && !row.stateReason.trim())) {
     problems.push('「0円確定」の理由を入力してください');
   }
-  if (totals.hasUnresolved) problems.push('金額が未確定の明細があります。金額を入れるか、「0円確定」「対象外」を選ぶか、行を外してください');
+  if (unresolvedKeys.size > 0) problems.push(`金額が未確定の明細が ${unresolvedKeys.size} 行あります。金額を入れるか、「0円確定」「対象外」を選ぶか、行を外してください`);
   if (adjustmentValue === null) problems.push('調整額は整数円で入力してください');
   else if (adjustmentValue !== quote.adjustment && adjustmentValue !== 0 && !adjustmentReason.trim()) problems.push('調整額を変えるときは理由を入力してください');
   const porUnavailable = porSelectionUnavailableReason(porState);
@@ -236,8 +302,8 @@ export function QuoteV25RevisionForm({
         return {
           source: 'parent',
           parent_item_id: row.itemId,
-          quantity: Number(row.quantity) === row.parentQuantity ? null : row.quantity.trim(),
-          unit_price: row.por && !row.state && PRICE.test(row.price.trim()) ? Number(row.price.trim()) : null,
+          quantity: validQuantity(row.quantity) && Number(row.quantity) !== row.parentQuantity ? row.quantity.trim() : null,
+          unit_price: porPriced(row) ? Number(row.price.trim()) : null,
           state: row.state,
           state_reason: row.state ? row.stateReason.trim() || null : null,
         };
@@ -251,8 +317,8 @@ export function QuoteV25RevisionForm({
         name: row.name.trim(),
         unit: row.unit.trim() || null,
         quantity: row.quantity.trim(),
-        unit_price: PRICE.test(row.price.trim()) ? Number(row.price.trim()) : 0,
-        remark: row.remark.trim() || null,
+        unit_price: !row.state && PRICE.test(row.price.trim()) ? Number(row.price.trim()) : 0,
+        remark: row.state ? null : row.remark.trim() || null,
         state: row.state,
         state_reason: row.state ? row.stateReason.trim() || null : null,
       };
@@ -267,29 +333,29 @@ export function QuoteV25RevisionForm({
     por_confirmed: porConfirmed,
   });
 
-  // 金額未確定の確認の欄：前の版の別途見積の行と、新しく足した 0 円の自由明細
-  const porRows: QuotePorReviewRow[] = rows.flatMap((row, index): QuotePorReviewRow[] => {
-    if (row.source === 'parent' && row.por) {
-      return [{
-        key: row.key,
-        name: row.name,
-        sectionLabel: SECTIONS.find((section) => section.code === row.section)?.label ?? '',
-        unitPrice: PRICE.test(row.price.trim()) ? Number(row.price.trim()) : 0,
-        remark: '',
-        lineState: row.state,
-        lineStateReason: row.stateReason,
-        unresolved: moneyRows[index].unitPrice === null && !row.state,
-        editable: true,
-        lineStateSelectable: STATE_KINDS.has(row.kind),
-      }];
-    }
-    return [];
-  });
+  // 金額未確定の確認の欄：前の版の別途見積の行（集約の行は扱いだけ）
+  const porRows: QuotePorReviewRow[] = rows.flatMap((row): QuotePorReviewRow[] =>
+    row.source === 'parent' && row.por
+      ? [{
+          key: row.key,
+          name: row.name,
+          sectionLabel: SECTIONS.find((section) => section.code === row.section)?.label ?? '',
+          unitPrice: POR_PRICE.test(row.price.trim()) ? Number(row.price.trim()) : 0,
+          remark: '',
+          lineState: row.state,
+          lineStateReason: row.stateReason,
+          unresolved: unresolvedKeys.has(row.key),
+          editable: !row.aggregate,
+          lineStateSelectable: LINE_STATE_KINDS.has(row.kind),
+          note: row.aggregate ? '選んだ商品の集約の行です。商品ごとの明細を足し、この行は表で「0円確定」か「対象外」にするか外してください' : undefined,
+        }]
+      : []
+  );
   const updatePor = (key: string, patch: QuotePorReviewPatch) => {
     const target = rows.find((row) => row.key === key);
-    if (!target || target.source !== 'parent') return;
+    if (!target || target.source !== 'parent' || target.aggregate) return;
     update(key, {
-      ...(patch.unitPrice !== undefined ? { price: String(patch.unitPrice) } : {}),
+      ...(patch.unitPrice !== undefined ? { price: patch.unitPrice > 0 ? String(patch.unitPrice) : '' } : {}),
       ...(patch.lineState !== undefined ? { state: patch.lineState } : {}),
       ...(patch.lineStateReason !== undefined ? { stateReason: patch.lineStateReason } : {}),
     });
@@ -315,9 +381,10 @@ export function QuoteV25RevisionForm({
         (!query || [product.name, product.manufacturer, product.modelNo, product.categoryName].join(' ').toLocaleLowerCase('ja-JP').includes(query))
     );
   }, [picker, pickerQuery, products]);
+  const expensePercent = String(Math.round(Number(context.money.expenseRate) * 10000) / 100);
 
   const stateSelect = (row: Extract<Row, { source: 'parent' | 'manual' }>) =>
-    row.source === 'parent' && !STATE_KINDS.has(row.kind) ? null : (
+    !LINE_STATE_KINDS.has(row.source === 'parent' ? row.kind : kindOfSection(row.section)) ? null : (
       <div className="space-y-1">
         <Select value={row.state ?? ''} aria-label={`扱い：${row.name || '自由明細'}`} className="h-7 text-xs" data-testid="v25-revision-state"
           onChange={(event) => update(row.key, { state: (event.target.value || null) as QuoteLineState | null })}>
@@ -338,7 +405,7 @@ export function QuoteV25RevisionForm({
       <input type="hidden" name="payload" value={payload} />
       <Alert tone="info">
         v2.5 の標準見積（第 {context.revisionVersion} 版）で作った見積です。金額はサーバーが計算します：前の版の行は前の版の単価のまま、
-        商品台帳の商品はこの版の売価、自由明細は入力した税別の売価。経費（{Number(context.money.expenseRate) * 100}%）と消費税は自動で計算し、千円未満の切り捨てはしません。
+        商品台帳の商品はこの版の売価、自由明細は入力した税別の売価。経費（{expensePercent}%）と消費税は自動で計算し、千円未満の切り捨てはしません。
         値引きなどは調整額（理由つき）か自由明細で入れてください。
       </Alert>
       {state.error && <Alert tone="danger">{state.error}</Alert>}
@@ -360,7 +427,6 @@ export function QuoteV25RevisionForm({
           <tbody>
             {SECTIONS.map((section) => {
               const sectionRows = rows.map((row, index) => ({ row, index })).filter(({ row }) => row.section === section.code);
-              const expense = totals.expenses[section.code];
               const catalogSection = section.code === 'base' ? null : (section.code as CatalogSection);
               return [
                 <tr key={`${section.code}-head`} className="border-y border-slate-300 bg-[#eef3ef]" data-testid={`v25-revision-section-${section.code}`}>
@@ -370,7 +436,7 @@ export function QuoteV25RevisionForm({
                         {section.label}
                         <span className="ml-2 font-normal text-muted">
                           小計 {formatYen(totals.lineTotals[section.code])}
-                          {context.money.expenseSections.includes(section.code) ? `・経費 ${formatYen(expense)}` : ''}
+                          {context.money.expenseSections.includes(section.code) ? `・経費 ${formatYen(totals.expenses[section.code])}` : ''}
                         </span>
                       </span>
                       {(section.code !== 'base' || canEditBase) && (
@@ -391,14 +457,15 @@ export function QuoteV25RevisionForm({
                 </tr>,
                 ...sectionRows.map(({ row, index }) => {
                   const amount = quoteV25RowAmount(moneyRows[index]);
+                  const unresolved = unresolvedKeys.has(row.key);
                   if (row.source === 'parent') {
-                    const priceEditable = row.por && !row.state;
+                    const priceEditable = row.por && !row.aggregate && !row.state;
                     return (
                       <tr key={row.key} className="border-b border-slate-200 align-top" data-testid="v25-revision-row" data-source="parent">
                         <td className="px-2 py-1.5">
                           <span className="font-medium text-ink">{row.name}</span>
                           {row.description && <span className="block text-[0.68rem] text-muted">{row.description}</span>}
-                          {row.por && !row.state && !PRICE.test(row.price.trim()) && <Badge tone="warn">未確定</Badge>}
+                          {unresolved && <Badge tone="warn">未確定</Badge>}
                         </td>
                         <td className="px-1 py-1">
                           <Input value={row.quantity} inputMode="decimal" disabled={row.locked || row.isDelta} aria-label={`数量：${row.name}`}
@@ -425,23 +492,29 @@ export function QuoteV25RevisionForm({
                   }
                   if (row.source === 'catalog') {
                     const product = productById.get(row.productId);
+                    const groups = product ? visibleVariantGroups(product.variantGroups, product.variantChoices, row.choiceIds) : [];
                     return (
                       <tr key={row.key} className="border-b border-slate-200 bg-amber-50/40 align-top" data-testid="v25-revision-row" data-source="catalog">
                         <td className="px-2 py-1.5">
                           <span className="font-medium text-ink">{product?.name ?? '（商品が見つかりません）'}</span>
                           <span className="block text-[0.68rem] text-muted">{[product?.categoryName, product?.manufacturer, product?.modelNo].filter(Boolean).join(' ／ ')}</span>
                           <div className="mt-1 flex flex-wrap gap-1">
-                            {(product?.groups ?? []).map((group) => (
-                              <Select key={group.id} aria-label={group.name} className="h-7 w-auto text-xs"
-                                value={group.choices.find((choice) => row.choiceIds.includes(choice.id))?.id ?? ''}
-                                onChange={(event) => {
-                                  const others = row.choiceIds.filter((id) => !group.choices.some((choice) => choice.id === id));
-                                  update(row.key, { choiceIds: event.target.value ? [...others, event.target.value] : others, unit: undefined });
-                                }}>
-                                {!group.required && <option value="">{group.name}：なし</option>}
-                                {group.choices.map((choice) => <option key={choice.id} value={choice.id}>{group.name}：{choice.name}</option>)}
-                              </Select>
-                            ))}
+                            {groups.map((group) => {
+                              const choices = (product?.variantChoices ?? []).filter((choice) => choice.group_id === group.id).sort((a, b) => a.sort_order - b.sort_order);
+                              const current = choices.find((choice) => row.choiceIds.includes(choice.id))?.id ?? '';
+                              return (
+                                <Select key={group.id} aria-label={group.name} className="h-7 w-auto text-xs" value={current}
+                                  onChange={(event) => {
+                                    if (!product) return;
+                                    const others = row.choiceIds.filter((id) => !choices.some((choice) => choice.id === id));
+                                    const next = pruneHiddenVariantChoices(product.variantGroups, product.variantChoices, event.target.value ? [...others, event.target.value] : others);
+                                    update(row.key, { choiceIds: next, unit: undefined });
+                                  }}>
+                                  {(!group.is_required || !current) && <option value="">{group.is_required ? `${group.name}：選んでください` : `${group.name}：なし`}</option>}
+                                  {choices.map((choice) => <option key={choice.id} value={choice.id}>{group.name}：{choice.name}</option>)}
+                                </Select>
+                              );
+                            })}
                           </div>
                         </td>
                         <td className="px-1 py-1">
@@ -465,6 +538,7 @@ export function QuoteV25RevisionForm({
                       <td className="px-1 py-1">
                         <Input value={row.name} placeholder="品名" maxLength={120} aria-label="自由明細の品名" className="h-7 text-xs"
                           onChange={(event) => update(row.key, { name: event.target.value })} />
+                        {unresolved && <Badge tone="warn">未確定</Badge>}
                       </td>
                       <td className="px-1 py-1">
                         <Input value={row.quantity} inputMode="decimal" aria-label="自由明細の数量" className="h-7 text-right text-xs"

@@ -1148,16 +1148,16 @@ export class SupabaseStore implements DataStore {
   async getQuoteV25Units(quoteId: string, items: { option_id: string; choice_ids: string[] }[]): Promise<(number | null)[]> {
     if (items.length === 0) return [];
     const db = await this.db();
-    const out: (number | null)[] = [];
-    for (let start = 0; start < items.length; start += 300) {
-      const chunk = items.slice(start, start + 300);
-      const { data, error } = await db.rpc('get_quote_v25_units', { p_quote_id: quoteId, p_items: chunk });
+    const chunks: (typeof items)[] = [];
+    for (let start = 0; start < items.length; start += 300) chunks.push(items.slice(start, start + 300));
+    // 300 件ずつ並べて計算する（編集画面を開くときの商品の一覧の売価）
+    const results = await Promise.all(chunks.map((chunk) => db.rpc('get_quote_v25_units', { p_quote_id: quoteId, p_items: chunk })));
+    return results.flatMap(({ data, error }, chunkIndex) => {
       if (error) mapPgError(error);
       const units = (Array.isArray(data) ? data : []) as Array<number | null>;
       // 結果が足りなければ価格未確定（null）として扱う（安全側）
-      chunk.forEach((_, index) => out.push(typeof units[index] === 'number' ? units[index] : null));
-    }
-    return out;
+      return chunks[chunkIndex].map((_, index) => (typeof units[index] === 'number' ? units[index] : null));
+    });
   }
 
   async createQuoteRevisionV25(quoteId: string, input: QuoteV25RevisionInput): Promise<Quote> {

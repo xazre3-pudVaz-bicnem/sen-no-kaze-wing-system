@@ -277,7 +277,7 @@ begin
     'spec_code', v_master.spec_code,
     'expense_rate', rev.expense_rate::text,
     'expense_sections', pg_catalog.to_jsonb(rule.expense_target_sections),
-    'tax_rate', tax.tax_rate::text,
+    'tax_rate', rev.tax_rate::text,
     'standard_adjustment_reason', rev.standard_adjustment_reason
   );
 end;
@@ -395,6 +395,8 @@ declare
   v_std_cost integer;
   v_variant_versions jsonb;
   v_variant_adjustment integer;
+  v_baseline_id uuid;
+  v_pin jsonb;
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -485,6 +487,7 @@ begin
     v_parent_item := null;
     v_option := null;
     v_choices := '{}'::uuid[];
+    v_pin := null;
     if pg_catalog.jsonb_typeof(v_line) <> 'object' then
       raise exception 'VALIDATION: % 行目の形式が正しくありません', v_index using errcode = 'P0001';
     end if;
@@ -546,8 +549,12 @@ begin
         exception when invalid_text_representation or numeric_value_out_of_range then
           raise exception 'VALIDATION: % 行目の売価が正しくありません', v_index using errcode = 'P0001';
         end;
-        if v_unit < 0 or v_unit > 100000000 then
-          raise exception 'VALIDATION: % 行目の売価は 0 以上 100000000 以下の整数で入力してください', v_index using errcode = 'P0001';
+        if v_unit < 1 or v_unit > 100000000 then
+          raise exception 'VALIDATION: % 行目の売価は 1 以上 100000000 以下の整数で入力してください（0 円にするときは「0円確定」を選んでください）', v_index using errcode = 'P0001';
+        end if;
+        -- 第 1 版の「価格未確定の商品」（選んだ商品のうち価格が未確定のものの集約の行）には金額を入れない
+        if pg_catalog.strpos(coalesce(v_parent_item.description, ''), '合計に含めていません') > 0 then
+          raise exception 'VALIDATION: % 行目：「%」の行には金額を入れられません。商品ごとの明細を足し、この行は「0円確定」か「対象外」にするか外してください', v_index, v_parent_item.name using errcode = 'P0001';
         end if;
       end if;
       -- 選択商品の変更差額の行は、数量を変えない（区分の差額をそのまま写す）
@@ -610,6 +617,59 @@ begin
       ) then
         raise exception 'VALIDATION: % 行目の選択肢が正しくありません', v_index using errcode = 'P0001';
       end if;
+      -- 表示条件を満たさない選択項目の選択肢は選べない（save_configuration_atomic と同じ決まり）
+      if exists (
+        select 1
+          from unnest(v_choices) input(choice_id)
+          join public.option_variant_choices vc on vc.id = input.choice_id
+          join public.option_variant_groups vg on vg.id = vc.group_id
+         where vg.depends_on_group_code is not null
+           and pg_catalog.cardinality(coalesce(vg.depends_on_choice_codes, '{}'::text[])) > 0
+           and exists (
+             select 1 from public.option_variant_groups dependency_group
+              where dependency_group.option_id = vg.option_id and dependency_group.code = vg.depends_on_group_code
+                and dependency_group.status = 'published')
+           and not exists (
+             select 1
+               from public.option_variant_choices dependency_choice
+               join public.option_variant_groups dependency_group on dependency_group.id = dependency_choice.group_id
+              where dependency_choice.id = any(v_choices)
+                and dependency_group.option_id = vg.option_id
+                and dependency_group.code = vg.depends_on_group_code
+                and dependency_group.status = 'published'
+                and dependency_choice.code = any(vg.depends_on_choice_codes))
+      ) then
+        raise exception 'VALIDATION: % 行目：表示されない仕様の選択肢は選べません', v_index using errcode = 'P0001';
+      end if;
+      -- 表示される必須の選択項目は、選択肢を 1 つ選ぶ（必須の仕様が抜けたまま安い単価で発行しない）
+      if exists (
+        select 1
+          from public.option_variant_groups vg
+         where vg.option_id = v_option.id
+           and vg.status = 'published'
+           and vg.is_required
+           and exists (select 1 from public.option_variant_choices c where c.group_id = vg.id and c.status = 'published')
+           and (
+             vg.depends_on_group_code is null
+             or pg_catalog.cardinality(coalesce(vg.depends_on_choice_codes, '{}'::text[])) = 0
+             or not exists (
+               select 1 from public.option_variant_groups dependency_group
+                where dependency_group.option_id = vg.option_id and dependency_group.code = vg.depends_on_group_code
+                  and dependency_group.status = 'published')
+             or exists (
+               select 1
+                 from public.option_variant_choices dependency_choice
+                 join public.option_variant_groups dependency_group on dependency_group.id = dependency_choice.group_id
+                where dependency_choice.id = any(v_choices)
+                  and dependency_group.option_id = vg.option_id
+                  and dependency_group.code = vg.depends_on_group_code
+                  and dependency_group.status = 'published'
+                  and dependency_choice.code = any(vg.depends_on_choice_codes))
+           )
+           and not exists (select 1 from public.option_variant_choices selected where selected.id = any(v_choices) and selected.group_id = vg.id)
+      ) then
+        raise exception 'VALIDATION: % 行目：「%」の必須の仕様を選んでください', v_index, v_option.name using errcode = 'P0001';
+      end if;
       -- 区分は商品のカテゴリーで決まる（DB の estimate_section_for_option と同じ）
       if public.estimate_section_for_option(v_category.code, v_option.is_installation) <> v_section then
         raise exception 'VALIDATION: % 行目：「%」は「%」の区分の商品です', v_index, v_option.name,
@@ -621,6 +681,41 @@ begin
       if v_unit is null then
         raise exception 'VALIDATION: % 行目：「%」は価格が未確定です。自由明細で金額を入れてください', v_index, v_option.name using errcode = 'P0001';
       end if;
+      -- 原価の記録：版の選択枠（カテゴリー単位）と同じ「商品＋選択肢」なら、売価の元の版に固定した原価。ほかは今の原価 Version
+      v_baseline_id := null;
+      select bi.id into v_baseline_id
+        from public.standard_estimate_revision_baseline_items bi
+       where bi.revision_id = rev.id and bi.slot_code is null and bi.option_id = v_option.id
+         and coalesce((select array_agg(bv.variant_choice_id order by bv.variant_choice_id)
+                         from public.standard_estimate_revision_baseline_variants bv where bv.baseline_item_id = bi.id), '{}'::uuid[]) = v_choices
+       limit 1;
+      v_std_version := null;
+      v_std_cost := null;
+      if v_baseline_id is not null then
+        select bi.standard_cost_version_id, cv.standard_cost into v_std_version, v_std_cost
+          from public.standard_estimate_revision_baseline_items bi
+          left join public.option_standard_cost_versions cv on cv.id = bi.standard_cost_version_id
+         where bi.id = v_baseline_id;
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 'variant_choice_id', bv.variant_choice_id, 'version_id', bv.variant_cost_version_id, 'cost_adjustment', bv.cost_adjustment_snapshot)
+                 order by bv.variant_choice_id), '[]'::jsonb),
+               case when count(*) = count(bv.variant_cost_version_id) then coalesce(sum(bv.cost_adjustment_snapshot), 0)::integer end
+          into v_variant_versions, v_variant_adjustment
+          from public.standard_estimate_revision_baseline_variants bv
+         where bv.baseline_item_id = v_baseline_id;
+      else
+        select cv.id, cv.standard_cost into v_std_version, v_std_cost
+          from public.option_standard_cost_versions cv
+         where cv.option_id = v_option.id and cv.superseded_at is null;
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 'variant_choice_id', c.id, 'version_id', vv.id, 'cost_adjustment', vv.cost_adjustment) order by c.id), '[]'::jsonb),
+               case when count(*) = count(vv.id) then coalesce(sum(vv.cost_adjustment), 0)::integer end
+          into v_variant_versions, v_variant_adjustment
+          from unnest(v_choices) c(id)
+          left join public.option_variant_cost_versions vv on vv.variant_choice_id = c.id and vv.superseded_at is null;
+      end if;
+      v_pin := pg_catalog.jsonb_build_object('std_version', v_std_version, 'std_cost', v_std_cost,
+                                             'variants', v_variant_versions, 'variant_adjustment', v_variant_adjustment);
       v_qty := coalesce(v_qty, 1);
       v_kind := case v_section when 'interior_exterior' then 'interior_exterior' when 'option' then 'option' else 'installation' end;
       v_name := v_option.name || coalesce(' ／ ' || (
@@ -690,7 +785,7 @@ begin
       'name', v_name, 'description', v_description, 'unit', v_unit_label, 'remark', v_remark,
       'unit_price', v_unit, 'quantity', v_qty, 'amount', v_amount, 'image_url', v_image,
       'option_id', v_option.id, 'variant_choice_ids', pg_catalog.to_jsonb(v_choices),
-      'parent_item_id', v_parent_item.id,
+      'parent_item_id', v_parent_item.id, 'pin', v_pin,
       'line_key', case when v_source = 'parent' then v_parent_item.line_key end));
   end loop;
 
@@ -706,7 +801,8 @@ begin
   if v_subtotal < 0 then
     raise exception 'VALIDATION: 調整後の税別額が 0 円未満です' using errcode = 'P0001';
   end if;
-  v_tax := pg_catalog.trunc(v_subtotal * tax.tax_rate);
+  -- 税は第 1 版と同じく版の税率（版を作ったときの税ルールの Version の率）
+  v_tax := pg_catalog.trunc(v_subtotal * rev.tax_rate);
   if v_subtotal + v_tax > 2147483647 or v_raw > 2147483647
      or exists (select 1 from unnest(v_line_totals || v_expenses) x where x < -2147483648 or x > 2147483647) then
     raise exception 'VALIDATION: 見積金額が保存できる範囲を超えています' using errcode = 'P0001';
@@ -726,7 +822,7 @@ begin
     now(), now() + interval '30 days', parent.customer_no, parent.customer_name, parent.customer_company, parent.base_model_name, parent.finish_level,
     v_line_totals[1], v_expenses[1], v_line_totals[2] + v_line_totals[3], v_expenses[2] + v_expenses[3], v_line_totals[4] + v_expenses[4],
     v_adjustment, v_adjustment_reason,
-    v_subtotal, tax.tax_rate, v_tax, v_subtotal + v_tax, parent.preview_image_url,
+    v_subtotal, rev.tax_rate, v_tax, v_subtotal + v_tax, parent.preview_image_url,
     '本見積書は標準見積を基に、担当者が案件内容を反映して作成した確定見積です。',
     coalesce(parent.dealer_id, case when v_rank = 1 then v_uid end),
     nullif(pg_catalog.btrim(coalesce(p_dealer_note, '')), ''), parent.revision + 1, parent.id, v_uid,
@@ -753,23 +849,13 @@ begin
       returning id into v_item_id;
       -- 新しく足した商品の原価の Version（足した時点）を社内の記録に残す（原価が未設定なら null のまま）
       if v_row ->> 'source' = 'catalog' then
-        v_std_version := null;
-        v_std_cost := null;
-        select cv.id, cv.standard_cost into v_std_version, v_std_cost
-          from public.option_standard_cost_versions cv
-         where cv.option_id = (v_row ->> 'option_id')::uuid and cv.superseded_at is null;
-        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-                 'variant_choice_id', c.value, 'version_id', vv.id, 'cost_adjustment', vv.cost_adjustment) order by c.value), '[]'::jsonb),
-               case when count(*) = count(vv.id) then coalesce(sum(vv.cost_adjustment), 0)::integer end
-          into v_variant_versions, v_variant_adjustment
-          from pg_catalog.jsonb_array_elements_text(v_row -> 'variant_choice_ids') c(value)
-          left join public.option_variant_cost_versions vv on vv.variant_choice_id = c.value::uuid and vv.superseded_at is null;
         insert into public.quote_item_cost_pins (
           quote_item_id, quote_id, option_id, standard_cost_version_id, standard_cost, variant_cost_versions, variant_adjustment,
           sales_fee_rate, markup_rate
         )
         values (
-          v_item_id, v_new, (v_row ->> 'option_id')::uuid, v_std_version, v_std_cost, v_variant_versions, v_variant_adjustment,
+          v_item_id, v_new, (v_row ->> 'option_id')::uuid, (v_row #>> '{pin,std_version}')::uuid, (v_row #>> '{pin,std_cost}')::integer,
+          coalesce(v_row #> '{pin,variants}', '[]'::jsonb), (v_row #>> '{pin,variant_adjustment}')::integer,
           rev.sales_fee_rate, rev.markup_rate
         );
       elsif v_row ->> 'source' = 'parent' and v_row ->> 'parent_item_id' is not null then

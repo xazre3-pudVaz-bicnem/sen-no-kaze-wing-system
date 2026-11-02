@@ -83,7 +83,12 @@ export default async function AdminQuoteRevisionEditPage({
       (option) => isQuoteSelectableProduct(option) && productSpecCodesAllow(option.spec_codes ?? [], v25Context.specCode, v25Context.modelSlug)
     );
     const groups = bundle?.variantGroups ?? [];
-    const choices = bundle?.variantChoices ?? [];
+    // 選択肢の追加金額（旧来の価格の列）は v2.5 では使わないので渡さない
+    const choices = (bundle?.variantChoices ?? []).map((choice) => ({ ...choice, extra_price: 0 }));
+    const groupsByOption = new Map<string, typeof groups>();
+    for (const group of groups) groupsByOption.set(group.option_id, [...(groupsByOption.get(group.option_id) ?? []), group]);
+    const choicesByGroup = new Map<string, typeof choices>();
+    for (const choice of choices) choicesByGroup.set(choice.group_id, [...(choicesByGroup.get(choice.group_id) ?? []), choice]);
     const defaults = new Map(selectable.map((option) => [option.id, defaultVariantIdsFor(groups, choices, [option.id])] as const));
     const units = await store
       .getQuoteV25Units(quote.id, selectable.map((option) => ({ option_id: option.id, choice_ids: defaults.get(option.id) ?? [] })), actor)
@@ -97,15 +102,8 @@ export default async function AdminQuoteRevisionEditPage({
         section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
         manufacturer: option.manufacturer ?? '',
         modelNo: option.model_no ?? '',
-        groups: groups
-          .filter((group) => group.option_id === option.id)
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map((group) => ({
-            id: group.id,
-            name: group.name,
-            required: group.is_required,
-            choices: choices.filter((choice) => choice.group_id === group.id).sort((a, b) => a.sort_order - b.sort_order).map((choice) => ({ id: choice.id, name: choice.name })),
-          })),
+        variantGroups: [...(groupsByOption.get(option.id) ?? [])].sort((a, b) => a.sort_order - b.sort_order),
+        variantChoices: (groupsByOption.get(option.id) ?? []).flatMap((group) => choicesByGroup.get(group.id) ?? []),
         defaultChoiceIds: defaults.get(option.id) ?? [],
         defaultUnit: units[index] ?? null,
       };

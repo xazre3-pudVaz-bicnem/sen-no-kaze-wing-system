@@ -64,8 +64,11 @@ declare
   o3 constant uuid := '2a200000-0000-4000-8000-000000000503';
   o4 constant uuid := '2a200000-0000-4000-8000-000000000504';
   o5 constant uuid := '2a200000-0000-4000-8000-000000000505';
+  o6 constant uuid := '2a200000-0000-4000-8000-000000000506';
   g_o2 constant uuid := '2a200000-0000-4000-8000-000000000601';
+  g_o6 constant uuid := '2a200000-0000-4000-8000-000000000602';
   c_o2 constant uuid := '2a200000-0000-4000-8000-000000000701';
+  c_o6a constant uuid := '2a200000-0000-4000-8000-000000000702';
   v_bmr text;
   v_se text;
   v_master uuid;
@@ -80,6 +83,7 @@ declare
   v_item_o1 uuid;
   v_item_fee uuid;
   v_item_por uuid;
+  v_item_porline uuid;
   v_item_base uuid;
   v_ctx jsonb;
   v_legacy_quote uuid;
@@ -115,11 +119,12 @@ begin
     (o2, cat_opt, 'runtime-fq-o2', 'D1 設備2', 10000, false, 'published', 'PRD-948002', false, null),
     (o3, cat_opt, 'runtime-fq-o3', 'D1 設備3（別途見積）', 0, true, 'published', 'PRD-948003', false, null),
     (o4, cat_opt, 'runtime-fq-o4', 'D1 設備4（別モデル）', 5000, false, 'published', 'PRD-948004', false, m_other),
-    (o5, cat_site, 'runtime-fq-o5', 'D1 施工1', 8000, false, 'published', 'PRD-948005', true, null);
+    (o5, cat_site, 'runtime-fq-o5', 'D1 施工1', 8000, false, 'published', 'PRD-948005', true, null),
+    (o6, cat_opt, 'runtime-fq-o6', 'D1 設備6（色が必須）', 7000, false, 'published', 'PRD-948006', false, null);
   insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
-  values (g_o2, o2, 'size', 'サイズ', 1, false, 'published');
+  values (g_o2, o2, 'size', 'サイズ', 1, false, 'published'), (g_o6, o6, 'color', '色', 1, true, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status, sort_order)
-  values (c_o2, g_o2, 'large', '大', 'option', 1000, 'published', 1);
+  values (c_o2, g_o2, 'large', '大', 'option', 1000, 'published', 1), (c_o6a, g_o6, 'white', '白', 'standard', 0, 'published', 1);
   set local session_replication_role = origin;
 
   -- 原価（本部）：設備1 20,000、設備2 10,000＋大 1,000、設備4 5,000（設備3 は別途見積）
@@ -144,8 +149,11 @@ begin
       'adjustment', 0, 'adjustment_reason', null,
       'slots', jsonb_build_array(jsonb_build_object('baseline_key', null, 'option_id', o1, 'variant_choice_ids', '[]'::jsonb, 'quantity', '1',
         'price_mode', 'auto', 'manual_unit_price', null, 'slot_code', null, 'slot_label', null, 'selectable_option_ids', '[]'::jsonb)),
-      'lines', jsonb_build_array(jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1 工事', 'name', '取付費',
-        'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 10000, 'remark', null, 'review_required', false)))::text));
+      'lines', jsonb_build_array(
+        jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1 工事', 'name', '取付費',
+          'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 10000, 'remark', null, 'review_required', false),
+        jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1 工事', 'name', '据付工事',
+          'quantity', '1', 'unit', '式', 'price_mode', 'por', 'unit_price', null, 'remark', null, 'review_required', false)))::text));
   v_out := pg_temp.fq_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, %s)).status', v_rev,
     (select lock_version from public.standard_estimate_revisions where id = v_rev)));
   perform pg_temp.fq_expect_eq('D1-0 前提：v2.5 の標準見積を公開でき、スイッチを入れられる', 'published/true',
@@ -199,13 +207,33 @@ begin
   select i.id into v_item_o1 from public.quote_items i where i.quote_id = v_q1 and i.kind = 'option' and i.name like 'D1 設備1%';
   select i.id into v_item_fee from public.quote_items i where i.quote_id = v_q1 and i.name = '取付費';
   select i.id into v_item_por from public.quote_items i where i.quote_id = v_q1 and i.name = '価格未確定の商品';
+  select i.id into v_item_porline from public.quote_items i where i.quote_id = v_q1 and i.name = '据付工事';
   select i.id into v_item_base from public.quote_items i where i.quote_id = v_q1 and i.kind = 'base' limit 1;
-  perform pg_temp.fq_expect_eq('D1-6 前提：第 1 版に、設備1・取付費・価格未確定の商品の行がある', 'true',
-    (v_item_o1 is not null and v_item_fee is not null and v_item_por is not null and v_item_base is not null)::text);
+  perform pg_temp.fq_expect_eq('D1-6 前提：第 1 版に、設備1・取付費・据付工事（別途見積）・価格未確定の商品の行がある', 'true',
+    (v_item_o1 is not null and v_item_fee is not null and v_item_por is not null and v_item_porline is not null and v_item_base is not null)::text);
+  -- 何も変えずに写す（未確定の行は 0 円のまま扱いだけ決める）と、第 1 版と同じ金額になる。確かめた後は取り消す
+  begin
+    select string_agg(e ->> 'key', ',') into v_keys from jsonb_array_elements(public.configuration_por_selections(v_cfg)) e;
+    perform pg_temp.fq_run_as('authenticated', u_admin, format('select public.confirm_quote_por_selections(%L, string_to_array(%L, '',''))::text', v_q1, v_keys));
+    v_out := pg_temp.fq_revise(u_admin, v_q1, (select jsonb_agg(case
+        when i.id = v_item_por then jsonb_build_object('source', 'parent', 'parent_item_id', i.id, 'state', 'zero_confirmed', 'state_reason', '検査')
+        when i.id = v_item_porline then jsonb_build_object('source', 'parent', 'parent_item_id', i.id, 'state', 'excluded')
+        else jsonb_build_object('source', 'parent', 'parent_item_id', i.id) end order by i.sort_order)
+      from public.quote_items i where i.quote_id = v_q1 and i.kind not in ('base_expense', 'option_expense', 'interior_exterior_expense')));
+    v_capture := coalesce((select (q2.base_price = q1.base_price and q2.base_expense = q1.base_expense and q2.option_subtotal = q1.option_subtotal
+                                   and q2.option_expense = q1.option_expense and q2.installation_subtotal = q1.installation_subtotal
+                                   and q2.subtotal = q1.subtotal and q2.tax = q1.tax and q2.total = q1.total)::text
+                             from public.quotes q2, public.quotes q1 where q2.id::text = v_out and q1.id = v_q1), v_out);
+    raise exception 'fq_rollback';
+  exception when raise_exception then
+    if sqlerrm <> 'fq_rollback' then raise; end if;
+  end;
+  perform pg_temp.fq_expect_eq('D1-6b 前の版の行を何も変えずに写すと、第 1 版と同じ金額になる（本部が出す場合）', 'true', v_capture);
   -- 第 2 版の明細：設備1（そのまま）・取付費（数量 2）・価格未確定の商品（0円確定）・設備2＋大 × 2（商品台帳）・運搬費 50,000（別途工事の自由明細）
   v_lines := jsonb_build_array(
     jsonb_build_object('source', 'parent', 'parent_item_id', v_item_o1),
     jsonb_build_object('source', 'parent', 'parent_item_id', v_item_fee, 'quantity', '2'),
+    jsonb_build_object('source', 'parent', 'parent_item_id', v_item_porline, 'state', 'excluded', 'state_reason', 'お客様手配'),
     jsonb_build_object('source', 'parent', 'parent_item_id', v_item_por, 'state', 'zero_confirmed', 'state_reason', 'お客様と合意のうえ今回は見送り'),
     jsonb_build_object('source', 'catalog', 'section', 'option', 'option_id', o2, 'variant_choice_ids', jsonb_build_array(c_o2), 'quantity', '2'),
     jsonb_build_object('source', 'manual', 'section', 'sitework', 'name', '運搬費', 'unit', '式', 'quantity', '1', 'unit_price', 50000));
@@ -253,10 +281,11 @@ begin
   begin
     v_out := pg_temp.fq_revise(u_dealer, v_q1, jsonb_build_array(
       jsonb_build_object('source', 'parent', 'parent_item_id', v_item_o1),
-      jsonb_build_object('source', 'parent', 'parent_item_id', v_item_por, 'unit_price', 30000)));
+      jsonb_build_object('source', 'parent', 'parent_item_id', v_item_porline, 'unit_price', 30000),
+      jsonb_build_object('source', 'parent', 'parent_item_id', v_item_por, 'state', 'zero_confirmed', 'state_reason', '検査')));
     v_capture := coalesce((select unit_price || '/' || amount || '/' || coalesce(remark, '(なし)') || '/' || total
                              from public.quote_items i join public.quotes q on q.id = i.quote_id
-                            where i.quote_id::text = v_out and i.name = '価格未確定の商品'), v_out);
+                            where i.quote_id::text = v_out and i.name = '据付工事'), v_out);
     raise exception 'fq_rollback';
   exception when raise_exception then
     if sqlerrm <> 'fq_rollback' then raise; end if;
@@ -264,6 +293,29 @@ begin
   -- 設備1 32,100 ＋ 30,000 ＝ 62,100、経費 9,315 → 本体 403,111 と合わせて税抜 474,526・税 47,452
   perform pg_temp.fq_expect_eq('D1-20b 別途見積の行に担当者が売価を入れると確定の行になる（未確定の目印を外し、その売価で計算する）',
     '30000/30000/(なし)/521978', v_capture);
+  perform pg_temp.fq_expect_error('D1-20c 別途見積の行を 0 円にするときは「0円確定」を選ぶ（売価 0 は受け付けない）', 'P0001', 'VALIDATION',
+    pg_temp.fq_revise(u_dealer, v_q1, jsonb_build_array(jsonb_build_object('source', 'parent', 'parent_item_id', v_item_porline, 'unit_price', 0))));
+  perform pg_temp.fq_expect_error('D1-20d 「価格未確定の商品」（選んだ商品の集約の行）には金額を入れられない', 'P0001', 'VALIDATION',
+    pg_temp.fq_revise(u_dealer, v_q1, jsonb_build_array(jsonb_build_object('source', 'parent', 'parent_item_id', v_item_por, 'unit_price', 30000))));
+  perform pg_temp.fq_expect_error('D1-20e 必須の仕様（色）を選ばない商品は足せない', 'P0001', 'VALIDATION: 1 行目：「D1 設備6',
+    pg_temp.fq_revise(u_dealer, v_q1, jsonb_build_array(jsonb_build_object('source', 'catalog', 'section', 'option', 'option_id', o6, 'variant_choice_ids', '[]'::jsonb))));
+  -- 版の選択枠と同じ商品（設備1）を足すと、売価は版の売価、原価の記録は版に固定した原価（公開の後に原価を改定しても）
+  perform pg_temp.fq_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 25000, %s, ''改定'')', o1,
+    (select lock_version from public.option_hq_standard_costs where option_id = o1)));
+  begin
+    v_out := pg_temp.fq_revise(u_dealer, v_q1, jsonb_build_array(
+      jsonb_build_object('source', 'parent', 'parent_item_id', v_item_por, 'state', 'zero_confirmed', 'state_reason', '検査'),
+      jsonb_build_object('source', 'parent', 'parent_item_id', v_item_porline, 'state', 'excluded'),
+      jsonb_build_object('source', 'catalog', 'section', 'option', 'option_id', o1, 'variant_choice_ids', '[]'::jsonb)));
+    v_capture := coalesce((select i.unit_price || '/' || p.standard_cost
+                             from public.quote_items i join public.quote_item_cost_pins p on p.quote_item_id = i.id
+                            where i.quote_id::text = v_out and i.option_id = o1), v_out);
+    raise exception 'fq_rollback';
+  exception when raise_exception then
+    if sqlerrm <> 'fq_rollback' then raise; end if;
+  end;
+  perform pg_temp.fq_expect_eq('D1-20f 版の選択枠と同じ商品は、版の売価（32,100）と版に固定した原価（20,000。改定後の 25,000 ではない）を記録する',
+    '32100/20000', v_capture);
 
   -- ---------- 第 2 版の発行 ----------
   -- オプション：設備1 32,100 ＋ 取付費 20,000 ＋ 0 ＋ 設備2 大 17,655 × 2 ＝ 35,310 → 87,410、経費 trunc(87,410 × 0.15) ＝ 13,111
@@ -281,7 +333,7 @@ begin
                      ((select quote_id from public.quote_requests where id = q.quote_request_id) = q.id)::text || '/' || q.revision::text
                 from public.quotes q where q.id = v_q2), v_out));
   perform pg_temp.fq_expect_eq('D1-23 明細：本体は前の版のまま、商品台帳の商品は名前に選択肢、0円確定は印、経費の行はサーバーが作る',
-    'base:350532/option:D1 設備1:32100/option:取付費:20000/option:価格未確定の商品:0:［0円確定］：お客様と合意のうえ今回は見送り/option:D1 設備2 ／ サイズ：大:35310/option_expense:13111/installation:運搬費:50000',
+    'base:350532/option:D1 設備1:32100/option:取付費:20000/option:据付工事:0/option:価格未確定の商品:0:［0円確定］：お客様と合意のうえ今回は見送り/option:D1 設備2 ／ サイズ：大:35310/option_expense:13111/installation:運搬費:50000',
     coalesce((select string_agg(case
         when kind = 'base' then 'base:' || (select sum(amount) from public.quote_items b where b.quote_id = v_q2 and b.kind = 'base')
         when kind = 'option_expense' then 'option_expense:' || amount

@@ -70,19 +70,23 @@ const revisionSchema = z.object({ revision_id: z.uuid(), expected_lock_version: 
  */
 export async function startStandardEstimateV25DraftAction(formData: FormData): Promise<void> {
   await requireAdmin('/admin/standard-estimates');
-  if (isLocalMode()) redirect('/admin/standard-estimates?error=local');
+  // v2.5 の下書きの編集は「見積書管理 ＞ 標準見積」の Excel 風の画面で行う（2026-10-27 先方方針）。作った後はその画面へ戻る
+  const workbench = formData.get('return_to') === 'workbench';
+  const back = (params: string) => (workbench ? `/admin/estimate-templates?${params}` : `/admin/standard-estimates?${params}`);
+  if (isLocalMode()) redirect(back('error=local'));
   const masterId = z.uuid().safeParse(formData.get('master_id'));
   const rawLock = formData.get('expected_draft_lock_version');
   const draftLock = rawLock === null || rawLock === '' ? null : Number(rawLock);
-  if (!masterId.success || (draftLock !== null && !Number.isSafeInteger(draftLock))) redirect('/admin/standard-estimates?error=invalid');
+  if (!masterId.success || (draftLock !== null && !Number.isSafeInteger(draftLock))) redirect(back('error=invalid'));
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('start_standard_estimate_v25_draft', {
     p_master_id: masterId.data,
     p_expected_draft_lock_version: draftLock,
   });
-  if (error || !data) redirect(`/admin/standard-estimates?error=${encodeURIComponent(message(error))}`);
+  if (error || !data) redirect(back(`master=${masterId.data}&error=${encodeURIComponent(message(error))}`));
   revalidatePath('/admin/standard-estimates');
-  redirect(`/admin/standard-estimates/${data as string}?v25=started`);
+  revalidatePath('/admin/estimate-templates');
+  redirect(`/admin/estimate-templates?master=${masterId.data}&started=1`);
 }
 
 /** v2.5 の下書きを保存する。原価 Version は、同じ商品・同じ選択肢なら固定のまま（DB が判断する） */

@@ -41,14 +41,17 @@ const SPEC_LABELS: Record<string, string> = {
   office: '事務所・店舗',
 };
 
+/** 旧テンプレート（参照）の画面。標準見積（v2.5）の編集は /admin/estimate-templates */
+const LEGACY_BASE_PATH = '/admin/estimate-templates/legacy';
+
 function estimateHref(id: string) {
   const params = new URLSearchParams({ estimate: id });
-  return `/admin/estimate-templates?${params.toString()}`;
+  return `${LEGACY_BASE_PATH}?${params.toString()}`;
 }
 
 function sampleEstimateHref(id: string) {
   const params = new URLSearchParams({ sample: id });
-  return `/admin/estimate-templates?${params.toString()}`;
+  return `${LEGACY_BASE_PATH}?${params.toString()}`;
 }
 
 function formatWholeYen(value: number) {

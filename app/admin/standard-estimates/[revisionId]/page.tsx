@@ -14,12 +14,10 @@ import { createClient } from '@/lib/supabase/server';
 import { startNextStandardEstimateRevisionAction } from '@/lib/actions/standard-estimates';
 import { startStandardEstimateV25DraftAction } from '@/lib/actions/standard-estimate-v25';
 import { getStandardEstimateV25Header, loadStandardEstimateV25 } from '@/lib/data/standard-estimate-v25';
-import type { V25ProductCandidate } from '@/lib/domain/standard-estimate-v25-view';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { StandardEstimateEditor } from '@/components/admin/standard-estimate-editor';
 import { StandardEstimateBaselineEditor, type BaselineCandidate, type BaselineItemView } from '@/components/admin/standard-estimate-baseline-editor';
-import { StandardEstimateV25Editor } from '@/components/admin/standard-estimate-v25-editor';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { isQuoteSelectableProduct, productLedgerState } from '@/lib/domain/product-lifecycle';
 
@@ -170,34 +168,8 @@ export default async function StandardEstimateRevisionPage({
   }));
   const newerBase = base?.current_published_revision_id && base.current_published_revision_id !== revision.base_master_revision_id;
 
-  // v2.5：商品台帳の商品（その仕様でお客様が選べる販売中の商品。保存済みの販売停止・廃番の商品は表示・保持のために渡す）と公開中の選択肢
+  // v2.5：計算ルール・税ルールの表示に使う（編集は「見積書管理 ＞ 標準見積」の Excel 風の画面）
   const v25 = isV25 && v25Header ? await loadStandardEstimateV25(supabase, revision, v25Header) : null;
-  const v25SavedOptionIds = new Set(v25?.slotOptionIds ?? []);
-  const v25Candidates: V25ProductCandidate[] = v25
-    ? (specCtx?.options ?? [])
-        .filter((option) => isQuoteSelectableProduct(option) || (productLedgerState(option) === 'retired' && v25SavedOptionIds.has(option.id)))
-        .map((option) => {
-          const code = categoryById.get(option.category_id)?.code ?? '';
-          return {
-            id: option.id,
-            name: option.name,
-            categoryName: categoryById.get(option.category_id)?.name ?? '未分類',
-            section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
-            retired: productLedgerState(option) === 'retired',
-            variantGroups: (bundle?.variantGroups ?? [])
-              .filter((group) => group.option_id === option.id)
-              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-              .map((group) => ({
-                id: group.id,
-                name: group.name,
-                choices: (bundle?.variantChoices ?? [])
-                  .filter((choice) => choice.group_id === group.id)
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((choice) => ({ id: choice.id, name: choice.name })),
-              })),
-          };
-        })
-    : [];
 
   return (
     <AdminPage
@@ -287,17 +259,14 @@ export default async function StandardEstimateRevisionPage({
       )}
 
       {isV25 && v25 && (
-        <StandardEstimateV25Editor
-          key={`v25-${revision.lock_version}`}
-          revisionId={revision.id}
-          lockVersion={revision.lock_version}
-          readOnly={!isDraft}
-          initial={v25.initial}
-          candidates={v25Candidates}
-          savedSlotAmounts={v25.savedSlotAmounts}
-          savedLineAmounts={v25.savedLineAmounts}
-          preview={v25.preview}
-        />
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white p-4 text-sm" data-testid="standard-estimate-v25-workbench-link">
+          <p className="text-ink-soft">
+            v2.5 の標準見積は「見積書管理 ＞ 標準見積」の Excel 風の画面で編集・保存・公開します（本部だけ）。
+          </p>
+          <a className="btn-secondary btn-sm" href={`/admin/estimate-templates?master=${revision.standard_estimate_master_id}`}>
+            {isDraft ? 'Excel 風の画面で編集する' : 'Excel 風の画面で見る'}
+          </a>
+        </section>
       )}
 
       {/* 保存のたびに版が進むので、保存後は DB の内容（新しい行の line_key など）で作り直す */}

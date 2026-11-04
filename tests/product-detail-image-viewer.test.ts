@@ -71,10 +71,19 @@ describe('共通商品詳細の画像名と拡大表示', () => {
     expect(lightbox).toContain('aria-label="拡大画像の次の画像"');
   });
 
+  it('セキノ興産の商品画像で提供元と色の注意書きを自動表示する', () => {
+    expect(detail).toContain("const isSekinoKosan = option.manufacturer?.includes('セキノ興産') ?? false;");
+    expect(detail).toContain('{isSekinoKosan && galleryImages.length > 0 && (');
+    expect(detail).toContain('data-testid="sekino-image-attribution"');
+    expect(detail).toContain('画像提供：株式会社セキノ興産');
+    expect(detail).toContain('※画面上の色は実物と異なる場合があります。');
+  });
+
   it('画像操作で商品仕様・金額・PDF表示の動作を変更しない', () => {
     expect(detail).toContain('const handleVariantChange = (choiceId: string, groupId: string) => {');
     expect(detail).toContain('onVariantChange(choiceId, groupId);');
-    expect(detail).toContain('showImages={false}');
+    expect(detail).toContain('showImages');
+    expect(detail).not.toContain('showImages={false}');
     expect(detail).toContain('onChange={handleVariantChange}');
     expect(detail).toContain('<ManufacturerDocumentModal');
     expect(detail).not.toContain('setActiveImageIndex(imageIndex);');

@@ -57,6 +57,7 @@ export function ProductDetail({
   ].filter((image, index, list) => list.findIndex((item) => item.url === image.url) === index);
   const safeImageIndex = galleryImages.length > 0 ? Math.min(activeImageIndex, galleryImages.length - 1) : 0;
   const activeImage = galleryImages[safeImageIndex] ?? null;
+  const isSekinoKosan = option.manufacturer?.includes('セキノ興産') ?? false;
 
   const moveImage = (direction: -1 | 1) => {
     if (galleryImages.length <= 1) return;
@@ -243,6 +244,12 @@ export function ProductDetail({
               </div>
             </div>
           )}
+          {isSekinoKosan && galleryImages.length > 0 && (
+            <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-muted" data-testid="sekino-image-attribution">
+              <p>画像提供：株式会社セキノ興産</p>
+              <p>※画面上の色は実物と異なる場合があります。</p>
+            </div>
+          )}
         </section>
 
         <section className="min-h-0 min-w-0 md:overflow-y-auto md:pr-2">
@@ -317,7 +324,7 @@ export function ProductDetail({
               <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
                 <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
-                  名称と追加金額を確認して選択してください。メーカー資料は「メーカー資料を見る」から確認できます。
+                  名称と追加金額を確認して選択してください。色・柄の見本画像は拡大できます。メーカー資料も確認できます。
                 </p>
               </div>
               <VariantPicker
@@ -325,7 +332,7 @@ export function ProductDetail({
                 choices={choices}
                 selected={selectedVariantIds}
                 onChange={handleVariantChange}
-                showImages={false}
+                showImages
                 showCurrentValue
               />
             </div>

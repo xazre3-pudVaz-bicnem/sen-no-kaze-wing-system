@@ -9,6 +9,7 @@ const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const editPage = read('app/admin/options/[id]/page.tsx');
 const forms = read('components/admin/forms.tsx');
+const categoryGuidance = read('components/admin/product-category-guidance.tsx');
 
 function sourceFiles(dir: string): string[] {
   return fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((entry) => {
@@ -36,9 +37,9 @@ describe('空調商品の電源仕様を専用の必須項目にしない', () =
     ]) {
       expect(fs.existsSync(path.join(root, file)), file).toBe(false);
     }
-    expect(editPage).toContain('<ProductPriceUnitRegistrationField optionId={id} />');
-    expect(editPage).toContain('<ProductPriceUnitPublishedCard optionId={id} />');
-    expect(editPage).toContain('<ProductPriceUnitRouteSummary />');
+    expect(editPage).toContain('<ProductPriceUnitRegistrationField optionId={id} priceLabel={priceLabel} />');
+    expect(editPage).toContain('<ProductPriceUnitPublishedCard optionId={id} priceLabel={priceLabel} />');
+    expect(editPage).toContain('<ProductPriceUnitRouteSummary priceLabel={priceLabel} />');
   });
 
   it('アプリは power_spec 列を読み書きしない', () => {
@@ -49,8 +50,8 @@ describe('空調商品の電源仕様を専用の必須項目にしない', () =
   });
 
   it('電源仕様は既存の商品仕様欄に書ける（空調の「能力クラス・電源」）', () => {
-    expect(forms).toContain("aircon: { label: '能力クラス・電源', placeholder: '例：2.2kW（6畳程度）／単相100V' },");
-    expect(forms).toContain("fixedInfo: ['能力クラス', '電源', '室内機・室外機', '寒冷地対応（必要な場合）'],");
+    expect(categoryGuidance).toContain("aircon: { label: '能力クラス・電源', placeholder: '例：2.2kW（6畳程度）／単相100V' },");
+    expect(categoryGuidance).toContain("fixedInfo: ['能力クラス', '電源', '室内機・室外機', '寒冷地対応（必要な場合）'],");
   });
 
   it('適用前の migration は編集せず、列を消すための migration も足さない（null 可の列として残す）', () => {

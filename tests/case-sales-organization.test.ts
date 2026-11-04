@@ -12,14 +12,14 @@ import {
 import { ANON_DEFINER_ALLOWLIST } from '../scripts/db-rehearsal/checks.mjs';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261016130000_case_sales_organization.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261104130000_case_sales_organization.sql'), 'utf8');
 const sqlOnly = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/, ''))
   .join('\n');
 const sectionOf = (start: string, end: string) => migration.slice(migration.indexOf(start), migration.indexOf(end, migration.indexOf(start)));
 
-describe('案件の営業担当組織：DB の取り決め（migration 20261016130000）', () => {
+describe('案件の営業担当組織：DB の取り決め（migration 20261104130000）', () => {
   it('組織の案件では、主担当者（営業担当組織の有効なメンバー）だけが担当。これまでの案件は現在の見積の担当', () => {
     const access = sectionOf('create or replace function public.case_access(p_request_id uuid)', 'comment on function public.case_access(uuid)');
     expect(access).toContain('if w.sales_organization_id is not null then');
@@ -48,13 +48,22 @@ describe('案件の営業担当組織：DB の取り決め（migration 202610161
     expect(policy('site_surveys_read')).toContain('public.is_case_legacy_manufacturer(quote_request_id)');
     const siteProfile = sectionOf(
       'create or replace function public.configuration_site_profile_access',
-      'create or replace function public.get_case_plan_configuration'
+      'do $case_plan_manager$'
     );
     expect(siteProfile).toContain("public.case_access(r.id) = 'staff' or public.is_case_legacy_manufacturer(r.id)");
     expect(siteProfile).not.toContain("'manufacturer'");
     const legacy = sectionOf('create function public.is_case_legacy_manufacturer', '-- ---------- 読み取りの権限');
     expect(legacy).toContain('w.manufacturing_organization_id is null');
     expect(legacy).toContain('w.manufacturer_id = auth.uid()');
+  });
+
+  it('案件のプランボードの読み取りは作り直さず、担当の判定だけを差し込む（v2.5 の S2b の明細の位置・位置の枠を消さない）', () => {
+    expect(migration).not.toContain('create or replace function public.get_case_plan_configuration');
+    const block = sectionOf('do $case_plan_manager$', '$case_plan_manager$;');
+    expect(block).toContain("v_old constant text := 'if not (v_rank >= 3 or (v_rank >= 1 and v_quote.dealer_id = v_uid)) then';");
+    expect(block).toContain('or (v_rank >= 1 and coalesce(v_quote.dealer_id = v_uid, false))');
+    expect(block).toContain('or (v_quote.quote_request_id is not null and public.is_case_sales_manager(v_quote.quote_request_id))');
+    expect(block).toContain("pg_catalog.strpos(v_def, '''position_slots''') = 0");
   });
 
   it('見積は営業担当組織の管理者も読める（直属の総代理店には、顧客情報を含む見積を開かない）', () => {

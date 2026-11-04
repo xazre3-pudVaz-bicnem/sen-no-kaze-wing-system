@@ -10,7 +10,7 @@ describe('商品台帳の入口', () => {
     expect(ledger).not.toContain('/admin/base-breakdown');
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品名・メーカー・シリーズ・型番で検索');
-    expect(client).toContain('商品価格（税別）');
+    expect(client).toContain('商品標準原価（税別）');
   });
 
   it('フリー商品を正式な商品台帳へ混ぜない', () => {
@@ -38,7 +38,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('すべて <span');
     expect(client).toContain('登録済み <span');
     expect(client).toContain('下書き <span');
-    expect(client).toContain('取扱終了 <span');
+    expect(client).toContain('販売停止・廃番 <span');
     expect(client).toContain('aria-label="商品状態"');
     expect(client).not.toContain('aria-label="公開状態"');
     expect(client).not.toContain('要確認のみ');
@@ -88,7 +88,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('<th className="w-[18%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="カテゴリー"');
     expect(client).toContain('<th className="w-[17%] px-2.5 py-1.5 text-right">');
-    expect(client).toContain('<SortHeader label="商品価格（税別）"');
+    expect(client).toContain('<SortHeader label="商品標準原価（税別）"');
     expect(client).toContain('<th className="w-[14%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="状態"');
     expect(client).toContain('<th className="w-[9%] px-2.5 py-1.5">');
@@ -97,7 +97,7 @@ describe('商品台帳の入口', () => {
     expect(client).not.toContain('>メーカー・型番</th>');
     expect(client).not.toContain('>操作</th>');
     expect(client).toContain('{itemCategory?.name ?? dash}');
-    expect(client).toContain('[o.manufacturer, o.model_no].filter(Boolean)');
+    expect(client).toContain('[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean)');
     expect(client).not.toContain('商品管理番号 {o.product_no || dash}');
     expect(client).toContain('line-clamp-2 text-[0.92rem] font-semibold');
     expect(client).toContain('text-xs leading-tight text-muted');
@@ -177,7 +177,7 @@ describe('商品台帳の入口', () => {
   it('お客様表示はシミュレーター共通ProductDetailをそのまま使う', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain("import { ProductDetail } from '@/components/simulator/product-detail'");
-    expect(client).toContain('商品詳細の確認画面です。取扱終了・シミュレーター非表示の商品も商品台帳では確認できます。');
+    expect(client).toContain('商品詳細の確認画面です。販売停止・廃番・シミュレーター非表示の商品も商品台帳では確認できます。');
     expect(client).toContain('defaultVariantIdsFor');
     expect(client).toContain('pruneHiddenVariantChoices');
     expect(client).toContain('<ProductDetail key={selected.id} category={category} option={selected}');
@@ -195,7 +195,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('利用先');
     expect(client).toContain('<Row label="見積で選択"');
     expect(client).toContain('自社の仕入・発注情報');
-    expect(client).toContain('本部商品基準原価（税別）');
+    expect(client).toContain('商品標準原価の記録（税別）');
     expect(client).toContain('<Row label="仕入先" value={<PendingDbValue />}/>');
     expect(client).toContain('<Row label="発注コード" value={<PendingDbValue />}/>');
     expect(client).toContain('<Row label="発注単位" value={<PendingDbValue />}/>');
@@ -211,7 +211,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('min-[900px]:grid-cols-2');
   });
 
-  it('利用者向けの商品状態は下書き・登録済み・取扱終了に統一する', () => {
+  it('利用者向けの商品状態は下書き・登録済み・販売停止・廃番に統一する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('productLedgerStateLabel(selected)');
     expect(client).toContain("productLedgerState(selected) === 'registered'");

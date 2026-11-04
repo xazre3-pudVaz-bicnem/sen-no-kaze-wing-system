@@ -5,6 +5,7 @@ import path from 'node:path';
 import { StoreError, type SessionUser } from '@/lib/data/store';
 import { filesDir, loadDb, saveDb, type LocalDb } from '@/lib/data/local-db';
 import { ROLE_RANK, type AppNotification } from '@/lib/domain/types';
+import { parseQuoteLineState } from '@/lib/domain/quote-por';
 import {
   CASE_FILE_TYPES,
   GUEST_PLAN_DAYS,
@@ -87,7 +88,7 @@ function rank(actor: SessionUser) {
   return ROLE_RANK[actor.role] ?? 0;
 }
 
-/** DB の case_access() と同じ（書き込みの判定。20261016130000 で組織の案件に対応） */
+/** DB の case_access() と同じ（書き込みの判定。20261104130000 で組織の案件に対応） */
 function accessOf(db: LocalDb, actor: SessionUser, requestId: string): CaseAccess | null {
   const request = db.quoteRequests.find((r) => r.id === requestId);
   if (!request) return null;
@@ -575,7 +576,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       }
     });
   }
-  // ---------- 営業担当組織・製造担当組織（20261016130000） ----------
+  // ---------- 営業担当組織・製造担当組織（20261104130000） ----------
   async getCaseRole(actor: SessionUser, requestId: string): Promise<CaseRole | null> {
     return this.read((db) => roleOf(db, actor, requestId));
   }
@@ -1352,9 +1353,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         base_model_name: quote?.base_model_name ?? '',
         spec_code: quote?.spec_code ?? null,
         finish_level: quote?.finish_level ?? null,
-        // 品名・数量だけ。価格は写さない
+        // 品名・数量だけ。価格は写さない。今回の契約対象外の行は契約した品目ではないので写さない（DB と同じ）
         items: db.quoteItems
-          .filter((i) => i.quote_id === order.quote_id)
+          .filter((i) => i.quote_id === order.quote_id && parseQuoteLineState(i.remark)?.state !== 'excluded')
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
           .map((i) => ({ kind: i.kind, name: i.name, quantity: i.quantity, unit: (i as { unit?: string | null }).unit ?? null })),
       };

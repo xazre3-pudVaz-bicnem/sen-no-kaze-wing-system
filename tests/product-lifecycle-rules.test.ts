@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEstimateSpecSelection } from '@/lib/domain/estimate-template';
+import { buildEstimateSpecSelection, estimateSpecStoppedProductNames } from '@/lib/domain/estimate-template';
 import { buildPresetSelection } from '@/lib/domain/preset';
 import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { defaultSelection, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
@@ -109,7 +109,7 @@ describe('新しく選べる商品の判定（RuleContext.canSelectNew）', () =
 
     const retired = toggleOption(ctx, [], 'light-retired');
     expect(retired.rejected).toBe(true);
-    expect(retired.notices).toEqual(['「照明（取扱終了）」は取扱終了のため、新しく選べません。']);
+    expect(retired.notices).toEqual(['「照明（取扱終了）」は販売停止中のため、新しく選べません。']);
 
     expect(toggleOption(ctx, [], 'light-draft').rejected).toBe(true);
   });
@@ -205,5 +205,28 @@ describe('標準構成の組み立て（非表示の標準商品は標準とし�
     const fromPreset = buildEstimateSpecSelection(ctx, model, 'hotel');
     expect(fromPreset).toEqual(expect.arrayContaining(['light-hidden', 'light-visible', 'interior-std']));
     expect(fromPreset).not.toContain('light-retired');
+  });
+
+  it('標準構成の販売停止の商品は、同じカテゴリーの既定の商品で自動的に補わない（2026-10-19 の先方回答 ③ の ①：その仕様は受付停止）', () => {
+    const stoppedPreset: ModelPreset = { code: 'office', name: '事務所', description: '', option_codes: ['interior-retired', 'light-visible'] };
+    const stoppedModel = { slug: 'wing-lifecycle-test', presets: [stoppedPreset] };
+    // 本体の仕様から組み立てる（必須の単一カテゴリーの内装は、販売停止の商品だけが標準）
+    const fromPlan = buildPresetSelection(ctx, stoppedPreset);
+    expect(fromPlan).toContain('light-visible');
+    expect(fromPlan).not.toContain('interior-retired');
+    expect(fromPlan).not.toContain('interior-std');
+    // Excel 標準見積・標準見積の基準商品から組み立てても同じ
+    const fromSaved = buildEstimateSpecSelection(ctx, stoppedModel, 'office', ['interior-retired', 'light-visible']);
+    expect(fromSaved).not.toContain('interior-retired');
+    expect(fromSaved).not.toContain('interior-std');
+    // 受付停止の案内に出す名前（基準商品・本体の仕様のどちらにあっても数える）
+    expect(estimateSpecStoppedProductNames(ctx, stoppedModel, 'office', ['interior-retired', 'light-visible'])).toEqual(['内装（取扱終了）']);
+    expect(estimateSpecStoppedProductNames(ctx, stoppedModel, 'office')).toEqual(['内装（取扱終了）']);
+    // 販売停止の商品が無い仕様は空（従来どおり必須カテゴリーは既定の商品で補う）。ホテル仕様は本体の仕様に販売停止の照明があるので受付停止
+    const cleanPreset: ModelPreset = { code: 'clean', name: '販売停止なし', description: '', option_codes: ['light-hidden', 'light-visible'] };
+    const cleanModel = { slug: 'wing-lifecycle-test', presets: [cleanPreset] };
+    expect(estimateSpecStoppedProductNames(ctx, cleanModel, 'clean', ['light-hidden', 'light-visible'])).toEqual([]);
+    expect(buildEstimateSpecSelection(ctx, cleanModel, 'clean', ['light-hidden', 'light-visible'])).toContain('interior-std');
+    expect(estimateSpecStoppedProductNames(ctx, model, 'hotel')).toEqual(['照明（取扱終了）']);
   });
 });

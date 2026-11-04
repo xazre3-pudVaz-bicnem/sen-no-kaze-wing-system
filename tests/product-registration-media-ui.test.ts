@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync('components/admin/option-media-manager.tsx', 'utf8');
+const sharedMedia = readFileSync('components/admin/product-media-presentation.tsx', 'utf8');
 
 describe('商品登録の画像・PDF確認UI', () => {
   it('メイン画像は軽量プレビューし、保存前の選択だけ解除できる', () => {
@@ -12,7 +13,10 @@ describe('商品登録の画像・PDF確認UI', () => {
   });
 
   it('追加画像は小さいサムネイルを並べ、詳細設定を折りたためる', () => {
-    expect(source).toContain('sizes="160px"');
+    expect(source).toContain('<ProductGalleryThumbnail image={image} />');
+    expect(sharedMedia).toContain('sizes="(max-width: 640px) 160px, 240px"');
+    expect(sharedMedia).toContain('h-32 w-full overflow-hidden');
+
     expect(source).toContain("gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))'");
     expect(source).toContain('<summary className="cursor-pointer text-xs font-semibold text-ink-soft">表示設定</summary>');
   });

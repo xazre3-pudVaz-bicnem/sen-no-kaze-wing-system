@@ -10,10 +10,24 @@ export async function fillRegisterForm(page: Page, email: string, name = 'テス
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(PASSWORD);
   await page.locator('#full_name').fill(name);
-  await page.locator('#phone').fill('090-0000-0000');
-  await page.locator('#address').fill('石川県七尾市1-1');
   await page.getByRole('checkbox', { name: /利用規約/ }).check();
   await page.getByRole('button', { name: '会員登録する' }).click();
+}
+
+/**
+ * 見積依頼の画面の連絡先（電話番号・ご住所）。会員登録では聞かないので、見積依頼のときに入れる（入っていれば変えない）。
+ * 連絡先の住所は、試験で使う設置予定地（石川県七尾市…）と違う住所にする（同じなら確認欄が出る）
+ */
+export async function fillQuoteRequestContact(page: Page) {
+  const form = page.getByTestId('quote-request-form');
+  await expect(form).toBeVisible();
+  for (const [selector, value] of [
+    ['#phone', '090-0000-0000'],
+    ['#address', '東京都千代田区丸の内1-1'],
+  ] as const) {
+    const input = form.locator(selector);
+    if (!(await input.inputValue()).trim()) await input.fill(value);
+  }
 }
 
 export async function register(page: Page, email: string, next = '/mypage', name = 'テスト 太郎') {
@@ -158,7 +172,7 @@ export async function requestQuoteAsCustomer(page: Page, email: string, configNa
   await page.waitForURL(/\?c=[0-9a-f-]{36}/);
   const configId = new URL(page.url()).searchParams.get('c')!;
   await page.goto(`/mypage/configurations/${configId}/request-quote`);
-  await expect(page.getByTestId('quote-request-form')).toBeVisible();
+  await fillQuoteRequestContact(page);
   if (siteAddress) await page.locator('#site_address').fill(siteAddress);
   await page.getByTestId('submit-quote-request').click();
   await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
@@ -172,7 +186,7 @@ export async function requestQuoteAsCustomer(page: Page, email: string, configNa
 export async function applyRegisteredOptionPrice(page: Page, price: number) {
   await page.locator('#registered-price').fill(String(price));
   await page.getByRole('button', { name: '変更内容を確認' }).click();
-  await expect(page.getByTestId('registered-option-change-review')).toContainText('商品価格（税別）');
+  await expect(page.getByTestId('registered-option-change-review')).toContainText('商品標準原価（税別）');
   await page.getByRole('button', { name: 'この変更を反映' }).click();
   // 反映が済むと、最新の登録内容を読み直して編集画面へ戻る
   await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
@@ -224,8 +238,40 @@ export async function revisionTotal(form: Locator): Promise<number> {
   return yen(text.match(/編集中\s*([^差]+)/)?.[1] ?? '');
 }
 
+/**
+ * 金額未確定の確認（正式見積の発行前に必要。D1 までの暫定）：未確定の行は「0円確定」を選んで理由を入れ、
+ * お客様が選んだ別途見積の商品の確認にチェックを入れる。初期データでは照明（別途見積）が標準で選ばれている
+ */
+export async function confirmPorBeforeIssue(form: Locator, reason = '現地確認の結果、ほかの明細に含む') {
+  const review = form.getByTestId('por-review');
+  if ((await review.count()) === 0) return;
+  await resolveUnresolvedPorRows(form, reason);
+  const confirm = review.getByTestId('por-confirm');
+  if ((await confirm.count()) > 0 && !(await confirm.isChecked())) await confirm.check();
+}
+
+/**
+ * 金額未確定の確認の欄で、未確定の行すべての扱いを選ぶ（既定は「0円確定」で理由を入れる。「対象外」はメモ）。
+ * 備考の自由記述では解消しない（2026-10-22 の確定事項 A-2-1）
+ */
+export async function resolveUnresolvedPorRows(form: Locator, reason: string, state: 'zero_confirmed' | 'excluded' = 'zero_confirmed') {
+  const review = form.getByTestId('por-review');
+  // 扱いを選べる未確定の行だけ（本体の行など選べない行は飛ばす）
+  const rows = review
+    .locator('[data-testid="por-review-row"][data-line-state="unresolved"]')
+    .filter({ has: form.page().getByTestId('por-review-state') });
+  // 扱いを選ぶと行の状態が変わり、未確定の一覧から外れる（選び終えるまで先頭の行を処理する。行は key で選び直す）
+  for (let guard = 0; guard < 50 && (await rows.count()) > 0; guard += 1) {
+    const first = rows.first();
+    const key = await first.getAttribute('data-row-key');
+    await first.getByTestId('por-review-state').selectOption(state);
+    await review.locator(`[data-testid="por-review-row"][data-row-key="${key}"]`).getByTestId('por-review-reason').fill(reason);
+  }
+}
+
 /** 編集中の内容を次の版として発行し、新しい版の見積 ID を返す（発行後は案件の画面へ戻る） */
 export async function issueRevision(page: Page, form: Locator): Promise<string> {
+  await confirmPorBeforeIssue(form);
   await form.getByRole('button', { name: /版を発行/ }).click();
   await page.waitForURL(/revised=1/);
   return new URL(page.url()).searchParams.get('case')!;

@@ -7,6 +7,7 @@ import { getStore } from '@/lib/data/store';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
 import { todayInJapan } from '@/lib/data/case-flow/preferences-from-form';
 import { dealerServesArea } from '@/lib/domain/case-flow';
+import { getSimulatorSaleViews, resolvedV25ConfigurationPricing } from '@/lib/data/standard-estimate-sale-views';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { groupQuoteRequestLines } from '@/lib/domain/quote-request-line-groups';
 import { PRICE_DISCLAIMER } from '@/lib/site';
@@ -46,16 +47,25 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   const dealers = (await caseFlow.listPublishedDealerProfiles())
     .filter((dealer) => dealerServesArea(dealer, configuration.site_prefecture ?? null, configuration.site_municipality ?? null))
     .map((dealer) => ({ id: dealer.dealer_id, name: dealer.display_name }));
-  const pricing = computePricing(
-    bundle.model,
-    bundle.options,
-    bundle.categories,
-    items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
-    undefined,
-    { groups: bundle.variantGroups, choices: bundle.variantChoices },
-    null,
-    exteriorFaces
-  );
+  // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）で計算せず、v2.5 の標準見積の売価で出す（DB の保存・見積依頼と同じ）
+  const sale = await getSimulatorSaleViews(bundle.model.id, { preview: false });
+  const pricing = sale.v25
+    ? await resolvedV25ConfigurationPricing(bundle, sale.saleViews, {
+        specCode: configuration.spec_code ?? null,
+        optionIds: items.map((i) => i.option_id),
+        variantChoiceIds: items.flatMap((i) => i.variant_choice_ids ?? []),
+        exteriorFaces,
+      })
+    : computePricing(
+        bundle.model,
+        bundle.options,
+        bundle.categories,
+        items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
+        undefined,
+        { groups: bundle.variantGroups, choices: bundle.variantChoices },
+        null,
+        exteriorFaces
+      );
   const { pricedGroups, zeroLines, priceOnRequestLines } = groupQuoteRequestLines(pricing.lines, bundle.categories);
   const hasSeparateWork = pricing.lines.some((line) => line.is_installation) || priceOnRequestLines.length > 0;
   const slug = bundle.model.slug;

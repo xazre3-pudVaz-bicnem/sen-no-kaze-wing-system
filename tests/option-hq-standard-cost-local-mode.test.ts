@@ -5,12 +5,18 @@ const mocks = vi.hoisted(() => ({
   isLocalMode: vi.fn(),
   requireStaff: vi.fn(),
   revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }));
 vi.mock('@/lib/data/store', () => ({ isLocalMode: mocks.isLocalMode }));
 vi.mock('@/lib/auth/session', () => ({ requireStaff: mocks.requireStaff }));
-vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock('next/cache', () => ({
+  revalidatePath: mocks.revalidatePath,
+  updateTag: mocks.updateTag,
+  // 公開カタログのキャッシュの印（CATALOG_TAG）を読み込むため
+  unstable_cache: (fn: unknown) => fn,
+}));
 
 import { getOptionHqStandardCostAccess, getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { saveOptionHqStandardCostAction } from '@/lib/actions/option-hq-standard-cost';
@@ -55,5 +61,6 @@ describe('本部商品基準原価：ローカル検証モード', () => {
     expect(result.error).toContain('ローカル検証モード');
     expect(mocks.createClient).not.toHaveBeenCalled();
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    expect(mocks.updateTag).not.toHaveBeenCalled();
   });
 });

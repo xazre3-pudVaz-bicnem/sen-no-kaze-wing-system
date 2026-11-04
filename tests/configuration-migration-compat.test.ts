@@ -108,8 +108,9 @@ describe('本番migration前のConfiguration互換', () => {
   });
 
   it('保存済みlegacy外壁は復元可能だが、新規選択候補はcurrentだけに限定する', () => {
-    expect(simulatorSource).toContain('options={allExteriorWallOptions}');
-    expect(simulatorSource).toContain('selectableOptions={exteriorWallOptions}');
+    // v2.5 の売価を使う間は、表示用の商品価格だけ差し替える（v2.5 PR-C1）。どの商品を出すかは変えない
+    expect(simulatorSource).toContain('options={withDisplayPrices(allExteriorWallOptions)}');
+    expect(simulatorSource).toContain('selectableOptions={withDisplayPrices(exteriorWallOptions)}');
     expect(dialogSource).toContain('const availableOptions = selectableOptions ?? options;');
     expect(dialogSource).toContain('normalizeExteriorFaces(current, options');
     expect(dialogSource).toContain('options={availableOptions}');

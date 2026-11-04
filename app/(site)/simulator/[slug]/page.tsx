@@ -7,6 +7,14 @@ import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
 import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
+import {
+  isFireProofSelected,
+  pickSaleView,
+  v25SlotOptionIdsFor,
+  v25StandardVariantIds,
+  withoutCatalogCosts,
+  withoutTemplatePrices,
+} from '@/lib/domain/standard-estimate-sale-view';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 import { JsonLd } from '@/components/ui';
@@ -51,6 +59,9 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   ]);
   const saleViews = sale.saleViews;
   const pricingPreview = previewRequested && !sale.switchedOn;
+  // v2.5 の売価（v2.5 PR-C1）を使うときは、商品価格の列（原価）・本体の価格・本体内訳をブラウザへ渡さない。
+  // 旧テンプレートは仕様の選択肢・標準構成のためにだけ渡し、金額は外す（価格の計算には使わない）
+  const clientBundle = sale.v25 ? withoutCatalogCosts(bundle) : bundle;
   const estimateTemplates = (
     await Promise.all(templateHeaders.map((row) => store.getEstimateTemplateBundle(model.id, row.spec_code)))
   ).filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -130,7 +141,22 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   } else if (spec) {
     // /plans の平面図から入った場合は、該当仕様の標準構成を選択済みで開始する。
     // 未知の spec_code は helper 側で無視し、通常の既定仕様へ安全にフォールバックする。
-    const entry = buildSimulatorEntryState(bundle, estimateTemplates, spec);
+    const entry = buildSimulatorEntryState(
+      bundle,
+      estimateTemplates,
+      spec,
+      sale.v25
+        ? (specCode, optionIds) =>
+            v25StandardVariantIds(
+              bundle.variantGroups,
+              bundle.variantChoices,
+              pickSaleView(saleViews, model.slug, specCode, isFireProofSelected(bundle, optionIds)),
+              optionIds
+            )
+        : undefined,
+      // v2.5：標準構成は公開中の v2.5 の版（非防火）の選択枠の商品（2026-10-29 先方回答）
+      sale.v25 ? (specCode) => v25SlotOptionIdsFor(saleViews, model.slug, specCode, false) : undefined
+    );
     if (entry) {
       initial = {
         // URL指定の新規下書きなので保存済みConfiguration IDは持たない。
@@ -158,10 +184,11 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
           key={c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new'}
-          bundle={bundle}
-          estimateTemplates={estimateTemplates}
+          bundle={clientBundle}
+          estimateTemplates={sale.v25 ? withoutTemplatePrices(estimateTemplates) : estimateTemplates}
           saleViews={saleViews}
           pricingPreview={pricingPreview}
+          v25Pricing={sale.v25}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}
           initial={initial}

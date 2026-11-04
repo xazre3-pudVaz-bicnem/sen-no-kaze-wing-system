@@ -1,5 +1,7 @@
 import 'server-only';
+import { updateTag } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { isMissingFunction, isMissingRelation } from '@/lib/data/schema-compat';
 import { isLocalMode } from '@/lib/data/store';
 export { canEditCostField, type CostRecordingAccess } from '@/lib/domain/option-cost-access';
@@ -24,6 +26,14 @@ const RECORD_REASON = {
   choice: '商品登録で原価差額を保存',
   publishChoice: '商品の登録（公開）で原価差額を記録',
 } as const;
+
+/**
+ * 原価の Version が変わったら、シミュレーターの v2.5 の売価の表（getSimulatorV25SaleViews）のキャッシュを捨てる（v2.5 PR-C1）。
+ * 売価の表は今の原価の Version から作るため、保存・見積依頼（DB で計算）と画面の金額がずれないようにする
+ */
+function refreshSalePrices() {
+  updateTag(CATALOG_TAG);
+}
 
 /** 権限の確認ができなかったときの文（保存の操作は止める。本部の入力を黙って捨てない） */
 export const COST_ACCESS_ERROR_MESSAGE = '原価の権限を確認できませんでした。時間をおいて、もう一度保存してください。';
@@ -109,6 +119,7 @@ export async function recordPublishedOptionCost(
     p_change_reason: RECORD_REASON[kind],
   });
   if (result.error) return { status: 'error', message: errorMessage(result.error) };
+  refreshSalePrices();
   return { status: 'recorded' };
 }
 
@@ -158,9 +169,13 @@ export async function recordPublishedChoiceCosts(
       p_expected_current_version_id: current?.id ?? null,
       p_change_reason: RECORD_REASON[kind],
     });
-    if (result.error) return { status: 'error', message: errorMessage(result.error) };
+    if (result.error) {
+      if (recorded) refreshSalePrices();
+      return { status: 'error', message: errorMessage(result.error) };
+    }
     recorded = true;
   }
+  if (recorded) refreshSalePrices();
   return { status: recorded ? 'recorded' : 'unchanged' };
 }
 

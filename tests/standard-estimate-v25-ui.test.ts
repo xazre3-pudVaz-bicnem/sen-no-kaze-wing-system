@@ -60,7 +60,9 @@ describe('標準見積 v2.5 の編集（PR-B1b の処理を「見積書管理 �
     expect(workbench).toContain('<Badge tone="danger">売価未入力</Badge>');
     expect(workbench).toContain('V25_COST_STATUS_LABEL[status]');
     expect(workbench).toContain('公開できない理由');
-    expect(workbench).toContain('const blockers = v25PublishBlockers(preview, dirty);');
+    expect(workbench).toContain('...v25PublishBlockers(preview, dirty),');
+    // シミュレーターと連携する選択枠の決まりに合わなければ公開できない（DB も公開で止める）
+    expect(workbench).toContain('const slotRuleIssues = useMemo(() => v25SlotRuleIssues(state.slots, (optionId) => candidateById.get(optionId)), [state.slots, candidateById]);');
   });
 
   it('保存は入力の確認の後、最新原価の取り込みは未保存の変更が無いときだけ、公開は確認ダイアログを通す', () => {

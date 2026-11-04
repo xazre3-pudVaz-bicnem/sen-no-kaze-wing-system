@@ -44,15 +44,17 @@ const candidates: V25WorkbenchCandidate[] = [
     name: '検査商品1',
     categoryId: 'cat-1',
     categoryName: '設備',
+    categoryCode: 'equipment',
+    singleSelect: false,
     manufacturer: 'メーカーA',
     modelNo: 'A-1',
     section: 'option',
     variantGroups: [{ id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] }],
     defaultChoices: { g1: 'c1' },
   },
-  { id: 'p2', name: '検査商品2', categoryId: 'cat-1', categoryName: '設備', manufacturer: '', modelNo: '', section: 'option', variantGroups: [], defaultChoices: {} },
-  { id: 'p3', name: '内装材', categoryId: 'cat-2', categoryName: '内装', manufacturer: '', modelNo: '', section: 'interior_exterior', variantGroups: [], defaultChoices: {} },
-  { id: 'p5', name: '設置工事', categoryId: 'cat-3', categoryName: '施工', manufacturer: '', modelNo: '', section: 'sitework', variantGroups: [], defaultChoices: {} },
+  { id: 'p2', name: '検査商品2', categoryId: 'cat-1', categoryName: '設備', categoryCode: 'equipment', singleSelect: false, manufacturer: '', modelNo: '', section: 'option', variantGroups: [], defaultChoices: {} },
+  { id: 'p3', name: '内装材', categoryId: 'cat-2', categoryName: '内装', categoryCode: 'wall-ceiling', singleSelect: true, manufacturer: '', modelNo: '', section: 'interior_exterior', variantGroups: [], defaultChoices: {} },
+  { id: 'p5', name: '設置工事', categoryId: 'cat-3', categoryName: '施工', categoryCode: 'sitework', singleSelect: false, manufacturer: '', modelNo: '', section: 'sitework', variantGroups: [], defaultChoices: {} },
 ];
 const sectionOf = (optionId: string) => candidates.find((candidate) => candidate.id === optionId)?.section;
 
@@ -233,7 +235,7 @@ describe('Excel 風の画面（描画）', () => {
         baseLines,
         candidates: [
           ...candidates,
-          { id: 'p8', name: '下書きに戻した商品', categoryId: '', categoryName: '設備', manufacturer: '', modelNo: '', section: 'option', retired: true, unavailable: true, variantGroups: [], defaultChoices: {} },
+          { id: 'p8', name: '下書きに戻した商品', categoryId: '', categoryName: '設備', categoryCode: '', singleSelect: false, manufacturer: '', modelNo: '', section: 'option', retired: true, unavailable: true, variantGroups: [], defaultChoices: {} },
         ],
         initial: { ...initial, slots: [...initial.slots, { key: 'slot-b8', baseline_key: 'b8', option_id: 'p8', variant_choices: {}, quantity: '1', price_mode: 'manual', manual_unit_price: '1000' }] },
         costs,

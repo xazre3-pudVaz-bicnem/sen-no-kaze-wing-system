@@ -60,7 +60,7 @@ describe('案件の営業担当組織：DB の取り決め（migration 202611041
   it('案件のプランボードの読み取りは作り直さず、担当の判定だけを差し込む（v2.5 の S2b の明細の位置・位置の枠を消さない）', () => {
     expect(migration).not.toContain('create or replace function public.get_case_plan_configuration');
     const block = sectionOf('do $case_plan_manager$', '$case_plan_manager$;');
-    expect(block).toContain("v_old constant text := 'if not (v_rank >= 3 or (v_rank >= 1 and v_quote.dealer_id = v_uid)) then';");
+    expect(block).toContain("v_old constant text := 'if not (v_rank >= 3 or (v_rank >= 1 and coalesce(v_quote.dealer_id = v_uid, false))) then';");
     expect(block).toContain('or (v_rank >= 1 and coalesce(v_quote.dealer_id = v_uid, false))');
     expect(block).toContain('or (v_quote.quote_request_id is not null and public.is_case_sales_manager(v_quote.quote_request_id))');
     expect(block).toContain("pg_catalog.strpos(v_def, '''position_slots''') = 0");

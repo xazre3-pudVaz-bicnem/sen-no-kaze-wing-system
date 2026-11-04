@@ -7,7 +7,10 @@
  *   - 明細売価 = trunc(売価単価 × 数量)、区分の経費 = trunc(区分の明細の小計 × 経費率)（経費の対象の区分だけ）
  *   - 税別 = Σ(区分の明細の小計 ＋ 経費) ＋ 調整額、税 = trunc(税別 × 税率)。千円未満の切り捨てはしない
  */
+import { customerCategorySelectable, productSpecCodesAllow, type CustomerCategoryMatrix } from './customer-category-applicability';
+import { isQuoteSelectableProduct } from './product-lifecycle';
 import { truncMul, truncQuantity } from './standard-estimate-money';
+import type { OptionCategory, ProductOption } from './types';
 
 export type QuoteV25Section = 'base' | 'interior_exterior' | 'option' | 'sitework';
 export const QUOTE_V25_SECTIONS: QuoteV25Section[] = ['base', 'interior_exterior', 'option', 'sitework'];
@@ -69,4 +72,25 @@ export function computeQuoteV25Totals(rows: QuoteV25Row[], context: QuoteV25Cont
   const subtotal = rawSubtotal + adjustment;
   const tax = truncMul(subtotal, context.taxRate);
   return { lineTotals, expenses, rawSubtotal, adjustment, subtotal, tax, total: subtotal + tax, hasUnresolved };
+}
+
+/**
+ * 商品台帳から足せる商品（DB の create_quote_revision_v25 と同じ決まり）：新しく選べる（公開中・販売中の）商品で、
+ * 商品の仕様コードがこの見積の仕様に合い、本体仕様マトリクスでその商品のカテゴリーが「×」でないもの
+ * （2026-10-21 の確定事項：明細を自由に編集できても、本体仕様マトリクスの適合を無条件に外さない。マトリクスの対象外のカテゴリーは制限しない）
+ */
+export function quoteV25SelectableProducts<T extends ProductOption>(
+  options: readonly T[],
+  categories: readonly Pick<OptionCategory, 'id' | 'code'>[],
+  matrix: CustomerCategoryMatrix | null,
+  modelSlug: string,
+  specCode: string
+): T[] {
+  const codeById = new Map(categories.map((category) => [category.id, category.code] as const));
+  return options.filter(
+    (option) =>
+      isQuoteSelectableProduct(option) &&
+      productSpecCodesAllow(option.spec_codes ?? [], specCode, modelSlug) &&
+      customerCategorySelectable(matrix, modelSlug, specCode, codeById.get(option.category_id) ?? '')
+  );
 }

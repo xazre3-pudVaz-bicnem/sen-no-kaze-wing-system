@@ -11,7 +11,8 @@ import { DealerRevisionForm } from '@/components/admin/dealer-forms';
 import { QuoteV25RevisionForm, type QuoteV25Product } from '@/components/admin/quote-v25-revision-form';
 import { Badge } from '@/components/ui';
 import { defaultVariantIdsFor } from '@/lib/domain/preset';
-import { productSpecCodesAllow } from '@/lib/domain/customer-category-applicability';
+import { buildCustomerCategoryMatrix } from '@/lib/domain/customer-category-applicability';
+import { quoteV25SelectableProducts } from '@/lib/domain/quote-v25';
 import { INTERIOR_EXTERIOR_CATEGORY_CODES } from '@/lib/domain/standard-estimate-pricing';
 import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 
@@ -75,12 +76,21 @@ export default async function AdminQuoteRevisionEditPage({
   const returnHref = `/admin/quotes?case=${encodeURIComponent(quote.id)}&tab=estimate#case-workspace`;
 
   // v2.5 の見積：商品台帳の商品は、見積に固定した版の売価（原価は渡さない）。この商品モデル・仕様で新しく選べる商品だけ
+  // （本体仕様マトリクスで「×」のカテゴリーの商品は出さない。DB の発行でも同じ判定で止める）
   let v25Products: QuoteV25Product[] = [];
   if (v25Context) {
-    const bundle = await store.getCatalogBundle(v25Context.baseModelId, { includeDraft: false });
+    const [bundle, specMatrix] = await Promise.all([
+      store.getCatalogBundle(v25Context.baseModelId, { includeDraft: false }),
+      store.getSpecMatrix(),
+    ]);
     const categoryById = new Map((bundle?.categories ?? []).map((category) => [category.id, category] as const));
-    const selectable = (bundle?.options ?? []).filter(
-      (option) => isQuoteSelectableProduct(option) && productSpecCodesAllow(option.spec_codes ?? [], v25Context.specCode, v25Context.modelSlug)
+    const matrix = bundle ? buildCustomerCategoryMatrix(specMatrix, bundle.categories, [bundle.model]) : null;
+    const selectable = quoteV25SelectableProducts(
+      bundle?.options ?? [],
+      bundle?.categories ?? [],
+      matrix,
+      v25Context.modelSlug,
+      v25Context.specCode
     );
     const groups = bundle?.variantGroups ?? [];
     // 選択肢の追加金額（旧来の価格の列）は v2.5 では使わないので渡さない

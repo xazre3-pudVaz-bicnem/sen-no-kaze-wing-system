@@ -24,9 +24,10 @@ const exteriorWallFacesDialog = fs.readFileSync(
 );
 
 describe('シミュレーター商品詳細の情報表示', () => {
-  it('通常の商品詳細は全カテゴリーで仕様選択をコンパクトな文字カードにする', () => {
-    expect(productDetail).toContain('showImages={false}');
-    expect(productDetail).toContain('名称と追加金額を確認して選択してください。メーカー資料は「メーカー資料を見る」から確認できます。');
+  it('共通商品詳細で画像がある選択項目だけ見本カード、画像がない項目は文字カードにする', () => {
+    expect(productDetail).toContain('showImages');
+    expect(productDetail).not.toContain('showImages={false}');
+    expect(productDetail).toContain('色・柄の見本画像は拡大できます。');
     expect(productDetail).not.toContain('EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES');
     expect(productDetail).not.toContain('useTextVariantCards');
     expect(variantPicker).toContain('const withImage = showImages && list.some((c) => c.image_url);');
@@ -106,7 +107,9 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(exteriorWallFacesDialog).toContain('<VariantPicker');
     expect(exteriorWallFacesDialog).not.toContain('showImages={false}');
     expect(variantPicker).toContain('showImages = true');
-    expect(variantPicker).toContain('<SmartImage src={c.image_url} alt={c.name} fill sizes="120px" className="object-cover" />');
+    expect(variantPicker).toContain('<ChoiceThumbnail');
+    expect(variantPicker).toContain('<ProductImageLightbox');
+    expect(variantPicker).toContain('aria-label={`${c.name}の色・柄見本を拡大`}');
   });
 
   it('お客様向け特徴・説明・型番・サイズ・メーカー参考価格を維持する', () => {

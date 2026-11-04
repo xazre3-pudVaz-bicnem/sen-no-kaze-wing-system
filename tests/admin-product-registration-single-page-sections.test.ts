@@ -14,6 +14,18 @@ const media = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-media-manager.tsx'),
   'utf8'
 );
+const forms = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/forms.tsx'),
+  'utf8'
+);
+const variants = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-variant-manager.tsx'),
+  'utf8'
+);
+const sectionHeading = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/product-section-heading.tsx'),
+  'utf8'
+);
 
 describe('商品登録 STEP 1 の1画面構成', () => {
   it('進捗カード一覧を廃止し、実セクション名へ1〜7の番号を付ける', () => {
@@ -32,13 +44,14 @@ describe('商品登録 STEP 1 の1画面構成', () => {
     }
     expect(newPage).toContain('{no}. {label}');
 
-    expect(newPage).toContain("content: '1. '");
-    expect(editPage).toContain("content: '1. '");
-    expect(editPage).toContain("content: '2. '");
-    expect(editPage).toContain("content: '3. 商品画像'");
-    expect(media).toContain('4. メーカー資料');
-    expect(editPage).toContain("content: '5. お客様選択'");
-    expect(editPage).toContain("content: '6. 価格・対象モデル'");
+    for (const title of ['1. 基本情報', '2. 商品の詳細', '3. 商品画像', '6. 価格・対象モデル']) {
+      expect(forms).toContain(title);
+    }
+    expect(sectionHeading).toContain('export function ProductSectionHeading');
+    expect(media).toContain('label="4. メーカー資料"');
+    expect(variants).toContain('label="5. お客様選択"');
+    expect(editPage).not.toContain("content: '1. '");
+    expect(newPage).not.toContain("content: '1. '");
     expect(editPage).toContain('7. 登録前チェック');
   });
 

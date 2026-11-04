@@ -14,6 +14,11 @@ import pg from 'pg';
 import { checkExitCode, evaluate, inspect, mergeRuntime, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
 import { runtimeConcurrency } from './runtime-concurrency.mjs';
 import { runtimeOptionHqStandardCost } from './runtime-option-hq-standard-cost.mjs';
+import { runtimeOptionStandardCostVersions } from './runtime-option-standard-cost-versions.mjs';
+import { runtimeV25InitialCostImport } from './runtime-v25-initial-cost-import.mjs';
+import { runtimePricingV25 } from './runtime-pricing-v25.mjs';
+import { runtimeStandardEstimateV25 } from './runtime-standard-estimate-v25.mjs';
+import { runtimeSimulatorV25Pricing } from './runtime-simulator-v25-pricing.mjs';
 import { runtimeOrganizationAccounts } from './runtime-organization-accounts.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
@@ -21,6 +26,15 @@ import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-publis
 import { runtimeConfigurationVariantAssignment } from './runtime-configuration-variant-assignment.mjs';
 import { runtimeProductLifecycle } from './runtime-product-lifecycle.mjs';
 import { runtimeLifecycleConcurrency } from './runtime-product-lifecycle-concurrency.mjs';
+import { runtimeQuoteFormalPorGuard } from './runtime-quote-formal-por-guard.mjs';
+import { runtimeProductSalesStop } from './runtime-product-sales-stop.mjs';
+import { runtimeConfigurationSpecGuard } from './runtime-configuration-spec-guard.mjs';
+import { runtimeTriggerFunctionExecute } from './runtime-trigger-function-execute.mjs';
+import { runtimeLegacyPriceGuard } from './runtime-legacy-price-guard.mjs';
+import { runtimeV25PositionSlots } from './runtime-v25-position-slots.mjs';
+import { runtimeV25FormalQuotes } from './runtime-v25-formal-quotes.mjs';
+import { runtimeV25StandardQuoteDrafts } from './runtime-v25-standard-quote-drafts.mjs';
+import { runtimeCasePlanPositionSlots } from './runtime-case-plan-position-slots.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -49,10 +63,35 @@ try {
     // 同時編集（optimistic locking）は 2 本の接続が必要なため、別の接続で実行する
     runtime = mergeRuntime(runtime, await runtimeConcurrency({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOptionHqStandardCost(client, { connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeOptionStandardCostVersions(client, { connectionString: url }));
+    // 既存の商品価格・追加金額の初期の原価 Version への取り込み（v2.5 PR-A3）
+    runtime = mergeRuntime(runtime, await runtimeV25InitialCostImport(client));
+    // 正式計算は DB の結果を、手で検算した値と TypeScript の同じ計算の両方と突き合わせる
+    runtime = mergeRuntime(runtime, await runtimePricingV25(client));
+    // 標準見積の v2.5 の Revision（公開と原価の切替・保存と公開の同時実行は 2 本の接続で確かめる）
+    runtime = mergeRuntime(runtime, await runtimeStandardEstimateV25(client, { connectionString: url }));
+    // v2.5 PR-C1：シミュレーター・保存した仕様・見積依頼の v2.5 の売価
+    runtime = mergeRuntime(runtime, await runtimeSimulatorV25Pricing(client));
     runtime = mergeRuntime(runtime, await runtimeConfigurationVariantAssignment(client));
     runtime = mergeRuntime(runtime, await runtimeProductLifecycle(client));
     // 取扱終了と保存・提出・発行の同時実行は 2 本の接続が必要なため、別の接続で実行する
     runtime = mergeRuntime(runtime, await runtimeLifecycleConcurrency({ connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeQuoteFormalPorGuard(client));
+    runtime = mergeRuntime(runtime, await runtimeProductSalesStop(client));
+    // #389 の安全機構（本体分類表・明細の保護）を今のマトリクス方式で確かめる。同時実行は 2 本の接続を使う
+    runtime = mergeRuntime(runtime, await runtimeConfigurationSpecGuard(client, { connectionString: url }));
+    // トリガー専用の関数 26 本は直接実行できず、外した後も 31 本のトリガーが動く（20261016114000）
+    runtime = mergeRuntime(runtime, await runtimeTriggerFunctionExecute(client));
+    // 旧価格の列（本部商品の原価）は利用者のロールから読めず、本部商品の金額は本部だけが変えられる（v2.5 PR-C1b）
+    runtime = mergeRuntime(runtime, await runtimeLegacyPriceGuard(client));
+    // 窓タイプと、位置・用途ごとの選択枠・枠ごとの選べる商品（v2.5 PR-S1）
+    runtime = mergeRuntime(runtime, await runtimeV25PositionSlots(client));
+    // v2.5 の標準見積から作った見積の第 2 版以降（正式見積）をサーバーの v2.5 の計算で発行する（v2.5 PR-D1）
+    runtime = mergeRuntime(runtime, await runtimeV25FormalQuotes(client));
+    // Web 以外の案件で、v2.5 の標準見積の版から見積下書きを作る・発行する・改訂する（v2.5 PR-D1c）
+    runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
+    // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
+    runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
     runtime = mergeRuntime(runtime, await runtimeOrganizationAccounts(client, { connectionString: url }));
     printRuntime(runtime);
   }

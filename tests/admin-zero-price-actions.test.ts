@@ -29,6 +29,17 @@ vi.mock('@/lib/data/public-catalog', () => ({
 vi.mock('@/lib/mail/send', () => ({
   flushNotificationsSafely: vi.fn(),
 }));
+// 原価の Version の記録（v2.5 PR-A3）は、このテストでは「仕組みが無い」扱い（従来どおりの保存）
+vi.mock('@/lib/data/option-cost-recording', () => ({
+  getCostRecordingAccess: vi.fn(async () => ({ available: false, canManage: false })),
+  getCostAccessForProduct: vi.fn(async () => ({ available: false, canManage: false })),
+  NO_COST_RECORDING: { available: false, canManage: false },
+  canEditCostField: (access: { available: boolean; canManage: boolean; error?: boolean }) => !access.error && (!access.available || access.canManage),
+  COST_ACCESS_ERROR_MESSAGE: '原価の権限を確認できませんでした。',
+  recordPublishedOptionCost: vi.fn(async () => ({ status: 'unavailable' })),
+  recordPublishedChoiceCosts: vi.fn(async () => ({ status: 'unavailable' })),
+  costRecordingNotice: () => null,
+}));
 vi.mock('@/lib/data/store', () => ({
   getStore: mocks.getStore,
   isLocalMode: vi.fn(() => false),
@@ -136,6 +147,7 @@ describe('0円商品のServer Actionガード', () => {
     const store = {
       getOption: vi.fn(async () => option({ status: 'draft', price: 0 })),
       upsertOption: vi.fn(),
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'toilet' }]),
     };
     mocks.getStore.mockResolvedValue(store);
     const fd = new FormData();
@@ -144,7 +156,24 @@ describe('0円商品のServer Actionガード', () => {
     await expect(publishOptionAction(fd)).rejects.toThrow('REDIRECT:');
     expect(store.upsertOption).not.toHaveBeenCalled();
     const redirectUrl = String(mocks.redirect.mock.calls[0]?.[0] ?? '');
-    expect(decodeURIComponent(redirectUrl)).toContain('商品価格が0円です');
+    expect(decodeURIComponent(redirectUrl)).toContain('商品標準原価が0円です');
+  });
+
+  it('旧フリー商品（本部商品の外）の0円は「商品価格が0円です」と案内する（原価の決まりは掛けない）', async () => {
+    const store = {
+      getOption: vi.fn(async () => option({ status: 'draft', price: 0 })),
+      upsertOption: vi.fn(),
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'free-product' }]),
+    };
+    mocks.getStore.mockResolvedValue(store);
+    const fd = new FormData();
+    fd.set('id', OPTION_ID);
+
+    await expect(publishOptionAction(fd)).rejects.toThrow('REDIRECT:');
+    expect(store.upsertOption).not.toHaveBeenCalled();
+    const redirectUrl = decodeURIComponent(String(mocks.redirect.mock.calls[0]?.[0] ?? ''));
+    expect(redirectUrl).toContain('商品価格が0円です');
+    expect(redirectUrl).not.toContain('商品標準原価');
   });
 
   it('publishOptionActionは明示確認済みの通常価格0円をPublishedにできる', async () => {

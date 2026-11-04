@@ -152,6 +152,8 @@ ANTHROPIC_API_KEY=sk-ant-... node scripts/generate-column.ts --slug seaside-inst
 
 変更後、既存ページとコラムの canonical・OGP・sitemap がすべて www.sen-no-kaze.com になります。
 
+Supabase Auth の Site URL・Redirect URLs・SMTP など、ほかの本番の設定の今の値と変更の内容は [custom-domain-settings.md](custom-domain-settings.md) にまとめています（変更は内容の確認の後に行う）。
+
 ### 自動投稿に必要な設定
 
 1. GitHub → Settings → **Secrets and variables** → **Actions** → **New repository secret**

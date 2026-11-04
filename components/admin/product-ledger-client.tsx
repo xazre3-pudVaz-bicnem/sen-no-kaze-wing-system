@@ -18,13 +18,19 @@ import {
   type ProductLedgerState,
 } from '@/lib/domain/product-lifecycle';
 import { setProductLifecycleAction } from '@/lib/actions/product-lifecycle';
+import { windowTypeLabelOf } from '@/lib/domain/window-types';
+import { ProductSalesStatusPanel } from './product-sales-status-panel';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
-import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
+import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption, WindowType } from '@/lib/domain/types';
 
 type Props = {
   canEdit: boolean;
-  /** 取扱終了・シミュレーター表示の操作を出してよいか（DB の migration が両方とも適用済みか） */
+  /** 販売停止・シミュレーター表示の操作を出してよいか（DB の migration が両方とも適用済みか） */
   lifecycleEnabled?: boolean;
+  /** 廃番の操作を出してよいか（20261016112000 が適用済みか） */
+  discontinueEnabled?: boolean;
+  /** 廃番を取り消せるか（本部の管理者だけ） */
+  canRestoreDiscontinued?: boolean;
   categories: OptionCategory[];
   options: ProductOption[];
   models: BaseModel[];
@@ -32,6 +38,10 @@ type Props = {
   configurationUsageCounts: Record<string, number> | null;
   hqStandardCosts: Record<string, number> | null;
   initiallySelectedId?: string;
+  /** 商品標準原価（options.price）を出す。原価の Version の仕組みがある間は本部だけ（v2.5 PR-A3） */
+  showCost?: boolean;
+  /** 窓タイプのマスター（v2.5 PR-S2）。窓タイプを使うカテゴリー（サッシ）の商品に名前を出す */
+  windowTypes?: WindowType[];
 };
 
 type LedgerSort =
@@ -188,7 +198,7 @@ function matchesLifecycle(option: ProductOption, lifecycle: '' | ProductLedgerSt
   return !lifecycle || productLedgerState(option) === lifecycle;
 }
 
-export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId }: Props) {
+export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discontinueEnabled = false, canRestoreDiscontinued = false, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId, showCost = true, windowTypes = [] }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupCode, setGroupCode] = useState('');
@@ -205,6 +215,8 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
 
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
+  // 窓タイプ（v2.5 PR-S2）：設定済みの商品だけ名前を出す（マスターに無いコードはコードのまま）
+  const windowTypeLabelFor = (option: ProductOption) => windowTypeLabelOf(windowTypes, option.window_type_code);
   const categoryGroups = useMemo(() => {
     const groups = new Map<string, { code: string; name: string; sort: number; categories: OptionCategory[] }>();
     for (const category of categories) {
@@ -324,7 +336,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div>
             <h2 className="text-lg font-semibold">商品一覧</h2>
-            <p className="mt-1 text-xs text-muted">取扱終了の商品も履歴として残し、一覧から選択・確認・編集できます。</p>
+            <p className="mt-1 text-xs text-muted">販売停止・廃番の商品も履歴として残し、一覧から選択・確認・編集できます。</p>
           </div>
           <p className="text-xs font-medium text-muted">
             {filtered.length ? filtered.length + '件中 ' + firstShown + '〜' + lastShown + '件を表示' : '0件'}
@@ -344,7 +356,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
                 下書き <span className="ml-1 text-xs">{draftCount}</span>
               </button>
               <button type="button" role="tab" aria-selected={lifecycle === 'retired' && !attentionOnly} onClick={() => { setLifecycle('retired'); setAttentionOnly(false); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (lifecycle === 'retired' && !attentionOnly ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
-                取扱終了 <span className="ml-1 text-xs">{retiredCount}</span>
+                販売停止・廃番 <span className="ml-1 text-xs">{retiredCount}</span>
               </button>
               <button type="button" role="tab" aria-selected={attentionOnly} onClick={() => { setLifecycle(''); setAttentionOnly(true); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (attentionOnly ? 'bg-amber-100 text-amber-900' : 'text-muted hover:bg-amber-50 hover:text-ink')}>
                 要確認 <span className="ml-1 text-xs">{attentionCount}</span>
@@ -413,7 +425,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
                   <tr>
                     <th className="w-[37%] px-2.5 py-1.5"><SortHeader label="商品" sort={sort} onSort={applySort} choices={[{ value: 'name-asc', label: '商品名 昇順' }, { value: 'name-desc', label: '商品名 降順' }]} /></th>
                     <th className="w-[18%] px-2.5 py-1.5"><SortHeader label="カテゴリー" sort={sort} onSort={applySort} choices={[{ value: 'category-asc', label: 'カテゴリー 昇順' }, { value: 'category-desc', label: 'カテゴリー 降順' }]} /></th>
-                    <th className="w-[17%] px-2.5 py-1.5 text-right"><SortHeader label="商品価格（税別）" sort={sort} onSort={applySort} align="right" choices={[{ value: 'price-asc', label: '安い順' }, { value: 'price-desc', label: '高い順' }]} /></th>
+                    {showCost && <th className="w-[17%] px-2.5 py-1.5 text-right"><SortHeader label="商品標準原価（税別）" sort={sort} onSort={applySort} align="right" choices={[{ value: 'price-asc', label: '安い順' }, { value: 'price-desc', label: '高い順' }]} /></th>}
                     <th className="w-[14%] px-2.5 py-1.5"><SortHeader label="状態" sort={sort} onSort={applySort} choices={[{ value: 'status-published-first', label: '登録済みを先に表示' }, { value: 'status-draft-first', label: '下書きを先に表示' }]} /></th>
                     <th className="w-[9%] px-2.5 py-1.5"><SortHeader label="更新日" sort={sort} onSort={applySort} align="right" choices={[{ value: 'updated-desc', label: '新しい順' }, { value: 'updated-asc', label: '古い順' }]} /></th>
                     <th className="w-[5%] px-1.5 py-1.5 text-center"><span className="sr-only">操作</span></th>
@@ -422,11 +434,11 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
                 <tbody className="divide-y divide-line">
                   {pageOptions.map((o) => {
                     const itemCategory = categoryMap.get(o.category_id);
-                    const manufacturerModel = [o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash;
+                    const manufacturerModel = [o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash;
                     return <tr key={o.id} tabIndex={0} aria-selected={selectedId === o.id} onClick={() => openDetail(o.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(o.id); } }} className={(selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25') + ' cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brown/50'} data-testid={'ledger-option-' + o.code}>
                       <td className="px-2.5 py-1.5"><div className="flex w-full min-w-0 items-center gap-2.5 text-left"><span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.62rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}</span><span className="min-w-0 flex-1"><span className="block line-clamp-2 text-[0.92rem] font-semibold leading-tight text-ink">{o.name}</span><span className="mt-0.5 block truncate text-xs leading-tight text-muted">{manufacturerModel}</span></span></div></td>
                       <td className="px-2.5 py-1.5 text-xs font-medium text-ink-soft">{itemCategory?.name ?? dash}</td>
-                      <td className="px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>
+                      {showCost && <td className="px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>}
                       <td className="px-2.5 py-1.5"><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></td>
                       <td className="px-2.5 py-1.5 text-xs whitespace-nowrap text-muted">{date(o.updated_at)}</td>
                       <td className="px-1.5 py-1.5 text-center"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></td>
@@ -444,7 +456,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
                   <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
                   <div className="pointer-events-none relative z-20 flex gap-2.5 p-2.5">
                     <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}</span>
-                    <div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3><p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-ink">{productPrice(o)}</span><span className="text-muted">更新 {date(o.updated_at)}</span></div></div>
+                    <div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3><p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-ink">{showCost ? productPrice(o) : ''}</span><span className="text-muted">更新 {date(o.updated_at)}</span></div></div>
                     <ChevronRight className="absolute bottom-2.5 right-3 size-4 text-muted" aria-hidden="true" />
                   </div>
                 </article>;
@@ -460,7 +472,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
                 return <article key={o.id} className={'group relative overflow-visible rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line')} data-testid={'ledger-option-' + o.code}>
                   <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
                   <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
-                  <div className="pointer-events-none relative z-20 flex min-h-[6.25rem] gap-2.5 p-2.5"><span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}</span><div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3><p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{productPrice(o)}</p><p className="text-[0.68rem] text-muted">{targetModel}</p></div></div></div>
+                  <div className="pointer-events-none relative z-20 flex min-h-[6.25rem] gap-2.5 p-2.5"><span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}</span><div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3><p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{showCost ? productPrice(o) : ''}</p><p className="text-[0.68rem] text-muted">{targetModel}</p></div></div></div>
                 </article>;
               })}
             </div>
@@ -481,29 +493,25 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
         <div className="grid shrink-0 grid-cols-2 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="商品詳細の表示切替"><button type="button" role="tab" id="ledger-customer-tab" aria-controls="ledger-customer-panel" aria-selected={detailTab === 'customer'} onClick={() => setDetailTab('customer')} className={`border-b-2 px-3 py-2.5 text-sm font-semibold transition ${detailTab === 'customer' ? 'border-brown text-ink' : 'border-transparent text-muted hover:text-ink'}`}>お客様表示</button><button type="button" role="tab" id="ledger-admin-tab" aria-controls="ledger-admin-panel" aria-selected={detailTab === 'admin'} onClick={() => setDetailTab('admin')} className={`border-b-2 px-3 py-2.5 text-sm font-semibold transition ${detailTab === 'admin' ? 'border-brown text-ink' : 'border-transparent text-muted hover:text-ink'}`}>管理情報</button></div>
 
         <div className="p-4 sm:p-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
-          {detailTab === 'customer' ? <section id="ledger-customer-panel" role="tabpanel" aria-labelledby="ledger-customer-tab"><div className="mb-3 rounded-xl border border-brown/20 bg-ivory/70 px-3 py-2 text-xs text-ink-soft">商品詳細の確認画面です。取扱終了・シミュレーター非表示の商品も商品台帳では確認できます。</div><div className="card p-4 sm:p-5"><ProductDetail key={selected.id} category={category} option={selected} groups={visiblePreviewGroups} choices={preview.choices} selectedVariantIds={previewVariantIds} isCurrentlySelected={false} compactMedia onVariantChange={onPreviewVariantChange} /></div></section> : (
+          {detailTab === 'customer' ? <section id="ledger-customer-panel" role="tabpanel" aria-labelledby="ledger-customer-tab"><div className="mb-3 rounded-xl border border-brown/20 bg-ivory/70 px-3 py-2 text-xs text-ink-soft">商品詳細の確認画面です。販売停止・廃番・シミュレーター非表示の商品も商品台帳では確認できます。</div><div className="card p-4 sm:p-5"><ProductDetail key={selected.id} category={category} option={selected} groups={visiblePreviewGroups} choices={preview.choices} selectedVariantIds={previewVariantIds} isCurrentlySelected={false} compactMedia onVariantChange={onPreviewVariantChange} /></div></section> : (
             <section id="ledger-admin-panel" role="tabpanel" aria-labelledby="ledger-admin-tab" className="space-y-4">
               <div className="grid gap-4 min-[900px]:grid-cols-2">
-                <dl className="card p-4"><h3 className="mb-2 font-semibold">商品基本情報</h3><Row label="商品管理番号" value={selected.product_no || '未採番'}/><Row label="カテゴリー" value={category.name}/><Row label="メーカー" value={selected.manufacturer || dash}/><Row label="型番・品番" value={selected.model_no || '要設定'}/><Row label="サイズ・仕様" value={selected.size_note || dash}/><Row label="対象モデル" value={selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'}/><Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/></dl>
-                <dl className="card p-4"><h3 className="mb-2 font-semibold">利用先</h3><Row label="見積で選択" value={isQuoteSelectableProduct(selected) ? '選択可' : productLedgerState(selected) === 'retired' ? '選択不可（取扱終了）' : '選択不可（下書き）'}/><Row label="シミュレーター" value={isQuoteSelectableProduct(selected) ? (productSimulatorVisibleSetting(selected) ? '表示する' : '表示しない') : '表示しない'}/><Row label="商品価格（税別）" value={productPrice(selected)}/><Row label="メーカー参考価格（税別）" value={selected.list_price == null ? '未設定' : formatPriceWithUnit(selected.list_price, selected.list_price_unit)}/></dl>
+                <dl className="card p-4"><h3 className="mb-2 font-semibold">商品基本情報</h3><Row label="商品管理番号" value={selected.product_no || '未採番'}/><Row label="カテゴリー" value={category.name}/><Row label="メーカー" value={selected.manufacturer || dash}/><Row label="型番・品番" value={selected.model_no || '要設定'}/>{(category.uses_window_type || selected.window_type_code) && <Row label="窓タイプ" value={windowTypeLabelFor(selected) ?? '未設定'}/>}<Row label="サイズ・仕様" value={selected.size_note || dash}/><Row label="対象モデル" value={selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'}/><Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/></dl>
+                <dl className="card p-4"><h3 className="mb-2 font-semibold">利用先</h3><Row label="見積で選択" value={isQuoteSelectableProduct(selected) ? '選択可' : productLedgerState(selected) === 'retired' ? `選択不可（${productLedgerStateLabel(selected)}）` : '選択不可（下書き）'}/><Row label="シミュレーター" value={isQuoteSelectableProduct(selected) ? (productSimulatorVisibleSetting(selected) ? '表示する' : '表示しない') : '表示しない'}/>{showCost && <Row label="商品標準原価（税別）" value={productPrice(selected)}/>}<Row label="メーカー参考価格（税別）" value={selected.list_price == null ? '未設定' : formatPriceWithUnit(selected.list_price, selected.list_price_unit)}/></dl>
               </div>
 
-              <section className="card p-4" aria-labelledby="ledger-handling-status-title">
-                <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id="ledger-handling-status-title" className="font-semibold">商品状態</h3><p className="mt-1 text-xs leading-relaxed text-muted">下書き、登録済み、取扱終了の3状態で管理します。取扱終了の商品も商品台帳では編集・確認できます。</p></div><Badge tone={productLedgerState(selected) === 'registered' ? 'success' : 'neutral'}>{productLedgerStateLabel(selected)}</Badge></div>
-                {canEdit && lifecycleEnabled && selected.status === 'published' && <div className="mt-3 border-t border-line pt-3">{productLedgerState(selected) === 'retired' ? <form action={setProductLifecycleAction}><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="action" value="resume"/><input type="hidden" name="expected_updated_at" value={selected.updated_at}/><button type="submit" className="btn-primary btn-sm" data-testid="ledger-resume-product">取扱を再開する</button><p className="mt-2 text-xs text-muted">再開すると、新しい見積で再び選択できるようになります。シミュレーター表示設定は以前の値を保持します。</p></form> : <form action={setProductLifecycleAction}><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="action" value="retire"/><input type="hidden" name="expected_updated_at" value={selected.updated_at}/><button type="submit" className="btn-secondary btn-sm" data-testid="ledger-retire-product">取扱を終了する</button><p className="mt-2 text-xs text-muted">新しい見積・シミュレーターの候補から外します。過去の保存内容や発行済み見積は変更しません。</p></form>}</div>}
-                {selected.status === 'draft' && <p className="mt-3 border-t border-line pt-3 text-xs text-muted">下書きは取扱終了にしません。不要なら参照状況を確認して削除します。</p>}
-              </section>
+              <ProductSalesStatusPanel option={selected} canEdit={canEdit} lifecycleEnabled={lifecycleEnabled} discontinueEnabled={discontinueEnabled} canRestoreDiscontinued={canRestoreDiscontinued} />
 
               <section className="card p-4" aria-labelledby="ledger-customer-simulator-title">
                 <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id="ledger-customer-simulator-title" className="font-semibold">シミュレーター表示</h3><p className="mt-1 text-xs leading-relaxed text-muted">登録済み商品だけ設定できます。実際の表示はカテゴリー・本体・仕様の条件も満たす場合に限ります。</p></div><Badge tone={isQuoteSelectableProduct(selected) && productSimulatorVisibleSetting(selected) ? 'success' : 'neutral'}>{isQuoteSelectableProduct(selected) && productSimulatorVisibleSetting(selected) ? '表示する' : '表示しない'}</Badge></div>
                 <dl className="mt-2"><Row label="対象モデル・仕様" value={`${selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'} ／ ${selected.spec_codes.length ? selected.spec_codes.join(' / ') : '全仕様共通'}`}/></dl>
                 {canEdit && lifecycleEnabled && isQuoteSelectableProduct(selected) && <form action={setProductLifecycleAction} className="mt-3 border-t border-line pt-3"><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="action" value={productSimulatorVisibleSetting(selected) ? 'hide_from_simulator' : 'show_in_simulator'}/><input type="hidden" name="expected_updated_at" value={selected.updated_at}/><button type="submit" className="btn-secondary btn-sm" data-testid="ledger-toggle-simulator">{productSimulatorVisibleSetting(selected) ? 'シミュレーターに表示しない' : 'シミュレーターに表示する'}</button></form>}
-                {productLedgerState(selected) === 'retired' && <p className="mt-3 border-t border-line pt-3 text-xs text-muted">取扱終了中はシミュレーターに表示されません。再開すると保存済みの表示設定が再び有効になります。</p>}
+                {productLedgerState(selected) === 'retired' && <p className="mt-3 border-t border-line pt-3 text-xs text-muted">販売停止・廃番の間はシミュレーターに表示されません。販売を再開すると保存済みの表示設定が再び有効になります。</p>}
               </section>
 
-              <div className="card p-4"><h3 className="font-semibold">自社の仕入・発注情報</h3><dl className="mt-2">{hqStandardCosts !== null && <Row label="本部商品基準原価（税別）" value={Object.prototype.hasOwnProperty.call(hqStandardCosts, selected.id) ? formatYen(hqStandardCosts[selected.id]) : '未設定'}/>}<Row label="仕入先" value={<PendingDbValue />}/><Row label="発注コード" value={<PendingDbValue />}/><Row label="発注単位" value={<PendingDbValue />}/></dl>{hqStandardCosts !== null && <p className="mt-2 border-t border-line pt-3 text-xs leading-relaxed text-muted">本部商品基準原価は、本部が現在の基準値として管理する税別原価です。実仕入価格・案件実原価・発行済み見積の原価ではありません。</p>}</div>
+              <div className="card p-4"><h3 className="font-semibold">自社の仕入・発注情報</h3><dl className="mt-2">{hqStandardCosts !== null && <Row label="商品標準原価の記録（税別）" value={Object.prototype.hasOwnProperty.call(hqStandardCosts, selected.id) ? formatYen(hqStandardCosts[selected.id]) : '未記録'}/>}<Row label="仕入先" value={<PendingDbValue />}/><Row label="発注コード" value={<PendingDbValue />}/><Row label="発注単位" value={<PendingDbValue />}/></dl>{hqStandardCosts !== null && <p className="mt-2 border-t border-line pt-3 text-xs leading-relaxed text-muted">商品標準原価の記録は、本部が登録済みの商品を保存・登録したときの税別原価の版です（v2.5 の計算に使います）。実仕入価格・案件実原価・発行済み見積の原価ではありません。</p>}</div>
 
-              <details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary><div className="border-t border-line px-4 py-3">{selectedConfigurationUsageCount === null ? <p className="text-sm text-muted">保存プランでの利用件数は、本部の商品編集権限があるユーザーだけ確認できます。</p> : <dl><Row label="保存プラン" value={selectedConfigurationUsageCount > 0 ? `保存プラン ${selectedConfigurationUsageCount}件` : '未使用'}/></dl>}<p className="mt-2 text-xs leading-relaxed text-muted">ここで「保存プラン」として数えるのは、configuration_items から商品IDを直接参照している保存済み構成だけです。標準見積・発行済み見積・Snapshotの履歴判定は含みません。</p>{canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && <div className="mt-3 rounded-lg border border-line bg-white p-3"><p className="text-sm font-semibold text-ink">完全削除可能</p><p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存プランから参照されていません。一覧右端の「⋮」から直接削除できます。</p></div>}{selected.status === 'published' && <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み・取扱終了の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。</p>}</div></details>
+              <details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary><div className="border-t border-line px-4 py-3">{selectedConfigurationUsageCount === null ? <p className="text-sm text-muted">保存プランでの利用件数は、本部の商品編集権限があるユーザーだけ確認できます。</p> : <dl><Row label="保存プラン" value={selectedConfigurationUsageCount > 0 ? `保存プラン ${selectedConfigurationUsageCount}件` : '未使用'}/></dl>}<p className="mt-2 text-xs leading-relaxed text-muted">ここで「保存プラン」として数えるのは、configuration_items から商品IDを直接参照している保存済み構成だけです。標準見積・発行済み見積・Snapshotの履歴判定は含みません。</p>{canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && <div className="mt-3 rounded-lg border border-line bg-white p-3"><p className="text-sm font-semibold text-ink">完全削除可能</p><p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存プランから参照されていません。一覧右端の「⋮」から直接削除できます。</p></div>}{selected.status === 'published' && <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み・販売停止・廃番の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。</p>}</div></details>
               <details className="card" data-product-origin-slot="pending-db"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">登録・権限情報 <ChevronDown className="size-4" /></summary><div className="border-t border-line"><p className="px-4 pt-3 text-xs leading-relaxed text-muted">商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。</p><dl className="px-4"><Row label="商品状態" value={productLedgerStateLabel(selected)}/><Row label="商品区分" value={<PendingDbValue />}/><Row label="登録元組織" value={<PendingDbValue />}/><Row label="最終更新" value={date(selected.updated_at)}/><Row label="商品情報の編集権限" value={canEdit ? '現在の権限で編集可能' : '閲覧のみ（サーバー側認可に従います）'}/></dl></div></details>
             </section>
           )}

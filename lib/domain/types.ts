@@ -169,8 +169,31 @@ export interface OptionCategory {
   is_required: boolean;
   /** false ならシミュレーターに出さない（台帳・代理店の見積編集では使える）。サッシは本体に含めるため非表示 */
   customer_visible: boolean;
+  /** 商品に窓タイプ（window_types）を設定するカテゴリー（サッシ。20261102100000。migration 前は未取得＝使わない） */
+  uses_window_type?: boolean;
   sort_order: number;
   status: PublishStatus;
+}
+
+/**
+ * 窓タイプ（サッシの商品の開閉形式。FIX窓・引違い窓・縦すべり出し窓・横すべり出し窓など。2026-10-30 先方回答）。
+ * 商品ごとに 1 つ（ProductOption.window_type_code）。「掃出し窓」などの用途・形状は入れない
+ */
+export interface WindowType {
+  code: string;
+  label: string;
+  sort_order: number;
+  status: 'active' | 'retired';
+}
+
+/**
+ * 標準見積の版の位置・用途の選択枠（slot_code）ごとの、お客様の選択（v2.5 PR-S1）。
+ * 保存したプランの明細の 1 行（configuration_items.slot_code）になる
+ */
+export interface SlotSelection {
+  slot_code: string;
+  option_id: string;
+  variant_choice_ids: string[];
 }
 
 /**
@@ -380,8 +403,12 @@ export interface ProductOption {
   status: PublishStatus;
   /** 登録済み商品をシミュレーターの新しい選択肢に出すか（20261015110000。migration 前は未取得＝表示）。見積の可否とは別 */
   simulator_visible?: boolean;
-  /** 取扱終了の日時（NULL＝取扱中。20261015110000）。取扱終了でも履歴は残し、新しい見積・シミュレーターでは選べない */
+  /** 販売停止の日時（NULL＝販売中。20261015110000。#500 の「取扱終了」）。販売停止でも履歴は残し、新しい見積・シミュレーターでは選べない */
   archived_at?: string | null;
+  /** 廃番の日時（20261016112000。廃番は販売停止の商品だけ）。原則再開しない。本部の管理者が理由を記録して取り消すと販売停止に戻る */
+  discontinued_at?: string | null;
+  /** サッシの商品の窓タイプ（window_types.code。20261102100000。窓タイプを使うカテゴリーの商品だけ・任意） */
+  window_type_code?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -545,6 +572,11 @@ export interface ConfigurationItem {
   quantity: number;
   /** 選ばれたバリエーション（壁色・扉色など） */
   variant_choice_ids: string[];
+  /**
+   * 標準見積の版の位置・用途の選択枠（v2.5 PR-S1。20261102100000）。null・未取得はカテゴリー単位の選択（これまでどおり）。
+   * 位置の枠ごとに 1 行なので、同じ商品が別の位置で複数行になることがある
+   */
+  slot_code?: string | null;
 }
 
 export interface ConfigurationSnapshot {
@@ -651,6 +683,13 @@ export interface Quote {
   notes: string | null;
   /** 見積Revisionを作成したスタッフ。既存見積はnull/未取得を許容する */
   created_by?: string | null;
+  /**
+   * v2.5 の標準見積で作った見積なら 'v2.5'（第 2 版以降も同じ。v2.5 PR-D1）。旧来の見積・DB の更新の前は null/未取得。
+   * v2.5 の見積の第 2 版以降は、固定した版の v2.5 の決まりで発行する（create_quote_revision_v25）
+   */
+  pricing_model?: 'v2.5' | null;
+  /** v2.5 の見積に固定した標準見積の版 */
+  standard_estimate_revision_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -741,7 +780,8 @@ export interface QuoteDraftItem {
   price_mode?: 'manual' | 'auto' | 'por';
 }
 
-export type ContactStatus = 'new' | 'handled';
+export type ContactStatus = 'new' | 'in_progress' | 'handled';
+export type ContactClassification = 'normal' | 'sales' | 'spam';
 
 /** お問い合わせ（トップ／お問い合わせページのフォーム） */
 export interface ContactMessage {
@@ -754,6 +794,8 @@ export interface ContactMessage {
   attachment_path: string | null;
   attachment_name: string | null;
   status: ContactStatus;
+  /** 本番migration未適用の期間はundefined */
+  classification?: ContactClassification;
   created_at: string;
 }
 

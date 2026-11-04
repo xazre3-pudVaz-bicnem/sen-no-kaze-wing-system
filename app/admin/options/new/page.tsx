@@ -13,11 +13,12 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const actor = await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
-  const [allCategories, models, options, costAccess] = await Promise.all([
+  const [allCategories, models, options, costAccess, windowTypes] = await Promise.all([
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     store.listOptions(),
     getCostRecordingAccess(),
+    store.listWindowTypes(),
   ]);
   const catalogEditor = canEditCatalog(actor.role);
   const registrationCategories = allCategories.filter((c) => c.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
@@ -135,6 +136,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
             duplicateSource={copySource && !canEditCostField(costAccess) ? withoutOptionCost(copySource) : copySource}
             returnTo={returnTo}
             canEditCost={canEditCostField(costAccess)}
+            windowTypes={windowTypes}
           />
 
           {lockedSections.map(([no, label, note]) => (

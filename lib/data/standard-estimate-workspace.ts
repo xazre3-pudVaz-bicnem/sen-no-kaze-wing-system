@@ -181,7 +181,7 @@ export async function loadStandardEstimateWorkspace(
     return { revision: summary, v25: null };
   }
 
-  const [v25, baseResult, savedResult, ruleResult, taxResult, catalog] = await Promise.all([
+  const [v25, baseResult, savedResult, ruleResult, taxResult, catalog, windowTypeResult] = await Promise.all([
     loadStandardEstimateV25(supabase, revision, header),
     supabase
       .from('base_master_revision_lines')
@@ -199,6 +199,8 @@ export async function loadStandardEstimateWorkspace(
       .maybeSingle(),
     supabase.from('tax_rule_versions').select('id, tax_mode, tax_rate, rounding_mode').eq('id', header.tax_rule_version_id).maybeSingle(),
     getPublicCatalog(),
+    // 窓タイプの名前（v2.5 PR-S2。候補の表示と、位置の枠の選べる商品の絞り込みだけに使う。読めなければ名前なしで続ける）
+    supabase.from('window_types').select('code, label'),
   ]);
   for (const result of [baseResult, savedResult, ruleResult, taxResult]) {
     if (result.error) throw new Error(`標準見積の編集に必要な内容を取得できませんでした: ${result.error.code ?? 'unknown'}`);
@@ -225,6 +227,9 @@ export async function loadStandardEstimateWorkspace(
         )
       : null;
   const categoryById = new Map((bundle?.categories ?? []).map((category) => [category.id, category] as const));
+  const windowTypeLabel = new Map(
+    windowTypeResult.error ? [] : ((windowTypeResult.data ?? []) as { code: string; label: string }[]).map((row) => [row.code, row.label] as const)
+  );
   const savedOptionIds = new Set(v25.slotOptionIds);
   const candidates: V25WorkbenchCandidate[] = (specCtx?.options ?? [])
     .filter((option) => isQuoteSelectableProduct(option) || (productLedgerState(option) === 'retired' && savedOptionIds.has(option.id)))
@@ -245,6 +250,9 @@ export async function loadStandardEstimateWorkspace(
         displayGroup: isLegacyWashbasinOption(option) ? 'washbasin-standard-set' : null,
         manufacturer: option.manufacturer ?? '',
         modelNo: option.model_no ?? '',
+        usesWindowType: category?.uses_window_type === true,
+        windowTypeCode: option.window_type_code ?? null,
+        windowTypeLabel: option.window_type_code ? (windowTypeLabel.get(option.window_type_code) ?? option.window_type_code) : null,
         section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
         retired: productLedgerState(option) === 'retired',
         variantGroups: groups.map((group) => ({
@@ -326,25 +334,23 @@ export async function loadStandardEstimateWorkspace(
   }
   const pinnedProductCost = new Map(((pinnedProducts.data ?? []) as { id: string; standard_cost: number }[]).map((row) => [row.id, Number(row.standard_cost)]));
   const pinnedChoiceCost = new Map(((pinnedChoices.data ?? []) as { id: string; cost_adjustment: number }[]).map((row) => [row.id, Number(row.cost_adjustment)]));
-  const pinned: Record<string, V25WorkbenchPinnedCost> = Object.fromEntries(
-    autoRows.map((row) => {
-      const variants = row.standard_estimate_revision_baseline_variants ?? [];
-      return [
-        slotIdentity(row.option_id, variants.map((variant) => variant.variant_choice_id)),
-        {
-          standard_cost: row.standard_cost_version_id ? (pinnedProductCost.get(row.standard_cost_version_id) ?? null) : null,
-          variant_adjustments: Object.fromEntries(
-            variants.map((variant) => [
-              variant.variant_choice_id,
-              variant.variant_cost_version_id ? (pinnedChoiceCost.get(variant.variant_cost_version_id) ?? null) : null,
-            ])
-          ),
-        },
-      ];
-    })
-  );
+  const pinnedRows = autoRows.map((row) => {
+    const variants = row.standard_estimate_revision_baseline_variants ?? [];
+    const cost: V25WorkbenchPinnedCost = {
+      standard_cost: row.standard_cost_version_id ? (pinnedProductCost.get(row.standard_cost_version_id) ?? null) : null,
+      variant_adjustments: Object.fromEntries(
+        variants.map((variant) => [
+          variant.variant_choice_id,
+          variant.variant_cost_version_id ? (pinnedChoiceCost.get(variant.variant_cost_version_id) ?? null) : null,
+        ])
+      ),
+    };
+    return { baselineKey: row.baseline_key, identity: slotIdentity(row.option_id, variants.map((variant) => variant.variant_choice_id)), cost };
+  });
   const costs: V25WorkbenchCosts = {
-    pinned,
+    // 同じ商品＋選択肢が複数の行にあるとき、行ごとの固定（pinnedByRow）を先に使う（DB の保存の v_old_rows → v_old と同じ）
+    pinned: Object.fromEntries(pinnedRows.map((row) => [row.identity, row.cost])),
+    pinnedByRow: Object.fromEntries(pinnedRows.map((row) => [`${row.baselineKey}#${row.identity}`, row.cost])),
     currentProduct: Object.fromEntries(currentProducts.map((row) => [row.option_id, Number(row.standard_cost)])),
     currentChoice: Object.fromEntries(currentChoices.map((row) => [row.variant_choice_id, Number(row.cost_adjustment)])),
   };

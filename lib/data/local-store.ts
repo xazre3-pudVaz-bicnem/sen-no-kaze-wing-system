@@ -36,6 +36,7 @@ import type {
   ContactClassification,
   SpecMatrix,
   MatrixRow,
+  WindowType,
 } from '@/lib/domain/types';
 import { computePricing } from '@/lib/domain/pricing';
 import {
@@ -46,6 +47,7 @@ import { categoriesInScope, validateSelection, type RuleContext } from '@/lib/do
 import { buildCustomerCategoryMatrix, effectiveCustomerSpecCodes } from '@/lib/domain/customer-category-applicability';
 import { ruleContextForSpec } from '@/lib/domain/estimate-template';
 import { canEditCatalog, hasRoleAtLeast } from '@/lib/domain/types';
+import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
 import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
   isCurrentIssuedQuote,
@@ -67,6 +69,7 @@ import {
   StoreError,
   type ContactInput,
   type CategoryInput,
+  type WindowTypeInput,
   type CatalogImportBatch,
   type DataStore,
   type ModelInput,
@@ -2106,6 +2109,33 @@ export class LocalStore implements DataStore {
       return c;
     });
   }
+  async listWindowTypes() {
+    return this.read((db) =>
+      [...(db.windowTypes ?? INITIAL_WINDOW_TYPES)].sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code))
+    );
+  }
+  async saveWindowType(input: WindowTypeInput): Promise<WindowType> {
+    return this.mutate((db) => {
+      // DB の window_types と同じ決まり：コードは英小文字・数字・ハイフン、名前は 40 文字まで・重複しない
+      if (!/^[a-z][a-z0-9-]{0,39}$/.test(input.code)) throw new StoreError('VALIDATION', '窓タイプのコードは英小文字・数字・ハイフン（40 字まで）で入力してください');
+      const label = input.label.trim();
+      if (!label || label.length > 40) throw new StoreError('VALIDATION', '窓タイプの名前は 1〜40 文字で入力してください');
+      db.windowTypes ??= INITIAL_WINDOW_TYPES.map((row) => ({ ...row }));
+      if (db.windowTypes.some((row) => row.label === label && row.code !== input.code)) {
+        throw new StoreError('VALIDATION', '同じ名前の窓タイプがあります');
+      }
+      const found = db.windowTypes.find((row) => row.code === input.code);
+      if (input.isNew) {
+        if (found) throw new StoreError('VALIDATION', '同じコードの窓タイプがあります');
+        const created: WindowType = { code: input.code, label, sort_order: input.sort_order, status: input.status };
+        db.windowTypes.push(created);
+        return created;
+      }
+      if (!found) throw new StoreError('NOT_FOUND', '窓タイプが見つかりません');
+      Object.assign(found, { label, sort_order: input.sort_order, status: input.status });
+      return found;
+    });
+  }
   async getOptionVariants(optionId: string) {
     return this.read((db) => {
       const groups = db.variantGroups
@@ -2206,6 +2236,18 @@ export class LocalStore implements DataStore {
       } = input as OptionInput & Pick<ProductOption, 'simulator_visible' | 'archived_at' | 'discontinued_at'>;
       if (db.options.some((o) => o.code === rest.code && o.id !== id)) {
         throw new StoreError('VALIDATION', `コード「${rest.code}」は既に使われています`);
+      }
+      // 窓タイプ（DB の options_window_type_guard と同じ）：窓タイプを使うカテゴリーの商品だけ・使用中の窓タイプだけ新しく設定できる
+      if (rest.window_type_code) {
+        const category = db.categories.find((row) => row.id === rest.category_id);
+        if (!category?.uses_window_type) {
+          throw new StoreError('VALIDATION', '窓タイプは、窓タイプを使うカテゴリー（サッシ）の商品だけに設定できます');
+        }
+        const current = id ? db.options.find((x) => x.id === id)?.window_type_code : null;
+        const windowType = (db.windowTypes ?? INITIAL_WINDOW_TYPES).find((row) => row.code === rest.window_type_code);
+        if (!windowType || (rest.window_type_code !== current && windowType.status !== 'active')) {
+          throw new StoreError('VALIDATION', '使用中の窓タイプを選んでください');
+        }
       }
       if (id) {
         const o = db.options.find((x) => x.id === id);

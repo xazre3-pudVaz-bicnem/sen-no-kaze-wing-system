@@ -5,9 +5,21 @@ import { signOutAction } from '@/lib/actions/auth';
 import { duplicateConfigurationAction } from '@/lib/actions/configurations';
 import { getStore } from '@/lib/data/store';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
-import { buildEstimateSpecSelection } from '@/lib/domain/estimate-template';
+import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
+import { buildEstimateSpecSelection, buildV25SpecSelection } from '@/lib/domain/estimate-template';
 import { defaultVariantIdsFor } from '@/lib/domain/preset';
-import { summarizePlanChanges, type PlanChangeSummary } from '@/lib/domain/plan-change-summary';
+import { summarizePlanChanges, type PlanChangeSummary, type PlanPositionChange } from '@/lib/domain/plan-change-summary';
+import { mergeOrphanSlotSelections, standardSlotSelection, withoutPositionCategoryOptions } from '@/lib/domain/simulator-position-slots';
+import {
+  FIRE_PROOF_OPTION_CODE,
+  isFireProofSelected,
+  pickSaleView,
+  splitConfigurationItems,
+  v25PositionSlotCategoryIds,
+  v25PositionSlots,
+  v25SlotOptionIds,
+  v25StandardVariantIds,
+} from '@/lib/domain/standard-estimate-sale-view';
 import type { CatalogBundle } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import {
@@ -212,6 +224,8 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
   // モデル・仕様ごとの読込を共用し、プラン保存や金額正本には触れない。
   const bundleRequests = new Map<string, Promise<CatalogBundle | null>>();
   const templateRequests = new Map<string, ReturnType<typeof store.getEstimateTemplateBundle>>();
+  // 新しい価格（v2.5）の間は、シミュレーターと同じく公開中の v2.5 の版の標準と比べる（位置・用途の選択枠は位置ごと。v2.5 PR-S2）
+  const saleRequests = new Map<string, ReturnType<typeof getSimulatorSaleViews>>();
   const planChangeEntries = await Promise.all(savedPlans.map(async (configuration) => {
     try {
       const modelId = configuration.base_model_id;
@@ -223,11 +237,13 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
       if (!templateRequests.has(templateKey)) {
         templateRequests.set(templateKey, store.getEstimateTemplateBundle(modelId, specCode));
       }
-      const [bundle, template, saved, exteriorFaces] = await Promise.all([
+      if (!saleRequests.has(modelId)) saleRequests.set(modelId, getSimulatorSaleViews(modelId, { preview: false }));
+      const [bundle, template, saved, exteriorFaces, sale] = await Promise.all([
         bundleRequests.get(modelId)!,
         templateRequests.get(templateKey)!,
         store.getConfiguration(configuration.id, user),
         getExteriorFaces(configuration.id),
+        saleRequests.get(modelId)!,
       ]);
       if (!bundle || !saved) return [configuration.id, null] as const;
       const ctx = {
@@ -237,16 +253,36 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
         conflicts: bundle.conflicts,
         customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
       };
-      const baselineIds = buildEstimateSpecSelection(ctx, bundle.model, specCode, template?.baseline_option_ids ?? []);
-      const baselineVariants = defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds);
+      const items = splitConfigurationItems(saved.items);
+      const fire = isFireProofSelected(bundle, items.optionIds);
+      const view = sale.v25 ? pickSaleView(sale.saleViews, bundle.model.slug, specCode, fire) : null;
+      const slotOptionIds = v25SlotOptionIds(view);
+      const fireOptionId = bundle.options.find((option) => option.code === FIRE_PROOF_OPTION_CODE)?.id ?? null;
+      const positionCategoryIds = v25PositionSlotCategoryIds(view, bundle.options);
+      // シミュレーターで開いたときと同じにそろえる：今の版に無い位置の選択はカテゴリー単位に戻し、
+      // 版で位置ごとに選ぶカテゴリーの商品はカテゴリー単位から外す（位置の枠ができる前の保存）
+      const plan = mergeOrphanSlotSelections(bundle, items, {
+        positionCodes: new Set(v25PositionSlots(view).map((slot) => slot.slot_code)),
+        positionCategoryIds,
+      });
+      const baselineIds = slotOptionIds
+        ? buildV25SpecSelection(ctx, bundle.model, specCode, slotOptionIds, fire ? fireOptionId : null, positionCategoryIds)
+        : buildEstimateSpecSelection(ctx, bundle.model, specCode, template?.baseline_option_ids ?? []);
+      const baselineVariants = view
+        ? v25StandardVariantIds(bundle.variantGroups, bundle.variantChoices, view, baselineIds)
+        : defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds);
+      const positions: PlanPositionChange[] = v25PositionSlots(view).flatMap((slot) => {
+        const current = plan.slotSelections.find((row) => row.slot_code === slot.slot_code);
+        if (!current) return [];
+        const categoryId = slot.category_id ?? bundle.options.find((option) => option.id === slot.standard_option_id)?.category_id;
+        const categoryName = bundle.categories.find((category) => category.id === categoryId)?.name ?? '';
+        return [{ label: `${categoryName}（${slot.slot_label}）`, current, standard: standardSlotSelection(slot, bundle.variantGroups, bundle.variantChoices) }];
+      });
       const summary = summarizePlanChanges(
         bundle,
-        {
-          optionIds: saved.items.map((item) => item.option_id),
-          variantChoiceIds: saved.items.flatMap((item) => item.variant_choice_ids ?? []),
-          exteriorFaces,
-        },
-        { optionIds: baselineIds, variantChoiceIds: baselineVariants }
+        { optionIds: withoutPositionCategoryOptions(bundle.options, plan.optionIds, positionCategoryIds), variantChoiceIds: plan.variantChoiceIds, exteriorFaces },
+        { optionIds: baselineIds, variantChoiceIds: baselineVariants },
+        positions
       );
       return [configuration.id, summary] as const;
     } catch (error) {

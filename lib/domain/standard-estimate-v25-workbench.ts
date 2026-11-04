@@ -28,6 +28,12 @@ export interface V25WorkbenchCandidate extends V25ProductCandidate {
   displayGroup?: string | null;
   manufacturer: string;
   modelNo: string;
+  /** 窓タイプを使うカテゴリー（サッシ）の商品か（v2.5 PR-S2。位置の枠の選べる商品を窓タイプで絞り込む） */
+  usesWindowType?: boolean;
+  /** 窓タイプ（未設定は null） */
+  windowTypeCode?: string | null;
+  /** 窓タイプの名前（マスターに無いコードはコードのまま） */
+  windowTypeLabel?: string | null;
   /** 新しく入れるときの選択肢（選択項目 → 標準の選択肢） */
   defaultChoices: Record<string, string>;
   /**
@@ -59,6 +65,11 @@ export interface V25WorkbenchPinnedCost {
 export interface V25WorkbenchCosts {
   /** slotIdentity → 固定した原価（保存済みの auto の選択枠だけ。DB の保存の v_old と同じ） */
   pinned: Record<string, V25WorkbenchPinnedCost>;
+  /**
+   * 「選択枠の識別子#slotIdentity」→ 固定した原価（DB の保存の v_old_rows と同じ。v2.5 PR-S1）。
+   * 同じ商品＋選択肢が複数の位置の枠にあるときは、その行の固定を先に使う
+   */
+  pinnedByRow?: Record<string, V25WorkbenchPinnedCost>;
   /** 今の商品の標準原価（option_id → 金額。版が無ければ載せない） */
   currentProduct: Record<string, number | null>;
   /** 今の選択肢の調整額（choice_id → 金額。版が無ければ載せない） */
@@ -79,6 +90,11 @@ export function standardSlotQuantity(categoryCode: string): number {
 
 /** 位置・用途の選択枠を作れないカテゴリー（外壁は 4 面の専用の仕組み、防火仕様は版で決まる。DB と同じ） */
 const NO_POSITION_SLOT_CATEGORY_CODES = new Set(['exterior-wall', 'fireproof']);
+
+/** 位置・用途の選択枠にできるカテゴリーか（外壁・防火仕様は作れない。DB と同じ） */
+export function canUsePositionSlot(categoryCode: string): boolean {
+  return !NO_POSITION_SLOT_CATEGORY_CODES.has(categoryCode);
+}
 
 /**
  * 選択枠がシミュレーターと連携する決まりに合わない内容（公開できない理由。DB の standard_estimate_v25_slot_rule_issues と同じ決まり）。
@@ -159,11 +175,16 @@ export function slotIdentity(optionId: string, choiceIds: string[]): string {
 
 /**
  * auto の選択枠の原価。保存済みの auto の選択枠と同じ「商品＋選択肢」なら固定した版を使う（版が無ければ原価未設定のまま）。
+ * 同じ行（選択枠の識別子）の固定を先に、無ければ同じ「商品＋選択肢」のほかの行の固定を使う（DB の保存の v_old_rows → v_old と同じ）。
  * それ以外（新しい行・商品や選択肢を変えた行・売価入力や別途見積から自動に変えた行）は今の版を使う（DB の保存と同じ決まり）
  */
-export function slotCostForWorkbench(slot: Pick<V25SlotRow, 'option_id' | 'variant_choices'>, costs: V25WorkbenchCosts): V25WorkbenchSlotCost {
+export function slotCostForWorkbench(
+  slot: Pick<V25SlotRow, 'option_id' | 'variant_choices'> & Partial<Pick<V25SlotRow, 'baseline_key'>>,
+  costs: V25WorkbenchCosts
+): V25WorkbenchSlotCost {
   const choices = slotChoiceIds(slot);
-  const pinned = costs.pinned[slotIdentity(slot.option_id, choices)];
+  const identity = slotIdentity(slot.option_id, choices);
+  const pinned = (slot.baseline_key ? costs.pinnedByRow?.[`${slot.baseline_key}#${identity}`] : undefined) ?? costs.pinned[identity];
   if (pinned) {
     if (pinned.standard_cost === null) return { status: 'missing', reason: 'missing_standard_cost', pinned: true };
     let total = 0;

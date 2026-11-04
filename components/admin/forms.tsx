@@ -23,7 +23,9 @@ import {
   type ProductOption,
   type ProductImageKind,
   type ViewKey,
+  type WindowType,
 } from '@/lib/domain/types';
+import { copiedWindowTypeCode, windowTypeChoices } from '@/lib/domain/window-types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
@@ -474,6 +476,8 @@ interface OptionFormProps {
   returnTo?: string;
   /** 商品標準原価・別途見積の欄を出す（原価の Version の仕組みがある間は本部だけ。フリー商品は常に出す） */
   canEditCost?: boolean;
+  /** 窓タイプ（サッシの商品の開閉形式。v2.5 PR-S2）。窓タイプを使うカテゴリーを選んだときだけ欄を出す */
+  windowTypes?: WindowType[];
 }
 
 export function OptionForm({
@@ -488,6 +492,7 @@ export function OptionForm({
   mode = 'all',
   returnTo,
   canEditCost = true,
+  windowTypes = [],
 }: OptionFormProps) {
   const [state, action, pending] = useActionState(saveOptionAction, initial);
   const [autoSaveState, setAutoSaveState] = useState<AdminFormState>(initial);
@@ -596,6 +601,7 @@ export function OptionForm({
       <input type="hidden" name="category_id" value={option.category_id} />
       <input type="hidden" name="manufacturer" value={option.manufacturer ?? ''} />
       <input type="hidden" name="model_no" value={option.model_no ?? ''} />
+      <input type="hidden" name="window_type_code" value={option.window_type_code ?? ''} />
     </>
   ) : null;
 
@@ -749,6 +755,31 @@ export function OptionForm({
                 {modelNoSuggestions.map((value) => <option key={value} value={value} />)}
               </datalist>
             </Field>
+            {selectedCategory?.uses_window_type && windowTypes.length > 0 ? (
+              <Field
+                label="窓タイプ"
+                htmlFor={`window_type_code-${mode}`}
+                hint="サッシの開閉形式を 1 つ選びます（任意）。掃出し窓・洗面窓などの位置・用途は、標準見積の位置・用途の選択枠で決めます"
+                errors={e.window_type_code}
+              >
+                <Select
+                  id={`window_type_code-${mode}`}
+                  name="window_type_code"
+                  // 複製して新しく登録するときは、「使う」窓タイプだけ引き継ぐ（「使わない」窓タイプは新しく設定できない）
+                  defaultValue={option ? (option.window_type_code ?? '') : (copiedWindowTypeCode(windowTypes, copySource?.window_type_code) ?? '')}
+                  data-testid="option-window-type"
+                >
+                  <option value="">未設定</option>
+                  {windowTypeChoices(windowTypes, option?.window_type_code)
+                    .map((row) => (
+                      <option key={row.code} value={row.code}>
+                        {row.label}
+                        {row.status === 'retired' ? '（使わない窓タイプ）' : ''}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+            ) : null /* 窓タイプを使わないカテゴリーでは欄を出さない（移したときに外すのはサーバー） */}
             {mode === 'create' && (
               <Field
                 label={sizeMeta.label}

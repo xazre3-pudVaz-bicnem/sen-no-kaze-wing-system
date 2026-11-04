@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
+import { windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
 import { productSizeMeta, productRegistrationGuidance, ProductCategoryGuidance } from '@/components/admin/product-category-guidance';
@@ -25,6 +26,7 @@ import {
   type OptionVariantChoice,
   type OptionVariantGroup,
   type ProductOption,
+  type WindowType,
 } from '@/lib/domain/types';
 
 const initialState: AdminFormState = { ok: false };
@@ -51,6 +53,8 @@ type Props = {
   duplicateCandidates?: DuplicateCandidateSummary[];
   /** 商品標準原価・原価差額・別途見積の欄を出す（原価の Version の仕組みがある間は本部だけ。フリー商品は常に出す） */
   canEditCost?: boolean;
+  /** 窓タイプ（v2.5 PR-S2）。窓タイプを使うカテゴリーの商品だけ欄を出す */
+  windowTypes?: WindowType[];
 };
 
 type ReviewState = {
@@ -144,6 +148,7 @@ export function RegisteredOptionEditFlow({
   financialTools,
   duplicateCandidates,
   canEditCost = true,
+  windowTypes = [],
 }: Props) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -156,6 +161,9 @@ export function RegisteredOptionEditFlow({
   const [selectedCategoryId, setSelectedCategoryId] = useState(option.category_id);
   const [sizeNoteValue, setSizeNoteValue] = useState(option.size_note ?? '');
   const selectedCategoryCode = categories.find((category) => category.id === selectedCategoryId)?.code ?? '';
+  // 窓タイプ（v2.5 PR-S2）：窓タイプを使うカテゴリー（サッシ）の商品だけ欄を出す
+  const windowTypeLabel = useCallback((code: string | null | undefined) => windowTypeLabelOf(windowTypes, code) ?? '—', [windowTypes]);
+  const selectedCategoryUsesWindowType = categories.find((category) => category.id === selectedCategoryId)?.uses_window_type === true;
   const sizeMeta = productSizeMeta(selectedCategoryCode);
   const sizeGuidance = productRegistrationGuidance(selectedCategoryCode);
   const duplicateCheckReady = Boolean(option.manufacturer?.trim() && (option.model_no?.trim() || option.name.trim()));
@@ -220,6 +228,12 @@ export function RegisteredOptionEditFlow({
       base_model_id: nullable(data.get('base_model_id')),
       manufacturer: nullable(data.get('manufacturer')),
       model_no: nullable(data.get('model_no')),
+      // 窓タイプ（v2.5 PR-S2）：窓タイプを使わないカテゴリーへ移すと外れる（サーバーも同じ）
+      window_type_code: categories.find((category) => category.id === String(data.get('category_id') ?? ''))?.uses_window_type
+        ? data.has('window_type_code')
+          ? nullable(data.get('window_type_code'))
+          : (option.window_type_code ?? null)
+        : null,
       size_note: nullable(data.get('size_note')),
       list_price: numberOrNull(data.get('list_price')),
       highlight: nullable(data.get('highlight')),
@@ -264,6 +278,7 @@ export function RegisteredOptionEditFlow({
       { key: 'category', label: 'カテゴリー', before: categoryMap.get(option.category_id)?.name ?? '—', after: categoryMap.get(next.category_id)?.name ?? '—' },
       { key: 'manufacturer', label: 'メーカー', before: option.manufacturer ?? '—', after: next.manufacturer ?? '—' },
       { key: 'model_no', label: 'シリーズ・型番／品番', before: option.model_no ?? '—', after: next.model_no ?? '—' },
+      { key: 'window_type', label: '窓タイプ', before: windowTypeLabel(option.window_type_code), after: windowTypeLabel(next.window_type_code) },
       { key: 'size_note', label: 'サイズ・仕様', before: option.size_note ?? '—', after: next.size_note ?? '—' },
       ...(showCostFields
         ? [{ key: 'price', label: priceLabel, before: option.price_on_request ? '別途見積' : yen(option.price), after: next.price_on_request ? '別途見積' : yen(next.price) }]
@@ -284,7 +299,7 @@ export function RegisteredOptionEditFlow({
     const imageChanged = Boolean(review.formData.get('image_file') instanceof File && (review.formData.get('image_file') as File).size > 0) || (option.image_url ?? '') !== (nullable(review.formData.get('image_url')) ?? '');
     if (imageChanged) rows.push({ key: 'image', label: 'メイン画像', before: option.image_url ?? '', after: review.imagePreviewUrl ?? '', kind: 'image' });
     return rows.filter((row) => row.kind === 'image' || row.before !== row.after);
-  }, [categoryMap, modelMap, option, review, priceLabel, showCostFields]);
+  }, [categoryMap, modelMap, option, review, priceLabel, showCostFields, windowTypeLabel]);
 
   const zeroPriceNeedsServerContract = Boolean(review && introducesUnconfirmedZeroPrice(option, review.option));
   const nextCategory = review ? categoryMap.get(review.option.category_id) : undefined;
@@ -488,6 +503,24 @@ export function RegisteredOptionEditFlow({
               <Field label="シリーズ・型番／品番" htmlFor="registered-model-no">
                 <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} onChange={() => setIdentityChanged(true)} />
               </Field>
+              {selectedCategoryUsesWindowType && windowTypes.length > 0 && (
+                <Field
+                  label="窓タイプ"
+                  htmlFor="registered-window-type"
+                  hint="サッシの開閉形式を 1 つ選びます（任意）。掃出し窓などの位置・用途は、標準見積の位置・用途の選択枠で決めます"
+                >
+                  <Select id="registered-window-type" name="window_type_code" defaultValue={option.window_type_code ?? ''} onChange={() => setIdentityChanged(true)} data-testid="registered-window-type">
+                    <option value="">未設定</option>
+                    {windowTypeChoices(windowTypes, option.window_type_code)
+                      .map((row) => (
+                        <option key={row.code} value={row.code}>
+                          {row.label}
+                          {row.status === 'retired' ? '（使わない窓タイプ）' : ''}
+                        </option>
+                      ))}
+                  </Select>
+                </Field>
+              )}
             </div>
             <ProductManagementNumber
               number={option.product_no}

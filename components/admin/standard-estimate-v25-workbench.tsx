@@ -21,11 +21,13 @@ import {
   type V25LinePriceMode,
   type V25LineRow,
   type V25Preview,
+  type V25PreviewSlot,
   type V25SlotPriceMode,
   type V25SlotRow,
 } from '@/lib/domain/standard-estimate-v25-view';
 import {
   calculateV25Workbench,
+  canUsePositionSlot,
   percentProblem,
   percentToRate,
   rateToPercent,
@@ -48,6 +50,8 @@ const RATE_LABEL = { sales_fee_rate: '販売費率', expense_rate: '経費率', 
 
 let rowSeq = 0;
 const newKey = (prefix: string) => `${prefix}-new-${(rowSeq += 1)}`;
+/** 選べる商品の絞り込みの「窓タイプ未設定」 */
+const NO_WINDOW_TYPE = '__none';
 
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
 
@@ -106,6 +110,11 @@ function WorkbenchBody({
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
+  const [positionOpen, setPositionOpen] = useState<Set<string>>(() => new Set());
+  const [selectableFor, setSelectableFor] = useState<string | null>(null);
+  const [selectableWindowType, setSelectableWindowType] = useState('');
+  const [selectableQuery, setSelectableQuery] = useState('');
   const [pending, startTransition] = useTransition();
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
@@ -121,17 +130,24 @@ function WorkbenchBody({
   }, [calc.result]);
   const sectionResult = (code: string): PricingSectionResult | undefined => calc.result?.sections.find((section) => section.code === code);
   const incompleteKeys = useMemo(() => new Map(calc.incomplete.map((item) => [item.key, item.reason])), [calc.incomplete]);
-  // 原価の状態は、保存済みの auto の選択枠と同じ「商品＋選択肢」の行にだけ出す（商品・選択肢を変えた行は、保存すると今の原価で固定する）
-  const previewByIdentity = useMemo(
-    () =>
-      new Map(
-        (preview?.slots ?? []).filter((slot) => slot.price_mode === 'auto').map((slot) => [
-          slotIdentity(slot.option_id, slot.variants.map((variant) => variant.variant_choice_id)),
-          slot,
-        ])
-      ),
-    [preview]
-  );
+  // 原価の状態は、保存済みの auto の選択枠と同じ「商品＋選択肢」の行にだけ出す（商品・選択肢を変えた行は、保存すると今の原価で固定する）。
+  // 同じ商品＋選択肢が複数の位置の枠にあるときは、その行の状態を先に使う（DB の保存の固定と同じ順）
+  const previewByIdentity = useMemo(() => {
+    const byIdentity = new Map<string, V25PreviewSlot>();
+    const byRow = new Map<string, V25PreviewSlot>();
+    for (const slot of preview?.slots ?? []) {
+      if (slot.price_mode !== 'auto') continue;
+      const identity = slotIdentity(slot.option_id, slot.variants.map((variant) => variant.variant_choice_id));
+      byIdentity.set(identity, slot);
+      byRow.set(`${slot.baseline_key}#${identity}`, slot);
+    }
+    return {
+      get: (row: Pick<V25SlotRow, 'baseline_key' | 'option_id' | 'variant_choices'>) => {
+        const identity = slotIdentity(row.option_id, slotChoiceIds(row));
+        return (row.baseline_key ? byRow.get(`${row.baseline_key}#${identity}`) : undefined) ?? byIdentity.get(identity);
+      },
+    };
+  }, [preview]);
   const unpricedKeys = useMemo(() => new Set(calc.unpriced), [calc.unpriced]);
   const unavailableCount = state.slots.filter((slot) => candidateById.get(slot.option_id)?.unavailable).length;
   const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
@@ -143,13 +159,15 @@ function WorkbenchBody({
   ];
 
   useEffect(() => {
-    if (!picker) return;
+    if (!picker && !selectableFor) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setPicker(null);
+      if (event.key !== 'Escape') return;
+      setPicker(null);
+      setSelectableFor(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [picker]);
+  }, [picker, selectableFor]);
 
   const setSlot = (key: string, patch: Partial<V25SlotRow>) =>
     setState((current) => ({ ...current, slots: current.slots.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)) }));
@@ -167,11 +185,20 @@ function WorkbenchBody({
     // 選択枠の数量は、外壁は 4（面）、それ以外は 1（シミュレーターと連携する選択枠の決まり）
     const quantity = String(standardSlotQuantity(candidate.categoryCode));
     if (picker.targetKey) {
+      const target = state.slots.find((slot) => slot.key === picker.targetKey);
       setSlot(picker.targetKey, {
         option_id: candidate.id,
         variant_choices: { ...candidate.defaultChoices },
         quantity,
         ...(candidate.section === 'sitework' ? { price_mode: priceMode } : {}),
+        // 位置の枠の選べる商品は、新しい標準の商品と同じカテゴリーのものだけ残す（標準の商品そのものは外す）
+        ...(target
+          ? {
+              selectable_option_ids: target.selectable_option_ids.filter(
+                (id) => id !== candidate.id && candidateById.get(id)?.categoryId === candidate.categoryId
+              ),
+            }
+          : {}),
       });
     } else {
       setState((current) => ({
@@ -196,6 +223,73 @@ function WorkbenchBody({
     }
     setPicker(null);
   };
+
+  // 位置・用途の選択枠（v2.5 PR-S2）
+  const togglePosition = (key: string) =>
+    setPositionOpen((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  // 同じ商品で位置を足す：識別子・名前は空のまま、元の行のすぐ下に足す（選べる商品・計算の仕方は元の行と同じ。原価は保存で DB が固定する）
+  const addSamePosition = (source: V25SlotRow) => {
+    const key = newKey('slot');
+    setState((current) => {
+      const slots = [...current.slots];
+      slots.splice(slots.findIndex((slot) => slot.key === source.key) + 1, 0, {
+        ...source,
+        key,
+        baseline_key: null,
+        variant_choices: { ...source.variant_choices },
+        quantity: '1',
+        slot_code: '',
+        slot_label: '',
+        selectable_option_ids: [...source.selectable_option_ids],
+      });
+      return { ...current, slots };
+    });
+    setPositionOpen((current) => new Set(current).add(key));
+  };
+  const toggleSelectable = (slotKey: string, optionId: string) =>
+    setState((current) => ({
+      ...current,
+      slots: current.slots.map((slot) =>
+        slot.key !== slotKey
+          ? slot
+          : {
+              ...slot,
+              selectable_option_ids: slot.selectable_option_ids.includes(optionId)
+                ? slot.selectable_option_ids.filter((id) => id !== optionId)
+                : [...slot.selectable_option_ids, optionId],
+            }
+      ),
+    }));
+  const selectableSlot = selectableFor ? (state.slots.find((slot) => slot.key === selectableFor) ?? null) : null;
+  const selectableBase = selectableSlot ? candidateById.get(selectableSlot.option_id) : undefined;
+  // 選べる商品の候補：標準の商品と同じカテゴリーの、販売中でこの仕様で選べる商品（DB の保存と公開の確認と同じ）
+  const selectableOptions = useMemo(
+    () =>
+      selectableBase
+        ? candidates.filter(
+            (candidate) => candidate.id !== selectableBase.id && !candidate.retired && !candidate.unavailable && candidate.categoryId === selectableBase.categoryId
+          )
+        : [],
+    [candidates, selectableBase]
+  );
+  const selectableWindowTypes = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const candidate of selectableOptions) if (candidate.windowTypeCode) map.set(candidate.windowTypeCode, candidate.windowTypeLabel ?? candidate.windowTypeCode);
+    return [...map.entries()];
+  }, [selectableOptions]);
+  const selectableShown = useMemo(() => {
+    const query = selectableQuery.trim().toLocaleLowerCase('ja-JP');
+    return selectableOptions.filter(
+      (candidate) =>
+        (!selectableWindowType || (selectableWindowType === NO_WINDOW_TYPE ? !candidate.windowTypeCode : candidate.windowTypeCode === selectableWindowType)) &&
+        (!query || [candidate.name, candidate.manufacturer, candidate.modelNo].join(' ').toLocaleLowerCase('ja-JP').includes(query))
+    );
+  }, [selectableOptions, selectableWindowType, selectableQuery]);
 
   const addLine = (section: StandardLineSectionCode) =>
     setState((current) => ({
@@ -382,13 +476,29 @@ function WorkbenchBody({
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const missing = incompleteKeys.get(slot.key);
-                      const pinnedPreview = previewByIdentity.get(slotIdentity(slot.option_id, slotChoiceIds(slot)));
+                      const pinnedPreview = previewByIdentity.get(slot);
                       const status: V25CostStatus | null = slot.price_mode !== 'auto' ? null : missing ? 'missing' : pinnedPreview ? slotCostStatus(pinnedPreview) : null;
+                      const slotCode = slot.slot_code.trim();
+                      const positionAllowed = Boolean(candidate && !candidate.unavailable && canUsePositionSlot(candidate.categoryCode));
                       rowNumber += 1;
                       return (
-                        <tr key={slot.key} className="border-b border-slate-200 align-top" data-testid="v25-wb-slot">
+                        <Fragment key={slot.key}>
+                        <tr className="border-b border-slate-200 align-top" data-testid="v25-wb-slot">
                           <td className="border-r border-slate-200 bg-slate-50 px-1 pt-1.5 text-center text-slate-400">{rowNumber}</td>
-                          <td className="border-r border-slate-200 px-2 pt-1.5 text-muted">{candidate?.categoryName ?? ''}</td>
+                          <td className="border-r border-slate-200 px-2 py-1 text-muted">
+                            <span className="block pt-0.5">{candidate?.categoryName ?? ''}</span>
+                            {slotCode && (
+                              <span className="mt-0.5 block w-fit max-w-full truncate rounded bg-sky-100 px-1 text-[0.68rem] font-medium text-sky-900" data-testid="v25-wb-slot-position">
+                                {slot.slot_label.trim() || '（位置の名前を入力）'}
+                              </span>
+                            )}
+                            {(slotCode || (positionAllowed && !readOnly)) && (
+                              <button type="button" className="mt-0.5 block text-left text-[0.68rem] text-navy underline" aria-expanded={positionOpen.has(slot.key)}
+                                data-testid="v25-wb-slot-position-toggle" onClick={() => togglePosition(slot.key)}>
+                                {slotCode ? `位置・選べる商品（${slot.selectable_option_ids.length + 1}）` : '位置で分ける'}
+                              </button>
+                            )}
+                          </td>
                           <td className="border-r border-slate-200 bg-amber-50/60 px-2 py-1">
                             <div className="flex items-start gap-1">
                               <span className="flex-1 pt-0.5 font-medium text-ink">
@@ -406,8 +516,8 @@ function WorkbenchBody({
                                 </button>
                               )}
                             </div>
-                            {candidate && (candidate.manufacturer || candidate.modelNo) && (
-                              <p className="text-[0.68rem] text-muted">{[candidate.manufacturer, candidate.modelNo].filter(Boolean).join(' ／ ')}</p>
+                            {candidate && (candidate.manufacturer || candidate.modelNo || candidate.windowTypeLabel) && (
+                              <p className="text-[0.68rem] text-muted">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</p>
                             )}
                           </td>
                           <td className="space-y-1 border-r border-slate-200 px-2 py-1">
@@ -467,6 +577,80 @@ function WorkbenchBody({
                             )}
                           </td>
                         </tr>
+                        {positionOpen.has(slot.key) && (
+                          <tr className="border-b border-slate-200 bg-sky-50/50" data-testid="v25-wb-slot-position-editor">
+                            <td className="border-r border-slate-200 bg-slate-50" />
+                            <td colSpan={columnCount - 1} className="px-3 py-2">
+                              <div className="grid gap-4 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
+                                <div className="space-y-1.5">
+                                  <p className="text-[0.7rem] font-semibold text-ink">位置・用途の選択枠</p>
+                                  <label className="block space-y-0.5">
+                                    <span className="text-[0.68rem] text-muted">識別子（英小文字・数字・ハイフン）</span>
+                                    <Input value={slot.slot_code} disabled={readOnly} placeholder="例：living-sweep" className="h-7 font-mono text-xs" data-testid="v25-wb-slot-code"
+                                      onChange={(event) => setSlot(slot.key, { slot_code: event.target.value })} />
+                                  </label>
+                                  <label className="block space-y-0.5">
+                                    <span className="text-[0.68rem] text-muted">位置・用途の名前（お客様の画面に出ます）</span>
+                                    <Input value={slot.slot_label} disabled={readOnly} placeholder="例：掃出し窓" className="h-7 text-xs" data-testid="v25-wb-slot-label"
+                                      onChange={(event) => setSlot(slot.key, { slot_label: event.target.value })} />
+                                  </label>
+                                  <p className="text-[0.68rem] leading-4 text-muted">
+                                    識別子は新しい版へ引き継ぎ、将来の平面図の位置と紐づけます。公開した後は変えないでください。位置の枠の数量は 1 です。
+                                  </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <p className="text-[0.7rem] font-semibold text-ink">お客様が選べる商品（この位置で 1 つ選ぶ）</p>
+                                  <ul className="flex flex-wrap gap-1.5" data-testid="v25-wb-slot-selectables">
+                                    <li className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[0.7rem]">
+                                      <span className="mr-1 text-[0.62rem] font-semibold text-brown">標準</span>
+                                      {candidate?.name ?? '（商品が見つかりません）'}
+                                      {candidate?.windowTypeLabel ? `（${candidate.windowTypeLabel}）` : ''}
+                                    </li>
+                                    {slot.selectable_option_ids.map((id) => {
+                                      const alternative = candidateById.get(id);
+                                      const name = alternative?.name ?? '（選べない商品）';
+                                      return (
+                                        <li key={id} className="flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[0.7rem]">
+                                          {name}
+                                          {alternative?.windowTypeLabel ? `（${alternative.windowTypeLabel}）` : ''}
+                                          {!readOnly && (
+                                            <button type="button" className="text-muted hover:text-danger" aria-label={`${name}を選べる商品から外す`}
+                                              onClick={() => toggleSelectable(slot.key, id)}>
+                                              ×
+                                            </button>
+                                          )}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                  {!readOnly && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <button type="button" className="btn-secondary btn-sm" disabled={!slotCode} data-testid="v25-wb-slot-selectable-open"
+                                        onClick={() => { setSelectableFor(slot.key); setSelectableWindowType(''); setSelectableQuery(''); }}>
+                                        ＋ 選べる商品を選ぶ
+                                      </button>
+                                      {slotCode && (
+                                        <button type="button" className="btn-secondary btn-sm" data-testid="v25-wb-slot-add-position" onClick={() => addSamePosition(slot)}>
+                                          ＋ 同じ商品で位置を足す
+                                        </button>
+                                      )}
+                                      {(slotCode || slot.slot_label.trim() || slot.selectable_option_ids.length > 0) && (
+                                        <button type="button" className="text-[0.7rem] text-muted underline"
+                                          onClick={() => setSlot(slot.key, { slot_code: '', slot_label: '', selectable_option_ids: [] })}>
+                                          カテゴリー単位の選択枠に戻す
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {!slotCode && !readOnly && (
+                                    <p className="text-[0.68rem] leading-4 text-muted">識別子と名前を入れると、この位置でお客様が商品を選べるようになります。</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   {!collapsed.has(code) &&
@@ -667,6 +851,52 @@ function WorkbenchBody({
               ))}
               {pickerCandidates.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">選べる商品がありません。</li>}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {selectableSlot && selectableBase && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setSelectableFor(null)}>
+          <div role="dialog" aria-modal="true" aria-label="お客様が選べる商品" className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-semibold">{selectableSlot.slot_label.trim() || selectableSlot.slot_code.trim()}：お客様が選べる商品</p>
+                <p className="text-xs text-muted">標準の「{selectableBase.name}」の代わりに選べる、{selectableBase.categoryName}の商品を選びます（いくつでも）。</p>
+              </div>
+              <button type="button" className="shrink-0 text-sm text-muted underline" onClick={() => setSelectableFor(null)}>閉じる</button>
+            </div>
+            <div className="flex flex-wrap gap-2 border-b border-line px-4 py-2">
+              {selectableBase.usesWindowType && (
+                <Select value={selectableWindowType} onChange={(event) => setSelectableWindowType(event.target.value)} aria-label="窓タイプ" className="h-8 text-xs"
+                  data-testid="v25-wb-selectable-window-type">
+                  <option value="">すべての窓タイプ</option>
+                  {selectableWindowTypes.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                  <option value={NO_WINDOW_TYPE}>窓タイプ未設定</option>
+                </Select>
+              )}
+              <Input value={selectableQuery} onChange={(event) => setSelectableQuery(event.target.value)} placeholder="商品名・メーカー・型番" aria-label="選べる商品を検索" className="h-8 flex-1 text-xs" />
+            </div>
+            <ul className="divide-y divide-line overflow-y-auto" data-testid="v25-wb-selectable-picker">
+              {selectableShown.map((candidate) => {
+                const checked = selectableSlot.selectable_option_ids.includes(candidate.id);
+                return (
+                  <li key={candidate.id}>
+                    <label className="flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-sm hover:bg-sand/40">
+                      <input type="checkbox" checked={checked} onChange={() => toggleSelectable(selectableSlot.key, candidate.id)} />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-medium">{candidate.name}</span>
+                        <span className="block text-xs text-muted">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</span>
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+              {selectableShown.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">選べる商品がありません。</li>}
+            </ul>
+            <div className="flex items-center justify-between border-t border-line px-4 py-2 text-xs text-muted">
+              <span>選んでいる商品 {selectableSlot.selectable_option_ids.length} 件（標準の商品のほか）</span>
+              <button type="button" className="btn-primary btn-sm" onClick={() => setSelectableFor(null)}>決定</button>
+            </div>
           </div>
         </div>
       )}

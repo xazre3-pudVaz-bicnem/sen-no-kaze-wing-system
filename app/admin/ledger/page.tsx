@@ -28,13 +28,14 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
   const editor = canEditCatalog(actor.role);
-  const [options, categories, models, configurationUsageCounts, lifecycleCapability, costAccess] = await Promise.all([
+  const [options, categories, models, configurationUsageCounts, lifecycleCapability, costAccess, windowTypes] = await Promise.all([
     store.listOptions(),
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
     store.getProductLifecycleCapability(),
     getCostRecordingAccess(),
+    store.listWindowTypes(),
   ]);
   // 販売停止・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す。廃番は 20261016112000 の適用後だけ
   const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
@@ -146,6 +147,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       configurationUsageCounts={configurationUsageCounts}
       hqStandardCosts={hqStandardCosts}
       showCost={showCost}
+      windowTypes={windowTypes}
       initiallySelectedId={selected}
     />
   </AdminPage>;

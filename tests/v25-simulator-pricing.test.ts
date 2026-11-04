@@ -401,7 +401,7 @@ describe('v2.5 の売価の差し込み（PR-C1）', () => {
 
   it('v2.5 の間は、仕様の標準の選択肢を標準見積の選択枠の選択肢にする（最初の表示・仕様の切り替え・注文範囲を広げたとき・/plans から）', () => {
     const app = read('components/simulator/simulator-app.tsx');
-    expect(app).toContain('initial?.variant_choice_ids ?? standardVariantIdsFor(defaultSpecCode, initialSelection)');
+    expect(app).toContain('initialPlan?.variantChoiceIds ?? standardVariantIdsFor(defaultSpecCode, initialSelection)');
     expect(app).toContain('const nextVariants = standardVariantIdsFor(code, nextSel);');
     expect(app).toContain('() => standardVariantIdsFor(specCode, activeSpecSelection),');
     // 狭める前に選んでいた選択肢が残っている選択項目には足さない（同じ選択項目に 2 つ選ばない）

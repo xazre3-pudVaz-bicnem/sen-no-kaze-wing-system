@@ -10,7 +10,7 @@ describe('商品台帳の入口', () => {
     expect(ledger).not.toContain('/admin/base-breakdown');
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品名・メーカー・シリーズ・型番で検索');
-    expect(client).toContain('商品価格（税別）');
+    expect(client).toContain('商品標準原価（税別）');
   });
 
   it('フリー商品を正式な商品台帳へ混ぜない', () => {
@@ -88,7 +88,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('<th className="w-[18%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="カテゴリー"');
     expect(client).toContain('<th className="w-[17%] px-2.5 py-1.5 text-right">');
-    expect(client).toContain('<SortHeader label="商品価格（税別）"');
+    expect(client).toContain('<SortHeader label="商品標準原価（税別）"');
     expect(client).toContain('<th className="w-[14%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="状態"');
     expect(client).toContain('<th className="w-[9%] px-2.5 py-1.5">');
@@ -195,7 +195,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('利用先');
     expect(client).toContain('<Row label="見積で選択"');
     expect(client).toContain('自社の仕入・発注情報');
-    expect(client).toContain('本部商品基準原価（税別）');
+    expect(client).toContain('商品標準原価の記録（税別）');
     expect(client).toContain('<Row label="仕入先" value={<PendingDbValue />}/>');
     expect(client).toContain('<Row label="発注コード" value={<PendingDbValue />}/>');
     expect(client).toContain('<Row label="発注単位" value={<PendingDbValue />}/>');

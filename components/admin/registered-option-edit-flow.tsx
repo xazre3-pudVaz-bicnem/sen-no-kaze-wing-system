@@ -14,6 +14,7 @@ import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } f
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
 import {
+  FREE_PRODUCT_CATEGORY_CODE,
   VIEW_KEYS,
   VIEW_LABELS,
   VARIANT_KIND_LABELS,
@@ -48,6 +49,8 @@ type Props = {
   returnTo?: string;
   financialTools: ReactNode;
   duplicateCandidates?: DuplicateCandidateSummary[];
+  /** 商品標準原価・原価差額・別途見積の欄を出す（原価の Version の仕組みがある間は本部だけ。フリー商品は常に出す） */
+  canEditCost?: boolean;
 };
 
 type ReviewState = {
@@ -140,6 +143,7 @@ export function RegisteredOptionEditFlow({
   returnTo,
   financialTools,
   duplicateCandidates,
+  canEditCost = true,
 }: Props) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -188,6 +192,10 @@ export function RegisteredOptionEditFlow({
 
   const categoryMap = useMemo(() => new Map(categories.map((row) => [row.id, row])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((row) => [row.id, row])), [models]);
+  // フリー商品は従来どおり「商品価格」。それ以外は千の風の調達想定の原価（v2.5 PR-A3）
+  const isFreeProduct = categoryMap.get(option.category_id)?.code === FREE_PRODUCT_CATEGORY_CODE;
+  const showCostFields = isFreeProduct || canEditCost;
+  const priceLabel = isFreeProduct ? '商品価格（税別）' : '商品標準原価（税別）';
 
   const buildReviewOption = async (data: FormData): Promise<ReviewState> => {
     const imageFile = data.get('image_file');
@@ -200,13 +208,14 @@ export function RegisteredOptionEditFlow({
       category_id: String(data.get('category_id') ?? option.category_id),
       name: String(data.get('name') ?? '').trim(),
       description: nullable(data.get('description')),
-      price: numberOrNull(data.get('price')) ?? 0,
+      // 原価の欄を出さない担当者の保存では、今の金額のまま（サーバーも今の金額を保つ）
+      price: showCostFields ? numberOrNull(data.get('price')) ?? 0 : option.price,
       image_url: imagePreviewUrl,
       selection_type: String(data.get('selection_type') ?? 'checkbox') === 'radio' ? 'radio' : 'checkbox',
       is_required: checked(data, 'is_required'),
       is_default: checked(data, 'is_default'),
       is_installation: checked(data, 'is_installation'),
-      price_on_request: checked(data, 'price_on_request'),
+      price_on_request: showCostFields ? checked(data, 'price_on_request') : option.price_on_request,
       spec_codes: data.getAll('spec_codes').map(String),
       base_model_id: nullable(data.get('base_model_id')),
       manufacturer: nullable(data.get('manufacturer')),
@@ -256,7 +265,9 @@ export function RegisteredOptionEditFlow({
       { key: 'manufacturer', label: 'メーカー', before: option.manufacturer ?? '—', after: next.manufacturer ?? '—' },
       { key: 'model_no', label: 'シリーズ・型番／品番', before: option.model_no ?? '—', after: next.model_no ?? '—' },
       { key: 'size_note', label: 'サイズ・仕様', before: option.size_note ?? '—', after: next.size_note ?? '—' },
-      { key: 'price', label: '商品価格（税別）', before: option.price_on_request ? '別途見積' : yen(option.price), after: next.price_on_request ? '別途見積' : yen(next.price) },
+      ...(showCostFields
+        ? [{ key: 'price', label: priceLabel, before: option.price_on_request ? '別途見積' : yen(option.price), after: next.price_on_request ? '別途見積' : yen(next.price) }]
+        : []),
       { key: 'list_price', label: 'メーカー参考価格（税別）', before: yen(option.list_price), after: yen(next.list_price) },
       { key: 'base_model', label: '対象モデル', before: option.base_model_id ? modelMap.get(option.base_model_id)?.name ?? '特定モデル' : '全モデル共通', after: next.base_model_id ? modelMap.get(next.base_model_id)?.name ?? '特定モデル' : '全モデル共通' },
       { key: 'spec_codes', label: '対応する仕様', before: specLabel(option.spec_codes), after: specLabel(next.spec_codes) },
@@ -273,7 +284,7 @@ export function RegisteredOptionEditFlow({
     const imageChanged = Boolean(review.formData.get('image_file') instanceof File && (review.formData.get('image_file') as File).size > 0) || (option.image_url ?? '') !== (nullable(review.formData.get('image_url')) ?? '');
     if (imageChanged) rows.push({ key: 'image', label: 'メイン画像', before: option.image_url ?? '', after: review.imagePreviewUrl ?? '', kind: 'image' });
     return rows.filter((row) => row.kind === 'image' || row.before !== row.after);
-  }, [categoryMap, modelMap, option, review]);
+  }, [categoryMap, modelMap, option, review, priceLabel, showCostFields]);
 
   const zeroPriceNeedsServerContract = Boolean(review && introducesUnconfirmedZeroPrice(option, review.option));
   const nextCategory = review ? categoryMap.get(review.option.category_id) : undefined;
@@ -391,10 +402,11 @@ export function RegisteredOptionEditFlow({
                     option={review.option}
                     groups={variantGroups}
                     choices={variantChoices}
+                    showPrice={showCostFields}
                   />
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  実際のお客様画面と同じ内容で表示しています。追加金額や「この内容に変更する」操作は、実際の選択内容によって変わるため、この確認画面では表示していません。
+                  実際のお客様画面と同じ内容で表示しています。選択肢ごとの金額や「この内容に変更する」操作は、実際の選択内容によって変わるため、この確認画面では表示していません。
                 </p>
               </>
             ) : (
@@ -645,7 +657,8 @@ export function RegisteredOptionEditFlow({
                               <div className="min-w-0">
                                 <p className="break-words text-sm font-semibold">{choice.name}</p>
                                 <p className="text-xs text-muted">
-                                  {VARIANT_KIND_LABELS[choice.kind]}・{choice.price_on_request ? '別途見積' : `追加金額 ${yen(choice.extra_price)}（税別）`}
+                                  {VARIANT_KIND_LABELS[choice.kind]}
+                                  {showCostFields ? `・${choice.price_on_request ? '別途見積' : `原価差額 ${yen(choice.extra_price)}（税別）`}` : ''}
                                   {choice.status === 'draft' ? '・非公開' : ''}
                                 </p>
                               </div>
@@ -670,9 +683,20 @@ export function RegisteredOptionEditFlow({
               description="登録状態は「登録済み」のままです。この画面から下書きへ戻す操作は行いません。"
             />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="商品価格（税別・円）" htmlFor="registered-price" required>
-                <Input id="registered-price" name="price" type="number" min={0} step={1000} defaultValue={option.price} required />
-              </Field>
+              {showCostFields ? (
+                <Field
+                  label={isFreeProduct ? '商品価格（税別・円）' : '商品標準原価（税別・円）'}
+                  htmlFor="registered-price"
+                  required
+                  hint={isFreeProduct ? undefined : '千の風が商品を調達する想定の購入金額（税別）。保存すると新しい原価の Version を作ります'}
+                >
+                  <Input id="registered-price" name="price" type="number" min={0} step={1000} defaultValue={option.price} required data-price-label={isFreeProduct ? '商品価格' : '商品標準原価'} />
+                </Field>
+              ) : (
+                <div className="rounded-lg border border-line bg-ivory/30 p-3 text-xs leading-5 text-muted" data-testid="registered-cost-hidden-note">
+                  商品標準原価と別途見積の設定は本部が登録します（原価は本部だけに表示します）。
+                </div>
+              )}
               <Field label="メーカー参考価格（税別・表示のみ）" htmlFor="registered-list-price">
                 <Input id="registered-list-price" name="list_price" type="number" min={0} step={1} defaultValue={option.list_price ?? ''} />
               </Field>
@@ -687,7 +711,9 @@ export function RegisteredOptionEditFlow({
                 <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">登録済み</div>
               </div>
             </div>
-            <Checkbox name="price_on_request" defaultChecked={option.price_on_request} label="価格は別途見積（0円扱い）" />
+            {showCostFields && (
+              <Checkbox name="price_on_request" defaultChecked={option.price_on_request} label="価格は別途見積（0円扱い）" />
+            )}
             <div className="border-t border-line pt-3">
   <section className="space-y-3 rounded-xl border border-line bg-ivory/30 p-3 sm:p-4" data-testid="registered-product-display-settings">
               <h3 className="text-lg font-semibold">主要仕様・表示設定</h3>

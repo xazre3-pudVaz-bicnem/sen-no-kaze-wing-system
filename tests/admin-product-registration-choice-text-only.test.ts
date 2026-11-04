@@ -17,7 +17,7 @@ describe('商品登録 お客様選択の簡潔化', () => {
 
   it('選択項目を作成した直後は最初の選択肢入力を開いて案内する', () => {
     expect(manager).toContain('const firstChoice = groupChoices.length === 0');
-    expect(manager).toContain("{firstChoice ? '最初の選択肢を追加（追加金額も入力）' : '＋ 選択肢を追加（追加金額も入力）'}");
+    expect(manager).toContain("{firstChoice ? '最初の選択肢を追加（原価差額も入力）' : '＋ 選択肢を追加（原価差額も入力）'}");
     expect(manager).toContain('open={firstChoice}');
   });
 

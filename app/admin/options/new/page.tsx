@@ -1,5 +1,7 @@
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { withoutHqOptionCosts, withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { Alert } from '@/components/ui';
@@ -11,10 +13,12 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const actor = await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
-  const [allCategories, models, options] = await Promise.all([
+  const [allCategories, models, options, costAccess, windowTypes] = await Promise.all([
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     store.listOptions(),
+    getCostRecordingAccess(),
+    store.listWindowTypes(),
   ]);
   const catalogEditor = canEditCatalog(actor.role);
   const registrationCategories = allCategories.filter((c) => c.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
@@ -24,7 +28,11 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const categories = productRegistrationCategoryDisplay(
     registrationCategories.filter((c) => c.code !== FREE_PRODUCT_CATEGORY_CODE)
   );
-  const defaultCategoryId = requestedFreeCategory ? undefined : sp.category;
+  const copyRequested = typeof sp.copy_from === 'string' && sp.copy_from.length > 0;
+  const copySource = copyRequested
+    ? options.find((option) => option.id === sp.copy_from && categories.some((category) => category.id === option.category_id))
+    : null;
+  const defaultCategoryId = copySource?.category_id ?? (requestedFreeCategory ? undefined : sp.category);
   const returnTo = typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') ? sp.return_to : undefined;
   const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;
   const returnLabel = returnToLedger ? '商品台帳へ戻る' : returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る';
@@ -43,6 +51,15 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
     );
   }
 
+  if (copyRequested && !copySource) {
+    return (
+      <AdminPage title="商品を複製して追加" lead="コピー元の商品を確認できませんでした。">
+        <BackLink href={returnTo ?? '/admin/ledger'} label={returnLabel} />
+        <Alert tone="info">コピー元の商品が見つからないか、この商品は複製対象外です。商品台帳から選び直してください。</Alert>
+      </AdminPage>
+    );
+  }
+
   const lockedSections = [
     ['2', '商品の詳細', 'サイズ・仕様・商品説明・メーカー記載の特徴'],
     ['3', '商品画像', 'メイン画像・必要なサブ画像'],
@@ -54,10 +71,18 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
 
   return (
     <AdminPage
-      title="商品を追加"
+      title={copySource ? '商品を複製して追加' : '商品を追加'}
       lead="STEP 1の商品情報を1画面で入力し、STEP 2でお客様表示を確認してから登録します。"
     >
       <BackLink href={returnTo ?? '/admin/options'} label={returnLabel} />
+      {copySource && (
+        <Alert tone="info">
+          「{copySource.name}」をもとに、新しい商品の下書きを作ります。基本情報・説明・表示用価格・対象モデルと仕様を引き継ぎます。
+          商品管理番号・選択肢・原価Version・公開状態・商品間の条件設定は引き継ぎません。
+          「基本情報を保存して続ける」の後で、千の風のStorage内のメイン画像・追加画像・メーカーPDFを新しいファイルとして複製します。
+          外部URLやStorage外のファイルは複製されません。コピー後の画面で不足を確認し、内容・価格と合わせて確認してください。コピー元は変更しません。
+        </Alert>
+      )}
       {returnTo && !returnToLedger && (
         <Alert tone="info">
           見積テンプレートの商品追加から移動しています。まず「1. 基本情報」を保存し、続けて同じSTEP 1の画面で商品情報を入力します。STEP 2で登録内容を確認して「この内容で登録」した後に元の見積テンプレートへ戻って商品を追加します。
@@ -104,12 +129,15 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
             option={null}
             categories={categories}
             models={models}
-            allOptions={options}
+            allOptions={withoutHqOptionCosts(options, costAccess, new Map(allCategories.map((category) => [category.id, category.code])))}
             dependencies={[]}
             conflicts={[]}
             defaultCategoryId={defaultCategoryId}
             mode="create"
+            duplicateSource={copySource && !canEditCostField(costAccess) ? withoutOptionCost(copySource) : copySource}
             returnTo={returnTo}
+            canEditCost={canEditCostField(costAccess)}
+            windowTypes={windowTypes}
           />
 
           {lockedSections.map(([no, label, note]) => (

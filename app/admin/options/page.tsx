@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
 import { formatYen } from '@/lib/domain/pricing';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 import { Badge, Input, Select } from '@/components/ui';
@@ -16,7 +17,9 @@ export default async function AdminOptionsPage({
   const editor = canEditCatalog(actor.role);
   const sp = await searchParams;
   const store = await getStore();
-  const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
+  const [options, categories, costAccess] = await Promise.all([store.listOptions(), store.listCategories(), getCostRecordingAccess()]);
+  // ここに並ぶのは本部商品だけ。商品標準原価は、原価の Version の仕組みがある間は本部だけに見せる（v2.5 PR-A3・商品台帳と同じ）
+  const showCost = canEditCostField(costAccess);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));
   const catalogOptions = options.filter((option) => catalogCategoryIds.has(option.category_id));
@@ -97,7 +100,7 @@ export default async function AdminOptionsPage({
             <tr>
               <Th>商品</Th>
               <Th>カテゴリー</Th>
-              <Th right>商品価格（税別）</Th>
+              {showCost && <Th right>商品標準原価（税別）</Th>}
               <Th>公開</Th>
               <Th></Th>
             </tr>
@@ -128,9 +131,11 @@ export default async function AdminOptionsPage({
                     <div className="text-sm">{category?.name ?? '—'}</div>
                     {category?.group_name && <div className="mt-0.5 text-xs text-muted">{category.group_name}</div>}
                   </Td>
-                  <Td right>
-                    <span className="font-semibold">{option.price_on_request ? '別途見積' : formatYen(option.price)}</span>
-                  </Td>
+                  {showCost && (
+                    <Td right>
+                      <span className="font-semibold">{option.price_on_request ? '別途見積' : formatYen(option.price)}</span>
+                    </Td>
+                  )}
                   <Td>
                     <Badge tone={option.status === 'published' ? 'success' : 'neutral'}>
                       {option.status === 'published' ? '公開' : '非公開'}

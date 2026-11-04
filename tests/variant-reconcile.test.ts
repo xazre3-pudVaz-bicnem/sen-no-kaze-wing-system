@@ -75,11 +75,12 @@ describe('シミュレーターの開き直し', () => {
   const source = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
 
   it('保存したプラン・一時保存（編集できるもの）と、ブラウザの下書きの両方で選択肢を整える', () => {
-    expect(source).toContain('reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initial.variant_choice_ids)');
+    // 保存した選択肢（今の版に無い位置の選択を戻した分を含む。v2.5 PR-S2）で整える
+    expect(source).toContain('reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initialPlan.variantChoiceIds)');
     expect(source).toMatch(/reconcileVariantChoices\(\s*bundle\.variantGroups,\s*bundle\.variantChoices,\s*restoredSelection,\s*draft\.variantIds \?\? \[\]\s*\)/);
   });
 
   it('見積依頼済みなどの読み取り専用の履歴は、保存された選択肢のまま表示する', () => {
-    expect(source).toContain('initial && !preserveReadOnlyHistoricalSelection');
+    expect(source).toContain('initialPlan && !preserveReadOnlyHistoricalSelection');
   });
 });

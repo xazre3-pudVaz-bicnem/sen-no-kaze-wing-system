@@ -37,6 +37,9 @@ function seed(signed: boolean) {
   db.quoteRequests.push({ id: ids.request, configuration_id: null, user_id: ids.customer, quote_id: ids.quote, status: 'sent', message: null, contact: { full_name: 'お客様', company_name: null, email: customer.email, phone: '0', address: 'x', site_address: null }, created_at: now, updated_at: now } as QuoteRequest);
   db.quotes.push({ id: ids.quote, quote_no: 'Q-MFG', quote_request_id: ids.request, user_id: ids.customer, dealer_id: ids.dealer, customer_name: 'お客様', revision: 2, status: 'accepted', base_model_name: 'Wing', total: 5000000 } as unknown as Quote);
   db.quoteItems.push({ id: 'qi-1', quote_id: ids.quote, kind: 'base', name: '本体一式', unit_price: 3000000, quantity: 1, amount: 3000000, sort_order: 0 } as unknown as QuoteItem);
+  // 今回の契約対象外の行は製造仕様に写さない（0円確定の行は契約に含まれるので写す。DB の 20261016111000 と同じ）
+  db.quoteItems.push({ id: 'qi-2', quote_id: ids.quote, kind: 'installation', name: '対象外の工事', remark: '［今回の契約対象外］', unit_price: 0, quantity: 1, amount: 0, sort_order: 1 } as unknown as QuoteItem);
+  db.quoteItems.push({ id: 'qi-3', quote_id: ids.quote, kind: 'installation', name: '0円確定の工事', remark: '［0円確定］：サービスで施工', unit_price: 0, quantity: 1, amount: 0, sort_order: 2 } as unknown as QuoteItem);
   if (signed) {
     db.contracts.push({ id: ids.contract, quote_request_id: ids.request, quote_id: ids.quote, user_id: ids.customer, provider: 'paper', status: 'signed', signer_name: 'お客様', signer_email: customer.email, contract_total: 5000000, envelope_xid: null, provider_document_id: null, signed_file_path: 'contracts/paper/x.pdf', failure_reason: null, sent_at: null, signed_at: now, canceled_at: null, created_at: now, updated_at: now } as ElectronicContract);
   }
@@ -80,7 +83,10 @@ describe('製造依頼・個体・工程表・施工の記録（ローカル検�
     const sent = await store.getManufacturingOrder(master, ids.request);
     expect(sent).toMatchObject({ status: 'sent', manufacturer_id: ids.master, order_no: null });
     expect(JSON.stringify(sent?.spec_snapshot)).not.toMatch(/unit_price|amount|3000000/);
-    expect(sent?.spec_snapshot?.items).toEqual([{ kind: 'base', name: '本体一式', quantity: 1, unit: null }]);
+    expect(sent?.spec_snapshot?.items).toEqual([
+      { kind: 'base', name: '本体一式', quantity: 1, unit: null },
+      { kind: 'installation', name: '0円確定の工事', quantity: 1, unit: null },
+    ]);
     expect(loadDb().notifications.some((n) => n.kind === 'manufacturing_order_sent' && n.recipient_id === ids.master)).toBe(true);
     // 送った後は担当代理店は変えられない
     await expect(store.updateManufacturingOrder(dealer, id, order(1), 3)).rejects.toMatchObject({ code: 'LOCKED' });

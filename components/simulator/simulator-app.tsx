@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ArrowRight, Save } from 'lucide-react';
 import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-configurations';
+import { fetchSimulatorV25UnitsAction } from '@/lib/actions/simulator-v25-units';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
-import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
+import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext, type RuleIssue } from '@/lib/domain/rules';
 import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices, reconcileVariantChoices } from '@/lib/domain/preset';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
+  buildV25SpecSelection,
+  estimateSpecStoppedProductNames,
   finishLevelForEstimateSpec,
   ruleContextForSpec,
   simulatorEstimateChoices,
@@ -23,19 +26,43 @@ import {
 import {
   computeStandardEstimatePricing,
   type StandardEstimatePricingResult,
+  type V25MissingUnit,
 } from '@/lib/domain/standard-estimate-pricing';
 import {
+  FIRE_PROOF_OPTION_CODE,
   computeSaleViewPricing,
+  isV25SaleView,
+  pendingSaleViewPricing,
+  v25DisplayCatalog,
+  v25SlotOptionIds,
+  v25SlotOptionIdsFor,
+  v25StandardVariantIds,
+  v25UnitKey,
   isFireProofSelected,
   pickSaleView,
+  v25PositionSlotCategoryIds,
+  v25PositionSlots,
+  v25SlotUnitForDisplay,
   type StandardEstimateSaleView,
 } from '@/lib/domain/standard-estimate-sale-view';
 import {
+  activeV25SlotSelections,
+  mergeOrphanSlotSelections,
+  sameSlotSelection,
+  standardSlotSelection,
+  switchPositionCategories,
+  v25StandardLineNotes,
+  withoutPositionCategoryOptions,
+} from '@/lib/domain/simulator-position-slots';
+import {
+  CURRENT_EXTERIOR_CODES,
+  LEGACY_EXTERIOR_CODES,
   makeDefaultExteriorFaces,
   normalizeExteriorFaces,
   type ExteriorFaceCode,
   type ExteriorFaceSelection,
 } from '@/lib/domain/exterior-wall';
+import { v25SimulatorStandardState } from '@/lib/domain/simulator-standard-state';
 import {
   FINISH_LEVELS,
   FINISH_LEVEL_INFO,
@@ -45,6 +72,8 @@ import {
   type ConfigurationStatus,
   type EstimateTemplateBundle,
   type FinishLevel,
+  type ProductOption,
+  type SlotSelection,
   type ViewKey,
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
@@ -57,7 +86,7 @@ import { isSimulatorSelectableProduct, simulatorChoiceOptions } from '@/lib/doma
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
 import { ElevationStrip, PlanBoard } from './plan-board';
-import { EquipmentBoard } from './equipment-board';
+import { EquipmentBoard, type EquipmentSlotTile } from './equipment-board';
 import { QuoteSheet } from './quote-sheet';
 import { PreviewStage } from './preview-stage';
 import { OptionPickerDialog } from './option-picker-dialog';
@@ -83,6 +112,8 @@ export interface SimulatorInitial {
   site_location_undecided: boolean;
   /** 読み込んだ時点の版（同時編集の検知）。版の列が無い DB では null */
   lock_version: number | null;
+  /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2。保存した明細の slot_code つきの行）。無ければ版の標準 */
+  slot_selections?: SlotSelection[];
 }
 
 interface Props {
@@ -99,6 +130,11 @@ interface Props {
    * 保存・見積依頼はできない（DB 側はスイッチが入るまでこれまでの計算のため、保存すると金額が食い違う）。
    */
   pricingPreview?: boolean;
+  /**
+   * v2.5 の標準見積の売価を使う（v2.5 PR-C1）。カタログの商品価格の列（原価）は受け取らず、
+   * 画面に出す商品価格・選択肢の差額は売価の表から作る。v2.5 の標準見積が無い仕様は価格を準備中として出す
+   */
+  v25Pricing?: boolean;
   /** 本体切り替え用（タイトル横のセレクト。先方指示「ここで本体を変える」） */
   models: { slug: string; name: string }[];
   /** 立面図（モデル共通の図面。現状は Wing のみ） */
@@ -126,6 +162,8 @@ interface Draft {
   ownerId?: string | null;
   /** configId のプランを読み込んだ（または最後に保存した）時点の版 */
   lockVersion?: number | null;
+  /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。旧形式の下書きでは未設定（版の標準） */
+  slotSelections?: SlotSelection[];
   pending: 'save' | 'quote' | null;
   savedAt: number;
 }
@@ -156,6 +194,7 @@ export function SimulatorApp({
   estimateTemplates,
   saleViews = [],
   pricingPreview = false,
+  v25Pricing = false,
   models,
   elevations,
   initial,
@@ -189,29 +228,65 @@ export function SimulatorApp({
   );
   const usesManagedEstimateChoices = simulatorSpecChoices.length > 0;
 
+  /** 防火仕様（防火構造）の商品。v2.5 の標準構成で防火の条件を表す */
+  const fireProofOptionId = useMemo(
+    () => bundle.options.find((option) => option.code === FIRE_PROOF_OPTION_CODE)?.id ?? null,
+    [bundle.options]
+  );
   /**
-   * 仕様を選んだときの標準商品構成。
-   * 標準価格はExcelが正本で、ここは商品変更差額・画像・設備選択の初期状態だけに使う。
+   * 仕様を選んだときの標準商品構成（防火の条件ごと）。
+   * v2.5 の売価を使う間は、公開中の v2.5 の標準見積の版の選択枠の商品（2026-10-29 先方回答：モデル・仕様・防火条件ごとの初期構成。
+   * 下書きの編集では変わらず、新しい版の公開で切り替わる）。v2.5 の版が無い仕様は旧来の標準構成（価格は準備中）。
+   * 旧来は、標準価格はExcelが正本で、ここは商品変更差額・画像・設備選択の初期状態だけに使う。
    * 管理画面から追加された仕様も estimate_templates の baseline_option_ids を使って自動反映する。
    */
-  const specSelections = useMemo(
-    () =>
-      simulatorSpecChoices.map((choice) => ({
-        code: choice.code,
-        ids: choice.template
-          ? buildEstimateBaselineSelection(ctx, model, choice.template)
-          : buildEstimateSpecSelection(ctx, model, choice.code),
-      })),
-    [ctx, model, simulatorSpecChoices]
+  const specSelectionsFor = useCallback(
+    (fire: boolean) =>
+      simulatorSpecChoices.map((choice) => {
+        const slotOptionIds = v25Pricing ? v25SlotOptionIdsFor(saleViews, model.slug, choice.code, fire) : null;
+        // 版の位置・用途の選択枠のカテゴリー（v2.5 PR-S2）は位置ごとに選ぶので、カテゴリー単位の標準構成には入れない
+        const positionCategoryIds = v25Pricing ? v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, choice.code, fire), bundle.options) : undefined;
+        return {
+          code: choice.code,
+          ids: slotOptionIds
+            ? buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, fire ? fireProofOptionId : null, positionCategoryIds)
+            : choice.template
+              ? buildEstimateBaselineSelection(ctx, model, choice.template)
+              : buildEstimateSpecSelection(ctx, model, choice.code),
+        };
+      }),
+    [bundle.options, ctx, fireProofOptionId, model, saleViews, simulatorSpecChoices, v25Pricing]
+  );
+  const nonFireSpecSelections = useMemo(() => specSelectionsFor(false), [specSelectionsFor]);
+  // 防火仕様の商品が無いモデル・v2.5 以前は、防火の条件で標準構成が変わらない
+  const fireSpecSelections = useMemo(
+    () => (v25Pricing && fireProofOptionId ? specSelectionsFor(true) : nonFireSpecSelections),
+    [fireProofOptionId, nonFireSpecSelections, specSelectionsFor, v25Pricing]
+  );
+  /**
+   * 仕様の標準の選択肢。v2.5 の売価を使う間は、その仕様の v2.5 の標準見積の選択枠の選択肢（標準のままなら差額 0。v2.5 PR-C1）。
+   * 選択枠に無い商品・v2.5 以前は商品の標準の選択肢
+   */
+  const standardVariantIdsFor = useCallback(
+    (code: string, optionIds: string[]) =>
+      v25Pricing
+        ? v25StandardVariantIds(
+            bundle.variantGroups,
+            bundle.variantChoices,
+            pickSaleView(saleViews, model.slug, code, isFireProofSelected(bundle, optionIds)),
+            optionIds
+          )
+        : defaultVariantIds(bundle, optionIds),
+    [bundle, model.slug, saleViews, v25Pricing]
   );
 
   const preferredPresetCode = model.presets?.[0]?.code;
   const managedDefaultSpecCode =
-    preferredPresetCode && specSelections.some((row) => row.code === preferredPresetCode)
+    preferredPresetCode && nonFireSpecSelections.some((row) => row.code === preferredPresetCode)
       ? preferredPresetCode
       : null;
   const validInitialSpecCode =
-    initial?.spec_code && specSelections.some((row) => row.code === initial.spec_code)
+    initial?.spec_code && nonFireSpecSelections.some((row) => row.code === initial.spec_code)
       ? initial.spec_code
       : null;
   const defaultSpecCode =
@@ -227,44 +302,78 @@ export function SimulatorApp({
     [ctx, defaultSpecCode, model.slug]
   );
   const initialBaselineIds =
-    specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaultSelection(initialSpecCtx, initialLevel);
+    nonFireSpecSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaultSelection(initialSpecCtx, initialLevel);
   const preserveLegacyInitialSelection =
     Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);
   const preserveReadOnlyHistoricalSelection = Boolean(initial && initial.status !== 'draft');
+  // 保存した位置ごとの選択のうち、今の版に無い位置の分（価格の切り替えを戻した・版に位置の枠が無いなど）は、
+  // カテゴリー単位の選択に戻す（v2.5 PR-S2。画面・金額・保存し直しから黙って消さない）
+  const initialSaleView =
+    v25Pricing && initial ? pickSaleView(saleViews, model.slug, defaultSpecCode, isFireProofSelected(bundle, initial.option_ids)) : null;
+  const initialPlan = initial
+    ? mergeOrphanSlotSelections(
+        bundle,
+        { optionIds: initial.option_ids, variantChoiceIds: initial.variant_choice_ids, slotSelections: initial.slot_selections ?? [] },
+        {
+          positionCodes: new Set(v25PositionSlots(initialSaleView).map((slot) => slot.slot_code)),
+          positionCategoryIds: v25PositionSlotCategoryIds(initialSaleView, bundle.options),
+        }
+      )
+    : null;
   const initialSourceIds = preserveLegacyInitialSelection
-    ? (initial?.option_ids ?? initialBaselineIds)
+    ? (initialPlan?.optionIds ?? initialBaselineIds)
     : initialBaselineIds;
   const initialRuleCtx = preserveReadOnlyHistoricalSelection ? ctx : initialSpecCtx;
   const eligibleInitialIds = preserveReadOnlyHistoricalSelection
     ? initialSourceIds
     : initialSourceIds.filter((id) => initialSpecCtx.options.some((option) => option.id === id));
-  const initialSelection = normalizeWashbasinSelection(
+  /**
+   * v2.5 の売価を使う間の新しいプラン（保存したプラン・一時保存・/plans からの入口は除く）の最初の状態は、仕様の標準状態そのもの
+   * （仕様の読み込み・防火の切り替え・/plans と同じ関数で作る。標準構成のままなら公開した版の標準価格になる）
+   */
+  const v25InitialState = useMemo(
+    () =>
+      v25Pricing && !initial
+        ? v25SimulatorStandardState(
+            bundle,
+            defaultSpecCode,
+            nonFireSpecSelections.find((row) => row.code === defaultSpecCode)?.ids ?? [],
+            (optionIds) => standardVariantIdsFor(defaultSpecCode, optionIds)
+          )
+        : null,
+    [bundle, defaultSpecCode, initial, nonFireSpecSelections, standardVariantIdsFor, v25Pricing]
+  );
+  // 位置・用途の選択枠（v2.5 PR-S2）：版で位置ごとに選ぶカテゴリーの商品は、カテゴリー単位の選択に持ち込まない
+  // （位置の枠ができる前に保存したプラン・下書き。位置の選択は版の標準から始める）。見積依頼済みなどの履歴は保存した内容のまま
+  const initialNormalizedSelection = normalizeWashbasinSelection(
     bundle.options,
     pruneToScope(initialRuleCtx, eligibleInitialIds, initialLevel),
     initialBaselineIds
   );
+  const initialPositionCategoryIds =
+    v25Pricing && !preserveReadOnlyHistoricalSelection
+      ? v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, defaultSpecCode, isFireProofSelected(bundle, initialNormalizedSelection)), bundle.options)
+      : new Set<string>();
+  const initialSelection =
+    v25InitialState?.optionIds ?? withoutPositionCategoryOptions(bundle.options, initialNormalizedSelection, initialPositionCategoryIds);
+  const initialPositionCategoryDropped = !v25InitialState && initialSelection.length < initialNormalizedSelection.length;
   // 編集できるプラン（保存した下書き・一時保存）は、台帳から外れた選択肢を外し、標準の選択肢で補って開く。
   // 見積依頼済みなどの読み取り専用の履歴は、保存された内容のまま表示する
   const initialVariants =
-    initial && !preserveReadOnlyHistoricalSelection
-      ? reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initial.variant_choice_ids)
+    v25InitialState?.variantChoiceIds ??
+    (initialPlan && !preserveReadOnlyHistoricalSelection
+      ? reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initialPlan.variantChoiceIds)
       : pruneHiddenVariantChoices(
           bundle.variantGroups,
           bundle.variantChoices,
-          initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
-        );
+          initialPlan?.variantChoiceIds ?? standardVariantIdsFor(defaultSpecCode, initialSelection)
+        ));
   const exteriorWallCat = bundle.categories.find((c) => c.code === 'exterior-wall');
   const allExteriorWallOptions = bundle.options
     .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
     .sort((a, b) => a.sort_order - b.sort_order);
-  const legacyExteriorCodes = new Set(['exterior-galnote', 'exterior-wood']);
-  const currentExteriorCodes = new Set([
-    'exterior-nichiha-st-u18',
-    'exterior-nichiha-ns-premium18',
-    'exterior-nichiha-m-flat-premium18',
-    'exterior-wood-accent-100',
-    'exterior-current-gl-bare',
-  ]);
+  const legacyExteriorCodes = LEGACY_EXTERIOR_CODES;
+  const currentExteriorCodes = CURRENT_EXTERIOR_CODES;
   const initialExteriorWallOptions = initialSpecCtx.options
     .filter((o) => o.category_id === exteriorWallCat?.id && isSimulatorSelectableProduct(o))
     .sort((a, b) => a.sort_order - b.sort_order);
@@ -276,6 +385,11 @@ export function SimulatorApp({
   const [selected, setSelected] = useState<string[]>(initialSelection);
   /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
   const [variantIds, setVariantIds] = useState<string[]>(initialVariants);
+  /**
+   * 位置・用途の選択枠（掃出し窓・洗面窓など）ごとに、お客様が選んだもの（v2.5 PR-S2）。
+   * 選んでいない位置・選べなくなった商品は版の標準（activeSlotSelections でそろえる）
+   */
+  const [slotSelections, setSlotSelections] = useState<SlotSelection[]>(initialPlan?.slotSelections ?? []);
   const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() => {
     // 保存済み旧Configurationの exterior_faces=[] は従来1商品方式を表す互換状態。
     // 外壁を明示変更するまで [] を維持し、価格や保存内容を4面方式へ自動変換しない。
@@ -290,6 +404,7 @@ export function SimulatorApp({
         initialVariants
       );
     }
+    if (v25InitialState) return v25InitialState.exteriorFaces;
     return normalizeExteriorFaces(
       undefined,
       initialSelectableExteriorWallOptions,
@@ -300,10 +415,36 @@ export function SimulatorApp({
     );
   });
   const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
+  /** 防火仕様（防火構造）を選んでいるか。v2.5 の売価を使う間は、使う標準見積の版と標準構成が防火の条件で変わる */
+  const fireSelected = isFireProofSelected(bundle, selected);
+  /** 今の防火の条件での、仕様ごとの標準商品構成 */
+  const specSelections = fireSelected ? fireSpecSelections : nonFireSpecSelections;
+  /**
+   * 新しい標準見積（標準状態の商品が登録された公開中のもの）が機種・用途・防火で 1 件に決まれば、それを基準価格にする。
+   * 防火仕様を選んでいて防火の標準見積があれば防火の標準見積、無ければ非防火の標準見積（防火は別途見積のまま）。
+   */
+  const activeSaleView = useMemo(
+    () => pickSaleView(saleViews, model.slug, specCode, fireSelected),
+    [fireSelected, model.slug, saleViews, specCode]
+  );
+  // 仕様の標準構成に販売停止・廃番の商品があれば、その仕様は新しい受付を止める（自動で別の商品に替えない。見積依頼は DB でも止める）。
+  // v2.5 の売価を使う間は、公開中の版の選択枠の商品も標準構成（DB の get_spec_acceptance_state と同じく両方を見る）
+  const specStoppedNames = useMemo(
+    () =>
+      estimateSpecStoppedProductNames(ctx, model, specCode, [
+        ...(estimateTemplateByCode.get(specCode)?.baseline_option_ids ?? []),
+        ...((v25Pricing && v25SlotOptionIds(activeSaleView)) || []),
+        // 位置・用途の選択枠の標準の商品（v2.5 PR-S2）
+        ...(v25Pricing ? v25PositionSlots(activeSaleView).map((slot) => slot.standard_option_id) : []),
+      ]),
+    [activeSaleView, ctx, estimateTemplateByCode, model, specCode, v25Pricing]
+  );
   const [sitePrefecture, setSitePrefecture] = useState<string | null>(initial?.site_prefecture ?? null);
   const [siteMunicipality, setSiteMunicipality] = useState<string | null>(initial?.site_municipality ?? null);
   const [siteLocationUndecided, setSiteLocationUndecided] = useState(initial?.site_location_undecided ?? false);
   const [picker, setPicker] = useState<string | null>(null);
+  /** 位置・用途の選択枠の選び直し（v2.5 PR-S2）。開いている位置の識別子 */
+  const [slotPicker, setSlotPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
   const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
   const [configId, setConfigId] = useState<string | null>(initial?.id ?? null);
@@ -319,12 +460,59 @@ export function SimulatorApp({
   const [guestSave, setGuestSave] = useState(false);
   const [saving, startSaving] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** 保存したプランの、位置ごとに選ぶカテゴリーの商品を、版の位置の標準にそろえた（v2.5 PR-S2。保存すると消す） */
+  const [positionNotice, setPositionNotice] = useState(initialPositionCategoryDropped);
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
   const activeSpecCtx = useMemo(
     () => ruleContextForSpec(ctx, specCode, model.slug),
     [ctx, model.slug, specCode]
+  );
+
+  // ---- 位置・用途の選択枠（v2.5 PR-S2。公開中の v2.5 の版の窓などの位置ごとに 1 つ選ぶ） ----
+  const positionSlots = useMemo(() => (v25Pricing ? v25PositionSlots(activeSaleView) : []), [activeSaleView, v25Pricing]);
+  const positionCategoryIds = useMemo(
+    () => (v25Pricing ? v25PositionSlotCategoryIds(activeSaleView, bundle.options) : new Set<string>()),
+    [activeSaleView, bundle.options, v25Pricing]
+  );
+  const optionById = useMemo(() => new Map(bundle.options.map((option) => [option.id, option] as const)), [bundle.options]);
+  const specOptionIds = useMemo(() => new Set(activeSpecCtx.options.map((option) => option.id)), [activeSpecCtx.options]);
+  /** 注文範囲（level）の内の位置か。位置のカテゴリーは版の枠のカテゴリー（無ければ標準の商品のカテゴリー） */
+  const slotInScope = useCallback(
+    (level: FinishLevel) => {
+      const inScope = new Set(categoriesInScope(bundle.categories, level).map((category) => category.id));
+      return (slot: (typeof positionSlots)[number]) =>
+        inScope.has(slot.category_id ?? optionById.get(slot.standard_option_id)?.category_id ?? '');
+    },
+    [bundle.categories, optionById]
+  );
+  const canSelectSlotOption = useCallback(
+    (optionId: string) => {
+      const option = optionById.get(optionId);
+      return Boolean(option && specOptionIds.has(optionId) && isSimulatorSelectableProduct(option));
+    },
+    [optionById, specOptionIds]
+  );
+  /** 今の位置ごとの選択（版の枠の順。注文範囲の内の位置だけ）。保存・金額・画像はこれを使う。見積依頼済みなどの履歴は保存した内容のまま */
+  const { selections: activeSlotSelections, reverted: revertedSlotLabels } = useMemo(
+    () =>
+      readOnly
+        ? { selections: slotSelections, reverted: [] as string[] }
+        : activeV25SlotSelections(positionSlots, slotSelections, {
+            inScope: slotInScope(finishLevel),
+            canSelect: canSelectSlotOption,
+            variantGroups: bundle.variantGroups,
+            variantChoices: bundle.variantChoices,
+          }),
+    [bundle.variantChoices, bundle.variantGroups, canSelectSlotOption, finishLevel, positionSlots, readOnly, slotInScope, slotSelections]
+  );
+  const slotOptionIdsInUse = useMemo(() => activeSlotSelections.map((selection) => selection.option_id), [activeSlotSelections]);
+  /** 位置の枠の標準の選択（版の枠の順。注文範囲の内の位置だけ） */
+  const standardSlotSelectionsFor = useCallback(
+    (level: FinishLevel) =>
+      positionSlots.filter(slotInScope(level)).map((slot) => standardSlotSelection(slot, bundle.variantGroups, bundle.variantChoices)),
+    [bundle.variantChoices, bundle.variantGroups, positionSlots, slotInScope]
   );
   const eligibleExteriorWallOptions = useMemo(
     () =>
@@ -421,6 +609,23 @@ export function SimulatorApp({
           if (restoredSelection.length === 0 && standardIds.length > 0) {
             restoredSelection = pruneToScope(restoredCtx, standardIds, restoredLevel);
           }
+          // 位置・用途の選択枠（v2.5 PR-S2）：版で位置ごとに選ぶカテゴリーの商品は、カテゴリー単位の選択に持ち込まない
+          if (v25Pricing) {
+            const beforeStrip = restoredSelection.length;
+            restoredSelection = withoutPositionCategoryOptions(
+              bundle.options,
+              restoredSelection,
+              v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, restoredSpec, isFireProofSelected(bundle, restoredSelection)), bundle.options)
+            );
+            // 位置の枠ができる前の下書き：そろえたことを案内する（保存した後に消える）
+            if (restoredSelection.length < beforeStrip) setPositionNotice(true);
+          }
+          const restoredSlotSelections = Array.isArray(draft.slotSelections)
+            ? draft.slotSelections.filter(
+                (row): row is SlotSelection =>
+                  typeof row?.slot_code === 'string' && typeof row?.option_id === 'string' && Array.isArray(row?.variant_choice_ids)
+              )
+            : [];
 
           const normalizedVariantIds = reconcileVariantChoices(
             bundle.variantGroups,
@@ -440,6 +645,7 @@ export function SimulatorApp({
           setFinishLevel(restoredLevel);
           setSelected(restoredSelection);
           setVariantIds(normalizedVariantIds);
+          setSlotSelections(restoredSlotSelections);
           setExteriorFaces(
             normalizeExteriorFaces(
               draft.exteriorFaces,
@@ -480,6 +686,7 @@ export function SimulatorApp({
         selected,
         variantIds,
         exteriorFaces,
+        slotSelections,
         finishLevel,
         spec: specCode,
         sitePrefecture,
@@ -495,7 +702,7 @@ export function SimulatorApp({
       };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, variantIds, exteriorFaces, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug]
+    [selected, variantIds, exteriorFaces, slotSelections, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug]
   );
 
   useEffect(() => {
@@ -550,22 +757,35 @@ export function SimulatorApp({
   /** 注文範囲を外れたカテゴリーの商品はポップアップにも出さない */
   const scopedOptions = useMemo(() => specOptions.filter((o) => scopedCategoryIds.has(o.category_id)), [specOptions, scopedCategoryIds]);
 
-  // ---- 計算・画像解決 ----
+  // ---- 計算・画像解決（使う標準見積の版は activeSaleView） ----
+  /** v2.5 の売価を使う間に、この仕様の v2.5 の標準見積が無い（価格は準備中・見積依頼でお見積り） */
+  const v25PricePending = v25Pricing && !activeSaleView;
   /**
-   * 新しい標準見積（標準状態の商品が登録された公開中のもの）が機種・用途・防火で 1 件に決まれば、それを基準価格にする。
-   * 防火仕様を選んでいて防火の標準見積があれば防火の標準見積、無ければ非防火の標準見積（防火は別途見積のまま）。
+   * v2.5：売価の表に無い「商品＋選択肢」（組み合わせが多い商品）をサーバーで計算した売価（キーは v25UnitKey）。
+   * 計算するまでの金額は、標準と 1 か所だけ変えた売価から作った目安
    */
-  const fireSelected = isFireProofSelected(bundle, selected);
-  const activeSaleView = useMemo(
-    () => pickSaleView(saleViews, model.slug, specCode, fireSelected),
-    [fireSelected, model.slug, saleViews, specCode]
+  const [v25Units, setV25Units] = useState<ReadonlyMap<string, number | null>>(() => new Map());
+  const [v25UnitsFailed, setV25UnitsFailed] = useState(false);
+  const requestedV25Units = useRef(new Set<string>());
+  /** v2.5 の売価：画面に出す商品価格・選択肢の差額（原価は使わない。合計は computeSaleViewPricing で売価の表から計算） */
+  const displayCatalog = useMemo(
+    () => (v25Pricing ? v25DisplayCatalog(bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView, v25Units) : null),
+    [v25Pricing, bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView, v25Units]
   );
-  /** 新しい標準見積が無ければ、Excelの標準見積（旧）を基準価格にし、商品変更分だけ差額反映する。 */
+  const displayOptionById = useMemo(
+    () => (displayCatalog ? new Map(displayCatalog.options.map((option) => [option.id, option] as const)) : null),
+    [displayCatalog]
+  );
+  const displayVariantChoices = displayCatalog?.choices ?? bundle.variantChoices;
+  /**
+   * 新しい標準見積が無ければ、Excelの標準見積（旧）を基準価格にし、商品変更分だけ差額反映する。
+   * v2.5 の売価を使う間は、旧テンプレートでは計算しない（商品価格の列で差額を出すため。v2.5 の標準見積が無い仕様は準備中）
+   */
   const standardEstimatePricing = useMemo<StandardEstimatePricingResult | null>(
     () =>
       activeSaleView
-        ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces)
-        : activeEstimateTemplate
+        ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces, v25Units, activeSlotSelections)
+        : activeEstimateTemplate && !v25Pricing
           ? computeStandardEstimatePricing(
               bundle,
               activeEstimateTemplate,
@@ -575,15 +795,21 @@ export function SimulatorApp({
               finishLevel
             )
           : null,
-    [activeEstimateTemplate, activeSaleView, bundle, exteriorFaces, finishLevel, selected, variantIds]
+    [activeEstimateTemplate, activeSaleView, activeSlotSelections, bundle, exteriorFaces, finishLevel, selected, variantIds, v25Pricing, v25Units]
   );
+  /** v2.5：今の選択で、売価の表に無く、まだサーバーで計算していない「商品＋選択肢」 */
+  const missingV25Units = useMemo<V25MissingUnit[]>(
+    () => (v25Pricing ? (standardEstimatePricing?.missing_units ?? []) : []),
+    [standardEstimatePricing, v25Pricing]
+  );
+  const v25Calculating = missingV25Units.length > 0 && !v25UnitsFailed;
   /** 標準見積未登録の仕様だけ従来計算へフォールバックする。 */
   const baseOverride = useMemo(
     () => (activeSaleView || activeEstimateTemplate ? null : baseBreakdownTotal(bundle, specCode)),
     [activeEstimateTemplate, activeSaleView, bundle, specCode]
   );
-  const pricing = useMemo(
-    () =>
+  const pricing = useMemo(() => {
+    const result =
       standardEstimatePricing?.pricing ??
       computePricing(
         model,
@@ -594,16 +820,44 @@ export function SimulatorApp({
         { groups: bundle.variantGroups, choices: bundle.variantChoices },
         baseOverride,
         exteriorFaces
-      ),
-    [model, bundle, selected, variantIds, baseOverride, exteriorFaces, standardEstimatePricing]
+      );
+    // v2.5 の標準見積が無い仕様は、原価から金額を出さない（価格は準備中・見積依頼でお見積り。DB の保存・見積依頼も同じ）
+    return v25PricePending ? pendingSaleViewPricing(result) : result;
+  }, [model, bundle, selected, variantIds, baseOverride, exteriorFaces, standardEstimatePricing, v25PricePending]);
+  /** v2.5 の売価を使う間は、画面に出す商品を、商品価格を売価にしたものに差し替える（原価は受け取っていない） */
+  const withDisplayPrices = useCallback(
+    (options: ProductOption[]) => (displayOptionById ? options.map((option) => displayOptionById.get(option.id) ?? option) : options),
+    [displayOptionById]
   );
+  const displayScopedOptions = useMemo(() => withDisplayPrices(scopedOptions), [withDisplayPrices, scopedOptions]);
+  const displayAllOptions = useMemo(() => withDisplayPrices(bundle.options), [withDisplayPrices, bundle.options]);
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
-  const levelTotals = useMemo(() => {
+  const { levelTotals, levelMissingUnits } = useMemo(() => {
     const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
     const base = preset?.ids ?? defaultSelection(activeSpecCtx);
     const out: Partial<Record<FinishLevel, number>> = {};
+    /** v2.5：ほかの注文範囲の目安でも、表に無い組み合わせはサーバーで計算してもらう */
+    const levelMissing: V25MissingUnit[] = [];
     for (const lv of FINISH_LEVELS) {
       const ids = pruneToScope(activeSpecCtx, lv === finishLevel ? selected : base, lv);
+      // v2.5 の売価：標準見積の売価の表で計算する（原価は使わない）。v2.5 の標準見積が無い仕様は準備中（金額を出さない）。
+      // 売価は選択肢の組み合わせで決まるので、今の注文範囲は今の選択肢、ほかは標準の選択肢で計算する
+      if (v25Pricing) {
+        if (!activeSaleView || !isV25SaleView(activeSaleView)) continue;
+        const result = computeSaleViewPricing(
+          bundle,
+          activeSaleView,
+          ids,
+          lv === finishLevel ? variantIds : standardVariantIdsFor(specCode, ids),
+          lv === finishLevel ? exteriorFaces : [],
+          v25Units,
+          // 位置の枠：今の注文範囲は今の選択、ほかはその範囲の内の位置の標準
+          lv === finishLevel ? activeSlotSelections : standardSlotSelectionsFor(lv)
+        );
+        out[lv] = result.pricing.total;
+        levelMissing.push(...(result.missing_units ?? []));
+        continue;
+      }
       out[lv] = computePricing(
         model,
         bundle.options,
@@ -615,8 +869,31 @@ export function SimulatorApp({
         lv === finishLevel ? exteriorFaces : []
       ).total;
     }
-    return out;
-  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces]);
+    return { levelTotals: out, levelMissingUnits: levelMissing };
+  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces, v25Pricing, activeSaleView, variantIds, v25Units, standardVariantIdsFor, activeSlotSelections, standardSlotSelectionsFor]);
+  // 表に無い組み合わせ（今の選択と、注文範囲のカードの目安の分）は、サーバーで売価だけを計算してもらう
+  // （200 件ずつ。失敗した組み合わせは目安のまま、もう一度は頼まない）
+  useEffect(() => {
+    const wanted = [...missingV25Units, ...levelMissingUnits]
+      .filter((item) => !requestedV25Units.current.has(v25UnitKey(item.revision_id, item.option_id, item.choice_ids)))
+      .filter((item, index, list) => list.findIndex((other) => v25UnitKey(other.revision_id, other.option_id, other.choice_ids) === v25UnitKey(item.revision_id, item.option_id, item.choice_ids)) === index)
+      .slice(0, 200);
+    if (wanted.length === 0) return;
+    for (const item of wanted) requestedV25Units.current.add(v25UnitKey(item.revision_id, item.option_id, item.choice_ids));
+    fetchSimulatorV25UnitsAction({ items: wanted })
+      .then((result) => {
+        if (!result.ok) {
+          setV25UnitsFailed(true);
+          return;
+        }
+        setV25Units((prev) => {
+          const next = new Map(prev);
+          for (const row of result.units) next.set(row.key, row.unit);
+          return next;
+        });
+      })
+      .catch(() => setV25UnitsFailed(true));
+  }, [missingV25Units, levelMissingUnits]);
 
   const independentInsulationCategoryIds = useMemo(
     () =>
@@ -636,10 +913,15 @@ export function SimulatorApp({
       const option = bundle.options.find((row) => row.id === id);
       return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
     });
-  const validationIssues = useMemo(
-    () => validateSelection(activeSpecCtx, selected, finishLevel),
-    [activeSpecCtx, selected, finishLevel]
-  );
+  // 位置・用途の選択枠の商品も、必須・前提・同時に選べないの確認に含める。「1 つだけ選択」はカテゴリー単位の選択だけで数える（DB と同じ）
+  const validationIssues = useMemo<RuleIssue[]>(() => {
+    const categoryLevel = validateSelection(activeSpecCtx, selected, finishLevel);
+    if (slotOptionIdsInUse.length === 0) return categoryLevel;
+    return [
+      ...validateSelection(activeSpecCtx, [...selected, ...slotOptionIdsInUse], finishLevel).filter((issue) => issue.type !== 'single'),
+      ...categoryLevel.filter((issue) => issue.type === 'single'),
+    ];
+  }, [activeSpecCtx, selected, finishLevel, slotOptionIdsInUse]);
   const displayIssues = useMemo(() => {
     if (!legacyReadOnlyWithoutIndependentInsulation) return validationIssues;
 
@@ -662,25 +944,108 @@ export function SimulatorApp({
     legacyReadOnlyWithoutIndependentInsulation,
     validationIssues,
   ]);
-  const blocked = useMemo(() => explainBlocked(activeSpecCtx, selected), [activeSpecCtx, selected]);
+  const blocked = useMemo(
+    () => explainBlocked(activeSpecCtx, [...selected, ...slotOptionIdsInUse]),
+    [activeSpecCtx, selected, slotOptionIdsInUse]
+  );
   const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
   const baselineVariantIds = useMemo(
-    () => defaultVariantIds(bundle, activeSpecSelection),
-    [activeSpecSelection, bundle]
+    () => standardVariantIdsFor(specCode, activeSpecSelection),
+    [activeSpecSelection, specCode, standardVariantIdsFor]
   );
+  /** 位置・用途の選択枠ごとの、今の選択と標準（画面の表示・変更点の一覧に使う） */
+  const slotRows = useMemo(
+    () =>
+      activeSlotSelections.flatMap((selection) => {
+        const slot = positionSlots.find((row) => row.slot_code === selection.slot_code);
+        if (!slot) return [];
+        const categoryId = slot.category_id ?? optionById.get(slot.standard_option_id)?.category_id ?? '';
+        return [{ slot, selection, standard: standardSlotSelection(slot, bundle.variantGroups, bundle.variantChoices), categoryId }];
+      }),
+    [activeSlotSelections, bundle.variantChoices, bundle.variantGroups, optionById, positionSlots]
+  );
+  const slotsAtStandard = slotRows.every((row) => sameSlotSelection(row.selection, row.standard));
+  /** 設備の一覧の位置ごとのタイル（差額は、その位置の標準の売価との差。表に無い組み合わせは目安） */
+  const slotTiles = useMemo<EquipmentSlotTile[]>(
+    () =>
+      slotRows.map((row) => {
+        const option = displayOptionById?.get(row.selection.option_id) ?? optionById.get(row.selection.option_id) ?? null;
+        const changed = !sameSlotSelection(row.selection, row.standard);
+        const current = activeSaleView ? v25SlotUnitForDisplay(activeSaleView, row.selection, v25Units) : null;
+        const standard = activeSaleView ? v25SlotUnitForDisplay(activeSaleView, row.standard, v25Units) : null;
+        const delta = current !== null && standard !== null ? current - standard : null;
+        return {
+          slotCode: row.slot.slot_code,
+          categoryId: row.categoryId,
+          label: row.slot.slot_label,
+          option,
+          variantNames: row.selection.variant_choice_ids
+            .map((id) => bundle.variantChoices.find((choice) => choice.id === id)?.name)
+            .filter((value): value is string => Boolean(value)),
+          state: current === null ? 'price-on-request' : changed ? 'changed' : 'standard',
+          deltaLabel: !changed || delta === null ? null : delta === 0 ? '追加費用なし' : delta > 0 ? `+${formatYen(delta)}` : formatYen(delta),
+        };
+      }),
+    [activeSaleView, bundle.variantChoices, displayOptionById, optionById, slotRows, v25Units]
+  );
+  // 位置の選び直しの画面：その位置で選べる商品（標準の商品を先頭に、本部が決めた順。選べなくなった商品は出さない）
+  const slotPickerRow = slotPicker ? (slotRows.find((row) => row.slot.slot_code === slotPicker) ?? null) : null;
+  const slotPickerCategory = slotPickerRow ? (bundle.categories.find((category) => category.id === slotPickerRow.categoryId) ?? null) : null;
+  const slotPickerOptions = useMemo(() => {
+    if (!slotPickerRow) return [];
+    const displayById = new Map(displayAllOptions.map((option) => [option.id, option] as const));
+    return slotPickerRow.slot.selectable_option_ids
+      .filter((id) => id === slotPickerRow.slot.standard_option_id || id === slotPickerRow.selection.option_id || canSelectSlotOption(id))
+      .map((id) => displayById.get(id))
+      .filter((option): option is ProductOption => Boolean(option));
+  }, [canSelectSlotOption, displayAllOptions, slotPickerRow]);
+  const slotPickerBlocked = useMemo(
+    () =>
+      slotPickerRow
+        ? explainBlocked(activeSpecCtx, [
+            ...selected,
+            ...activeSlotSelections.filter((row) => row.slot_code !== slotPickerRow.slot.slot_code).map((row) => row.option_id),
+          ])
+        : new Map<string, string>(),
+    [activeSlotSelections, activeSpecCtx, selected, slotPickerRow]
+  );
+  /** 御見積書の標準見積の明細の注記（標準から変えた商品の行。金額は変更差額の行のまま） */
+  const standardLineNotes = useMemo(() => {
+    if (!activeSaleView || !isV25SaleView(activeSaleView)) return {};
+    const choiceById = new Map(bundle.variantChoices.map((choice) => [choice.id, choice] as const));
+    const optionOfGroup = new Map(bundle.variantGroups.map((group) => [group.id, group.option_id] as const));
+    const inScopeCategoryIds = new Set(categoriesInScope(bundle.categories, finishLevel).map((category) => category.id));
+    return v25StandardLineNotes(
+      activeSaleView,
+      { optionIds: selected, variantChoiceIds: variantIds, slotSelections: activeSlotSelections },
+      {
+        optionName: (id) => optionById.get(id)?.name,
+        choiceName: (id) => choiceById.get(id)?.name,
+        optionOfChoice: (id) => {
+          const choice = choiceById.get(id);
+          return choice ? optionOfGroup.get(choice.group_id) : undefined;
+        },
+        categoryOf: (id) => optionById.get(id)?.category_id,
+        inScope: (id) => inScopeCategoryIds.has(optionById.get(id)?.category_id ?? ''),
+      }
+    );
+  }, [activeSaleView, activeSlotSelections, bundle.categories, bundle.variantChoices, bundle.variantGroups, finishLevel, optionById, selected, variantIds]);
   const planChangeSummary = useMemo(() => summarizePlanChanges(
     bundle,
     { optionIds: selected, variantChoiceIds: variantIds, exteriorFaces },
-    { optionIds: activeSpecSelection, variantChoiceIds: baselineVariantIds }
-  ), [bundle, selected, variantIds, exteriorFaces, activeSpecSelection, baselineVariantIds]);
-  const atStandardSpecSelection = sameSelection(
-    selected,
-    pruneToScope(activeSpecCtx, activeSpecSelection, finishLevel)
-  );
+    { optionIds: activeSpecSelection, variantChoiceIds: baselineVariantIds },
+    slotRows.map((row) => ({
+      label: `${bundle.categories.find((category) => category.id === row.categoryId)?.name ?? ''}（${row.slot.slot_label}）`,
+      current: row.selection,
+      standard: row.standard,
+    }))
+  ), [bundle, selected, variantIds, exteriorFaces, activeSpecSelection, baselineVariantIds, slotRows]);
+  const atStandardSpecSelection =
+    sameSelection(selected, pruneToScope(activeSpecCtx, activeSpecSelection, finishLevel)) && slotsAtStandard;
   const preferredFloorplanKeys = useMemo<string[] | undefined>(() => {
     if (!atStandardSpecSelection || !activePreset) return undefined;
-    return selectedPreviewKeys(bundle.options, activeSpecSelection, 'floorplan');
-  }, [activePreset, activeSpecSelection, atStandardSpecSelection, bundle.options]);
+    return selectedPreviewKeys(bundle.options, [...activeSpecSelection, ...slotOptionIdsInUse], 'floorplan');
+  }, [activePreset, activeSpecSelection, atStandardSpecSelection, bundle.options, slotOptionIdsInUse]);
   const previews = useMemo(
     () =>
       Object.fromEntries(
@@ -689,13 +1054,14 @@ export function SimulatorApp({
           resolvePreview(
             bundle.previewRules,
             v,
-            selectedPreviewKeys(bundle.options, selected, v),
+            // 位置・用途の選択枠で選んだ商品も、選んだ商品として画像の切り替えに数える
+            selectedPreviewKeys(bundle.options, [...selected, ...slotOptionIdsInUse], v),
             specCode,
             v === 'floorplan' ? preferredFloorplanKeys : undefined
           ),
         ])
       ) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
-    [bundle, preferredFloorplanKeys, selected, specCode]
+    [bundle, preferredFloorplanKeys, selected, slotOptionIdsInUse, specCode]
   );
   const thumbnailUrl = previews.exterior.layers[0]?.url ?? previews.interior.layers[0]?.url ?? null;
 
@@ -706,15 +1072,19 @@ export function SimulatorApp({
   };
 
   // ---- 操作 ----
-  const applyPreset = (code: string) => {
-    if (!hydrated || readOnly) return;
-    const selection = specSelections.find((row) => row.code === code);
-    const choice = simulatorSpecChoices.find((row) => row.code === code);
-    if (!selection || !choice) return;
-    const nextLevel = finishLevelForEstimateSpec(code);
+  /** 仕様・防火の条件の標準状態（注文範囲・商品・選択肢・外壁の 4 面）。仕様の読み込みと防火の切り替えで使う */
+  const standardStateFor = (code: string, fire: boolean) => {
+    const selection = (fire ? fireSpecSelections : nonFireSpecSelections).find((row) => row.code === code);
+    if (!selection) return null;
+    // v2.5：新しいプランの最初の状態・/plans からの入口と同じ関数で作る（防火の切り替えで「標準構成のまま」を正しく判定するため）
+    if (v25Pricing) {
+      const state = v25SimulatorStandardState(bundle, code, selection.ids, (optionIds) => standardVariantIdsFor(code, optionIds));
+      return { level: state.finishLevel, selection: state.optionIds, variants: state.variantChoiceIds, faces: state.exteriorFaces };
+    }
+    const level = finishLevelForEstimateSpec(code);
     const nextCtx = ruleContextForSpec(ctx, code, model.slug);
-    const nextSel = pruneToScope(nextCtx, selection.ids, nextLevel);
-    const nextVariants = defaultVariantIds(bundle, nextSel);
+    const nextSel = pruneToScope(nextCtx, selection.ids, level);
+    const nextVariants = standardVariantIdsFor(code, nextSel);
     const nextExteriorOptions = nextCtx.options
       .filter((option) => option.category_id === exteriorWallCat?.id && option.status === 'published')
       .sort((a, b) => a.sort_order - b.sort_order);
@@ -722,21 +1092,67 @@ export function SimulatorApp({
     const selectableNextExteriorOptions = nextHasCurrentExteriorCatalog
       ? nextExteriorOptions.filter((option) => !legacyExteriorCodes.has(option.code))
       : nextExteriorOptions;
-    setSpecCode(code);
-    setFinishLevel(nextLevel);
-    setSelected(nextSel);
-    setVariantIds(nextVariants);
-    setExteriorFaces(
-      makeDefaultExteriorFaces(
-        selectableNextExteriorOptions,
-        bundle.variantGroups,
-        bundle.variantChoices,
-        nextSel,
-        nextVariants
-      )
+    const faces = makeDefaultExteriorFaces(
+      selectableNextExteriorOptions,
+      bundle.variantGroups,
+      bundle.variantChoices,
+      nextSel,
+      nextVariants
     );
+    return { level, selection: nextSel, variants: nextVariants, faces };
+  };
+
+  const applyPreset = (code: string) => {
+    if (!hydrated || readOnly) return;
+    const choice = simulatorSpecChoices.find((row) => row.code === code);
+    // v2.5 の売価を使う間は、今の防火の条件の標準構成を読み込む（旧来は防火で変わらない）
+    const next = standardStateFor(code, fireSelected);
+    if (!next || !choice) return;
+    setSpecCode(code);
+    setFinishLevel(next.level);
+    setSelected(next.selection);
+    setVariantIds(next.variants);
+    setExteriorFaces(next.faces);
+    // 位置・用途の選択枠も、新しい仕様の版の標準から始める
+    setSlotSelections([]);
     setDirty(true);
     pushToast(`「${choice.name}」の標準見積を読み込みました`, 'success');
+  };
+
+  /**
+   * 防火仕様の切り替え。v2.5 の売価を使う間は、今の仕様の標準構成のままなら、選んだ防火の条件の標準構成
+   * （公開中の版の選択枠の商品・選択肢）を読み込む（2026-10-29 先方回答：初期構成はモデル・仕様・防火条件ごと）。
+   * 標準構成から変えていれば、変えた内容を残して防火仕様だけを入れ替える（金額は v2.5 のルールで計算する）
+   */
+  const changeFireSpec = (fireproofCategoryId: string, nextId: string) => {
+    const nextFire = bundle.options.find((option) => option.id === nextId)?.code === FIRE_PROOF_OPTION_CODE;
+    if (v25Pricing && hydrated && !readOnly && nextFire !== fireSelected) {
+      const current = standardStateFor(specCode, fireSelected);
+      const next = standardStateFor(specCode, nextFire);
+      const atStandard =
+        current !== null &&
+        finishLevel === current.level &&
+        sameSelection(selected, current.selection) &&
+        sameSelection(variantIds, current.variants) &&
+        sameExteriorFaces(displayedExteriorFaces, current.faces) &&
+        slotsAtStandard;
+      if (atStandard && next && next.selection.includes(nextId)) {
+        setSelected(next.selection);
+        setVariantIds(next.variants);
+        setExteriorFaces(next.faces);
+        setSlotSelections([]);
+        setDirty(true);
+        pushToast(`${nextFire ? '防火構造' : '非防火'}の標準構成を読み込みました`, 'success');
+        return;
+      }
+      // 標準構成から変えている：変えた内容を残し、使う版が変わる分だけ、位置ごとに選ぶカテゴリーをそろえる（v2.5 PR-S2）
+      const nextPositionCategoryIds = v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, specCode, nextFire), bundle.options);
+      applyPicker(fireproofCategoryId, [nextId], [], (ids) =>
+        switchPositionCategories(activeSpecCtx, ids, positionCategoryIds, nextPositionCategoryIds, next?.selection ?? [])
+      );
+      return;
+    }
+    applyPicker(fireproofCategoryId, [nextId]);
   };
 
   /**
@@ -755,7 +1171,21 @@ export function SimulatorApp({
         const r = toggleOption(activeSpecCtx, cur, oid);
         if (!r.rejected) cur = r.next;
       }
+      // 位置ごとに選ぶカテゴリーの商品は、前提の自動追加で入っても、カテゴリー単位の選択に残さない（v2.5 PR-S2。位置の選択で選ぶ）
+      cur = withoutPositionCategoryOptions(bundle.options, cur, positionCategoryIds);
       setSelected(cur);
+      // v2.5：足した商品にも標準の選択肢を選ぶ（選択肢が無いと標準見積の選択枠と一致せず、標準のままでも差額が出る）。
+      // 狭める前に選んでいた選択肢が残っている選択項目は、その選択肢のまま（同じ選択項目に 2 つ選ばない）
+      if (v25Pricing) {
+        const added = cur.filter((id) => !selected.includes(id));
+        if (added.length > 0) {
+          setVariantIds((prev) => {
+            const groupOf = new Map(bundle.variantChoices.map((choice) => [choice.id, choice.group_id]));
+            const chosenGroups = new Set(prev.map((id) => groupOf.get(id)).filter(Boolean));
+            return [...prev, ...standardVariantIdsFor(specCode, added).filter((id) => !chosenGroups.has(groupOf.get(id)))];
+          });
+        }
+      }
     } else {
       const kept = pruneToScope(activeSpecCtx, selected, level);
       const dropped = selected.length - kept.length;
@@ -767,7 +1197,16 @@ export function SimulatorApp({
     pushToast(`「${FINISH_LEVEL_INFO[level].name}」で見積を作ります`, 'success');
   };
 
-  const applyPicker = (categoryId: string, nextInCategory: string[], nextVariants: string[] = []) => {
+  /**
+   * adjustSelection は、選び直しの後のカテゴリー単位の選択をそろえる（防火の切り替えで使う版が変わるとき。v2.5 PR-S2）。
+   * そろえて足した商品には標準の選択肢を選び、外した商品の選択肢は外す
+   */
+  const applyPicker = (
+    categoryId: string,
+    nextInCategory: string[],
+    nextVariants: string[] = [],
+    adjustSelection?: (ids: string[]) => string[]
+  ) => {
     const inCategory = activeSpecCtx.options.filter((o) => o.category_id === categoryId).map((o) => o.id);
     let cur = selected;
     const notices: string[] = [];
@@ -811,17 +1250,41 @@ export function SimulatorApp({
     for (const [oid, notice] of removalNotices) {
       if (cur.includes(oid)) notices.push(notice);
     }
+    const picked = cur;
+    // 位置ごとに選ぶカテゴリーの商品は、前提の自動追加で入っても、カテゴリー単位の選択に残さない（v2.5 PR-S2。位置の選択で選ぶ）
+    cur = adjustSelection ? adjustSelection(cur) : withoutPositionCategoryOptions(bundle.options, cur, positionCategoryIds);
+    const adjustedIn = cur.filter((id) => !picked.includes(id));
+    const adjustedOut = new Set(picked.filter((id) => !cur.includes(id)));
+    const positionCategoryNames = [
+      ...new Set(
+        [...adjustedOut]
+          .map((id) => optionById.get(id)?.category_id)
+          .filter((categoryId): categoryId is string => Boolean(categoryId && positionCategoryIds.has(categoryId)))
+          .map((categoryId) => bundle.categories.find((category) => category.id === categoryId)?.name ?? '')
+      ),
+    ].filter(Boolean);
+    if (!adjustSelection && positionCategoryNames.length > 0) {
+      notices.push(`「${positionCategoryNames.join('・')}」は位置ごとに選びます。設備の一覧の位置のタイルから選んでください`);
+    }
 
     setSelected(cur);
-    // このカテゴリーの商品に紐づく選択肢を入れ替える
+    // このカテゴリーの商品に紐づく選択肢を入れ替える（そろえて外した商品の選択肢も外し、足した商品は標準の選択肢）
     const catOptionIds = new Set(inCategory);
-    const groupIds = new Set(bundle.variantGroups.filter((g) => catOptionIds.has(g.option_id)).map((g) => g.id));
+    const groupIds = new Set(
+      bundle.variantGroups.filter((g) => catOptionIds.has(g.option_id) || adjustedOut.has(g.option_id)).map((g) => g.id)
+    );
+    const addedGroupIds = new Set(bundle.variantGroups.filter((g) => adjustedIn.includes(g.option_id)).map((g) => g.id));
+    const addedVariants =
+      adjustedIn.length > 0
+        ? standardVariantIdsFor(specCode, cur).filter((cid) => addedGroupIds.has(bundle.variantChoices.find((c) => c.id === cid)?.group_id ?? ''))
+        : [];
     setVariantIds((prev) => [
       ...prev.filter((cid) => {
         const gid = bundle.variantChoices.find((c) => c.id === cid)?.group_id;
-        return !gid || !groupIds.has(gid);
+        return !gid || (!groupIds.has(gid) && !addedGroupIds.has(gid));
       }),
       ...nextVariants,
+      ...addedVariants,
     ]);
     setDirty(true);
     setPicker(null);
@@ -883,7 +1346,32 @@ export function SimulatorApp({
       setExteriorFacePicker('front');
       return;
     }
+    // 位置ごとに選ぶカテゴリー（v2.5 PR-S2）は、カテゴリー単位では選ばない。最初の位置の選択を開く
+    if (positionCategoryIds.has(categoryId)) {
+      const first = slotRows.find((row) => row.categoryId === categoryId);
+      if (first) setSlotPicker(first.slot.slot_code);
+      return;
+    }
     setPicker(categoryId);
+  };
+
+  const openSlotPicker = (slotCode: string) => {
+    if (readOnly) {
+      pushToast('見積依頼済みの仕様は編集できません。マイページから複製してください。', 'warn');
+      return;
+    }
+    setSlotPicker(slotCode);
+  };
+
+  /** 位置・用途の選択枠の選び直し（その位置で 1 つ。選択肢はその商品のものだけ） */
+  const applySlotPicker = (slotCode: string, nextIds: string[], nextVariants: string[]) => {
+    const optionId = nextIds[0];
+    setSlotPicker(null);
+    if (!optionId) return;
+    const groupIds = new Set(bundle.variantGroups.filter((group) => group.option_id === optionId).map((group) => group.id));
+    const variantChoiceIds = nextVariants.filter((id) => groupIds.has(bundle.variantChoices.find((choice) => choice.id === id)?.group_id ?? ''));
+    setSlotSelections((prev) => [...prev.filter((row) => row.slot_code !== slotCode), { slot_code: slotCode, option_id: optionId, variant_choice_ids: variantChoiceIds }]);
+    setDirty(true);
   };
 
   // ---- 保存・見積依頼 ----
@@ -891,6 +1379,12 @@ export function SimulatorApp({
     persistDraft({ pending });
     router.push(`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`);
   };
+
+  /** 保存する選択肢：選んでいる商品の選択項目のものだけ（外した商品の選択肢は DB が受け付けない） */
+  const savableVariantIds = useMemo(() => {
+    const groupIds = new Set(bundle.variantGroups.filter((group) => selected.includes(group.option_id)).map((group) => group.id));
+    return variantIds.filter((id) => groupIds.has(bundle.variantChoices.find((choice) => choice.id === id)?.group_id ?? ''));
+  }, [bundle.variantChoices, bundle.variantGroups, selected, variantIds]);
 
   const doSave = (saveName: string, then: 'stay' | 'quote') => {
     // 本部プレビューは確認用。保存すると DB（これまでの計算）と金額が食い違うため保存しない
@@ -905,8 +1399,10 @@ export function SimulatorApp({
         preview_image_url: thumbnailUrl,
         notes: null,
         finish_level: finishLevel,
-        variant_choice_ids: variantIds,
+        variant_choice_ids: savableVariantIds,
         exterior_faces: exteriorFaces,
+        // 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。注文範囲の内の位置をすべて 1 つずつ（DB が版と照らして確かめる）
+        slot_selections: activeSlotSelections,
         spec_code: specCode,
         site_prefecture: sitePrefecture,
         site_municipality: siteMunicipality,
@@ -926,6 +1422,9 @@ export function SimulatorApp({
       setLockVersion(result.configuration.lock_version ?? null);
       setStatus(result.configuration.status);
       setDirty(false);
+      setPositionNotice(false);
+      // 保存した位置ごとの選択（標準に戻した位置を含む）を、今の選択にする
+      setSlotSelections(activeSlotSelections);
       persistDraft({ name: saveName, configId: result.configuration.id, lockVersion: result.configuration.lock_version ?? null });
       setDialog(null);
       if (then === 'quote') {
@@ -1085,7 +1584,7 @@ export function SimulatorApp({
                           value={fireproofChosen?.id ?? ''}
                           onChange={(e) => {
                             const nextId = e.target.value;
-                            if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
+                            if (nextId && nextId !== fireproofChosen?.id) changeFireSpec(fireproofCat.id, nextId);
                           }}
                           disabled={readOnly}
                           className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"
@@ -1134,6 +1633,17 @@ export function SimulatorApp({
                       </button>
                     ))}
                   </div>
+
+                  {specStoppedNames.length > 0 && (
+                    <p
+                      className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[0.78rem] leading-relaxed text-amber-900"
+                      role="status"
+                      data-testid="spec-acceptance-stopped"
+                    >
+                      この仕様の標準の商品構成に、販売停止の商品（{specStoppedNames.join('・')}）が含まれるため、現在は新しいご依頼を受け付けていません。
+                      プランの確認・保存はできます。再開まで担当からのご案内をお待ちください。
+                    </p>
+                  )}
 
                   <div className="mt-3">
                     <SiteLocationPicker
@@ -1194,6 +1704,16 @@ export function SimulatorApp({
           )}
         </div>
 
+        {v25PricePending && (
+          <div className="mt-4" data-testid="price-pending-banner">
+            <Alert tone="info">この仕様の価格は準備中です。見積依頼をいただければ、担当者がお見積りします。</Alert>
+          </div>
+        )}
+        {v25UnitsFailed && (
+          <div className="mt-4" data-testid="price-estimate-banner">
+            <Alert tone="warn">一部の商品の金額を計算できませんでした。表示している金額は目安です（保存・見積依頼のときに計算し直します）。</Alert>
+          </div>
+        )}
         {pricingPreview && (
           <div className="mt-4" data-testid="pricing-preview-banner">
             <Alert tone="info">
@@ -1206,6 +1726,15 @@ export function SimulatorApp({
           <Alert tone="warn" className="mt-4">
             {loadError}
           </Alert>
+        )}
+        {!readOnly && (positionNotice || revertedSlotLabels.length > 0) && (
+          <div className="mt-4" data-testid="position-slot-notice">
+            <Alert tone="info">
+              窓などの位置ごとの選択を、今の標準見積の構成にそろえました
+              {revertedSlotLabels.length > 0 ? `（${revertedSlotLabels.join('・')}は、選んでいた商品を今は選べないため標準の商品に戻しています）` : ''}
+              。内容を確認してから保存してください。
+            </Alert>
+          </div>
         )}
         {guestPlanExpiresAt && !configId && (
           <div className="mt-4" data-testid="guest-plan-notice">
@@ -1259,15 +1788,17 @@ export function SimulatorApp({
       <div className="container-x max-w-5xl space-y-4 pt-3 pb-2">
         <EquipmentBoard
           categories={specCategories}
-          options={scopedOptions}
+          options={displayScopedOptions}
           selected={selected}
           baselineSelected={activeSpecSelection}
           selectedVariantIds={variantIds}
           baselineVariantIds={baselineVariantIds}
           variantGroups={bundle.variantGroups}
-          variantChoices={bundle.variantChoices}
+          variantChoices={displayVariantChoices}
           readOnly={readOnly}
           onPickCategory={openPicker}
+          slotTiles={slotTiles}
+          onPickSlot={openSlotPicker}
         />
 
         {displayIssues.length > 0 && (
@@ -1288,11 +1819,17 @@ export function SimulatorApp({
           pricing={pricing}
           standardEstimate={standardEstimatePricing}
           categories={bundle.categories}
-          options={bundle.options}
+          options={displayAllOptions}
           readOnly={readOnly}
           onPickCategory={openPicker}
           showDealerFinder
+          standardLineNotes={standardLineNotes}
         />
+        {v25Calculating && (
+          <p className="mt-3 text-xs text-muted" role="status" data-testid="price-calculating">
+            選んだ組み合わせの金額を計算しています…
+          </p>
+        )}
         <p className="mt-3 text-xs text-muted">{PRICE_DISCLAIMER}</p>
       </div>
 
@@ -1319,25 +1856,41 @@ export function SimulatorApp({
       {picker && (
         <OptionPickerDialog
           category={bundle.categories.find((c) => c.id === picker)!}
-          options={scopedOptions.filter((o) => o.category_id === picker)}
+          options={displayScopedOptions.filter((o) => o.category_id === picker)}
           selectedIds={selected}
           baselineSelectedIds={activeSpecSelection}
           blocked={blocked}
           variantGroups={bundle.variantGroups}
-          variantChoices={bundle.variantChoices}
+          variantChoices={displayVariantChoices}
           selectedVariantIds={variantIds}
           baselineVariantIds={baselineVariantIds}
           onClose={() => setPicker(null)}
           onApply={(next, nextVariants) => applyPicker(picker, next, nextVariants)}
         />
       )}
+      {slotPickerRow && slotPickerCategory && (
+        <OptionPickerDialog
+          category={slotPickerCategory}
+          slot={{ label: slotPickerRow.slot.slot_label }}
+          options={slotPickerOptions}
+          selectedIds={[slotPickerRow.selection.option_id]}
+          baselineSelectedIds={[slotPickerRow.standard.option_id]}
+          blocked={slotPickerBlocked}
+          variantGroups={bundle.variantGroups}
+          variantChoices={displayVariantChoices}
+          selectedVariantIds={slotPickerRow.selection.variant_choice_ids}
+          baselineVariantIds={slotPickerRow.standard.variant_choice_ids}
+          onClose={() => setSlotPicker(null)}
+          onApply={(next, nextVariants) => applySlotPicker(slotPickerRow.slot.slot_code, next, nextVariants)}
+        />
+      )}
       {exteriorFacePicker && exteriorWallCat && (
         <ExteriorWallFacesDialog
           category={exteriorWallCat}
-          options={allExteriorWallOptions}
-          selectableOptions={exteriorWallOptions}
+          options={withDisplayPrices(allExteriorWallOptions)}
+          selectableOptions={withDisplayPrices(exteriorWallOptions)}
           variantGroups={bundle.variantGroups}
-          variantChoices={bundle.variantChoices}
+          variantChoices={displayVariantChoices}
           selectedOptionIds={selected}
           selectedVariantIds={variantIds}
           current={exteriorFaces}
@@ -1372,13 +1925,14 @@ export function SimulatorApp({
           plan={{
             name,
             option_ids: selected,
-            variant_choice_ids: variantIds,
+            variant_choice_ids: savableVariantIds,
             exterior_faces: exteriorFaces,
             finish_level: finishLevel,
             spec_code: specCode,
             site_prefecture: sitePrefecture,
             site_municipality: siteMunicipality,
             site_location_undecided: siteLocationUndecided,
+            slot_selections: activeSlotSelections,
           }}
           onLogin={() => {
             setGuestSave(false);

@@ -5,9 +5,12 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
+import { quoteLineGuardError } from '@/lib/data/quote-line-guard';
+import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { isMissingNamedFunction } from '@/lib/data/schema-compat';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { createClient } from '@/lib/supabase/server';
+import { quoteLineStateReasonSchema, quoteLineStateSchema } from '@/lib/validation';
 
 export interface LegacyAcceptedFormalizationState {
   ok: boolean;
@@ -23,6 +26,8 @@ const installationItemSchema = z.object({
   quantity: z.number().min(0.01).max(99_999).refine((value) => Number.isFinite(value) && Math.round(value * 10_000) / 10_000 === value, {
     message: '数量は小数4桁以内で入力してください。',
   }),
+  line_state: quoteLineStateSchema.optional(),
+  line_state_reason: quoteLineStateReasonSchema.optional(),
 });
 
 const payloadSchema = z.object({
@@ -66,6 +71,23 @@ export async function formalizeLegacyAcceptedQuoteAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください。' };
   }
+  // 明細の状態（対象外・0円確定）は画面の明示の選択から備考に印を付ける。手入力の印は受け付けない（D1 までの暫定）
+  let installationItems;
+  try {
+    installationItems = applyQuoteLineStates(parsed.data.items);
+  } catch (e) {
+    if (e instanceof QuoteLineStateInputError) return { ok: false, error: e.message };
+    throw e;
+  }
+
+  // お客様が選んだ別途見積の商品（画面に出した一覧）。確認欄にチェックがあるときだけ確認として記録する（D1 までの暫定）
+  const porKeys = parsePorSelectionKeys(formData.get('por_keys'));
+  if (porKeys === null) {
+    return { ok: false, error: '金額未確定の確認の内容を読み取れませんでした。画面を再読み込みしてください。' };
+  }
+  if (porKeys.length > 0 && formData.get('por_confirmed') !== '1') {
+    return { ok: false, error: 'お客様が選んだ別途見積の商品について、「金額未確定の確認」にチェックを入れてから発行してください。' };
+  }
 
   // LocalStore has no equivalent privileged transaction. Do not emulate a
   // lifecycle write in memory and accidentally claim DB-level guarantees.
@@ -74,9 +96,19 @@ export async function formalizeLegacyAcceptedQuoteAction(
   }
 
   const db = await createClient();
+  // DB の更新（20261016111000）が済むまで、旧い関数で確定見積を発行しない
+  const blocked = await quoteLineGuardError(db);
+  if (blocked) return { ok: false, error: blocked };
+  if (porKeys.length > 0) {
+    const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
+      p_quote_id: parsed.data.quote_id,
+      p_selection_keys: porKeys,
+    });
+    if (confirmError) return { ok: false, error: userFacingRpcError(confirmError) };
+  }
   const { data, error } = await db.rpc('create_formal_quote_from_accepted_preliminary', {
     p_quote_id: parsed.data.quote_id,
-    p_installation_items: parsed.data.items,
+    p_installation_items: installationItems,
     p_dealer_note: parsed.data.dealer_note || null,
   });
 

@@ -72,7 +72,7 @@ describe('管理画面の色・仕様管理', () => {
     expect(manager).toContain('＋ 選択項目を追加');
     expect(manager).toContain('選択項目名');
     expect(manager).toContain('最初の選択肢を追加');
-    expect(manager).toContain('追加金額（税別・円）');
+    expect(manager).toContain('原価差額（税別・円）');
     expect(manager).toContain('標準の選択肢にする');
     expect(manager).toContain('表示条件（必要な場合だけ）');
     expect(manager).not.toContain('色・仕様ごとの追加金額');

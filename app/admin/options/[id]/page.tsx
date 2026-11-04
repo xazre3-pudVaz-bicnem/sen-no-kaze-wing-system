@@ -141,6 +141,7 @@ export default async function EditOptionPage({
                     optionId={id}
                     canManage={hqCostAccess.canManage}
                     cost={hqCostAccess.cost}
+                    versions={hqCostAccess.versions}
                   />
                 )}
               </>
@@ -155,6 +156,7 @@ export default async function EditOptionPage({
                 optionId={id}
                 canManage={hqCostAccess.canManage}
                 cost={hqCostAccess.cost}
+                versions={hqCostAccess.versions}
               />
             )}
             <ProductPriceUnitPublishedCard optionId={id} />
@@ -282,6 +284,7 @@ export default async function EditOptionPage({
                     optionId={id}
                     canManage={hqCostAccess.canManage}
                     cost={hqCostAccess.cost}
+                    versions={hqCostAccess.versions}
                   />
                 </div>
               )}

@@ -1131,6 +1131,8 @@ export interface GuestPlanInput {
   site_prefecture: string | null;
   site_municipality: string | null;
   site_location_undecided: boolean;
+  /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。版との照らし合わせは、ログインして保存するとき（DB の create_guest_plan は形だけ確かめる） */
+  slot_selections?: { slot_code: string; option_id: string; variant_choice_ids: string[] }[];
 }
 
 export interface GuestPlan {
@@ -1162,6 +1164,17 @@ export function normalizeGuestPlanInput(raw: Record<string, unknown>): GuestPlan
     const [optionId] = uuidList([face?.option_id], 1, '外壁の選択');
     return { face_code: code as GuestPlanFace, option_id: optionId, variant_choice_ids: uuidList(face?.variant_choice_ids, 20, '外壁の選択') };
   });
+  const slotsRaw = raw.slot_selections ?? [];
+  if (!Array.isArray(slotsRaw) || slotsRaw.length > 100) fail('位置ごとの選択の形式が正しくありません');
+  const slotCodes = new Set<string>();
+  const slot_selections = (slotsRaw as Array<Record<string, unknown>>).map((slot) => {
+    const code = typeof slot?.slot_code === 'string' ? slot.slot_code : '';
+    // DB の create_guest_plan と同じ形（識別子は英小文字・数字・ハイフン、選択肢は 20 件まで）
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(code) || slotCodes.has(code)) fail('位置ごとの選択の形式が正しくありません');
+    slotCodes.add(code);
+    const [optionId] = uuidList([slot?.option_id], 1, '位置ごとの選択');
+    return { slot_code: code, option_id: optionId, variant_choice_ids: uuidList(slot?.variant_choice_ids, 20, '位置ごとの選択') };
+  });
   const finish = typeof raw.finish_level === 'string' ? raw.finish_level : 'full';
   if (!['shell', 'equipment', 'full'].includes(finish)) fail('仕上げの形式が正しくありません');
   const spec = cfText(raw.spec_code, 40, '仕様');
@@ -1176,6 +1189,7 @@ export function normalizeGuestPlanInput(raw: Record<string, unknown>): GuestPlan
     site_prefecture: cfText(raw.site_prefecture, 10, '設置予定地（都道府県）'),
     site_municipality: cfText(raw.site_municipality, 60, '設置予定地（市区町村）'),
     site_location_undecided: raw.site_location_undecided === true,
+    ...(slot_selections.length > 0 ? { slot_selections } : {}),
   };
 }
 

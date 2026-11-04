@@ -39,6 +39,18 @@ export interface StandardEstimatePricingResult {
   template: EstimateTemplateBundle;
   /** 標準状態から商品マスター価格で生じた差額。0ならExcel原本の金額そのもの。 */
   has_changes: boolean;
+  /**
+   * v2.5：売価の表に無く、まだサーバーで計算していない「商品＋選択肢」（組み合わせが多い商品。v2.5 PR-C1）。
+   * 空でない間の金額は、標準と 1 か所だけ変えた売価を足し合わせた目安（数円ずれうる）
+   */
+  missing_units?: V25MissingUnit[];
+}
+
+/** v2.5 の売価の表に無い「商品＋選択肢」（サーバーの get_simulator_v25_units で計算する） */
+export interface V25MissingUnit {
+  revision_id: string;
+  option_id: string;
+  choice_ids: string[];
 }
 
 function sectionCodeForLine(

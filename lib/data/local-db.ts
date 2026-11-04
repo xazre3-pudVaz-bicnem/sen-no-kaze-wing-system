@@ -33,11 +33,14 @@ import type {
   EstimateTemplateSection,
   EstimateTemplateLine,
   SpecMatrix,
+  WindowType,
 } from '@/lib/domain/types';
 import type { LocalCaseFlowTables } from './case-flow/local-tables';
+import type { QuotePorSelection } from '@/lib/domain/quote-por';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
 import { buildSeedMatrix } from '@/lib/seed/matrix';
+import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
 import { takeLocalReset } from './local-reset';
 
 /**
@@ -91,6 +94,18 @@ export interface LocalDb {
   auditLogs: AuditLog[];
   /** 案件の進行（フェーズ4以降）。lib/data/case-flow/local.ts が使う */
   caseFlow?: LocalCaseFlowTables;
+  /** 別途見積の確認の記録（DB の quote_por_confirmations と同じ。変更・削除しない。D1 までの暫定） */
+  quotePorConfirmations?: LocalQuotePorConfirmation[];
+  /** 窓タイプ（DB の window_types と同じ。v2.5 PR-S1/S2）。古い db.json に無ければ初期値 */
+  windowTypes?: WindowType[];
+}
+
+export interface LocalQuotePorConfirmation {
+  id: string;
+  quote_id: string;
+  selections: QuotePorSelection[];
+  confirmed_by: string;
+  confirmed_at: string;
 }
 
 export function localDir(): string {
@@ -112,6 +127,7 @@ export function emptyDb(): LocalDb {
     models: clone(seedCatalog.models),
     images: clone(seedCatalog.images),
     categories: clone(seedCatalog.categories),
+    windowTypes: clone(INITIAL_WINDOW_TYPES),
     options: clone(seedCatalog.options),
     optionImages: [],
     dependencies: clone(seedCatalog.dependencies),

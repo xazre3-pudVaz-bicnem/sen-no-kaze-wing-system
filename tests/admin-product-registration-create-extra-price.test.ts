@@ -11,7 +11,7 @@ const action = read('lib/actions/product-registration-variants.ts');
 describe('選択項目の初回作成時に追加金額を入力して保存する', () => {
   it('初回作成画面でも選択肢名と同じ行に税別金額の入力欄を表示する', () => {
     expect(form).toContain('data-testid="two-line-choice"');
-    expect(form).toContain('追加金額（税別・円）');
+    expect(form).toContain('原価差額（税別・円）');
     expect(form).toContain('name={`choice_extra_price_${index}`}');
     expect(form).toContain('value={choicePrices[rowId] ?? \'0\'}');
     expect(form).toContain('min={0}');
@@ -55,7 +55,7 @@ describe('選択項目の初回作成時に追加金額を入力して保存す�
     expect(action).toContain('const invalidPriceIndex = choicePrices.findIndex');
     expect(action).toContain('if (invalidPriceIndex >= 0)');
     expect(action).toContain('choicePrices[row.choiceIndex] !== 0');
-    expect(action).toContain('画像または追加金額を指定した選択肢には名前を入力してください');
+    expect(action).toContain('画像または原価差額を指定した選択肢には名前を入力してください');
     expect(action.indexOf('invalidPriceIndex >= 0')).toBeLessThan(action.indexOf('await store.upsertVariantGroup'));
     expect(action.indexOf('extra_price: input.extraPrice')).toBeLessThan(action.indexOf('await store.upsertVariantGroup'));
     expect(variantChoiceSchema.safeParse({

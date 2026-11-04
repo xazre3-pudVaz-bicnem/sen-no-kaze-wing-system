@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
 import { isCurrentAcceptedPreliminaryForFormalization } from '@/lib/domain/quote-lifecycle';
 import { formatYen } from '@/lib/domain/pricing';
+import { EMPTY_POR_SELECTION_STATE } from '@/lib/domain/quote-por';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { LegacyAcceptedFormalizationForm } from '@/components/admin/legacy-accepted-formalization-form';
@@ -50,6 +51,15 @@ export default async function LegacyAcceptedFormalizationPage({
   const installationItems = items
     .filter((item) => item.kind === 'installation')
     .sort((a, b) => a.sort_order - b.sort_order);
+  const carriedItems = items
+    .filter((item) => item.kind !== 'installation')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  // お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。発行時に DB が確かめる）。
+  // 読み込めないときは画面を落とさず、発行を止めて再読み込みを案内する。商品台帳は明細の別途見積の判定に使う
+  const [porState, options] = await Promise.all([
+    store.getQuotePorSelections(quote.id, actor).catch(() => ({ ...EMPTY_POR_SELECTION_STATE, loadError: true })),
+    store.listOptions(),
+  ]);
   const returnHref = `/admin/quotes?case=${encodeURIComponent(quote.id)}&tab=estimate#case-workspace`;
 
   return (
@@ -94,7 +104,10 @@ export default async function LegacyAcceptedFormalizationPage({
       <LegacyAcceptedFormalizationForm
         quoteId={quote.id}
         installationItems={installationItems}
+        carriedItems={carriedItems}
         defaultDealerNote={quote.dealer_note}
+        porState={porState}
+        optionFlags={options.map((option) => ({ id: option.id, price: option.price, priceOnRequest: option.price_on_request }))}
       />
     </div>
   );

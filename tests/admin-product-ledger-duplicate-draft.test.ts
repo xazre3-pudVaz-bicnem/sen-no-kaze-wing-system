@@ -20,7 +20,8 @@ describe('商品台帳：元商品を維持した下書き複製', () => {
     expect(newPage).toContain("typeof sp.copy_from === 'string'");
     expect(newPage).toContain('options.find((option) => option.id === sp.copy_from && categories.some((category) => category.id === option.category_id))');
     expect(newPage).toContain('if (copyRequested && !copySource)');
-    expect(newPage).toContain('duplicateSource={copySource}');
+    // 複製元の原価は、原価を扱えない人には渡さない（main）。画像・メーカー PDF は複製するので「引き継がない」に入れない（#593）
+    expect(newPage).toContain('duplicateSource={copySource && !canEditCostField(costAccess) ? withoutOptionCost(copySource) : copySource}');
     expect(newPage).toContain('商品管理番号・選択肢・原価Version');
     expect(newPage).toContain('外部URLやStorage外のファイルは複製されません');
   });

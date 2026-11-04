@@ -944,13 +944,13 @@ as $$
          end;
 $$;
 
--- 案件のプランボードの読み取り：担当の判定に、営業担当組織の管理者を足す（担当の空いた見積で素通りしないよう coalesce も）。
+-- 案件のプランボードの読み取り：担当の判定に、営業担当組織の管理者を足す（担当の判定は 10/09 の是正（20261009090000）の coalesce のまま）。
 -- 2026-11-04：この migration は v2.5（S2b・20261102140000）の後に入る。S2b がこの関数に足した明細の位置・位置の枠を消さないよう、
 -- 関数を作り直さず、担当の判定の 1 か所だけを目印を確かめて差し込む（所有者・SECURITY DEFINER・search_path・権限は変えない）
 do $case_plan_manager$
 declare
   v_target constant regprocedure := 'public.get_case_plan_configuration(uuid)'::regprocedure;
-  v_old constant text := 'if not (v_rank >= 3 or (v_rank >= 1 and v_quote.dealer_id = v_uid)) then';
+  v_old constant text := 'if not (v_rank >= 3 or (v_rank >= 1 and coalesce(v_quote.dealer_id = v_uid, false))) then';
   v_new constant text := 'if not (
     v_rank >= 3
     or (v_rank >= 1 and coalesce(v_quote.dealer_id = v_uid, false))

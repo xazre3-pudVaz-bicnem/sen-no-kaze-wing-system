@@ -81,6 +81,7 @@ declare
   o3 constant uuid := '2a300000-0000-4000-8000-000000000503';
   s1 constant uuid := '2a300000-0000-4000-8000-000000000504';
   o5 constant uuid := '2a300000-0000-4000-8000-000000000505';
+  o6 constant uuid := '2a300000-0000-4000-8000-000000000506';
   g_o2 constant uuid := '2a300000-0000-4000-8000-000000000601';
   g_color constant uuid := '2a300000-0000-4000-8000-000000000602';
   c_o2 constant uuid := '2a300000-0000-4000-8000-000000000701';
@@ -92,6 +93,8 @@ declare
   v_master uuid;
   v_rev uuid;
   v_rev2 uuid;
+  v_rev3 uuid;
+  v_payload_b jsonb;
   v_out text;
   v_draft uuid;
   v_quote uuid;
@@ -129,17 +132,19 @@ begin
     (o2, cat_opt, 'runtime-sqd-o2', 'D1c 設備2', 10000, false, 'published', 'PRD-947002', false),
     (o3, cat_opt, 'runtime-sqd-o3', 'D1c 設備3（別途見積）', 0, true, 'published', 'PRD-947003', false),
     (s1, cat_sash, 'runtime-sqd-s1', 'D1c サッシ1', 30000, false, 'published', 'PRD-947004', false),
-    (o5, cat_site, 'runtime-sqd-o5', 'D1c 施工1', 8000, false, 'published', 'PRD-947005', true);
+    (o5, cat_site, 'runtime-sqd-o5', 'D1c 施工1', 8000, false, 'published', 'PRD-947005', true),
+    (o6, cat_opt, 'runtime-sqd-o6', 'D1c 設備4（原価0円）', 0, false, 'published', 'PRD-947006', false);
   insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
   values (g_o2, o2, 'size', 'サイズ', 1, false, 'published'), (g_color, s1, 'color', '色', 1, true, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status, sort_order)
   values (c_o2, g_o2, 'large', '大', 'option', 1000, 'published', 1), (c_white, g_color, 'white', '白', 'standard', 0, 'published', 1);
   set local session_replication_role = origin;
 
-  -- 原価（本部）：設備1 20,000、設備2 10,000＋大 1,000、サッシ1 30,000＋白 0（設備3 は別途見積、施工1 は売価を決める）
+  -- 原価（本部）：設備1 20,000、設備2 10,000＋大 1,000、サッシ1 30,000＋白 0、設備4 0 円（設備3 は別途見積、施工1 は売価を決める）
   perform pg_temp.sqd_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 20000, 0, ''検査'')', o1));
   perform pg_temp.sqd_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 10000, 0, ''検査'')', o2));
   perform pg_temp.sqd_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 30000, 0, ''検査'')', s1));
+  perform pg_temp.sqd_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 0, 0, ''検査'')', o6));
   perform pg_temp.sqd_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, 1000, null, ''検査'')', c_o2));
   perform pg_temp.sqd_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, 0, null, ''検査'')', c_white));
 
@@ -184,12 +189,43 @@ begin
   -- ---------- 案件と下書きを作る ----------
   perform pg_temp.sqd_expect_error('D1c-1 代理店・総代理店は、標準見積から案件を作れない（今と同じく本部だけ）', '42501', 'FORBIDDEN',
     pg_temp.sqd_run_as('authenticated', u_master, format($q$ select public.create_standard_quote_case('D1c 案件', '{"full_name":"検査 花子"}'::jsonb, null, %L)::text $q$, v_rev)));
+  -- 売価だけを決めた行（manual の選択枠「施工1」・明細「取付費」「養生」）は版に原価が無い。原価＝売価として写さず、この版からは作らない
+  --（2026-11-04 の先方回答 A-2 ⑤：「原価＝売価」の案は未承認。原価の扱いを反映するまで止める）
+  perform pg_temp.sqd_expect_error('D1c-1b 売価だけを決めて原価の無い行（manual）を含む版からは、案件・下書きを作らない（明細の名前を示す）', 'P0001',
+    'LOCKED: 標準見積の版に、売価だけを決めて原価が無い明細（「D1c 施工1」・「取付費」・「養生」）',
+    pg_temp.sqd_run_as('authenticated', u_admin,
+      format($q$ select public.create_standard_quote_case('D1c 案件（売価だけ）', '{"full_name":"検査 花子"}'::jsonb, null, %L)::text $q$, v_rev)));
+  perform pg_temp.sqd_expect_eq('D1c-1c 作れなかったときは、案件も下書きも残さない', '0/0',
+    (select count(*)::text from public.quote_requests r where r.case_name = 'D1c 案件（売価だけ）') || '/' ||
+    (select count(*)::text from public.quote_drafts d where d.standard_estimate_revision_id = v_rev));
+  -- 売価だけの行の無い版：設備4（原価 0 円の商品。auto で売価 0 円）を足し、施工1・取付費・養生を外す
+  v_rev3 := pg_temp.sqd_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L)::text', v_master))::uuid;
+  v_payload_b := jsonb_build_object(
+    'rates', jsonb_build_object('sales_fee_rate', '1.07', 'markup_rate', '1.5', 'expense_rate', '0.15'),
+    'adjustment', 0, 'adjustment_reason', null,
+    'slots', jsonb_build_array(
+      v_slot || jsonb_build_object('option_id', o1),
+      v_slot || jsonb_build_object('option_id', o2, 'variant_choice_ids', jsonb_build_array(c_o2)),
+      v_slot || jsonb_build_object('option_id', o3, 'price_mode', 'por'),
+      v_slot || jsonb_build_object('option_id', s1, 'variant_choice_ids', jsonb_build_array(c_white), 'slot_code', 'hakidashi', 'slot_label', '掃出し窓'),
+      v_slot || jsonb_build_object('option_id', o6)),
+    'lines', jsonb_build_array(
+      jsonb_build_object('line_key', null, 'section_code', 'sitework', 'group_label', 'D1c 別途工事', 'name', '据付工事',
+        'quantity', '1', 'unit', '式', 'price_mode', 'por', 'unit_price', null, 'remark', null, 'review_required', false)));
+  v_out := pg_temp.sqd_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, %s, %L::jsonb)).lock_version::text', v_rev3,
+    (select lock_version from public.standard_estimate_revisions where id = v_rev3), v_payload_b));
+  v_out := pg_temp.sqd_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, %s)).status', v_rev3,
+    (select lock_version from public.standard_estimate_revisions where id = v_rev3)));
+  -- 本体 350,532、経費 52,579。オプション 32,100＋17,655＋48,150＋0 ＝ 97,905、経費 14,685。別途工事は別途見積だけ
+  -- 税抜 515,701・税 51,570・税込 567,271（別途見積の 2 行は合計に含めない）
+  perform pg_temp.sqd_expect_eq('D1c-1d 前提：売価だけの行の無い v2.5 の版を公開できる（税込 567,271 円・別途見積あり）', 'published/515701/51570/567271/true',
+    v_out || '/' || coalesce((select r.subtotal || '/' || r.tax || '/' || r.total || '/' || r.has_por from public.standard_estimate_revisions r where r.id = v_rev3), '(none)'));
   v_out := pg_temp.sqd_run_as('authenticated', u_admin,
-    format($q$ select public.create_standard_quote_case('D1c 案件', '{"full_name":"検査 花子"}'::jsonb, '電話で受付', %L)::text $q$, v_rev));
+    format($q$ select public.create_standard_quote_case('D1c 案件', '{"full_name":"検査 花子"}'::jsonb, '電話で受付', %L)::text $q$, v_rev3));
   v_draft := case when v_out ~ '^[0-9a-f-]{36}$' then v_out::uuid end;
   perform pg_temp.sqd_expect_eq('D1c-2 本部は v2.5 の標準見積の版から案件と見積下書きを作れる（作り方・元の版を下書きに持つ）', 'standard_estimate/true',
-    coalesce((select d.source_kind || '/' || (d.standard_estimate_revision_id = v_rev)::text from public.quote_drafts d where d.id = v_draft), v_out));
-  perform pg_temp.sqd_expect_eq('D1c-3 同じ明細・率なので、下書きの合計は標準見積の版の合計と同じ', '535201/535201/53520/588721',
+    coalesce((select d.source_kind || '/' || (d.standard_estimate_revision_id = v_rev3)::text from public.quote_drafts d where d.id = v_draft), v_out));
+  perform pg_temp.sqd_expect_eq('D1c-3 同じ明細・率なので、下書きの合計は標準見積の版の合計と同じ', '515701/515701/51570/567271',
     coalesce((select d.subtotal_raw || '/' || d.subtotal || '/' || d.tax || '/' || d.total from public.quote_drafts d where d.id = v_draft), '(none)'));
 
   -- 明細：本体の後、区分ごとに選択枠（版の順）→ 商品に紐づかない明細 → 経費。品名は「商品名 ／ 仕様」、見出しは「カテゴリー（位置）」
@@ -199,26 +235,26 @@ begin
    where i.draft_id = v_draft and i.kind not in ('base', 'base_expense');
   perform pg_temp.sqd_expect_eq('D1c-4 明細の品名・見出し・価格の決め方・売価単価（Web の第 1 版の見積と同じ名前）',
     'D1c 設備1|D1c 設備|auto|32100 ; D1c 設備2 ／ 大|D1c 設備|auto|17655 ; D1c 設備3（別途見積）|D1c 設備|por|por ; '
-    || 'D1c サッシ1 ／ 白|D1c サッシ（掃出し窓）|auto|48150 ; 取付費|D1c 工事|manual|10000 ; 養生|D1c 工事|manual|0 ; '
-    || 'オプション諸費用|交通費、労災、安全管理費等（15%）|auto|16185 ; D1c 施工1|D1c 施工|manual|8000 ; 据付工事|D1c 別途工事|por|por',
+    || 'D1c サッシ1 ／ 白|D1c サッシ（掃出し窓）|auto|48150 ; D1c 設備4（原価0円）|D1c 設備|auto|0 ; '
+    || 'オプション諸費用|交通費、労災、安全管理費等（15%）|auto|14685 ; 据付工事|D1c 別途工事|por|por',
     coalesce(v_draft_lines, '(none)'));
   -- Web の第 1 版の見積（標準見積の売価の表示）と、品名ごとの金額が同じ
   select string_agg((l.value ->> 'name') || '=' || coalesce(l.value ->> 'amount', 'por'), ',' order by l.value ->> 'name')
     into v_sale
-    from jsonb_array_elements(public.standard_estimate_v25_sale_view(v_rev, false) -> 'lines') l;
+    from jsonb_array_elements(public.standard_estimate_v25_sale_view(v_rev3, false) -> 'lines') l;
   perform pg_temp.sqd_expect_eq('D1c-5 品名ごとの金額は、Web の見積に使う版の売価と同じ', v_sale,
     (select string_agg(i.name || '=' || coalesce(i.amount::text, 'por'), ',' order by i.name)
        from public.quote_draft_items i
        join public.quote_draft_item_costs c on c.draft_id = i.draft_id and c.line_key = i.line_key
       where i.draft_id = v_draft and i.kind <> 'base' and c.line_role = 'line'));
-  -- 原価：本体 19,474 × 12 ＝ 233,688（経費 35,053）、選択枠は版で固定した原価単価（21,400・11,770・32,100）、
-  -- manual は売価と同じ（取付費 10,000・養生 0・施工1 8,000）。オプション 75,270（経費 11,290）。合計 363,301
-  perform pg_temp.sqd_expect_eq('D1c-6 社内の記録の原価：選択枠は版で固定した原価単価、manual の行は売価と同じ（粗利 0）。合計 363,301 円',
-    '21400/11770/32100/10000/8000/363301',
+  -- 原価：本体 19,474 × 12 ＝ 233,688（経費 35,053）、選択枠は版で固定した原価単価（21,400・11,770・32,100・0）。
+  -- オプション 65,270（経費 9,790）。合計 343,801
+  perform pg_temp.sqd_expect_eq('D1c-6 社内の記録の原価：選択枠は版で固定した原価単価（原価 0 円の商品は 0 円）。合計 343,801 円',
+    '21400/11770/32100/0/343801',
     (select string_agg(c.cost_unit_price::text, '/' order by i.sort_order)
        from public.quote_draft_items i
        join public.quote_draft_item_costs c on c.draft_id = i.draft_id and c.line_key = i.line_key
-      where i.draft_id = v_draft and i.name in ('D1c 設備1', 'D1c 設備2 ／ 大', 'D1c サッシ1 ／ 白', '取付費', 'D1c 施工1')) || '/' ||
+      where i.draft_id = v_draft and i.name in ('D1c 設備1', 'D1c 設備2 ／ 大', 'D1c サッシ1 ／ 白', 'D1c 設備4（原価0円）')) || '/' ||
     pg_temp.sqd_run_as('authenticated', u_admin, format($q$ select public.get_standard_quote_draft(%L) -> 'internals' ->> 'cost_total' $q$, v_draft)));
 
   -- ---------- 正式保存（発行） ----------
@@ -240,30 +276,30 @@ begin
   v_out := pg_temp.sqd_save(u_admin, v_draft, pg_temp.sqd_lines(v_draft, v_prices, jsonb_build_array(jsonb_build_object(
     'section_code', 'option', 'name', '追加の0円', 'description', 'D1c 工事', 'unit', '式', 'quantity', 1,
     'price_mode', 'manual', 'cost_unit_price', 0, 'unit_price', 0))));
-  perform pg_temp.sqd_expect_error('D1c-8 版の 0 円の明細（養生）は変えていなければ止めず、新しく足した 0 円の行だけを金額未確定として止める',
+  perform pg_temp.sqd_expect_error('D1c-8 版の 0 円の明細（原価 0 円の商品「設備4」）は変えていなければ止めず、新しく足した 0 円の行だけを金額未確定として止める',
     'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（追加の0円）',
     pg_temp.sqd_run_as('authenticated', u_admin, format('select public.finalize_quote_draft(%L, %s)::text', v_draft,
       (select lock_version from public.quote_drafts where id = v_draft))));
   v_out := pg_temp.sqd_save(u_admin, v_draft, pg_temp.sqd_lines(v_draft, '{}'::jsonb) - (
     select (ordinality - 1)::integer from jsonb_array_elements(pg_temp.sqd_lines(v_draft, '{}'::jsonb)) with ordinality e(value, ordinality)
      where e.value ->> 'name' = '追加の0円'));
-  -- オプション 112,905（経費 16,935）、別途工事 38,000。税抜 570,951・税 57,095・税込 628,046
-  perform pg_temp.sqd_expect_eq('D1c-9 金額を入れた下書きの合計（オプション 112,905・経費 16,935・別途工事 38,000。税込 628,046 円）', '570951/57095/628046',
+  -- オプション 102,905（経費 15,435）、別途工事 30,000。税抜 551,451・税 55,145・税込 606,596
+  perform pg_temp.sqd_expect_eq('D1c-9 金額を入れた下書きの合計（オプション 102,905・経費 15,435・別途工事 30,000。税込 606,596 円）', '551451/55145/606596',
     coalesce((select d.subtotal || '/' || d.tax || '/' || d.total from public.quote_drafts d where d.id = v_draft), v_out));
   v_out := pg_temp.sqd_run_as('authenticated', u_admin, format('select public.finalize_quote_draft(%L, %s)::text', v_draft,
     (select lock_version from public.quote_drafts where id = v_draft)));
   v_quote := case when v_out ~ '^[0-9a-f-]{36}$' then v_out::uuid end;
-  perform pg_temp.sqd_expect_eq('D1c-10 正式保存できる。見積は Web 以外の仕組み（版の固定の列は使わず、社内の記録に元の版・率・原価）', '628046/(none)/true/1.5000/397901',
+  perform pg_temp.sqd_expect_eq('D1c-10 正式保存できる。見積は Web 以外の仕組み（版の固定の列は使わず、社内の記録に元の版・率・原価）', '606596/(none)/true/1.5000/378401',
     coalesce((select q.total || '/' || coalesce(q.pricing_model, '(none)') from public.quotes q where q.id = v_quote), v_out) || '/' ||
-    coalesce((select (s.standard_estimate_revision_id = v_rev)::text || '/' || s.markup_rate || '/' || s.cost_total
+    coalesce((select (s.standard_estimate_revision_id = v_rev3)::text || '/' || s.markup_rate || '/' || s.cost_total
                 from public.quote_internal_snapshots s where s.quote_id = v_quote), '(no snapshot)'));
 
   -- ---------- 改訂の下書き（直前の発行版から元の版を引き継ぐ。以前は v2.5 の版のため止まっていた） ----------
   v_out := pg_temp.sqd_run_as('authenticated', u_admin, format('select public.create_quote_revision_draft(%L)::text', v_quote));
   v_rdraft := case when v_out ~ '^[0-9a-f-]{36}$' then v_out::uuid end;
   perform pg_temp.sqd_expect_eq('D1c-11 改訂の下書きを作れる（作り方・元の版・率・原価を発行版から引き継ぐ。最新の標準見積へは追従しない）',
-    'standard_estimate/true/1.5000/397901',
-    coalesce((select d.source_kind || '/' || (d.standard_estimate_revision_id = v_rev)::text from public.quote_drafts d where d.id = v_rdraft), v_out) || '/' ||
+    'standard_estimate/true/1.5000/378401',
+    coalesce((select d.source_kind || '/' || (d.standard_estimate_revision_id = v_rev3)::text from public.quote_drafts d where d.id = v_rdraft), v_out) || '/' ||
     coalesce((select n.markup_rate || '/' || n.cost_total from public.quote_draft_internals n where n.draft_id = v_rdraft), '(none)'));
 
   -- ---------- その他 ----------
@@ -283,15 +319,15 @@ begin
     has_function_privilege('authenticated', 'public.standard_estimate_v25_quote_draft_lines(uuid, boolean)', 'EXECUTE')::text || '/' ||
     has_function_privilege('service_role', 'public.standard_estimate_v25_quote_draft_lines(uuid, boolean)', 'EXECUTE')::text);
 
-  -- 単位が見積の明細に入らない長さの版：行の番号ではなく明細の名前で知らせ、案件も作らない
+  -- 単位が見積の明細に入らない長さの版：行の番号ではなく明細の名前で知らせ、案件も作らない（売価だけの行の無い版の明細を、別途見積の 2 行にする）
   v_rev2 := pg_temp.sqd_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L)::text', v_master))::uuid;
   v_out := pg_temp.sqd_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, %s, %L::jsonb)).lock_version::text', v_rev2,
     (select lock_version from public.standard_estimate_revisions where id = v_rev2),
-    jsonb_set(v_payload, '{lines}', jsonb_build_array(
+    jsonb_set(v_payload_b, '{lines}', jsonb_build_array(
       jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1c 工事', 'name', '長い単位の工事',
-        'quantity', '1', 'unit', '一式（設置場所により変動します）', 'price_mode', 'manual', 'unit_price', 1000, 'remark', null, 'review_required', false),
+        'quantity', '1', 'unit', '一式（設置場所により変動します）', 'price_mode', 'por', 'unit_price', null, 'remark', null, 'review_required', false),
       jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1c 工事', 'name', 'ごく少量の部材',
-        'quantity', '0.005', 'unit', 'kg', 'price_mode', 'manual', 'unit_price', 1000, 'remark', null, 'review_required', false)))));
+        'quantity', '0.005', 'unit', 'kg', 'price_mode', 'por', 'unit_price', null, 'remark', null, 'review_required', false)))));
   v_out := pg_temp.sqd_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, %s)).status', v_rev2,
     (select lock_version from public.standard_estimate_revisions where id = v_rev2)));
   perform pg_temp.sqd_expect_error('D1c-14 見積の明細の決まり（単位の長さ・数量）に合わない版からは作れない（行の番号ではなく明細の名前を示す）', 'P0001', 'VALIDATION: 標準見積の明細（「長い単位の工事」・「ごく少量の部材」）',

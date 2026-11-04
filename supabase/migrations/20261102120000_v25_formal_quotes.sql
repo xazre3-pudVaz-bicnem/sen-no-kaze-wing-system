@@ -603,6 +603,11 @@ begin
          or not public.customer_product_spec_selectable(v_master.model_slug, v_master.spec_code, v_option.spec_codes) then
         raise exception 'VALIDATION: % 行目：「%」は、この見積の商品モデル・仕様で選べない商品です', v_index, v_option.name using errcode = 'P0001';
       end if;
+      -- 本体仕様マトリクスで「×」のカテゴリーの商品は足せない（2026-10-21 の確定事項：明細を自由に編集できても、
+      -- 本体仕様マトリクスの適合を無条件に外さない。シミュレーターの保存と同じ判定。マトリクスの対象外のカテゴリーは制限しない）
+      if not public.customer_category_selectable(v_master.model_slug, v_master.spec_code, v_category.code) then
+        raise exception 'VALIDATION: % 行目：「%」のカテゴリー（%）は、本体仕様マトリクスで、この見積の仕様では選べません', v_index, v_option.name, v_category.name using errcode = 'P0001';
+      end if;
       if pg_catalog.cardinality(v_choices) <> (select count(distinct x) from unnest(v_choices) x) then
         raise exception 'VALIDATION: % 行目の選択肢が重複しています', v_index using errcode = 'P0001';
       end if;

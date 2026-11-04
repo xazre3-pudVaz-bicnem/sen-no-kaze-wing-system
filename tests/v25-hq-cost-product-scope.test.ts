@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/data/store', () => ({
   getStore: mocks.getStore,
+  // 一括登録が書き戻す金額をサーバーで読み直すのは Supabase のときだけ（v2.5 PR-C1b）。ここではストアの値を使う
+  isLocalMode: () => true,
   StoreError: class StoreError extends Error {
     code: string;
     constructor(code: string, message: string) {

@@ -80,6 +80,31 @@ function assemble(
 }
 
 /**
+ * 公開カタログの旧価格（v2.5 PR-C1b）。スイッチが切れている間は旧シミュレーターの売価なので、今までどおりサーバーが
+ * service_role で読んで足す。入った後は公開カタログに旧価格を持たない（すべて 0。本部の画面は別の経路で読む）。
+ * このカタログは全員で共有するキャッシュのため、利用者ごとの範囲（本部だけ）では足さない
+ */
+async function withPublicLegacyPrices(models: BaseModel[], options: ProductOption[], choices: OptionVariantChoice[], breakdowns: BaseBreakdownItem[]) {
+  const { getSimulatorStandardPricingEnabled } = await import('./standard-estimate-sale-views');
+  const { withLegacyBreakdownPrices, withLegacyChoicePrices, withLegacyModelPrices, withLegacyOptionPrices } = await import('./legacy-prices');
+  if (await getSimulatorStandardPricingEnabled()) {
+    return {
+      models: models.map((row) => ({ ...row, base_price: 0 })),
+      options: options.map((row) => ({ ...row, price: 0 })),
+      choices: choices.map((row) => ({ ...row, extra_price: 0 })),
+      breakdowns: breakdowns.map((row) => ({ ...row, unit_price: 0, amount: 0 })),
+    };
+  }
+  const [pricedModels, pricedOptions, pricedChoices, pricedBreakdowns] = await Promise.all([
+    withLegacyModelPrices(models, 'all'),
+    withLegacyOptionPrices(options, 'all'),
+    withLegacyChoicePrices(choices, 'all'),
+    withLegacyBreakdownPrices(breakdowns, 'all'),
+  ]);
+  return { models: pricedModels, options: pricedOptions, choices: pricedChoices, breakdowns: pricedBreakdowns as BaseBreakdownItem[] };
+}
+
+/**
  * 公開カタログ（公開中のモデル・画像・オプション・ルール）をまとめて 1 回で取得する。
  * モデルごとに問い合わせると往復が増えるため、テーブル単位で並列に取得して JS 側で組み立てる。
  */
@@ -97,28 +122,30 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
   }
 
   const { createPublicClient } = await import('@/lib/supabase/public');
+  const { legacyTableColumns } = await import('./legacy-prices');
   const db = createPublicClient();
+  // 旧価格の列（本部商品の原価）は匿名キーでは読めない（v2.5 PR-C1b）。金額のほかの列を読み、金額は下で足す
   const [models, images, categories, options, optionImages, dependencies, conflicts, rules, hotspots, vgroups, vchoices, bbItems] = await Promise.all([
-    db.from('base_models').select('*').eq('status', 'published').order('sort_order'),
+    db.from('base_models').select(legacyTableColumns('base_models')).eq('status', 'published').order('sort_order'),
     db.from('product_images').select('*').order('sort_order'),
     db.from('option_categories').select('*').eq('status', 'published').order('sort_order'),
-    db.from('options').select('*').eq('status', 'published').order('sort_order'),
+    db.from('options').select(legacyTableColumns('options')).eq('status', 'published').order('sort_order'),
     db.from('option_images').select('*').order('sort_order'),
     db.from('option_dependencies').select('*'),
     db.from('option_conflicts').select('*'),
     db.from('preview_image_rules').select('*').eq('status', 'published'),
     db.from('preview_hotspots').select('*').order('sort_order'),
     db.from('option_variant_groups').select('*').eq('status', 'published').order('sort_order'),
-    db.from('option_variant_choices').select('*').eq('status', 'published').order('sort_order'),
-    db.from('base_breakdown_items').select('*').order('sort_order'),
+    db.from('option_variant_choices').select(legacyTableColumns('option_variant_choices')).eq('status', 'published').order('sort_order'),
+    db.from('base_breakdown_items').select(legacyTableColumns('base_breakdown_items')).order('sort_order'),
   ]);
   // preview_hotspots は 0008 で追加されるテーブル。未適用の DB ではホットスポットなしとして扱う
   const hotspotRows = isMissingRelation(hotspots.error) ? [] : ((hotspots.data ?? []) as PreviewHotspot[]);
   // バリエーションは 0013 で追加。未適用の DB では「選択項目なし」として扱う
   const groupRows = isMissingRelation(vgroups.error) ? [] : ((vgroups.data ?? []) as OptionVariantGroup[]);
-  const choiceRows = isMissingRelation(vchoices.error) ? [] : ((vchoices.data ?? []) as OptionVariantChoice[]);
+  const choiceRows = isMissingRelation(vchoices.error) ? [] : ((vchoices.data ?? []) as unknown as OptionVariantChoice[]);
   // 本体内訳は 0016 で追加。未適用の DB では「内訳なし」として扱う
-  const breakdownRows = isMissingRelation(bbItems.error) ? [] : ((bbItems.data ?? []) as BaseBreakdownItem[]);
+  const breakdownRows = isMissingRelation(bbItems.error) ? [] : ((bbItems.data ?? []) as unknown as BaseBreakdownItem[]);
   if (optionImages.error && !isMissingRelation(optionImages.error)) {
     throw new Error(`public catalog option_images: ${optionImages.error.message}`);
   }
@@ -149,22 +176,27 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
         categoryItems: mCategoryItems as SpecMatrix['categoryItems'],
       };
   const categoryRows = normalizeCategories((categories.data ?? []) as OptionCategory[]);
-  const modelRows = (models.data ?? []) as BaseModel[];
+  const priced = await withPublicLegacyPrices(
+    (models.data ?? []) as unknown as BaseModel[],
+    (options.data ?? []) as unknown as ProductOption[],
+    choiceRows,
+    breakdownRows
+  );
 
   return assemble(
-    modelRows,
+    priced.models,
     (images.data ?? []) as ProductImage[],
     categoryRows,
-    normalizeOptions((options.data ?? []) as ProductOption[]),
+    normalizeOptions(priced.options),
     optionImageRows,
     (dependencies.data ?? []) as OptionDependency[],
     (conflicts.data ?? []) as OptionConflict[],
     (rules.data ?? []) as PreviewImageRule[],
     hotspotRows,
     groupRows,
-    choiceRows,
-    breakdownRows,
-    buildCustomerCategoryMatrix(specMatrix, categoryRows, modelRows)
+    priced.choices,
+    priced.breakdowns,
+    buildCustomerCategoryMatrix(specMatrix, categoryRows, priced.models)
   );
 }
 

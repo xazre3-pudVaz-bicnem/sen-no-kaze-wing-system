@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { getStore, StoreError, type CatalogImportBatch } from '@/lib/data/store';
+import { withWriteBackChoicePrices, withWriteBackOptionPrices } from '@/lib/data/legacy-prices';
 import {
   FREE_PRODUCT_CATEGORY_CODE,
   type OptionCategory,
@@ -105,7 +106,10 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   const byCode = new Map(categories.map((c) => [c.code, c]));
   const byName = new Map(categories.map((c) => [c.name, c]));
   const byId = new Map(categories.map((c) => [c.id, c]));
-  const existingOptions = await store.listOptions();
+  // 金額を反映しない本部商品（protectHqCost）は、今の金額をそのまま書き戻す。本部以外の画面の読み取りでは本部商品の金額が 0 になる
+  // （スイッチが入った後。v2.5 PR-C1b）ため、書き戻す金額だけはサーバーで読む（画面には出さない）
+  const listedOptions = await store.listOptions();
+  const existingOptions = options.protectHqCost === true ? await withWriteBackOptionPrices(listedOptions) : listedOptions;
   const optionByCode = new Map(existingOptions.map((o) => [o.code, o]));
 
   const resolveCategory = (name: string): OptionCategory | undefined => {
@@ -246,7 +250,8 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   const existingChoiceById = new Map<string, OptionVariantChoice>();
   const existingProtectedIds = [...protectedOptionIds].filter((optionId) => existingOptions.some((row) => row.id === optionId));
   for (const variants of await Promise.all(existingProtectedIds.map((optionId) => store.getOptionVariants(optionId)))) {
-    for (const choice of variants.choices) existingChoiceById.set(choice.id, choice);
+    // 金額を反映しない本部商品（protectHqCost のときだけ集めている）の選択肢は、今の DB の金額を書き戻す
+    for (const choice of await withWriteBackChoicePrices(variants.choices)) existingChoiceById.set(choice.id, choice);
   }
 
   for (const c of plan.choices) {

@@ -4,7 +4,7 @@ import { Fragment, useActionState, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatYen } from '@/lib/domain/pricing';
-import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
+import { ROLE_LABELS, type Profile, type Quote, type QuoteInitialLine, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
 import {
   chooseQuoteLineState,
@@ -36,6 +36,7 @@ import {
 
 const initial = { ok: false } as const;
 const NO_OPTION_FLAGS: QuoteOptionFlag[] = [];
+const NO_INITIAL_LINES: QuoteInitialLine[] = [];
 
 /** 管理者：見積の担当代理店を割り当てる */
 export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Profile[] }) {
@@ -128,6 +129,7 @@ export function DealerRevisionForm({
   specCode = '',
   porState = EMPTY_POR_SELECTION_STATE,
   optionFlags = NO_OPTION_FLAGS,
+  initialSiteworkLines = NO_INITIAL_LINES,
 }: {
   quote: Quote;
   items: QuoteItem[];
@@ -146,6 +148,8 @@ export function DealerRevisionForm({
   porState?: QuotePorSelectionState;
   /** 商品台帳のすべての商品（前の版の明細が指す商品の別途見積の判定に使う） */
   optionFlags?: QuoteOptionFlag[];
+  /** 別途工事に最初から並べる初期明細（第 1 版を初めて編集するときだけ。画面のサーバー側で決める。2026-11-04 先方回答 A-3） */
+  initialSiteworkLines?: QuoteInitialLine[];
 }) {
   const [state, action, pending] = useActionState(createDealerRevisionAction, initial);
   const editable = (kind: QuoteItem['kind']): kind is RevisionItemKind =>
@@ -166,7 +170,24 @@ export function DealerRevisionForm({
         unit_price: item.unit_price,
         quantity: item.quantity,
         image_url: item.image_url ?? null,
-      }));
+      }))
+      // 別途工事の初期明細：金額は空（0 円）のまま。使う行に金額を入れ、要らない行は外す（入れないままでは発行できない）
+      .concat(
+        initialSiteworkLines.map((line, index): Row => ({
+          key: `initial-sitework-${index}`,
+          kind: 'installation',
+          option_id: null,
+          name: line.name,
+          description: '',
+          unit: line.unit,
+          remark: '',
+          line_state: null,
+          line_state_reason: '',
+          unit_price: 0,
+          quantity: 1,
+          image_url: null,
+        }))
+      );
 
   const [rows, setRows] = useState<Row[]>(buildInitialRows);
   const [isDirty, setIsDirty] = useState(false);

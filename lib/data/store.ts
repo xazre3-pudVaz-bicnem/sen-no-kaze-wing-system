@@ -43,6 +43,7 @@ import type {
   MatrixRow,
   SlotSelection,
   WindowType,
+  QuoteInitialLine,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { QuoteV25Context } from '@/lib/domain/quote-v25';
@@ -661,6 +662,8 @@ export interface DataStore {
   listWindowTypes(): Promise<WindowType[]>;
   /** 窓タイプを足す・名前や並び・使う／使わないを変える（本部だけ。DB の RLS でも止める） */
   saveWindowType(input: WindowTypeInput): Promise<WindowType>;
+  /** 見積の編集で最初から並べる明細（いまは別途工事の 9 種類の工事。2026-11-04 先方回答 A-3）。表が無い DB（migration の前）は空 */
+  listQuoteInitialLines(section: QuoteInitialLine['section_code']): Promise<QuoteInitialLine[]>;
   listOptions(): Promise<ProductOption[]>;
   getOption(id: string): Promise<ProductOption | null>;
   upsertOption(input: OptionInput): Promise<ProductOption>;

@@ -56,8 +56,24 @@ describe('computePricing（見積書テンプレートの計算構造）', () =>
     expect(withUb.option_total - base.option_total).toBe(570_000 + Math.floor(570_000 * 0.15));
   });
 
-  it('別途工事（要見積）は 0 円で集計され、フラグが立つ', () => {
-    const r = computePricing(wing, seedOptions, seedCategories, codes('sw-transport', 'sw-electric'));
+  it('設置関連の別途見積の商品は 0 円で集計され、フラグが立つ', () => {
+    // 別途工事の 9 品目は商品台帳から削除した（2026-11-04 先方回答 A-3）。設置関連・別途見積の扱いは検査用の商品で確かめる
+    const template = seedOptions.find((o) => o.code === 'shoe-box')!;
+    const porInstallation = (n: number): ProductOption => ({
+      ...template,
+      id: `90000000-0000-4000-8000-00000000010${n}`,
+      base_model_id: null,
+      code: `por-installation-${n}`,
+      name: `設置関連の検査用の商品${n}`,
+      price: 0,
+      price_on_request: true,
+      is_installation: true,
+      is_required: false,
+      is_default: false,
+      spec_codes: [],
+    });
+    const extra = [porInstallation(1), porInstallation(2)];
+    const r = computePricing(wing, [...seedOptions, ...extra], seedCategories, extra.map((o) => ({ option_id: o.id })));
     expect(r.installation_subtotal).toBe(0);
     expect(r.has_price_on_request).toBe(true);
     expect(r.lines.every((l) => l.is_installation)).toBe(true);

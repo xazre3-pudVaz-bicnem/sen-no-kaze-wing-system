@@ -8,6 +8,7 @@ import {
   issueRevision,
   logout,
   openRevisionEditor,
+  pickOption,
   requestQuoteAsCustomer,
   resolveUnresolvedPorRows,
   revisionRowNumber,
@@ -97,14 +98,17 @@ test.describe('代理店による確定見積（改訂版）', () => {
 
   test('金額未確定の明細が残る間は確定見積を発行できず、金額・0円確定（理由）・対象外と確認で発行できる（D1 までの暫定）', async ({ page }) => {
     const customer = uniqueEmail('por');
-    const { quoteId } = await requestQuoteAsCustomer(page, customer, '別途見積のテスト');
+    // 別途工事は標準では選ばれない（2026-10-21 の先方の決定）ので、お客様が「電気設備工事」（別途見積）を選んでから依頼する
+    const { quoteId } = await requestQuoteAsCustomer(page, customer, '別途見積のテスト', undefined, (p) =>
+      pickOption(p, 'equip-sitework', ['sw-electric'])
+    );
     await logout(page);
 
     await signIn(page, ADMIN, '/admin', '管理者');
     const form = await openRevisionEditor(page, quoteId);
     const review = form.getByTestId('por-review');
     await expect(review).toBeVisible();
-    // 標準で選ばれる照明・別途工事（別途見積）は、0 円のまま未確定の行として示される
+    // 標準で選ばれる照明と、お客様が選んだ別途工事（どちらも別途見積）は、0 円のまま未確定の行として示される
     const rows = review.getByTestId('por-review-row');
     const lightingRow = rows.filter({ hasText: '照明器具 ダウンライト一式' });
     const electricRow = rows.filter({ hasText: '電気設備工事' });

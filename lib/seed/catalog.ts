@@ -42,18 +42,6 @@ export const MODEL_FLAT_ID = '10000000-0000-4000-8000-000000000003';
 /** 仕様コード */
 export const SPEC = { hotel: 'hotel', residence: 'residence', office: 'office' } as const;
 
-const SITEWORK_CODES = [
-  'sw-transport',
-  'sw-design-permit',
-  'sw-packing',
-  'sw-site-install',
-  'sw-electric',
-  'sw-plumbing',
-  'sw-foundation',
-  'sw-disposal',
-  'sw-site-expense',
-];
-
 // サッシは本体（分類表見積書の６．サッシ木製建具工事）に含めるため、お客様の標準構成には入れない
 const COMMON_BASE = ['fire-standard', 'floor-light-beige', 'wall-ceiling-cross', 'exterior-galnote', 'door-standard'];
 
@@ -87,7 +75,6 @@ export const seedModels: BaseModel[] = [
           'shoe-box',
           'folding-bed',
           'lighting-downlight',
-          ...SITEWORK_CODES,
         ],
       },
       {
@@ -107,14 +94,13 @@ export const seedModels: BaseModel[] = [
           'shoe-box',
           'coat-rack',
           'lighting-downlight',
-          ...SITEWORK_CODES,
         ],
       },
       {
         code: 'office',
         name: '事務所・店舗用',
         description: '水まわり設備なしの一室空間。事務所・店舗向けの構成です。',
-        option_codes: [...COMMON_BASE, 'interior-standard-wing', 'carpentry-office-wing', 'lighting-downlight', 'office-supplies', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-wing', 'carpentry-office-wing', 'lighting-downlight', 'office-supplies'],
       },
     ],
     status: 'published',
@@ -170,13 +156,13 @@ export const seedModels: BaseModel[] = [
         code: 'hotel-single',
         name: 'ホテル・単身者用',
         description: 'BOX（ホテル単身者）の標準見積に対応する構成です。',
-        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'shower-unit-1116', 'mini-kitchen', 'folding-bed', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'shower-unit-1116', 'mini-kitchen', 'folding-bed'],
       },
       {
         code: 'water-kit',
         name: '水回りキット',
         description: 'BOX（水回りキット）の標準見積に対応する構成です。',
-        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'ub-1216', 'toilet-washlet', 'mini-kitchen', 'gas-boiler-16', 'aircon', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'ub-1216', 'toilet-washlet', 'mini-kitchen', 'gas-boiler-16', 'aircon'],
       },
     ],
     status: 'published',
@@ -213,7 +199,7 @@ export const seedModels: BaseModel[] = [
         code: 'office',
         name: '事務所・店舗用',
         description: '内装仕上げと造作のみの事務所向け構成。',
-        option_codes: [...COMMON_BASE, 'interior-standard-flat', 'carpentry-flat', 'lighting-downlight', 'office-supplies', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-flat', 'carpentry-flat', 'lighting-downlight', 'office-supplies'],
       },
     ],
     status: 'published',
@@ -516,8 +502,9 @@ const sitework = (oid: string, code: string, name: string, description: string |
     price: 0,
     is_installation: true,
     price_on_request: true,
-    is_default: true,
-    is_required: true,
+    // 必須・初期選択にしない（2026-10-21 の先方の決定：お客様が確認・選択・相談できる。金額は「別途見積」のまま）
+    is_default: false,
+    is_required: false,
     sort_order: sort,
   });
 

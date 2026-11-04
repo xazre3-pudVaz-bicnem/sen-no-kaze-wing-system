@@ -5,6 +5,7 @@ import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } f
 import { type Quote, type QuoteItem } from '@/lib/domain/types';
 import { formatQty } from '@/lib/domain/pricing';
 import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
+import { isExcludedLineRemark } from '@/lib/domain/quote-por';
 import { COMPANY, PROJECT_NAME } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
 
@@ -112,7 +113,8 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
       ? optionItemsTotal
       : quote.option_subtotal + quote.option_expense;
   const hasInterior = interiorItems.length > 0 || Boolean(interiorExpense);
-  const withImages = items.filter((i) => i.image_url && productImages.get(i.id));
+  // 今回の契約対象外の行は、選んだ商品の画像一覧に出さない（製造依頼の仕様に写さないのと同じ。D1 までの暫定）
+  const withImages = items.filter((i) => i.image_url && productImages.get(i.id) && !isExcludedLineRemark(i.remark));
   /** 明細 1 行（項目・摘要／備考・単価・数量・金額）。金額 0 の別途工事は「−」 */
   const row = (it: QuoteItem, opts: { dash?: boolean } = {}) => (
     <View key={it.id} style={s.tr} wrap={false}>
@@ -121,7 +123,9 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
       <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
       <Text style={s.cPrice}>{it.unit_price !== 0 ? yen(it.unit_price) : ''}</Text>
       <Text style={s.cQty}>{it.unit ? `${formatQty(it.quantity)} ${it.unit}` : formatQty(it.quantity)}</Text>
-      <Text style={s.cAmount}>{opts.dash && it.amount === 0 ? '−' : yen(it.amount)}</Text>
+      <Text style={s.cAmount}>
+        {isExcludedLineRemark(it.remark) ? '対象外' : opts.dash && it.amount === 0 ? '−' : yen(it.amount)}
+      </Text>
     </View>
   );
   /** 【◯◯計】の小計行 */
@@ -323,7 +327,7 @@ export async function renderQuotePdf(quote: Quote, items: QuoteItem[]): Promise<
   const image = await loadImage(quote.preview_image_url);
   const productImages = new Map<string, PdfImage>();
   for (const it of items) {
-    if (it.image_url) productImages.set(it.id, await loadImage(it.image_url, 600));
+    if (it.image_url && !isExcludedLineRemark(it.remark)) productImages.set(it.id, await loadImage(it.image_url, 600));
   }
   const buffer = await renderToBuffer(<QuoteDocument quote={quote} items={items} image={image} productImages={productImages} />);
   return new Uint8Array(buffer);

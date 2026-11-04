@@ -3,6 +3,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addProductImageAction,
   updateContactStatusAction,
+  updateContactClassificationAction,
   saveCategoryAction,
   saveModelAction,
   saveOptionAction,
@@ -10,6 +11,7 @@ import {
   type AdminFormState,
 } from '@/lib/actions/admin';
 import {
+  FREE_PRODUCT_CATEGORY_CODE,
   VIEW_KEYS,
   VIEW_LABELS,
   type BaseModel,
@@ -21,7 +23,9 @@ import {
   type ProductOption,
   type ProductImageKind,
   type ViewKey,
+  type WindowType,
 } from '@/lib/domain/types';
+import { copiedWindowTypeCode, windowTypeChoices } from '@/lib/domain/window-types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
@@ -41,9 +45,9 @@ export function Status({ state }: { state: AdminFormState }) {
   return null;
 }
 
-export function SubmitButton({ pending, label = '保存する' }: { pending: boolean; label?: string }) {
+export function SubmitButton({ pending, label = '保存する', disabled = false }: { pending: boolean; label?: string; disabled?: boolean }) {
   return (
-    <Button type="submit" disabled={pending} data-testid="admin-submit">
+    <Button type="submit" disabled={pending || disabled} data-testid="admin-submit">
       {pending && <Spinner />}
       {label}
     </Button>
@@ -55,7 +59,16 @@ export function SubmitButton({ pending, label = '保存する' }: { pending: boo
 type EditablePreset = ModelPreset & { _key: string };
 type ModelFormMode = 'all' | 'basic' | 'plans';
 
-export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mode?: ModelFormMode }) {
+export function ModelForm({
+  model,
+  mode = 'all',
+  canEditBasePrice = true,
+}: {
+  model: BaseModel | null;
+  mode?: ModelFormMode;
+  /** 本体価格は本部だけが登録・変更できる（v2.5 PR-C1b）。本部以外には表示だけにする（保存しても今の本体価格のまま） */
+  canEditBasePrice?: boolean;
+}) {
   const [state, action, pending] = useActionState(saveModelAction, initial);
   const e = state.fieldErrors ?? {};
   const joinPairs = (arr: { [k: string]: string }[] | undefined, a: string, b: string) => (arr ?? []).map((x) => `${x[a]}|${x[b]}`).join('\n');
@@ -168,7 +181,15 @@ export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mo
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="商品名" htmlFor="name" required errors={e.name}><Input id="name" name="name" defaultValue={model?.name} required /></Field>
               <Field label="slug（URL）" htmlFor="slug" required hint="英小文字・数字・ハイフン" errors={e.slug}><Input id="slug" name="slug" defaultValue={model?.slug} required /></Field>
-              <Field label="本体一式（諸費用別・税別・円）" htmlFor="base_price" required hint="見積書テンプレートの本体明細合計（諸費用を除く）" errors={e.base_price}><Input id="base_price" name="base_price" type="number" min={0} step={1} defaultValue={model?.base_price ?? 0} required data-testid="model-base-price" /></Field>
+              <Field
+                label="本体一式（諸費用別・税別・円）"
+                htmlFor="base_price"
+                required
+                hint={canEditBasePrice ? '見積書テンプレートの本体明細合計（諸費用を除く）' : '本体価格は本部だけが登録・変更できます（表示だけ）'}
+                errors={e.base_price}
+              >
+                <Input id="base_price" name="base_price" type="number" min={0} step={1} defaultValue={model?.base_price ?? 0} required readOnly={!canEditBasePrice} data-testid="model-base-price" />
+              </Field>
               <Field label="諸費用率（%）" htmlFor="expense_rate" required hint="本体・オプションそれぞれの小計に掛ける（テンプレート: 15%）" errors={e.expense_rate}><Input id="expense_rate" name="expense_rate" type="number" min={0} max={100} step={0.1} defaultValue={expenseRatePercent} required /></Field>
               <Field label="公開状態" htmlFor="status" required errors={e.status}>
                 <Select id="status" name="status" defaultValue={model?.status ?? 'draft'}>
@@ -447,12 +468,16 @@ interface OptionFormProps {
   conflicts: OptionConflict[];
   /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
   defaultCategoryId?: string;
-  /** 新しい下書きへ引き継ぐ表示情報。ID・画像・選択肢・履歴は引き継がない。 */
+  /** 新しい下書きへ引き継ぐ表示情報。ID・選択肢・履歴は引き継がない（画像・メーカー PDF は保存の後に別ファイルとして複製する）。 */
   duplicateSource?: ProductOption | null;
   /** 必要に応じて商品情報の一部だけを編集するための表示モード */
   mode?: 'all' | 'product' | 'create' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
   /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
   returnTo?: string;
+  /** 商品標準原価・別途見積の欄を出す（原価の Version の仕組みがある間は本部だけ。フリー商品は常に出す） */
+  canEditCost?: boolean;
+  /** 窓タイプ（サッシの商品の開閉形式。v2.5 PR-S2）。窓タイプを使うカテゴリーを選んだときだけ欄を出す */
+  windowTypes?: WindowType[];
 }
 
 export function OptionForm({
@@ -466,6 +491,8 @@ export function OptionForm({
   duplicateSource,
   mode = 'all',
   returnTo,
+  canEditCost = true,
+  windowTypes = [],
 }: OptionFormProps) {
   const [state, action, pending] = useActionState(saveOptionAction, initial);
   const [autoSaveState, setAutoSaveState] = useState<AdminFormState>(initial);
@@ -492,6 +519,9 @@ export function OptionForm({
   const [sizeNoteValue, setSizeNoteValue] = useState(option?.size_note ?? copySource?.size_note ?? '');
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
   const categoryCode = selectedCategory?.code ?? '';
+  // フリー商品は従来どおり「商品価格」。それ以外は千の風の調達想定の原価（v2.5 の正式計算の元）
+  const isFreeProduct = categoryCode === FREE_PRODUCT_CATEGORY_CODE;
+  const showCostFields = isFreeProduct || canEditCost;
   const sizeMeta = productSizeMeta(categoryCode);
   const guidance = productRegistrationGuidance(categoryCode);
   const categoryOptions = allOptions.filter((row) => !selectedCategoryId || row.category_id === selectedCategoryId);
@@ -571,6 +601,7 @@ export function OptionForm({
       <input type="hidden" name="category_id" value={option.category_id} />
       <input type="hidden" name="manufacturer" value={option.manufacturer ?? ''} />
       <input type="hidden" name="model_no" value={option.model_no ?? ''} />
+      <input type="hidden" name="window_type_code" value={option.window_type_code ?? ''} />
     </>
   ) : null;
 
@@ -597,8 +628,9 @@ export function OptionForm({
       {option.is_required && <input type="hidden" name="is_required" value="true" />}
       {option.is_installation && <input type="hidden" name="is_installation" value="true" />}
       <input type="hidden" name="list_price" value={option.list_price ?? ''} />
-      <input type="hidden" name="price" value={option.price} />
-      {option.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
+      {/* 原価の欄を出さない担当者には金額を渡さない（保存は今の金額を保つ。v2.5 PR-A3） */}
+      <input type="hidden" name="price" value={showCostFields ? option.price : 0} />
+      {showCostFields && option.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
       <input type="hidden" name="preview_key" value={option.preview_key ?? ''} />
       {option.affects_views.map((view) => <input key={`view-${view}`} type="hidden" name="affects_views" value={view} />)}
       {dependencies.map((dep) => (
@@ -621,12 +653,12 @@ export function OptionForm({
       <input type="hidden" name="base_model_id" value={copySource?.base_model_id ?? ''} />
       <input type="hidden" name="description" value={copySource?.description ?? ''} />
       <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
-      {/* 画像・メーカー資料は複製元の Storage パスを流用せず、新商品で登録する。 */}
+      {/* 画像・メーカー資料は複製元の Storage パスを流用せず、保存の後に新しい商品の置き場所へ別ファイルとして複製する。 */}
       <input type="hidden" name="image_url" value="" />
-      {copySource
+      {copySource && showCostFields
         ? <input type="hidden" name="price" value={copySource.price} />
         : <input type="hidden" name="price" value="0" />}
-      {copySource?.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
+      {showCostFields && copySource?.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
       {copySource
         ? <input type="hidden" name="selection_type" value={copySource.selection_type} />
         : <input type="hidden" name="selection_type" value="radio" />}
@@ -724,6 +756,31 @@ export function OptionForm({
                 {modelNoSuggestions.map((value) => <option key={value} value={value} />)}
               </datalist>
             </Field>
+            {selectedCategory?.uses_window_type && windowTypes.length > 0 ? (
+              <Field
+                label="窓タイプ"
+                htmlFor={`window_type_code-${mode}`}
+                hint="サッシの開閉形式を 1 つ選びます（任意）。掃出し窓・洗面窓などの位置・用途は、標準見積の位置・用途の選択枠で決めます"
+                errors={e.window_type_code}
+              >
+                <Select
+                  id={`window_type_code-${mode}`}
+                  name="window_type_code"
+                  // 複製して新しく登録するときは、「使う」窓タイプだけ引き継ぐ（「使わない」窓タイプは新しく設定できない）
+                  defaultValue={option ? (option.window_type_code ?? '') : (copiedWindowTypeCode(windowTypes, copySource?.window_type_code) ?? '')}
+                  data-testid="option-window-type"
+                >
+                  <option value="">未設定</option>
+                  {windowTypeChoices(windowTypes, option?.window_type_code)
+                    .map((row) => (
+                      <option key={row.code} value={row.code}>
+                        {row.label}
+                        {row.status === 'retired' ? '（使わない窓タイプ）' : ''}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+            ) : null /* 窓タイプを使わないカテゴリーでは欄を出さない（移したときに外すのはサーバー） */}
             {mode === 'create' && (
               <Field
                 label={sizeMeta.label}
@@ -879,25 +936,49 @@ export function OptionForm({
         <section id="sales-settings" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
           <ProductSectionHeading
             label={mode === 'sales' ? '販売・詳細設定' : '6. 価格・対象モデル'}
-            description="商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。"
+            description={
+              isFreeProduct
+                ? '商品価格、対象モデル・公開状態を確認します。'
+                : '商品標準原価、対象モデル・公開状態を確認します。色・仕様ごとの原価差額は「5. お客様選択」で設定します。'
+            }
           />
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
-            <p className="font-semibold">価格</p>
+            <p className="font-semibold">{isFreeProduct ? '価格' : '原価'}</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="商品価格（税別・円）" htmlFor={`price-${mode}`} required hint="価格未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します。標準品との差額は別途の計算で扱います" errors={e.price}>
-                <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
-              </Field>
+              {showCostFields ? (
+                <Field
+                  label={isFreeProduct ? '商品価格（税別・円）' : '商品標準原価（税別・円）'}
+                  htmlFor={`price-${mode}`}
+                  required
+                  hint={
+                    isFreeProduct
+                      ? '価格未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します。'
+                      : '千の風が商品を調達する想定の購入金額（税別）です。売価は標準見積の販売費率・掛率・経費のルールで計算します。未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します'
+                  }
+                  errors={e.price}
+                >
+                  <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" data-price-label={isFreeProduct ? '商品価格' : '商品標準原価'} />
+                </Field>
+              ) : (
+                <div className="rounded-lg border border-line bg-ivory/30 p-3 text-xs leading-5 text-muted" data-testid="option-cost-hidden-note">
+                  商品標準原価と別途見積の設定は本部が登録します（原価は本部だけに表示します）。
+                </div>
+              )}
               <Field label="メーカー参考価格（税別・表示のみ）" htmlFor={`list_price-${mode}`} errors={e.list_price}>
                 <Input id={`list_price-${mode}`} name="list_price" type="number" min={0} step={1} defaultValue={option?.list_price ?? ''} />
               </Field>
             </div>
-            <div className="mt-4">
-              <Checkbox name="price_on_request" defaultChecked={option?.price_on_request} label="価格は別途見積（0円扱い）" />
-              <p className="mt-2 text-xs leading-5 text-muted">
-                単に価格が未確認なだけの場合は「別途見積」にせず、0円の下書きとして保存してください。
-              </p>
-            </div>
+            {showCostFields && (
+              <div className="mt-4">
+                <Checkbox name="price_on_request" defaultChecked={option?.price_on_request} label="価格は別途見積（0円扱い）" />
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {isFreeProduct
+                    ? '単に価格が未確認なだけの場合は「別途見積」にせず、0円の下書きとして保存してください。'
+                    : '単に原価が未確認なだけの場合は「別途見積」にせず、0円の下書きとして保存してください。'}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="option-normal-settings">
@@ -1180,17 +1261,63 @@ export function PreviewRuleForm({
 
 /* ---------- お問い合わせ ---------- */
 
-export function ContactStatusForm({ id, status }: { id: string; status: 'new' | 'handled' }) {
+export function ContactStatusForm({
+  id, status, classificationReady = true,
+}: { id: string; status: 'new' | 'in_progress' | 'handled'; classificationReady?: boolean }) {
   const [state, action, pending] = useActionState(updateContactStatusAction, initial);
-  const next = status === 'new' ? 'handled' : 'new';
+  if (!classificationReady) {
+    const next = status === 'new' ? 'handled' : 'new';
+    return (
+      <form action={action}>
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="status" value={next} />
+        <button type="submit" disabled={pending} className="text-xs underline underline-offset-4 hover:text-ink disabled:opacity-50">
+          {next === 'handled' ? '対応済みにする' : '未対応に戻す'}
+        </button>
+        {state.error && <span role="alert" className="ml-2 text-xs text-danger">{state.error}</span>}
+      </form>
+    );
+  }
   return (
-    <form action={action}>
+    <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="status" value={next} />
-      <button type="submit" disabled={pending} className="text-xs underline underline-offset-4 hover:text-ink disabled:opacity-50">
-        {next === 'handled' ? '対応済みにする' : '未対応に戻す'}
-      </button>
-      {state.error && <span className="ml-2 text-xs text-danger">{state.error}</span>}
+      <label htmlFor={`contact-status-${id}`} className="text-xs font-semibold">対応状況</label>
+      <select id={`contact-status-${id}`} key={status} name="status" defaultValue={status}
+        className="rounded-md border border-line bg-white px-2 py-1 text-xs">
+        <option value="new">未対応</option>
+        <option value="in_progress">対応中</option>
+        <option value="handled">対応済み</option>
+      </select>
+      <button type="submit" disabled={pending} className="text-xs font-semibold underline underline-offset-4 disabled:opacity-50">変更</button>
+      {state.error && <span role="alert" className="text-xs text-danger">{state.error}</span>}
+    </form>
+  );
+}
+
+export function ContactClassificationForm({
+  id, classification,
+}: { id: string; classification: 'normal' | 'sales' | 'spam' }) {
+  const [state, action, pending] = useActionState(updateContactClassificationAction, initial);
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="id" value={id} />
+      <p className="text-xs font-semibold">問い合わせの分類</p>
+      <div className="flex flex-wrap gap-3">
+        {classification !== 'normal' && (
+          <button type="submit" name="classification" value="normal" disabled={pending}
+            className="text-xs underline underline-offset-4 disabled:opacity-50">通常に戻す</button>
+        )}
+        {classification !== 'sales' && (
+          <button type="submit" name="classification" value="sales" disabled={pending}
+            className="text-xs underline underline-offset-4 disabled:opacity-50">営業に分類</button>
+        )}
+        {classification !== 'spam' && (
+          <button type="submit" name="classification" value="spam" disabled={pending}
+            className="text-xs underline underline-offset-4 disabled:opacity-50">迷惑に分類</button>
+        )}
+      </div>
+      {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}
+      {state.ok && state.message && <p role="status" className="text-xs text-forest">{state.message}</p>}
     </form>
   );
 }

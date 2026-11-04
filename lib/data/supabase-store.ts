@@ -34,9 +34,12 @@ import type {
   QuoteRequestStatus,
   ContactMessage,
   ContactStatus,
+  ContactClassification,
   SpecMatrix,
   MatrixRow,
+  WindowType,
 } from '@/lib/domain/types';
+import { QUOTE_V25_SECTIONS, type QuoteV25Section } from '@/lib/domain/quote-v25';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -48,6 +51,9 @@ import {
   StoreError,
   type ContactInput,
   type CategoryInput,
+  type WindowTypeInput,
+  type QuoteV25EditContext,
+  type QuoteV25RevisionInput,
   type DataStore,
   type CaseDealer,
   type DealerQuoteListItem,
@@ -76,11 +82,32 @@ import {
   type MatrixRowCreateInput,
   type MatrixRowUpdateInput,
   type ProductLifecycleAction,
+  type SpecAcceptanceState,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
+import {
+  getLegacyPriceScope,
+  legacyTableColumns,
+  withLegacyBreakdownPrices,
+  withLegacyChoicePrices,
+  withLegacyModelPrices,
+  withLegacyOptionPrices,
+  withLegacyTemplateLinePrices,
+  withLegacyTemplatePrices,
+  withLegacyTemplateSectionPrices,
+  type LegacyPriceScope,
+} from './legacy-prices';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
-import { managedPublicObjectPath, safeCloneExtension, type ProductMediaCopySummary } from '@/lib/storage/product-media-copy';
+import {
+  managedPublicObjectPath,
+  markKeepCopiedDraft,
+  MAX_CLONE_GALLERY_IMAGES,
+  safeCloneExtension,
+  type ProductMediaCopySummary,
+} from '@/lib/storage/product-media-copy';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
+import { EMPTY_POR_SELECTION_STATE, isReservedLineStateRemark, type QuotePorSelection, type QuotePorSelectionState } from '@/lib/domain/quote-por';
+import { assertQuoteLineGuardReady } from './quote-line-guard';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -168,30 +195,40 @@ export class SupabaseStore implements DataStore {
     return (await createClient()) as unknown as Db;
   }
 
+  /**
+   * 旧価格の列（本部商品の原価）を足す範囲（v2.5 PR-C1b）。
+   * このストアは全リクエストで共有するため、範囲は覚えておかず毎回確かめる（スイッチの状態はキャッシュ済み）
+   */
+  private legacyPriceScope(): Promise<LegacyPriceScope> {
+    return getLegacyPriceScope();
+  }
+
   // ---------- 商品 ----------
   async listModels(opts?: { includeDraft?: boolean }) {
     const db = await this.db();
-    let q = db.from('base_models').select('*').order('sort_order');
+    let q = db.from('base_models').select(legacyTableColumns('base_models')).order('sort_order');
     if (!opts?.includeDraft) q = q.eq('status', 'published');
     const { data, error } = await q;
     if (error) mapPgError(error);
-    return (data ?? []) as BaseModel[];
+    return withLegacyModelPrices((data ?? []) as unknown as BaseModel[], await this.legacyPriceScope());
   }
   async getModelBySlug(slug: string, opts?: { includeDraft?: boolean }) {
     const db = await this.db();
-    let q = db.from('base_models').select('*').eq('slug', slug);
+    let q = db.from('base_models').select(legacyTableColumns('base_models')).eq('slug', slug);
     if (!opts?.includeDraft) q = q.eq('status', 'published');
     const { data, error } = await q.maybeSingle();
     if (error) mapPgError(error);
-    return (data as BaseModel | null) ?? null;
+    const row = (data as unknown as BaseModel | null) ?? null;
+    return row ? (await withLegacyModelPrices([row], await this.legacyPriceScope()))[0] : null;
   }
   async getModelById(id: string, opts?: { includeDraft?: boolean }) {
     const db = await this.db();
-    let q = db.from('base_models').select('*').eq('id', id);
+    let q = db.from('base_models').select(legacyTableColumns('base_models')).eq('id', id);
     if (!opts?.includeDraft) q = q.eq('status', 'published');
     const { data, error } = await q.maybeSingle();
     if (error) mapPgError(error);
-    return (data as BaseModel | null) ?? null;
+    const row = (data as unknown as BaseModel | null) ?? null;
+    return row ? (await withLegacyModelPrices([row], await this.legacyPriceScope()))[0] : null;
   }
   async getCatalogBundle(modelId: string, opts?: { includeDraft?: boolean }): Promise<CatalogBundle | null> {
     const model = await this.getModelById(modelId, opts);
@@ -201,14 +238,15 @@ export class SupabaseStore implements DataStore {
     const [images, categories, options, previewRules, optionImages] = await Promise.all([
       db.from('product_images').select('*').eq('base_model_id', modelId).order('sort_order'),
       db.from('option_categories').select('*').order('sort_order'),
-      db.from('options').select('*').or(`base_model_id.is.null,base_model_id.eq.${modelId}`).order('sort_order'),
+      db.from('options').select(legacyTableColumns('options')).or(`base_model_id.is.null,base_model_id.eq.${modelId}`).order('sort_order'),
       db.from('preview_image_rules').select('*').eq('base_model_id', modelId),
       db.from('option_images').select('*').order('sort_order'),
     ]);
     for (const r of [images, categories, options, previewRules]) if (r.error) mapPgError(r.error);
     if (optionImages.error && !isMissingRelation(optionImages.error)) mapPgError(optionImages.error);
     const optionImageRows = (optionImages.error ? [] : (optionImages.data ?? [])) as OptionImage[];
-    const opts_ = normalizeOptions(pub((options.data ?? []) as ProductOption[])).map((option) => ({
+    const scope = await this.legacyPriceScope();
+    const opts_ = normalizeOptions(await withLegacyOptionPrices(pub((options.data ?? []) as unknown as ProductOption[]), scope)).map((option) => ({
       ...option,
       gallery_images: optionImageRows
         .filter((image) => image.option_id === option.id)
@@ -232,10 +270,10 @@ export class SupabaseStore implements DataStore {
     const vg = ids.length ? await db.from('option_variant_groups').select('*').in('option_id', ids).order('sort_order') : { data: [], error: null };
     if (vg.error && !isMissingRelation(vg.error)) mapPgError(vg.error);
     const gids = ((vg.data ?? []) as OptionVariantGroup[]).map((g) => g.id);
-    const vc = gids.length ? await db.from('option_variant_choices').select('*').in('group_id', gids).order('sort_order') : { data: [], error: null };
+    const vc = gids.length ? await db.from('option_variant_choices').select(legacyTableColumns('option_variant_choices')).in('group_id', gids).order('sort_order') : { data: [], error: null };
     if (vc.error && !isMissingRelation(vc.error)) mapPgError(vc.error);
     // 本体内訳マスター（0016 未適用の DB では「内訳なし」として扱う）
-    const bb = await db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).order('sort_order');
+    const bb = await db.from('base_breakdown_items').select(legacyTableColumns('base_breakdown_items')).eq('base_model_id', modelId).order('sort_order');
     if (bb.error && !isMissingRelation(bb.error)) mapPgError(bb.error);
     const idSet = new Set(ids);
     return {
@@ -249,8 +287,8 @@ export class SupabaseStore implements DataStore {
       previewRules: ruleRows,
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
       variantGroups: (vg.error ? [] : (vg.data ?? [])) as OptionVariantGroup[],
-      variantChoices: (vc.error ? [] : (vc.data ?? [])) as OptionVariantChoice[],
-      baseBreakdowns: (bb.error ? [] : (bb.data ?? [])) as BaseBreakdownItem[],
+      variantChoices: await withLegacyChoicePrices((vc.error ? [] : (vc.data ?? [])) as unknown as OptionVariantChoice[], scope),
+      baseBreakdowns: (await withLegacyBreakdownPrices((bb.error ? [] : (bb.data ?? [])) as unknown as BaseBreakdownItem[], scope)) as BaseBreakdownItem[],
     };
   }
 
@@ -259,7 +297,9 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const capability = await db.rpc('product_lifecycle_capability');
     if (!capability.error && capability.data) {
-      return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards) };
+      // 廃番の印（20261016112000）があるか。無ければ廃番の操作は出さない
+      const discontinue = await db.from('options').select('id, discontinued_at').limit(1);
+      return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards), discontinue: !discontinue.error };
     }
     const columns = await db.from('options').select('id, archived_at, simulator_visible').limit(1);
     return { columns: !columns.error, guards: false };
@@ -286,6 +326,38 @@ export class SupabaseStore implements DataStore {
     }
     return { updated_at: rows[0].updated_at };
   }
+  /** 廃番にする・取り消す（判定・権限・変更履歴は DB の set_option_discontinued とトリガーが行う） */
+  async setProductDiscontinued(input: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string }) {
+    const db = await this.db();
+    const { data, error } = await db.rpc('set_option_discontinued', {
+      p_option_id: input.id,
+      p_expected_updated_at: input.expectedUpdatedAt,
+      p_discontinued: input.discontinued,
+      p_reason: input.reason,
+    });
+    if (error) {
+      if (isMissingNamedFunction(error, 'set_option_discontinued')) {
+        throw new StoreError('VALIDATION', '廃番の機能は、DB の更新が済むまで使えません。');
+      }
+      mapPgError(error);
+    }
+    return { updated_at: String(data) };
+  }
+  /** 仕様で新しい受付ができるか。migration の適用前は判定せず受け付ける（従来どおり） */
+  async getSpecAcceptanceState(modelId: string, specCode: string | null): Promise<SpecAcceptanceState> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_spec_acceptance_state', { p_model_id: modelId, p_spec_code: specCode });
+    if (error) {
+      if (isMissingNamedFunction(error, 'get_spec_acceptance_state')) return { accepting: true, stoppedNames: [], available: false };
+      mapPgError(error);
+    }
+    const value = (data ?? {}) as { accepting?: boolean; stopped_names?: string[] };
+    return {
+      accepting: value.accepting !== false,
+      stoppedNames: Array.isArray(value.stopped_names) ? value.stopped_names : [],
+      available: true,
+    };
+  }
   /** 商品価格の一括更新（監査ログは DB トリガーが記録する） */
   async updateOptionPrices(items: { id: string; price: number }[]) {
     const db = await this.db();
@@ -298,14 +370,14 @@ export class SupabaseStore implements DataStore {
   // ---------- 本体内訳マスター ----------
   async listBaseBreakdownItems(modelId?: string) {
     const db = await this.db();
-    let q = db.from('base_breakdown_items').select('*').order('spec_code').order('sort_order');
+    let q = db.from('base_breakdown_items').select(legacyTableColumns('base_breakdown_items')).order('spec_code').order('sort_order');
     if (modelId) q = q.eq('base_model_id', modelId);
     const { data, error } = await q;
     if (error) {
       if (isMissingRelation(error)) return [];
       mapPgError(error);
     }
-    return (data ?? []) as BaseBreakdownItem[];
+    return (await withLegacyBreakdownPrices((data ?? []) as unknown as BaseBreakdownItem[], await this.legacyPriceScope())) as BaseBreakdownItem[];
   }
   async saveBaseBreakdownItems(
     modelId: string,
@@ -329,9 +401,15 @@ export class SupabaseStore implements DataStore {
       remark: it.remark,
       sort_order: i + 1,
     }));
-    const ins = await db.from('base_breakdown_items').insert(rows).select('*');
+    const ins = await db.from('base_breakdown_items').insert(rows).select(legacyTableColumns('base_breakdown_items'));
     if (ins.error) mapPgError(ins.error);
-    return (ins.data ?? []) as BaseBreakdownItem[];
+    // 金額の列は読み返せない（v2.5 PR-C1b）。書いた金額をそのまま返す
+    const written = new Map(rows.map((row) => [row.sort_order, row]));
+    return ((ins.data ?? []) as unknown as BaseBreakdownItem[]).map((row) => ({
+      ...row,
+      unit_price: written.get(row.sort_order)?.unit_price ?? 0,
+      amount: written.get(row.sort_order)?.amount ?? 0,
+    }));
   }
 
   // ---------- 本体仕様マトリクス ----------
@@ -398,21 +476,21 @@ export class SupabaseStore implements DataStore {
   // ---------- 標準見積テンプレート ----------
   async listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]> {
     const db = await this.db();
-    let q = db.from('estimate_templates').select('*').order('base_model_id').order('spec_code');
+    let q = db.from('estimate_templates').select(legacyTableColumns('estimate_templates')).order('base_model_id').order('spec_code');
     if (modelId) q = q.eq('base_model_id', modelId);
     const { data, error } = await q;
     if (error) {
       if (isMissingRelation(error)) return [];
       mapPgError(error);
     }
-    return (data ?? []) as EstimateTemplate[];
+    return (await withLegacyTemplatePrices((data ?? []) as unknown as EstimateTemplate[], await this.legacyPriceScope())) as EstimateTemplate[];
   }
 
   async getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null> {
     const db = await this.db();
     const templateResult = await db
       .from('estimate_templates')
-      .select('*')
+      .select(legacyTableColumns('estimate_templates'))
       .eq('base_model_id', modelId)
       .eq('spec_code', specCode)
       .maybeSingle();
@@ -420,19 +498,29 @@ export class SupabaseStore implements DataStore {
       if (isMissingRelation(templateResult.error)) return null;
       mapPgError(templateResult.error);
     }
-    const template = templateResult.data as EstimateTemplate | null;
-    if (!template) return null;
+    const templateRow = templateResult.data as unknown as EstimateTemplate | null;
+    if (!templateRow) return null;
+    const scope = await this.legacyPriceScope();
+    const [template] = (await withLegacyTemplatePrices([templateRow], scope)) as EstimateTemplate[];
     const [sections, lines, baseRows] = await Promise.all([
-      db.from('estimate_template_sections').select('*').eq('template_id', template.id).order('sort_order'),
-      db.from('estimate_template_lines').select('*').eq('template_id', template.id).order('sort_order'),
-      db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).eq('spec_code', specCode).order('sort_order'),
+      db.from('estimate_template_sections').select(legacyTableColumns('estimate_template_sections')).eq('template_id', template.id).order('sort_order'),
+      db.from('estimate_template_lines').select(legacyTableColumns('estimate_template_lines')).eq('template_id', template.id).order('sort_order'),
+      db
+        .from('base_breakdown_items')
+        .select(legacyTableColumns('base_breakdown_items'))
+        .eq('base_model_id', modelId)
+        .eq('spec_code', specCode)
+        .order('sort_order'),
     ]);
     for (const result of [sections, lines, baseRows]) if (result.error) mapPgError(result.error);
     return {
       template,
-      sections: (sections.data ?? []) as EstimateTemplateBundle['sections'],
-      lines: (lines.data ?? []) as EstimateTemplateBundle['lines'],
-      base_breakdown_items: (baseRows.data ?? []) as EstimateTemplateBundle['base_breakdown_items'],
+      sections: (await withLegacyTemplateSectionPrices((sections.data ?? []) as unknown as EstimateTemplateBundle['sections'], scope)) as EstimateTemplateBundle['sections'],
+      lines: (await withLegacyTemplateLinePrices((lines.data ?? []) as unknown as EstimateTemplateBundle['lines'], scope)) as EstimateTemplateBundle['lines'],
+      base_breakdown_items: (await withLegacyBreakdownPrices(
+        (baseRows.data ?? []) as unknown as EstimateTemplateBundle['base_breakdown_items'],
+        scope
+      )) as EstimateTemplateBundle['base_breakdown_items'],
       baseline_option_ids: template.baseline_option_ids ?? [],
     };
   }
@@ -608,10 +696,16 @@ export class SupabaseStore implements DataStore {
       p_site_location_undecided: undecided,
       // 同時編集の検知。既存 Draft の保存で版が一致しなければ DB が LOCKED で拒否する
       p_expected_lock_version: input.expected_lock_version ?? null,
+      // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。位置の選択があるときだけ渡す（20261102100000 が無い DB でも、これまでの保存は動く）
+      ...(input.slot_selections && input.slot_selections.length > 0 ? { p_slot_selections: input.slot_selections } : {}),
     };
     const atomic = await db.rpc('save_configuration_atomic', atomicInput);
     if (!atomic.error) return atomic.data as Configuration;
     if (!isMissingNamedFunction(atomic.error, 'save_configuration_atomic')) mapPgError(atomic.error);
+    // 位置ごとの選択（v2.5 PR-S1）は、古い保存の経路では持てない。黙って落とさずに止める（DB の更新の直後で関数の一覧が古いときも）
+    if ((input.slot_selections ?? []).length > 0) {
+      throw new StoreError('VALIDATION', '位置ごとの選択を保存できませんでした。時間をおいてもう一度保存してください。');
+    }
 
     // Temporary deployment compatibility: only a definitely missing RPC uses
     // the old save path. The fallback is allowed only when the requested state
@@ -715,6 +809,8 @@ export class SupabaseStore implements DataStore {
 
   async createManualQuoteDraftWithItems(_actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {
     const db = await this.db();
+    // 「0円確定」「対象外」の印は、DB の更新（20261016111000）が済むまで保存しない
+    if (input.items.some((item) => isReservedLineStateRemark(item.remark))) await assertQuoteLineGuardReady(db);
     const { data, error } = await db.rpc('create_manual_quote_draft_with_items', {
       p_case_name: input.case_name,
       p_contact: {
@@ -789,6 +885,8 @@ export class SupabaseStore implements DataStore {
 
   async saveQuoteDraft(id: string, input: QuoteDraftSaveInput, _actor: SessionUser): Promise<number> {
     const db = await this.db();
+    // 「0円確定」「対象外」の印は、DB の更新（20261016111000）が済むまで保存しない
+    if (input.items.some((item) => isReservedLineStateRemark(item.remark))) await assertQuoteLineGuardReady(db);
     const { data, error } = await db.rpc('save_quote_draft', {
       p_draft_id: id,
       p_expected_lock_version: input.expected_lock_version,
@@ -808,6 +906,8 @@ export class SupabaseStore implements DataStore {
     if (!detail) throw new StoreError('NOT_FOUND', 'Draftが見つかりません');
 
     const db = await this.db();
+    // DB の更新（20261016111000）が済むまで、旧い関数で正式見積を発行しない
+    await assertQuoteLineGuardReady(db);
     const { data, error } = detail.draft.parent_quote_id
       ? await db.rpc('finalize_quote_revision_draft', {
           p_draft_id: id,
@@ -954,9 +1054,14 @@ export class SupabaseStore implements DataStore {
   }
   async getNewContactMessageCount() {
     const db = await this.db();
-    const { count, error } = await db.from('contact_messages').select('*', { count: 'exact', head: true }).eq('status', 'new');
-    if (error) mapPgError(error);
-    return count ?? 0;
+    // migration適用前は旧カラムで集計。適用後は営業・迷惑を通常の未対応件数から除外。
+    const scoped = await db.from('contact_messages').select('*', { count: 'exact', head: true })
+      .eq('status', 'new').eq('classification', 'normal');
+    if (!scoped.error) return scoped.count ?? 0;
+    if (!['42703', 'PGRST204'].includes(scoped.error.code ?? '')) mapPgError(scoped.error);
+    const legacy = await db.from('contact_messages').select('*', { count: 'exact', head: true }).eq('status', 'new');
+    if (legacy.error) mapPgError(legacy.error);
+    return legacy.count ?? 0;
   }
   async assignQuoteDealer(id: string, dealerId: string | null) {
     const db = await this.db();
@@ -1000,6 +1105,16 @@ export class SupabaseStore implements DataStore {
 
   async createDealerRevision(id: string, input: DealerRevisionInput) {
     const db = await this.db();
+    // DB の更新（20261016111000）が済むまで、旧い関数で正式見積（改訂）を発行しない
+    await assertQuoteLineGuardReady(db);
+    // お客様が選んだ別途見積の商品を確認したことを、発行の前に記録する（DB が発行時に担当者自身の記録を確かめる）
+    if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
+      const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
+        p_quote_id: id,
+        p_selection_keys: input.por_confirmation_keys,
+      });
+      if (confirmError) mapPgError(confirmError);
+    }
     const { data, error } = await db.rpc('create_quote_revision', {
       p_quote_id: id,
       p_items: input.items,
@@ -1010,6 +1125,86 @@ export class SupabaseStore implements DataStore {
     const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', newId).single();
     if (e2) mapPgError(e2);
     return q as Quote;
+  }
+
+  async getQuoteV25Context(quoteId: string): Promise<QuoteV25EditContext | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_quote_v25_context', { p_quote_id: quoteId });
+    if (error) {
+      // DB の更新（20261102120000）の前・v2.5 の見積でない・権限が無いときは、これまでの編集画面
+      if (isMissingNamedFunction(error, 'get_quote_v25_context') || error.code === 'P0002') return null;
+      mapPgError(error);
+    }
+    const value = (data ?? null) as Record<string, unknown> | null;
+    if (!value) return null;
+    const sections = Array.isArray(value.expense_sections) ? (value.expense_sections as string[]) : [];
+    return {
+      revisionId: String(value.revision_id),
+      revisionVersion: Number(value.revision_version),
+      baseModelId: String(value.base_model_id),
+      modelSlug: String(value.model_slug),
+      specCode: String(value.spec_code),
+      money: {
+        expenseRate: String(value.expense_rate),
+        expenseSections: sections.filter((code): code is QuoteV25Section => (QUOTE_V25_SECTIONS as string[]).includes(code)),
+        taxRate: String(value.tax_rate),
+      },
+      standardAdjustmentReason: typeof value.standard_adjustment_reason === 'string' ? value.standard_adjustment_reason : null,
+    };
+  }
+
+  async getQuoteV25Units(quoteId: string, items: { option_id: string; choice_ids: string[] }[]): Promise<(number | null)[]> {
+    if (items.length === 0) return [];
+    const db = await this.db();
+    const chunks: (typeof items)[] = [];
+    for (let start = 0; start < items.length; start += 300) chunks.push(items.slice(start, start + 300));
+    // 300 件ずつ並べて計算する（編集画面を開くときの商品の一覧の売価）
+    const results = await Promise.all(chunks.map((chunk) => db.rpc('get_quote_v25_units', { p_quote_id: quoteId, p_items: chunk })));
+    return results.flatMap(({ data, error }, chunkIndex) => {
+      if (error) mapPgError(error);
+      const units = (Array.isArray(data) ? data : []) as Array<number | null>;
+      // 結果が足りなければ価格未確定（null）として扱う（安全側）
+      return chunks[chunkIndex].map((_, index) => (typeof units[index] === 'number' ? units[index] : null));
+    });
+  }
+
+  async createQuoteRevisionV25(quoteId: string, input: QuoteV25RevisionInput): Promise<Quote> {
+    const db = await this.db();
+    // お客様が選んだ別途見積の商品を確認したことを、発行の前に記録する（DB が発行時に担当者自身の記録を確かめる。#529 と同じ）
+    if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
+      const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
+        p_quote_id: quoteId,
+        p_selection_keys: input.por_confirmation_keys,
+      });
+      if (confirmError) mapPgError(confirmError);
+    }
+    const { data, error } = await db.rpc('create_quote_revision_v25', {
+      p_quote_id: quoteId,
+      p_lines: input.lines,
+      p_adjustment: input.adjustment,
+      p_adjustment_reason: input.adjustment_reason,
+      p_dealer_note: input.dealer_note,
+    });
+    if (error) mapPgError(error);
+    const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', data as string).single();
+    if (e2) mapPgError(e2);
+    return toQuote(q as Record<string, unknown>);
+  }
+
+  async getQuotePorSelections(quoteId: string): Promise<QuotePorSelectionState> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_quote_por_selections', { p_quote_id: quoteId });
+    if (error) {
+      // migration の適用前は確認の仕組みが無い（画面は発行のボタンを止め、発行の処理も止める）
+      if (isMissingNamedFunction(error, 'get_quote_por_selections')) return EMPTY_POR_SELECTION_STATE;
+      mapPgError(error);
+    }
+    const value = (data ?? {}) as { selections?: QuotePorSelection[]; confirmed?: boolean };
+    return {
+      selections: Array.isArray(value.selections) ? value.selections : [],
+      confirmed: Boolean(value.confirmed),
+      available: true,
+    };
   }
 
   // ---------- PDF（service role） ----------
@@ -1127,6 +1322,16 @@ export class SupabaseStore implements DataStore {
     const { id, ...rest } = input;
     // 明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する。
     const q = id ? db.from(table).upsert({ id, ...rest }, { onConflict: 'id' }) : db.from(table).insert(rest);
+    if (table === 'options' || table === 'option_variant_choices' || table === 'base_models') {
+      // 旧価格の列は読み返せない（v2.5 PR-C1b）。金額のほかの列を返し、金額はサーバーで足す
+      const { data, error } = await q.select(legacyTableColumns(table)).single();
+      if (error) mapPgError(error);
+      const row = data as unknown as T & { id: string };
+      const scope = await this.legacyPriceScope();
+      if (table === 'options') return (await withLegacyOptionPrices([row], scope))[0] as T;
+      if (table === 'option_variant_choices') return (await withLegacyChoicePrices([row], scope))[0] as T;
+      return (await withLegacyModelPrices([row], scope))[0] as T;
+    }
     const { data, error } = await q.select('*').single();
     if (error) mapPgError(error);
     return data as T;
@@ -1143,6 +1348,26 @@ export class SupabaseStore implements DataStore {
   async upsertCategory(input: CategoryInput) {
     return this.upsert<OptionCategory>('option_categories', input);
   }
+  async listWindowTypes() {
+    const db = await this.db();
+    const { data, error } = await db.from('window_types').select('code, label, sort_order, status').order('sort_order').order('code');
+    if (error) {
+      // 窓タイプの表（20261102100000）が無い DB では、窓タイプを使わない
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as WindowType[];
+  }
+  async saveWindowType(input: WindowTypeInput) {
+    const db = await this.db();
+    const columns = 'code, label, sort_order, status';
+    const result = input.isNew
+      ? await db.from('window_types').insert({ code: input.code, label: input.label, sort_order: input.sort_order, status: input.status }).select(columns).single()
+      : await db.from('window_types').update({ label: input.label, sort_order: input.sort_order, status: input.status }).eq('code', input.code).select(columns).maybeSingle();
+    if (result.error) mapPgError(result.error);
+    if (!result.data) throw new StoreError('NOT_FOUND', '窓タイプが見つかりません');
+    return result.data as WindowType;
+  }
   async getOptionVariants(optionId: string) {
     const db = await this.db();
     const groupsResult = await db
@@ -1156,12 +1381,12 @@ export class SupabaseStore implements DataStore {
     if (!groups.length) return { groups: [], choices: [] };
     const choicesResult = await db
       .from('option_variant_choices')
-      .select('*')
+      .select(legacyTableColumns('option_variant_choices'))
       .in('group_id', groups.map((group) => group.id))
       .order('sort_order')
       .order('id');
     if (choicesResult.error) mapPgError(choicesResult.error);
-    return { groups, choices: (choicesResult.data ?? []) as OptionVariantChoice[] };
+    return { groups, choices: await withLegacyChoicePrices((choicesResult.data ?? []) as unknown as OptionVariantChoice[], await this.legacyPriceScope()) };
   }
     async upsertVariantGroup(input: OptionVariantGroup) {
     return this.upsert<OptionVariantGroup>('option_variant_groups', input as unknown as Record<string, unknown> & { id?: string | null });
@@ -1180,29 +1405,30 @@ export class SupabaseStore implements DataStore {
   }
   async listOptions() {
     const db = await this.db();
-    const { data, error } = await db.from('options').select('*').order('sort_order');
+    const { data, error } = await db.from('options').select(legacyTableColumns('options')).order('sort_order');
     if (error) mapPgError(error);
-    return normalizeOptions((data ?? []) as ProductOption[]);
+    return normalizeOptions(await withLegacyOptionPrices((data ?? []) as unknown as ProductOption[], await this.legacyPriceScope()));
   }
   async getOption(id: string) {
     const db = await this.db();
     const [optionResult, imageResult] = await Promise.all([
-      db.from('options').select('*').eq('id', id).maybeSingle(),
+      db.from('options').select(legacyTableColumns('options')).eq('id', id).maybeSingle(),
       db.from('option_images').select('*').eq('option_id', id).order('sort_order'),
     ]);
     if (optionResult.error) mapPgError(optionResult.error);
     if (imageResult.error && !isMissingRelation(imageResult.error)) mapPgError(imageResult.error);
-    const option = (optionResult.data as ProductOption | null) ?? null;
-    if (!option) return null;
+    const optionRow = (optionResult.data as unknown as ProductOption | null) ?? null;
+    if (!optionRow) return null;
+    const [option] = await withLegacyOptionPrices([optionRow], await this.legacyPriceScope());
     return {
       ...option,
       gallery_images: (imageResult.error ? [] : (imageResult.data ?? [])) as OptionImage[],
     };
   }
   async upsertOption(input: OptionInput) {
-    // 取扱終了・シミュレーター表示は setProductLifecycle だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
-    const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, ...rest } = input as OptionInput &
-      Pick<ProductOption, 'simulator_visible' | 'archived_at'>;
+    // 販売停止・廃番・シミュレーター表示は setProductLifecycle・setProductDiscontinued だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
+    const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, discontinued_at: _discontinuedAt, ...rest } = input as OptionInput &
+      Pick<ProductOption, 'simulator_visible' | 'archived_at' | 'discontinued_at'>;
     return this.upsert<ProductOption>('options', rest);
   }
   async deleteOption(id: string) {
@@ -1241,64 +1467,84 @@ export class SupabaseStore implements DataStore {
     if (target.status !== 'draft' || target.image_url || target.manufacturer_document_url || target.gallery_images?.length) {
       throw new StoreError('VALIDATION', '複製先はメディア未登録の新しい下書きである必要があります。');
     }
-    const galleries = source.gallery_images ?? [];
-    if (galleries.length > 30) throw new StoreError('VALIDATION', '追加画像は30枚以下の商品だけ複製できます。');
+    // 追加画像は並び順で上限まで複製し、残りは「複製できなかったメディア」として知らせる（登録側に上限は無いため、複製を止めない）
+    const allGalleries = [...(source.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    const galleries = allGalleries.slice(0, MAX_CLONE_GALLERY_IMAGES);
     const admin = createAdminClient();
     const imageBucket = admin.storage.from('product-images');
     const docBucket = admin.storage.from('product-documents');
     const imageProbe = imageBucket.getPublicUrl('__clone_probe__').data.publicUrl;
     const pdfProbe = docBucket.getPublicUrl('__clone_probe__').data.publicUrl;
     type Bucket = 'product-images' | 'product-documents';
-    type Copy = { bucket: Bucket; from: string; to: string; url: string };
+    // target：メイン画像・メーカー PDF・追加画像（galleries の添字）のどれのコピーか
+    type Copy = { bucket: Bucket; from: string; to: string; url: string; target: 'main' | 'pdf' | number; label: string };
     const jobs: Copy[] = [];
     const skipped: string[] = [];
+    if (allGalleries.length > galleries.length) skipped.push(`追加画像（${MAX_CLONE_GALLERY_IMAGES + 1}枚目以降）`);
     const createJob = (
       url: string | null | undefined,
       bucket: Bucket,
       kind: 'image' | 'pdf',
       destFolder: string,
+      target: Copy['target'],
+      label: string,
       sourcePrefix?: string
-    ): string | null => {
-      if (!url) return null;
+    ): boolean => {
+      if (!url) return false;
       const from = managedPublicObjectPath(url, bucket === 'product-images' ? imageProbe : pdfProbe);
-      if (!from || (sourcePrefix && (!from.startsWith(sourcePrefix) || from.slice(sourcePrefix.length).includes('/')))) return null;
+      if (!from || (sourcePrefix && (!from.startsWith(sourcePrefix) || from.slice(sourcePrefix.length).includes('/')))) return false;
       const ext = safeCloneExtension(from, kind);
-      if (!ext) return null;
+      if (!ext) return false;
       const to = `${destFolder}${randomUUID()}.${ext}`;
       const fileBucket = bucket === 'product-images' ? imageBucket : docBucket;
-      jobs.push({ bucket, from, to, url: fileBucket.getPublicUrl(to).data.publicUrl });
-      return jobs[jobs.length - 1].url;
+      jobs.push({ bucket, from, to, url: fileBucket.getPublicUrl(to).data.publicUrl, target, label });
+      return true;
     };
 
-    const mainUrl = createJob(source.image_url, 'product-images', 'image', `option-${newDraftId}/main/`);
-    if (source.image_url && !mainUrl) skipped.push('メイン画像');
-    const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = [];
-    for (const image of galleries) {
-      const cloned = createJob(image.url, 'product-images', 'image', optionMediaPrefix(newDraftId, 'gallery'), optionMediaPrefix(sourceId, 'gallery'));
-      if (cloned) {
-        galleryRows.push({ option_id: newDraftId, url: cloned, alt: image.alt, caption: image.caption, sort_order: image.sort_order });
-      } else {
+    if (source.image_url && !createJob(source.image_url, 'product-images', 'image', `option-${newDraftId}/main/`, 'main', 'メイン画像')) {
+      skipped.push('メイン画像');
+    }
+    galleries.forEach((image, index) => {
+      if (!createJob(image.url, 'product-images', 'image', optionMediaPrefix(newDraftId, 'gallery'), index, '追加画像', optionMediaPrefix(sourceId, 'gallery'))) {
         skipped.push('追加画像');
       }
+    });
+    if (
+      source.manufacturer_document_url &&
+      !createJob(source.manufacturer_document_url, 'product-documents', 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), 'pdf', 'メーカーPDF', optionMediaPrefix(sourceId, 'manufacturer'))
+    ) {
+      skipped.push('メーカーPDF');
     }
-    const pdfUrl = createJob(source.manufacturer_document_url, 'product-documents', 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), optionMediaPrefix(sourceId, 'manufacturer'));
-    if (source.manufacturer_document_url && !pdfUrl) skipped.push('メーカーPDF');
 
     if (!jobs.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
     const db = await this.db();
     const copied: Copy[] = [];
+    // 1 つのファイルのコピーに失敗しても（コピー元のファイルが無いなど）、そのファイルだけ飛ばして知らせる（下書きは作る）
+    for (const job of jobs) {
+      const bucket = job.bucket === 'product-images' ? imageBucket : docBucket;
+      const { error } = await bucket.copy(job.from, job.to);
+      if (error) {
+        console.error('[wing] product media copy skipped', { newDraftId, from: `${job.bucket}/${job.from}`, message: error.message });
+        skipped.push(job.label);
+        continue;
+      }
+      copied.push(job);
+    }
+    if (!copied.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
+    const mainUrl = copied.find((job) => job.target === 'main')?.url ?? null;
+    const pdfUrl = copied.find((job) => job.target === 'pdf')?.url ?? null;
+    const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = galleries.flatMap((image, index) => {
+      const job = copied.find((row) => row.target === index);
+      return job ? [{ option_id: newDraftId, url: job.url, alt: image.alt, caption: image.caption, sort_order: image.sort_order }] : [];
+    });
+
     let changedDb = false;
     try {
-      for (const job of jobs) {
-        const bucket = job.bucket === 'product-images' ? imageBucket : docBucket;
-        const { error } = await bucket.copy(job.from, job.to);
-        if (error) throw new StoreError('INTERNAL', `商品メディアのコピーに失敗しました: ${error.message}`);
-        copied.push(job);
-      }
-      // 顧客画面へは draft の間は公開されない。現行DBの保存境界でコピー先のみ更新する。
+      // 顧客画面へは draft の間は公開されない。メイン画像・PDF がまだ空の下書きだけ更新する（別の画面での登録を上書きしない）
       const { data: updated, error: updateError } = await db.from('options')
         .update({ image_url: mainUrl, manufacturer_document_url: pdfUrl })
-        .eq('id', newDraftId).eq('status', 'draft').select('id');
+        .eq('id', newDraftId).eq('status', 'draft').is('image_url', null).is('manufacturer_document_url', null)
+        .select('id');
       if (updateError) mapPgError(updateError);
       if (updated?.length !== 1) throw new StoreError('LOCKED', '複製先の商品が更新されたためコピーを中止しました。');
       changedDb = true;
@@ -1308,11 +1554,17 @@ export class SupabaseStore implements DataStore {
       }
       return { copiedMain: Boolean(mainUrl), copiedGallery: galleryRows.length, copiedPdf: Boolean(pdfUrl), skipped };
     } catch (error) {
-      // DB更新後に失敗した場合はリンクを先に解除し、成功した場合のみ新規ファイルを削除する。
+      // DB更新後に失敗した場合はリンクを先に解除し（複製で入れた値だけ）、成功した場合のみ新規ファイルを削除する。
       let rollbackOk = true;
       if (changedDb) {
-        const clearGallery = await db.from('option_images').delete().eq('option_id', newDraftId);
-        const clearOption = await db.from('options').update({ image_url: null, manufacturer_document_url: null }).eq('id', newDraftId).eq('status', 'draft');
+        const galleryUrls = galleryRows.map((row) => row.url);
+        const clearGallery = galleryUrls.length
+          ? await db.from('option_images').delete().eq('option_id', newDraftId).in('url', galleryUrls)
+          : { error: null };
+        let clear = db.from('options').update({ image_url: null, manufacturer_document_url: null }).eq('id', newDraftId).eq('status', 'draft');
+        clear = mainUrl ? clear.eq('image_url', mainUrl) : clear.is('image_url', null);
+        clear = pdfUrl ? clear.eq('manufacturer_document_url', pdfUrl) : clear.is('manufacturer_document_url', null);
+        const clearOption = await clear;
         rollbackOk = !clearGallery.error && !clearOption.error;
       }
       if (rollbackOk) {
@@ -1322,10 +1574,16 @@ export class SupabaseStore implements DataStore {
           const { error: removeError } = await admin.storage.from(bucketName).remove(paths);
           if (removeError) console.error('[wing] failed to clean copied option media', removeError);
         }
-      } else {
-        console.error('[wing] copied media DB rollback failed; preserve new files for recovery', newDraftId);
+        throw error;
       }
-      throw error;
+      // 取り消しに失敗したときは、確認のため新しい下書きと複製したファイルを残す（呼び出し側は下書きを消さない）
+      console.error('[wing] copied media DB rollback failed; keep the new draft and files for recovery', {
+        newDraftId,
+        paths: copied.map((job) => `${job.bucket}/${job.to}`),
+      });
+      throw markKeepCopiedDraft(
+        new StoreError('INTERNAL', '商品メディアの複製の途中で失敗しました。確認のため新しい下書きを残しています。管理者に連絡してください。')
+      );
     }
   }
 
@@ -1410,6 +1668,13 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const { error } = await db.from('contact_messages').update({ status }).eq('id', id);
     if (error) mapPgError(error);
+  }
+  async updateContactClassification(id: string, classification: ContactClassification) {
+    const db = await this.db();
+    const { data, error } = await db.from('contact_messages')
+      .update({ classification }).eq('id', id).select('id').maybeSingle();
+    if (error) mapPgError(error);
+    if (!data) throw new StoreError('NOT_FOUND', 'お問い合わせが見つからないか、更新権限がありません');
   }
 
   async uploadImage(file: UploadInput, folder: string) {

@@ -61,3 +61,17 @@ export function safeCloneExtension(storagePath: string, kind: 'image' | 'pdf'): 
   if (kind === 'pdf') return ext === 'pdf' ? 'pdf' : null;
   return ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'].includes(ext) ? ext : null;
 }
+
+/** 複製する追加画像の上限（超えた分は複製せず「複製できなかったメディア」に出す。登録側に上限は無い） */
+export const MAX_CLONE_GALLERY_IMAGES = 30;
+
+const KEEP_COPIED_DRAFT = Symbol.for('wing.keepCopiedDraft');
+
+/** 複製の取り消し（DB）に失敗したとき：確認のため新しい下書きと複製したファイルを残す（呼び出し側は下書きを消さない） */
+export function markKeepCopiedDraft<T extends Error>(error: T): T {
+  return Object.assign(error, { [KEEP_COPIED_DRAFT]: true });
+}
+
+export function shouldKeepCopiedDraft(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as Record<symbol, unknown>)[KEEP_COPIED_DRAFT] === true;
+}

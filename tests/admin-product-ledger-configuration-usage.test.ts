@@ -37,7 +37,7 @@ describe('商品台帳の保存済み構成利用状況', () => {
     expect(ledgerClient).toContain('完全削除可能');
     expect(ledgerClient).toContain('一覧右端の「⋮」から直接削除できます。');
     expect(ledgerClient).toContain("selected.status === 'published'");
-    expect(ledgerClient).toContain('登録済み・取扱終了の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。');
+    expect(ledgerClient).toContain('登録済み・販売停止・廃番の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。');
   });
 
   it('既存のサーバー側削除処理は保存済み構成からの参照を拒否する', () => {

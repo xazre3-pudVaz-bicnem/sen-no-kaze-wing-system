@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
 import { BASE_ESTIMATE_SPEC_CODE, estimateTemplatesFor } from '@/lib/domain/estimate-template';
 import { formatYen } from '@/lib/domain/pricing';
 import { Alert } from '@/components/ui';
@@ -18,6 +19,8 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
   await requireCatalogEditor();
   const sp = await searchParams;
   const store = await getStore();
+  // 本体内訳の金額は本部だけが登録・変更できる（v2.5 PR-C1b）
+  const amountsEditable = canEditCostField(await getCostRecordingAccess());
   const [models, allItems, allTemplates] = await Promise.all([
     store.listModels({ includeDraft: true }),
     store.listBaseBreakdownItems(),
@@ -135,6 +138,7 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
             items={items}
             expenseRate={rate}
             lockedByTemplate={Boolean(template)}
+            hqOnly={!amountsEditable}
             expenseAmountOverride={baseSection?.expense_amount}
             totalOverride={baseSection?.total}
           />

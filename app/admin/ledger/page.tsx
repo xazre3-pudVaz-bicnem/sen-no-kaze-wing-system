@@ -3,6 +3,8 @@ import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
 import { ProductLedgerOverlayDismiss } from '@/components/admin/product-ledger-overlay-dismiss';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { withoutChoiceCost, withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
 import { getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { getStore } from '@/lib/data/store';
@@ -13,8 +15,10 @@ import { Alert } from '@/components/ui';
 
 /** 商品の状態を変えた後のお知らせ（lib/actions/product-lifecycle.ts の DONE） */
 const PRODUCT_LIFECYCLE_DONE: Record<string, string> = {
-  retired: '取扱を終了しました。新しい見積・シミュレーターの候補から外れます。保存済みの内容や発行済みの見積は変わりません。',
-  resumed: '取扱を再開しました。シミュレーター表示の設定は以前の値のままです。',
+  retired: '販売を停止しました。新しい見積・シミュレーターの候補から外れます。標準構成で使っている仕様は新しい受付を止めます。保存済みの内容や発行済みの見積は変わりません。',
+  resumed: '販売を再開しました。シミュレーター表示の設定は以前の値のままです。',
+  discontinued: '廃番にしました。廃番の商品は販売を再開できません（誤操作は本部の管理者が取り消せます）。',
+  restored: '廃番を取り消しました。販売停止に戻っています（販売の再開は別の操作です）。',
   simulator_shown: 'シミュレーターに表示する設定にしました。',
   simulator_hidden: 'シミュレーターに表示しない設定にしました。見積では引き続き選べます。',
 };
@@ -24,15 +28,20 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
   const editor = canEditCatalog(actor.role);
-  const [options, categories, models, configurationUsageCounts, lifecycleCapability] = await Promise.all([
+  const [options, categories, models, configurationUsageCounts, lifecycleCapability, costAccess, windowTypes] = await Promise.all([
     store.listOptions(),
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
     store.getProductLifecycleCapability(),
+    getCostRecordingAccess(),
+    store.listWindowTypes(),
   ]);
-  // 取扱終了・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す
+  // 販売停止・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す。廃番は 20261016112000 の適用後だけ
   const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
+  const discontinueEnabled = lifecycleEnabled && Boolean(lifecycleCapability.discontinue);
+  // 商品標準原価（v2.5 PR-A3）：原価の Version の仕組みがある間は、原価を本部だけに出す（クライアントへ渡すデータからも外す）
+  const showCost = canEditCostField(costAccess);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const ledgerCategories = catalogCategories.map((category) => {
     const displayGroup = productRegistrationCategoryGroup(category.code);
@@ -59,6 +68,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       {editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}
       {editor && <Link href="/admin/options/new?return_to=%2Fadmin%2Fledger" className="btn-primary btn-sm">＋ 商品を登録</Link>}
       {editor && <Link href="/admin/categories" className="btn-secondary btn-sm">カテゴリー・お客様表示設定</Link>}
+      {costAccess.available && costAccess.canManage && <Link href="/admin/options/cost-import" className="btn-secondary btn-sm">原価 Version の取り込み</Link>}
     </>}
   >
     <style>{`
@@ -119,17 +129,25 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     <FlashMessages sp={sp} />
     {sp.lifecycle && PRODUCT_LIFECYCLE_DONE[sp.lifecycle] && <Alert tone="success">{PRODUCT_LIFECYCLE_DONE[sp.lifecycle]}</Alert>}
     {editor && !lifecycleEnabled && (
-      <Alert tone="info">取扱終了・シミュレーター表示の設定は、DB の更新（migration）が済むまで使えません。</Alert>
+      <Alert tone="info">販売停止・シミュレーター表示の設定は、DB の更新（migration）が済むまで使えません。</Alert>
     )}
     <ProductLedgerClient
       canEdit={editor}
       lifecycleEnabled={lifecycleEnabled}
+      discontinueEnabled={discontinueEnabled}
+      canRestoreDiscontinued={actor.role === 'admin'}
       categories={ledgerCategories}
-      options={catalogOptions}
+      options={showCost ? catalogOptions : catalogOptions.map(withoutOptionCost)}
       models={models}
-      variantsByOptionId={Object.fromEntries(rows)}
+      variantsByOptionId={
+        showCost
+          ? Object.fromEntries(rows)
+          : Object.fromEntries(rows.map(([id, variants]) => [id, { ...variants, choices: variants.choices.map(withoutChoiceCost) }]))
+      }
       configurationUsageCounts={configurationUsageCounts}
       hqStandardCosts={hqStandardCosts}
+      showCost={showCost}
+      windowTypes={windowTypes}
       initiallySelectedId={selected}
     />
   </AdminPage>;

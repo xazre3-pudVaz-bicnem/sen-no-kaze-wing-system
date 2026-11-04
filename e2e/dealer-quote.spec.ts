@@ -98,9 +98,9 @@ test.describe('代理店による確定見積（改訂版）', () => {
 
   test('金額未確定の明細が残る間は確定見積を発行できず、金額・0円確定（理由）・対象外と確認で発行できる（D1 までの暫定）', async ({ page }) => {
     const customer = uniqueEmail('por');
-    // 別途工事は標準では選ばれない（2026-10-21 の先方の決定）ので、お客様が「電気設備工事」（別途見積）を選んでから依頼する
+    // 別途工事は標準では選ばれない（2026-10-21 の先方の決定）ので、お客様が相談したい「電気設備工事」と「運送費」（どちらも別途見積）を選んでから依頼する
     const { quoteId } = await requestQuoteAsCustomer(page, customer, '別途見積のテスト', undefined, (p) =>
-      pickOption(p, 'equip-sitework', ['sw-electric'])
+      pickOption(p, 'equip-sitework', ['sw-electric', 'sw-transport'])
     );
     await logout(page);
 

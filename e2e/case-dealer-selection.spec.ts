@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN_EMAIL, openFreshSimulator, register, signInOrRegister, uniqueEmail } from './helpers';
+import { ADMIN_EMAIL, fillQuoteRequestContact, openFreshSimulator, register, signInOrRegister, uniqueEmail } from './helpers';
 import { createOrganizationViaUi, issueInvitation, joinViaInvitation } from './org-helpers';
 
 // お客様が代理店を選ぶ（2026-10-15 先方確定）：見積依頼の「相談したい代理店」で、組織に所属する代理店の紹介ページを選ぶと、
@@ -46,6 +46,8 @@ test.describe('お客様が代理店を選ぶ', () => {
     await customer.waitForURL(/\?c=[0-9a-f-]{36}/);
     const configId = new URL(customer.url()).searchParams.get('c')!;
     await customer.goto(`/mypage/configurations/${configId}/request-quote`);
+    // 連絡先（電話番号・ご住所）は見積依頼の画面で入れる（会員登録では聞かない）
+    await fillQuoteRequestContact(customer);
     // 打合せのご希望（相談したい代理店を含む）は折りたたみの中にある
     await customer.getByTestId('quote-request-preferences-disclosure').locator('summary').click();
     await customer.locator('#preferred_dealer_id').selectOption({ label: displayName });

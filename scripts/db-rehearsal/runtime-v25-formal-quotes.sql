@@ -59,12 +59,14 @@ declare
   mr_office constant uuid := '2a200000-0000-4000-8000-000000000301';
   cat_opt constant uuid := '2a200000-0000-4000-8000-000000000401';
   cat_site constant uuid := '2a200000-0000-4000-8000-000000000402';
+  cat_kitchen constant uuid := '2a200000-0000-4000-8000-000000000403';
   o1 constant uuid := '2a200000-0000-4000-8000-000000000501';
   o2 constant uuid := '2a200000-0000-4000-8000-000000000502';
   o3 constant uuid := '2a200000-0000-4000-8000-000000000503';
   o4 constant uuid := '2a200000-0000-4000-8000-000000000504';
   o5 constant uuid := '2a200000-0000-4000-8000-000000000505';
   o6 constant uuid := '2a200000-0000-4000-8000-000000000506';
+  o7 constant uuid := '2a200000-0000-4000-8000-000000000507';
   g_o2 constant uuid := '2a200000-0000-4000-8000-000000000601';
   g_o6 constant uuid := '2a200000-0000-4000-8000-000000000602';
   c_o2 constant uuid := '2a200000-0000-4000-8000-000000000701';
@@ -112,7 +114,13 @@ begin
   values (mr_office, m_model, 'office', '2100x4550', false);
   insert into public.option_categories (id, code, name, status, selection_mode)
   values (cat_opt, 'runtime-fq-option', 'D1 設備', 'published', 'multi'),
-         (cat_site, 'runtime-fq-site', 'D1 施工', 'published', 'multi');
+         (cat_site, 'runtime-fq-site', 'D1 施工', 'published', 'multi'),
+         (cat_kitchen, 'runtime-fq-kitchen', 'D1 キッチン', 'published', 'multi');
+  -- 本体仕様マトリクス：D1 設備は「選択」（備品）、D1 キッチンは「×」（キッチン）。D1 施工はマトリクスの対象外
+  insert into public.option_category_matrix_items (category_id, matrix_item_code)
+  values (cat_opt, 'furnishings'), (cat_kitchen, 'kitchen');
+  insert into public.matrix_cells (matrix_row_id, matrix_item_code, selectable)
+  values (mr_office, 'furnishings', true), (mr_office, 'kitchen', false);
   insert into public.options (id, category_id, code, name, price, price_on_request, status, product_no, is_installation, base_model_id)
   values
     (o1, cat_opt, 'runtime-fq-o1', 'D1 設備1', 20000, false, 'published', 'PRD-948001', false, null),
@@ -120,7 +128,8 @@ begin
     (o3, cat_opt, 'runtime-fq-o3', 'D1 設備3（別途見積）', 0, true, 'published', 'PRD-948003', false, null),
     (o4, cat_opt, 'runtime-fq-o4', 'D1 設備4（別モデル）', 5000, false, 'published', 'PRD-948004', false, m_other),
     (o5, cat_site, 'runtime-fq-o5', 'D1 施工1', 8000, false, 'published', 'PRD-948005', true, null),
-    (o6, cat_opt, 'runtime-fq-o6', 'D1 設備6（色が必須）', 7000, false, 'published', 'PRD-948006', false, null);
+    (o6, cat_opt, 'runtime-fq-o6', 'D1 設備6（色が必須）', 7000, false, 'published', 'PRD-948006', false, null),
+    (o7, cat_kitchen, 'runtime-fq-o7', 'D1 キッチン1（マトリクスで×）', 9000, false, 'published', 'PRD-948007', false, null);
   insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
   values (g_o2, o2, 'size', 'サイズ', 1, false, 'published'), (g_o6, o6, 'color', '色', 1, true, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status, sort_order)
@@ -261,6 +270,9 @@ begin
   perform pg_temp.fq_expect_error('D1-14 この見積の商品モデルで選べない商品は足せない', 'P0001', 'VALIDATION',
     pg_temp.fq_revise(u_dealer, v_q1, v_lines || jsonb_build_array(
       jsonb_build_object('source', 'catalog', 'section', 'option', 'option_id', o4, 'variant_choice_ids', '[]'::jsonb))));
+  perform pg_temp.fq_expect_error('D1-14b 本体仕様マトリクスで「×」のカテゴリーの商品は足せない（2026-10-21 の確定事項）', 'P0001', 'VALIDATION: %「D1 キッチン1（マトリクスで×）」のカテゴリー（D1 キッチン）は、本体仕様マトリクス',
+    pg_temp.fq_revise(u_dealer, v_q1, v_lines || jsonb_build_array(
+      jsonb_build_object('source', 'catalog', 'section', 'option', 'option_id', o7, 'variant_choice_ids', '[]'::jsonb))));
   perform pg_temp.fq_expect_error('D1-15 商品は、その商品の区分にだけ足せる（施工の商品をオプションには足せない）', 'P0001', 'VALIDATION',
     pg_temp.fq_revise(u_dealer, v_q1, v_lines || jsonb_build_array(
       jsonb_build_object('source', 'catalog', 'section', 'option', 'option_id', o5, 'variant_choice_ids', '[]'::jsonb))));

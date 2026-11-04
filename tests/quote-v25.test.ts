@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { computeQuoteV25Totals, quoteV25RowAmount, type QuoteV25Context, type QuoteV25Row } from '@/lib/domain/quote-v25';
+import type { CustomerCategoryMatrix } from '@/lib/domain/customer-category-applicability';
+import {
+  computeQuoteV25Totals,
+  quoteV25RowAmount,
+  quoteV25SelectableProducts,
+  type QuoteV25Context,
+  type QuoteV25Row,
+} from '@/lib/domain/quote-v25';
+import type { ProductOption } from '@/lib/domain/types';
 
 // 実 DB の検査（scripts/db-rehearsal/runtime-v25-formal-quotes.sql の D1-21）と同じ第 2 版：
 // 本体 29,211 × 12、オプション 設備1 32,100（前の版のまま）・取付費 10,000 × 2・価格未確定の商品（0円確定）・設備2＋大 17,655 × 2、別途工事 運搬費 50,000
@@ -39,5 +47,40 @@ describe('v2.5 PR-D1：正式見積の第 2 版以降の画面の試算（DB の
     expect(quoteV25RowAmount({ section: 'option', unitPrice: 333, quantity: '1.5', state: null, unchangedAmount: 500 })).toBe(500);
     // 選択商品の変更差額（マイナス）も前の版の金額のまま
     expect(quoteV25RowAmount({ section: 'option', unitPrice: -16050, quantity: '1', state: null, unchangedAmount: -16050 })).toBe(-16050);
+  });
+});
+
+describe('v2.5 PR-D1：商品台帳から足せる商品（DB の create_quote_revision_v25 と同じ決まり）', () => {
+  // Flat の事務所：キッチンは本体仕様マトリクスで「×」、サッシは「選択」。断熱はマトリクスの対象外
+  const matrix: CustomerCategoryMatrix = {
+    itemByCategoryCode: { kitchen: 'kitchen', sash: 'sash' },
+    rows: { flat: { office: ['roof-exterior', 'interior', 'entrance-door', 'sash'] } },
+  };
+  const categories = [
+    { id: 'cat-kitchen', code: 'kitchen' },
+    { id: 'cat-sash', code: 'sash' },
+    { id: 'cat-insulation', code: 'insulation' },
+  ];
+  const product = (id: string, categoryId: string, extra: Partial<ProductOption> = {}) =>
+    ({ id, category_id: categoryId, status: 'published', archived_at: null, spec_codes: [], ...extra }) as ProductOption;
+  const options = [
+    product('kitchen', 'cat-kitchen'),
+    product('sash', 'cat-sash'),
+    product('insulation', 'cat-insulation'),
+    product('sash-hotel-only', 'cat-sash', { spec_codes: ['hotel'] }),
+    product('sash-stopped', 'cat-sash', { archived_at: '2026-11-01T00:00:00Z' }),
+    product('sash-draft', 'cat-sash', { status: 'draft' }),
+  ];
+
+  it('「×」のカテゴリーの商品・仕様が合わない商品・販売停止・下書きは出さない（マトリクスの対象外のカテゴリーは制限しない）', () => {
+    expect(quoteV25SelectableProducts(options, categories, matrix, 'flat', 'office').map((option) => option.id)).toEqual(['sash', 'insulation']);
+  });
+
+  it('マトリクスに行の無い仕様は、マトリクスの対象のカテゴリーを出さない（DB と同じく閉じる側）', () => {
+    expect(quoteV25SelectableProducts(options, categories, matrix, 'flat', 'hotel').map((option) => option.id)).toEqual(['insulation']);
+  });
+
+  it('マトリクスの無い DB（migration 未適用）は、従来どおりカテゴリーで制限しない', () => {
+    expect(quoteV25SelectableProducts(options, categories, null, 'flat', 'office').map((option) => option.id)).toEqual(['kitchen', 'sash', 'insulation']);
   });
 });

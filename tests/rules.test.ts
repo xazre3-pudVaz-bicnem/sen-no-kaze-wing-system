@@ -12,11 +12,11 @@ const ctx: RuleContext = {
 };
 
 describe('toggleOption', () => {
-  it('初期選択は必須カテゴリー（内装・造作）と別途工事を満たし、検証エラーがない', () => {
+  it('初期選択は必須カテゴリー（内装・造作）を満たし、別途工事は入れず（2026-10-21 の先方の決定）、検証エラーがない', () => {
     const sel = defaultSelection(ctx);
     expect(sel).toContain(O.interiorStdWing);
     expect(sel).toContain(O.carpentryFullWing);
-    expect(sel).toContain(O.swTransport);
+    expect(sel).not.toContain(O.swTransport);
     expect(validateSelection(ctx, sel)).toEqual([]);
   });
 

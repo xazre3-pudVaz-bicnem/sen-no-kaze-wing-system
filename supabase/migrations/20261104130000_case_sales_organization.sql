@@ -27,7 +27,7 @@ do $preflight$
 begin
   if to_regprocedure('public.is_organization_manager(uuid)') is null
      or to_regclass('public.organization_invitations') is null then
-    raise exception 'PRECONDITION: organization accounts (20261016120000) must be applied first';
+    raise exception 'PRECONDITION: organization accounts (20261104120000) must be applied first';
   end if;
   if to_regprocedure('public.case_access(uuid)') is null
      or to_regclass('public.case_workflows') is null
@@ -944,85 +944,46 @@ as $$
          end;
 $$;
 
-create or replace function public.get_case_plan_configuration(p_quote_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
+-- 案件のプランボードの読み取り：担当の判定に、営業担当組織の管理者を足す（担当の空いた見積で素通りしないよう coalesce も）。
+-- 2026-11-04：この migration は v2.5（S2b・20261102140000）の後に入る。S2b がこの関数に足した明細の位置・位置の枠を消さないよう、
+-- 関数を作り直さず、担当の判定の 1 か所だけを目印を確かめて差し込む（所有者・SECURITY DEFINER・search_path・権限は変えない）
+do $case_plan_manager$
 declare
-  v_uid uuid := auth.uid();
-  v_rank integer := public.current_role_rank();
-  v_quote public.quotes;
-  v_result jsonb;
-begin
-  if v_uid is null then
-    raise exception 'UNAUTHENTICATED' using errcode = '42501';
-  end if;
-
-  if v_rank < 1 then
-    raise exception 'FORBIDDEN: 案件プランボードを確認できるのは担当者以上です'
-      using errcode = '42501';
-  end if;
-
-  select *
-    into v_quote
-    from public.quotes
-   where id = p_quote_id;
-
-  if not found then
-    raise exception 'NOT_FOUND' using errcode = 'P0002';
-  end if;
-
-  if not (
+  v_target constant regprocedure := 'public.get_case_plan_configuration(uuid)'::regprocedure;
+  v_old constant text := 'if not (v_rank >= 3 or (v_rank >= 1 and v_quote.dealer_id = v_uid)) then';
+  v_new constant text := 'if not (
     v_rank >= 3
     or (v_rank >= 1 and coalesce(v_quote.dealer_id = v_uid, false))
     or (v_quote.quote_request_id is not null and public.is_case_sales_manager(v_quote.quote_request_id))
-  ) then
-    raise exception 'FORBIDDEN: この見積の担当者ではありません'
-      using errcode = '42501';
+  ) then';
+  v_def text;
+  v_count integer;
+  v_before text;
+  v_after text;
+begin
+  select pg_catalog.concat_ws('|', p.proowner::regrole::text, p.prosecdef::text, coalesce(p.proconfig::text, ''), coalesce(p.proacl::text, ''))
+    into v_before
+    from pg_catalog.pg_proc p where p.oid = v_target;
+  v_def := pg_catalog.pg_get_functiondef(v_target);
+  v_count := (pg_catalog.length(v_def) - pg_catalog.length(pg_catalog.replace(v_def, v_old, ''))) / pg_catalog.length(v_old);
+  if v_count <> 1 then
+    raise exception 'PRECONDITION: get_case_plan_configuration has % access-check markers (expected 1)', v_count;
   end if;
-
-  select jsonb_build_object(
-           'configuration', jsonb_build_object(
-             'id', c.id,
-             'name', c.name,
-             'base_model_id', c.base_model_id,
-             'status', c.status,
-             'finish_level', c.finish_level,
-             'spec_code', c.spec_code,
-             'site_prefecture', c.site_prefecture,
-             'site_municipality', c.site_municipality,
-             'site_location_undecided', c.site_location_undecided
-           ),
-           'items', coalesce(
-             (
-               select jsonb_agg(
-                        jsonb_build_object(
-                          'option_id', ci.option_id,
-                          'quantity', ci.quantity,
-                          'variant_choice_ids', ci.variant_choice_ids
-                        )
-                        order by ci.id
-                      )
-                 from public.configuration_items ci
-                where ci.configuration_id = c.id
-             ),
-             '[]'::jsonb
-           ),
-           'exterior_faces', coalesce(c.exterior_faces, '[]'::jsonb)
-         )
-    into v_result
-    from public.configurations c
-   where c.id = v_quote.configuration_id;
-
-  if v_result is null then
-    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  execute pg_catalog.replace(v_def, v_old, v_new);
+  select pg_catalog.concat_ws('|', p.proowner::regrole::text, p.prosecdef::text, coalesce(p.proconfig::text, ''), coalesce(p.proacl::text, ''))
+    into v_after
+    from pg_catalog.pg_proc p where p.oid = v_target;
+  if v_after is distinct from v_before then
+    raise exception 'POSTCONDITION: owner / security definer / search_path / ACL of get_case_plan_configuration changed (% -> %)', v_before, v_after;
   end if;
-
-  return v_result;
+  v_def := pg_catalog.pg_get_functiondef(v_target);
+  if pg_catalog.strpos(v_def, 'public.is_case_sales_manager(v_quote.quote_request_id)') = 0
+     or pg_catalog.strpos(v_def, '''position_slots''') = 0
+     or pg_catalog.strpos(v_def, '''slot_code'', ci.slot_code') = 0 then
+    raise exception 'POSTCONDITION: get_case_plan_configuration must keep the S2b position slots and add the sales manager check';
+  end if;
 end;
-$$;
+$case_plan_manager$;
 
 -- ---------- 製造依頼：製造担当組織へ送る（これまでの案件は従来どおり総代理店の利用者へ） ----------
 

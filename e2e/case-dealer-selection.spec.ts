@@ -46,6 +46,8 @@ test.describe('お客様が代理店を選ぶ', () => {
     await customer.waitForURL(/\?c=[0-9a-f-]{36}/);
     const configId = new URL(customer.url()).searchParams.get('c')!;
     await customer.goto(`/mypage/configurations/${configId}/request-quote`);
+    // 打合せのご希望（相談したい代理店を含む）は折りたたみの中にある
+    await customer.getByTestId('quote-request-preferences-disclosure').locator('summary').click();
     await customer.locator('#preferred_dealer_id').selectOption({ label: displayName });
     await customer.getByTestId('submit-quote-request').click();
     await customer.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);

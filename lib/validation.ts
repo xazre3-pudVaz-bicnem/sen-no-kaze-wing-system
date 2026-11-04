@@ -30,9 +30,6 @@ export const signUpSchema = z.object({
   password: passwordSchema,
   full_name: trimmed(60).min(1, '氏名を入力してください'),
   company_name: optional(100),
-  phone: trimmed(20).min(1, '電話番号を入力してください').regex(/^[0-9+\-() ]+$/, '電話番号は数字とハイフンで入力してください'),
-  postal_code: optional(10),
-  address: trimmed(200).min(1, '住所を入力してください'),
   agree: z.literal('on', { error: '利用規約とプライバシーポリシーへの同意が必要です' }),
 });
 
@@ -54,9 +51,12 @@ export const updatePasswordSchema = z
 export const profileSchema = z.object({
   full_name: trimmed(60).min(1, '氏名を入力してください'),
   company_name: optional(100),
-  phone: trimmed(20).min(1, '電話番号を入力してください').regex(/^[0-9+\-() ]+$/, '電話番号は数字とハイフンで入力してください'),
+  phone: optional(20).refine(
+    (phone) => phone === null || /^[0-9+\-() ]+$/.test(phone),
+    '電話番号は数字とハイフンで入力してください'
+  ),
   postal_code: optional(10),
-  address: trimmed(200).min(1, '住所を入力してください'),
+  address: optional(200),
 });
 
 export const saveConfigurationSchema = z.object({
@@ -83,6 +83,17 @@ export const saveConfigurationSchema = z.object({
     .default(null),
   site_location_undecided: z.boolean().default(false),
   exterior_faces: z.array(exteriorFaceSchema).max(4).default([]),
+  /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。版との照らし合わせは DB（save_configuration_atomic）が行う */
+  slot_selections: z
+    .array(
+      z.object({
+        slot_code: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+        option_id: z.uuid(),
+        variant_choice_ids: z.array(z.uuid()).max(30).default([]),
+      })
+    )
+    .max(100)
+    .default([]),
   /** 既存の Draft を保存するとき、読み込んだ時点の版（同時編集の検知） */
   expected_lock_version: z.number().int().min(1).nullable().default(null),
 });
@@ -159,6 +170,15 @@ export const categorySchema = z.object({
   customer_visible: boolFromForm,
   sort_order: intFromForm,
   status: statusSchema,
+});
+
+/** 窓タイプ（サッシの商品の開閉形式。DB の window_types と同じ決まり。v2.5 PR-S2） */
+export const windowTypeSchema = z.object({
+  is_new: z.enum(['0', '1']),
+  code: trimmed(40).regex(/^[a-z][a-z0-9-]{0,39}$/, 'コードは英小文字で始まる英小文字・数字・ハイフン（40 字まで）で入力してください'),
+  label: trimmed(40).min(1, '名前を入力してください'),
+  sort_order: intFromForm,
+  status: z.enum(['active', 'retired']),
 });
 
 export const optionSchema = z.object({
@@ -270,6 +290,17 @@ export const assignDealerSchema = z.object({
   dealer_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
 });
 
+/**
+ * 明細の状態（画面の明示の選択。サーバーが備考に印を付ける。D1 までの暫定。lib/domain/quote-por.ts）。
+ * 空は「印なし」（金額確定、または金額未確定）
+ */
+export const quoteLineStateSchema = z.preprocess(
+  (v) => (v === '' || v == null ? null : v),
+  z.enum(['excluded', 'zero_confirmed']).nullable()
+);
+/** 0円確定の理由・対象外のメモ（印を足しても備考の 200 文字に収まる長さ） */
+export const quoteLineStateReasonSchema = z.preprocess((v) => (v == null ? '' : v), optional(190));
+
 /** 代理店が入力する別途工事・フリー商品の 1 行 */
 export const dealerRevisionItemSchema = z.object({
   kind: z.enum([
@@ -291,6 +322,8 @@ export const dealerRevisionItemSchema = z.object({
   quantity: z.coerce.number().min(0.01).max(99_999),
   /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧用） */
   image_url: optional(500).nullable(),
+  line_state: quoteLineStateSchema.optional(),
+  line_state_reason: quoteLineStateReasonSchema.optional(),
 }).superRefine((row, ctx) => {
   if (row.unit_price < 0 && row.name !== '選択商品の変更差額') {
     ctx.addIssue({
@@ -345,6 +378,8 @@ export const quoteDraftSaveItemSchema = z.object({
     '数量は小数4桁以内で入力してください'
   ),
   image_url: optional(500).nullable(),
+  line_state: quoteLineStateSchema.optional(),
+  line_state_reason: quoteLineStateReasonSchema.optional(),
 }).superRefine((row, ctx) => {
   if (row.unit_price < 0) {
     ctx.addIssue({

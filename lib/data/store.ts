@@ -1,4 +1,5 @@
 import 'server-only';
+import type { CasePlanPositionSlot } from '@/lib/domain/case-plan-position-slots';
 import type { ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type {
   FinishLevel,
@@ -33,14 +34,19 @@ import type {
   RoleCode,
   ContactMessage,
   ContactStatus,
+  ContactClassification,
   EstimateTemplate,
   EstimateTemplateBundle,
   EstimateTemplateLine,
   EstimateTemplateSection,
   SpecMatrix,
   MatrixRow,
+  SlotSelection,
+  WindowType,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
+import type { QuoteV25Context } from '@/lib/domain/quote-v25';
+import type { QuotePorSelectionState } from '@/lib/domain/quote-por';
 
 export interface SessionUser {
   id: string;
@@ -199,6 +205,11 @@ export interface SaveConfigurationInput {
   variant_choice_ids?: string[];
   /** 外壁4面の割当。未指定は既存互換用に空配列として保存する */
   exterior_faces?: ExteriorFaceSelection[];
+  /**
+   * 標準見積の版の位置・用途の選択枠ごとの選択（v2.5 PR-S1）。新しい価格（スイッチ）の間だけ保存できる。
+   * 版に位置の枠があるときは、すべての位置を 1 つずつ（DB が版と照らして確かめる）。空・未指定は位置の選択なし
+   */
+  slot_selections?: SlotSelection[];
 }
 
 /** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */
@@ -224,9 +235,66 @@ export interface DealerRevisionItem {
   image_url?: string | null;
 }
 
+/** v2.5 の見積の編集画面に渡す値（売価・経費率・税率だけ。原価・販売費率・掛率は渡さない。v2.5 PR-D1） */
+export interface QuoteV25EditContext {
+  revisionId: string;
+  revisionVersion: number;
+  baseModelId: string;
+  modelSlug: string;
+  specCode: string;
+  money: QuoteV25Context;
+  /** 標準見積の調整額の理由（前の版の調整額のままなら引き継ぐ） */
+  standardAdjustmentReason: string | null;
+}
+
+/** v2.5 の見積の第 2 版以降の行（DB の create_quote_revision_v25 の p_lines と同じ形） */
+export type QuoteV25RevisionLine =
+  | {
+      source: 'parent';
+      parent_item_id: string;
+      quantity?: string | null;
+      /** 前の版で別途見積（価格未確定）の行だけ */
+      unit_price?: number | null;
+      state?: 'zero_confirmed' | 'excluded' | null;
+      state_reason?: string | null;
+    }
+  | {
+      source: 'catalog';
+      section: 'interior_exterior' | 'option' | 'sitework';
+      option_id: string;
+      variant_choice_ids: string[];
+      quantity: string;
+    }
+  | {
+      source: 'manual';
+      section: 'base' | 'interior_exterior' | 'option' | 'sitework';
+      name: string;
+      description?: string | null;
+      unit?: string | null;
+      quantity: string;
+      unit_price: number;
+      remark?: string | null;
+      state?: 'zero_confirmed' | 'excluded' | null;
+      state_reason?: string | null;
+    };
+
+export interface QuoteV25RevisionInput {
+  lines: QuoteV25RevisionLine[];
+  adjustment: number;
+  adjustment_reason: string | null;
+  dealer_note: string | null;
+  /** お客様が選んだ別途見積の商品を確認した、として画面が送る一覧の key（確認欄にチェックがあるときだけ。#529 と同じ） */
+  por_confirmation_keys?: string[] | null;
+}
+
 export interface DealerRevisionInput {
   items: DealerRevisionItem[];
   dealer_note: string | null;
+  /**
+   * お客様が選んだ別途見積の商品を確認した、として画面が送る一覧の key（確認欄にチェックがあるときだけ）。
+   * 発行の前に確認を記録する（DB の confirm_quote_por_selections と同じ。D1 までの暫定）
+   */
+  por_confirmation_keys?: string[] | null;
 }
 
 export interface ManualQuoteDraftInput {
@@ -326,13 +394,15 @@ export interface CasePlanConfigurationHeader {
 
 export type CasePlanConfigurationItem = Pick<
   ConfigurationItem,
-  'option_id' | 'quantity' | 'variant_choice_ids'
+  'option_id' | 'quantity' | 'variant_choice_ids' | 'slot_code'
 >;
 
 export interface CasePlanConfiguration {
   configuration: CasePlanConfigurationHeader;
   items: CasePlanConfigurationItem[];
   exterior_faces: ExteriorFaceSelection[];
+  /** 見積に固定した標準見積の版の位置・用途の選択枠（v2.5 PR-S2b。v2.5 の見積でなければ空・DB が返さない古い環境では無い） */
+  position_slots?: CasePlanPositionSlot[];
 }
 
 export interface ContactInput {
@@ -352,10 +422,21 @@ export interface UploadInput {
 
 export type ModelInput = Omit<BaseModel, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
 export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
-// 取扱終了・シミュレーター表示は、商品の登録・編集では書き換えない（専用の setProductLifecycle だけで変える）
-export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images' | 'simulator_visible' | 'archived_at'> & { id?: string | null };
+/** 窓タイプの登録・変更（コードは新しく足すときだけ決め、後から変えない。v2.5 PR-S2） */
+export type WindowTypeInput = WindowType & { isNew: boolean };
+// 販売停止・廃番・シミュレーター表示は、商品の登録・編集では書き換えない（専用の setProductLifecycle・setProductDiscontinued だけで変える）
+export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images' | 'simulator_visible' | 'archived_at' | 'discontinued_at'> & { id?: string | null };
 
-/** 商品の状態の変更（20261015113000）。取扱終了・取扱再開・シミュレーターに表示する・表示しない */
+/** 仕様（モデル・仕様コード）で新しい受付ができるか。標準構成に販売停止・廃番の商品があれば受け付けない（20261016112000） */
+export interface SpecAcceptanceState {
+  accepting: boolean;
+  /** 標準構成にある販売停止・廃番の商品の名前 */
+  stoppedNames: string[];
+  /** DB に判定の仕組みがあるか（migration の適用前は false。画面は案内を出さず、依頼は従来どおり） */
+  available: boolean;
+}
+
+/** 商品の状態の変更（20261015113000）。retire＝販売停止（#500 の取扱終了）・resume＝販売の再開・シミュレーターに表示する・表示しない */
 export type ProductLifecycleAction = 'retire' | 'resume' | 'show_in_simulator' | 'hide_from_simulator';
 export type OptionImageInput = Omit<OptionImage, 'id' | 'created_at'> & { id?: string | null };
 export type PreviewRuleInput = Omit<PreviewImageRule, 'id'> & { id?: string | null };
@@ -477,6 +558,17 @@ export interface DataStore {
   listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]>;
   /** 代理店が別途工事・フリー商品を入れた確定見積（次の版）を発行する。元の版は改訂済みとして残る */
   createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser): Promise<Quote>;
+  /** v2.5 の見積の編集画面に渡す値。v2.5 の見積でない・権限が無い・DB の更新の前は null（v2.5 PR-D1） */
+  getQuoteV25Context(quoteId: string, actor: SessionUser): Promise<QuoteV25EditContext | null>;
+  /** v2.5 の見積に固定した版での「商品＋選択肢」の売価単価（価格未確定は null。300 件まで） */
+  getQuoteV25Units(quoteId: string, items: { option_id: string; choice_ids: string[] }[], actor: SessionUser): Promise<(number | null)[]>;
+  /** v2.5 の見積の第 2 版以降を、固定した版の v2.5 の決まりで発行する（金額はサーバーが作る） */
+  createQuoteRevisionV25(quoteId: string, input: QuoteV25RevisionInput, actor: SessionUser): Promise<Quote>;
+  /**
+   * 改訂・確定見積の画面用：Web の案件でお客様が選んだ別途見積の商品と、自分の確認が済んでいるか。
+   * 本部と担当の代理店・総代理店だけ（DB の get_quote_por_selections。D1 までの暫定）
+   */
+  getQuotePorSelections(quoteId: string, actor: SessionUser): Promise<QuotePorSelectionState>;
 
   /** 顧客が見積を承諾／辞退する */
   respondToQuote(id: string, status: 'accepted' | 'declined', actor: SessionUser): Promise<Quote>;
@@ -496,6 +588,16 @@ export interface DataStore {
    * 0 件なら失敗にする（古い画面の操作を成功扱いにしない）。参照保護などの判定は DB のトリガーが行う（20261015113000）
    */
   setProductLifecycle(input: { id: string; action: ProductLifecycleAction; expectedUpdatedAt: string }): Promise<{ updated_at: string }>;
+  /**
+   * 廃番にする（販売停止の商品だけ・商品台帳を編集できる人）／取り消す（本部の管理者だけ・販売停止に戻る）。理由は必須で、変更履歴に残す。
+   * 画面が読んだ版（updated_at）でなければ失敗にする（DB の set_option_discontinued。20261016112000）
+   */
+  setProductDiscontinued(
+    input: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string },
+    actor: SessionUser
+  ): Promise<{ updated_at: string }>;
+  /** 仕様で新しい受付ができるか（標準構成に販売停止・廃番の商品があれば受け付けない。DB の get_spec_acceptance_state） */
+  getSpecAcceptanceState(modelId: string, specCode: string | null): Promise<SpecAcceptanceState>;
   /** 商品の状態の機能を使えるか（20261015110000 と 20261015113000 が適用済みか） */
   getProductLifecycleCapability(): Promise<ProductLifecycleCapability>;
 
@@ -555,6 +657,10 @@ export interface DataStore {
   upsertModel(input: ModelInput): Promise<BaseModel>;
   listCategories(): Promise<OptionCategory[]>;
   upsertCategory(input: CategoryInput): Promise<OptionCategory>;
+  /** 窓タイプ（サッシの商品の開閉形式）。使われなくなったものも含めて並び順に。表が無い DB（migration の前）は空 */
+  listWindowTypes(): Promise<WindowType[]>;
+  /** 窓タイプを足す・名前や並び・使う／使わないを変える（本部だけ。DB の RLS でも止める） */
+  saveWindowType(input: WindowTypeInput): Promise<WindowType>;
   listOptions(): Promise<ProductOption[]>;
   getOption(id: string): Promise<ProductOption | null>;
   upsertOption(input: OptionInput): Promise<ProductOption>;
@@ -596,6 +702,7 @@ export interface DataStore {
   createContactMessage(input: ContactInput): Promise<ContactMessage>;
   listContactMessages(): Promise<ContactMessage[]>;
   updateContactStatus(id: string, status: ContactStatus): Promise<void>;
+  updateContactClassification(id: string, classification: ContactClassification): Promise<void>;
 }
 
 function hasSupabaseEnv(): boolean {

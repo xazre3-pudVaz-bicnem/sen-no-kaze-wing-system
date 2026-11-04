@@ -78,6 +78,7 @@ export function ProductLedgerActionsMenu({
   const canDeleteDraft = isDraft && configurationUsageCount === 0;
   const deleteAction = isDraft ? deleteDraftProductFromLedgerAction : deleteUnusedPublishedOptionAction;
   const editHref = `/admin/options/${optionId}?return_to=%2Fadmin%2Fledger`;
+  const duplicateHref = `/admin/options/new?copy_from=${encodeURIComponent(optionId)}&return_to=%2Fadmin%2Fledger`;
 
   return (
     <>
@@ -103,6 +104,12 @@ export function ProductLedgerActionsMenu({
             className="flex w-full items-center rounded-md px-2.5 py-2 text-ink-soft hover:bg-sand hover:text-ink"
           >
             商品情報を編集
+          </Link>
+          <Link
+            href={duplicateHref}
+            className="flex w-full items-center rounded-md px-2.5 py-2 text-ink-soft hover:bg-sand hover:text-ink"
+          >
+            この商品をもとに新規登録
           </Link>
 
           {(isDraft || isPublished) && <div className="my-1 border-t border-line" />}

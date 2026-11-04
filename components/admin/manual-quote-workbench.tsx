@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
 import { quoteLineAmount } from '@/lib/domain/quote-amount';
+import { chooseQuoteLineState, findUnresolvedLines, quoteOptionFlagMap, type QuoteLineState } from '@/lib/domain/quote-por';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
@@ -16,6 +17,7 @@ import {
   isValidQuoteQuantity,
   quoteQuantityRule,
   type QuoteAuthoringRow,
+  type QuoteAuthoringRowPatch,
   type QuoteAuthoringSection,
   type QuoteCatalogProduct,
   type QuotePickerRow,
@@ -37,6 +39,9 @@ type WorkbenchRow = {
   unit_price: number;
   quantity: number;
   image_url: string | null;
+  /** 扱い（0円確定・対象外）。保存のときにサーバーが備考の印にする */
+  line_state: QuoteLineState | null;
+  line_state_reason: string;
 };
 
 export interface ManualQuoteWorkbenchModel {
@@ -60,6 +65,8 @@ function createRow(kind: EditableKind = 'installation'): WorkbenchRow {
     unit_price: 0,
     quantity: 1,
     image_url: null,
+    line_state: null,
+    line_state_reason: '',
   };
 }
 
@@ -154,8 +161,13 @@ export function ManualQuoteWorkbench({
     rows.map(({ key: _key, ...row }) => ({
       ...row,
       remark: row.remark || null,
+      line_state_reason: row.line_state ? row.line_state_reason : '',
     }))
   );
+
+  // 金額が未確定の明細の案内（登録は止めない。正式発行のときに DB が止める。D1 までの暫定）
+  const productOptions = useMemo(() => quoteOptionFlagMap(products), [products]);
+  const unresolvedRows = findUnresolvedLines(rows, { options: productOptions, matchLineKey: true });
 
   // 明細額は DB と同じ trunc（新しい見積下書きは切り捨て）
   const subtotalRaw = rows.reduce(
@@ -177,12 +189,12 @@ export function ManualQuoteWorkbench({
     remark: row.remark || null,
     optionId: row.option_id,
     locked: !canEditBase && (row.kind === 'base' || row.kind === 'base_expense'),
+    lineState: row.line_state,
+    lineStateReason: row.line_state_reason,
+    unresolved: unresolvedRows.has(row),
   }));
 
-  const updateAuthoringRow = (
-    key: string,
-    patch: Partial<Pick<QuoteAuthoringRow, 'name' | 'quantity' | 'unit' | 'unitPrice' | 'remark'>>
-  ) => {
+  const updateAuthoringRow = (key: string, patch: QuoteAuthoringRowPatch) => {
     setRows((current) =>
       current.map((row) => {
         if (row.key !== key) return row;
@@ -200,14 +212,17 @@ export function ManualQuoteWorkbench({
           nextQuantity = patch.quantity;
         }
 
-        return {
+        const next: WorkbenchRow = {
           ...row,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.quantity !== undefined || patch.unit !== undefined ? { quantity: nextQuantity } : {}),
           ...(patch.unit !== undefined ? { unit: nextUnit } : {}),
           ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
           ...(patch.remark !== undefined ? { remark: patch.remark ?? '' } : {}),
+          ...(patch.lineStateReason !== undefined ? { line_state_reason: patch.lineStateReason } : {}),
         };
+        // 「0円確定」「対象外」を選んだ行は 0 円にし、理由・メモが空なら今の備考を入れておく（戻したら金額を入れ直す）
+        return patch.lineState !== undefined ? chooseQuoteLineState(next, patch.lineState) : next;
       })
     );
     markDirty();
@@ -234,6 +249,8 @@ export function ManualQuoteWorkbench({
       unit_price: product.priceOnRequest ? 0 : product.price,
       remark: productRemark,
       image_url: product.imageUrl,
+      line_state: null,
+      line_state_reason: '',
     };
 
     setRows((current) => {
@@ -500,6 +517,7 @@ export function ManualQuoteWorkbench({
                 onRemove={removeAuthoringRow}
                 onAddFree={addAuthoringRow}
                 onSelectProduct={selectCatalogProduct}
+                showLineState
               />
             </>
           ) : activeTab === 'planboard' ? (

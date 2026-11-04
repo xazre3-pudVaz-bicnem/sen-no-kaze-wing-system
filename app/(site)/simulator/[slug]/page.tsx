@@ -7,6 +7,16 @@ import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
 import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
+import {
+  isFireProofSelected,
+  pickSaleView,
+  splitConfigurationItems,
+  v25PositionSlotCategoryIds,
+  v25SlotOptionIdsFor,
+  v25StandardVariantIds,
+  withoutCatalogCosts,
+  withoutTemplatePrices,
+} from '@/lib/domain/standard-estimate-sale-view';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 import { JsonLd } from '@/components/ui';
@@ -51,6 +61,9 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   ]);
   const saleViews = sale.saleViews;
   const pricingPreview = previewRequested && !sale.switchedOn;
+  // v2.5 の売価（v2.5 PR-C1）を使うときは、商品価格の列（原価）・本体の価格・本体内訳をブラウザへ渡さない。
+  // 旧テンプレートは仕様の選択肢・標準構成のためにだけ渡し、金額は外す（価格の計算には使わない）
+  const clientBundle = sale.v25 ? withoutCatalogCosts(bundle) : bundle;
   const estimateTemplates = (
     await Promise.all(templateHeaders.map((row) => store.getEstimateTemplateBundle(model.id, row.spec_code)))
   ).filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -83,11 +96,14 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       if (!found) loadError = '保存した仕様が見つからないか、閲覧権限がありません。';
       else {
         const exteriorFaces = await getExteriorFaces(found.configuration.id);
+        // 位置・用途の選択枠の明細（slot_code つき。v2.5 PR-S2）は、カテゴリー単位の選択と分けて渡す
+        const items = splitConfigurationItems(found.items);
         initial = {
           id: found.configuration.id,
           name: found.configuration.name,
-          option_ids: found.items.map((i) => i.option_id),
-          variant_choice_ids: found.items.flatMap((i) => i.variant_choice_ids ?? []),
+          option_ids: items.optionIds,
+          variant_choice_ids: items.variantChoiceIds,
+          slot_selections: items.slotSelections,
           exterior_faces: exteriorFaces,
           status: found.configuration.status,
           finish_level: found.configuration.finish_level ?? 'full',
@@ -124,13 +140,31 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
         site_municipality: guest.plan.site_municipality,
         site_location_undecided: guest.plan.site_location_undecided,
         lock_version: null,
+        slot_selections: guest.plan.slot_selections ?? [],
       };
       guestPlanExpiresAt = guest.expires_at;
     }
   } else if (spec) {
     // /plans の平面図から入った場合は、該当仕様の標準構成を選択済みで開始する。
     // 未知の spec_code は helper 側で無視し、通常の既定仕様へ安全にフォールバックする。
-    const entry = buildSimulatorEntryState(bundle, estimateTemplates, spec);
+    const entry = buildSimulatorEntryState(
+      bundle,
+      estimateTemplates,
+      spec,
+      sale.v25
+        ? (specCode, optionIds) =>
+            v25StandardVariantIds(
+              bundle.variantGroups,
+              bundle.variantChoices,
+              pickSaleView(saleViews, model.slug, specCode, isFireProofSelected(bundle, optionIds)),
+              optionIds
+            )
+        : undefined,
+      // v2.5：標準構成は公開中の v2.5 の版（非防火）の選択枠の商品（2026-10-29 先方回答）
+      sale.v25 ? (specCode) => v25SlotOptionIdsFor(saleViews, model.slug, specCode, false) : undefined,
+      // 版の位置・用途の選択枠のカテゴリーは、位置ごとに選ぶ（カテゴリー単位の標準構成に入れない。v2.5 PR-S2）
+      sale.v25 ? (specCode) => v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, specCode, false), bundle.options) : undefined
+    );
     if (entry) {
       initial = {
         // URL指定の新規下書きなので保存済みConfiguration IDは持たない。
@@ -157,10 +191,12 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: `${model.name} 見積シミュレーター`, path: `/simulator/${model.slug}` }])} />
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
-          bundle={bundle}
-          estimateTemplates={estimateTemplates}
+          key={c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new'}
+          bundle={clientBundle}
+          estimateTemplates={sale.v25 ? withoutTemplatePrices(estimateTemplates) : estimateTemplates}
           saleViews={saleViews}
           pricingPreview={pricingPreview}
+          v25Pricing={sale.v25}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}
           initial={initial}

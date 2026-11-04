@@ -122,6 +122,8 @@ export function EquipmentBoard({
   // categories は上位で本体分類表の「選択 / ×」を解決済み。
   // 候補商品が未登録でも「選択」の業務項目自体は表示し、商品一覧側で空状態を明示する。
   const shown = categories.filter((c) => c.code !== 'sitework');
+  // 別途工事は現地確認の後に金額が決まる工事。必須にせず、お客様が相談したい工事を選べるよう、別の欄に出す（2026-10-21 の先方の決定）
+  const siteworkCats = categories.filter((c) => c.code === 'sitework');
   const interiorExteriorCats = sortCategoriesForDisplay(shown.filter(isInteriorExteriorCategory), INTERIOR_EXTERIOR_CATEGORY_ORDER);
   const optionCats = sortCategoriesForDisplay(
     shown.filter((c) => OPTION_CATEGORY_CODES.has(c.code)),
@@ -397,6 +399,15 @@ export function EquipmentBoard({
           emptyState
         )}
       </section>
+
+      {siteworkCats.length > 0 && (
+        <section aria-labelledby="sitework-heading" className="overflow-hidden border border-gold bg-white" data-testid="equipment-board-sitework">
+          {sectionHeader('sitework-heading', '別途工事（ご相談）', '必要な工事は、担当者が現地確認のうえご案内します。相談したい工事があれば選んでください（金額は別途お見積り）')}
+          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-sitework-list">
+            {siteworkCats.map(normalTile)}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

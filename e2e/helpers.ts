@@ -161,8 +161,10 @@ export async function signInOrRegister(page: Page, email: string, next: string, 
   if (!ok) await register(page, email, next, name);
 }
 
-/** 顧客として保存 → 見積依頼までを済ませ、発行された見積 ID を返す（siteAddress を渡すと設置予定地に入れる） */
-/** beforeSave：保存する前にシミュレーターで行う操作（商品を選ぶなど） */
+/**
+ * 顧客として保存 → 見積依頼までを済ませ、発行された見積 ID を返す（siteAddress を渡すと設置予定地に入れる。
+ * beforeSave は保存する前にシミュレーターで行う操作＝商品を選ぶなど）
+ */
 export async function requestQuoteAsCustomer(
   page: Page,
   email: string,

@@ -200,6 +200,7 @@ export default async function EditOptionPage({
       <OptionRegistrationSaveBoundary>
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
+        {sp.deleted_variant === '1' && <Alert tone="success">未使用の選択項目・選択肢を削除しました。</Alert>}
         {sp.copy_missing && (
           <Alert tone="info">
             コピー元の一部のメディアは別ファイルとして複製できませんでした（{sp.copy_missing.split(',').filter((entry) =>

@@ -82,7 +82,11 @@ async function pruneTable(table: string, keepIds: string[]) {
     return;
   }
   const { error: delError } = await db.from(table).delete().in('id', stale);
-  if (delError) throw new Error(`${table}: 削除できませんでした（保存済みプランから参照されている可能性があります）: ${delError.message}`);
+  if (delError) {
+    // 選択項目・選択肢は直接の削除を DB で禁止している（下書き商品の未使用分だけ、管理画面の「削除（未使用のみ）」で消す）
+    const reason = delError.code === '42501' ? 'この表は直接の削除が禁止されています' : '保存済みプランから参照されている可能性があります';
+    throw new Error(`${table}: 削除できませんでした（${reason}）: ${delError.message}`);
+  }
   console.log(`${table}: prune ${stale.length}`);
 }
 

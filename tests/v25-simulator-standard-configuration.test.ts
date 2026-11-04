@@ -318,7 +318,7 @@ describe('シミュレーターと連携する選択枠の数量（2026-10-29 �
     expect(issues).toEqual([
       '外壁の選択枠は数量 4（面）にしてください：「外壁A」',
       '外壁以外の選択枠は数量 1 にしてください（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にします）：「サッシA」',
-      '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「sash」',
+      '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「sash」（位置ごとに分けるときは、位置・用途の選択枠にします）',
     ]);
   });
 
@@ -365,9 +365,9 @@ describe('シミュレーターと連携する選択枠の数量（2026-10-29 �
     expect(v25SlotRuleIssues([{ option_id: 'basin', quantity: '1' }, { option_id: 'faucet', quantity: '1' }], ofSet)).toEqual([]);
     expect(
       v25SlotRuleIssues([{ option_id: 'basin', quantity: '1' }, { option_id: 'faucet', quantity: '1' }, { option_id: 'basin2', quantity: '1' }], ofSet)
-    ).toEqual(['1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「washbasin」']);
+    ).toEqual(['1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「washbasin」（位置ごとに分けるときは、位置・用途の選択枠にします）']);
     expect(v25SlotRuleIssues([{ option_id: 'toilet', quantity: '1' }, { option_id: 'toilet2', quantity: '1' }], ofSet)).toEqual([
-      '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「toilet」',
+      '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「toilet」（位置ごとに分けるときは、位置・用途の選択枠にします）',
     ]);
   });
 });

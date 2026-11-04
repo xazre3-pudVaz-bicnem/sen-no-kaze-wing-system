@@ -4,7 +4,7 @@ import { baseTotalOf } from '@/lib/domain/pricing';
 import { offeredSaleViewSpecCodes, v25BaseTotalFrom, type V25BaseTotalRow } from '@/lib/domain/public-base-price';
 import type { V25MissingUnit } from '@/lib/domain/standard-estimate-pricing';
 import { v25ConfigurationPricing, v25UnitKey, type StandardEstimateSaleView } from '@/lib/domain/standard-estimate-sale-view';
-import type { BaseModel, CatalogBundle, PricingResult } from '@/lib/domain/types';
+import type { BaseModel, CatalogBundle, PricingResult, SlotSelection } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { CATALOG_TAG } from './public-catalog';
 import { isMissingNamedFunction } from './schema-compat';
@@ -95,7 +95,14 @@ export async function fetchSimulatorV25Units(items: V25MissingUnit[]): Promise<M
 export async function resolvedV25ConfigurationPricing(
   bundle: CatalogBundle,
   views: StandardEstimateSaleView[],
-  input: { specCode: string | null; optionIds: string[]; variantChoiceIds: string[]; exteriorFaces: ExteriorFaceSelection[] }
+  input: {
+    specCode: string | null;
+    optionIds: string[];
+    variantChoiceIds: string[];
+    exteriorFaces: ExteriorFaceSelection[];
+    /** 位置・用途の枠ごとの選択（v2.5 PR-S1。splitConfigurationItems で明細から分ける） */
+    slotSelections?: SlotSelection[];
+  }
 ): Promise<PricingResult> {
   const first = v25ConfigurationPricing(bundle, views, input);
   if (first.missing.length === 0) return first.pricing;

@@ -1103,6 +1103,11 @@ export class LocalStore implements DataStore {
   }
   async saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
     return this.mutate((db) => {
+      // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）は新しい価格（スイッチ）の間だけ。ローカル検証モードは v2.5 の売価を使わない
+      // （スイッチが切れているのと同じ）ので、DB の save_configuration_atomic と同じく受け付けない
+      if ((input.slot_selections ?? []).length > 0) {
+        throw new StoreError('VALIDATION', '位置ごとの選択は、新しい価格の標準見積でだけ保存できます');
+      }
       const undecided = input.site_location_undecided ?? false;
       const sitePrefecture = undecided ? null : (input.site_prefecture ?? null);
       const siteMunicipality = undecided ? null : (input.site_municipality ?? null);

@@ -30,6 +30,7 @@ import { runtimeProductSalesStop } from './runtime-product-sales-stop.mjs';
 import { runtimeConfigurationSpecGuard } from './runtime-configuration-spec-guard.mjs';
 import { runtimeTriggerFunctionExecute } from './runtime-trigger-function-execute.mjs';
 import { runtimeLegacyPriceGuard } from './runtime-legacy-price-guard.mjs';
+import { runtimeV25PositionSlots } from './runtime-v25-position-slots.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -79,6 +80,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeTriggerFunctionExecute(client));
     // 旧価格の列（本部商品の原価）は利用者のロールから読めず、本部商品の金額は本部だけが変えられる（v2.5 PR-C1b）
     runtime = mergeRuntime(runtime, await runtimeLegacyPriceGuard(client));
+    // 窓タイプと、位置・用途ごとの選択枠・枠ごとの選べる商品（v2.5 PR-S1）
+    runtime = mergeRuntime(runtime, await runtimeV25PositionSlots(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

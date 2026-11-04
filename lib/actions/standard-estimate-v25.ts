@@ -41,6 +41,10 @@ const payloadSchema = z.object({
         quantity: decimal,
         price_mode: z.enum(['auto', 'manual', 'por']),
         manual_unit_price: z.number().int().min(0).nullable(),
+        // 位置・用途の選択枠（v2.5 PR-S1）。DB でも同じ決まりで確かめる
+        slot_code: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).nullable().default(null),
+        slot_label: z.string().trim().min(1).max(40).nullable().default(null),
+        selectable_option_ids: z.array(z.uuid()).max(50).default([]),
       })
     )
     .max(200),

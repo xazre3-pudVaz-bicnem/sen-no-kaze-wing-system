@@ -683,10 +683,16 @@ export class SupabaseStore implements DataStore {
       p_site_location_undecided: undecided,
       // 同時編集の検知。既存 Draft の保存で版が一致しなければ DB が LOCKED で拒否する
       p_expected_lock_version: input.expected_lock_version ?? null,
+      // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。位置の選択があるときだけ渡す（20261102100000 が無い DB でも、これまでの保存は動く）
+      ...(input.slot_selections && input.slot_selections.length > 0 ? { p_slot_selections: input.slot_selections } : {}),
     };
     const atomic = await db.rpc('save_configuration_atomic', atomicInput);
     if (!atomic.error) return atomic.data as Configuration;
     if (!isMissingNamedFunction(atomic.error, 'save_configuration_atomic')) mapPgError(atomic.error);
+    // 位置ごとの選択（v2.5 PR-S1）は、古い保存の経路では持てない。黙って落とさずに止める（DB の更新の直後で関数の一覧が古いときも）
+    if ((input.slot_selections ?? []).length > 0) {
+      throw new StoreError('VALIDATION', '位置ごとの選択を保存できませんでした。時間をおいてもう一度保存してください。');
+    }
 
     // Temporary deployment compatibility: only a definitely missing RPC uses
     // the old save path. The fallback is allowed only when the requested state

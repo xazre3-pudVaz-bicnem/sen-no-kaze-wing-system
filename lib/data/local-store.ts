@@ -875,8 +875,10 @@ export class LocalStore implements DataStore {
             option_id: item.option_id,
             quantity: item.quantity,
             variant_choice_ids: item.variant_choice_ids ?? [],
+            slot_code: item.slot_code ?? null,
           })),
         exterior_faces: Array.isArray(exteriorFaces) ? exteriorFaces : [],
+        position_slots: [],
       };
     });
   }

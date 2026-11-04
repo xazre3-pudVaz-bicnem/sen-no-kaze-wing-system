@@ -841,6 +841,7 @@ export async function CaseWorkspace({
               bundle={planBundle}
               configuration={casePlanConfiguration.configuration}
               items={casePlanConfiguration.items}
+              positionSlots={casePlanConfiguration.position_slots ?? []}
               exteriorFaces={casePlanConfiguration.exterior_faces}
               estimateTemplate={planEstimateTemplate}
               elevations={planElevations}

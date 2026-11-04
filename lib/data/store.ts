@@ -1,4 +1,5 @@
 import 'server-only';
+import type { CasePlanPositionSlot } from '@/lib/domain/case-plan-position-slots';
 import type { ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type {
   FinishLevel,
@@ -393,13 +394,15 @@ export interface CasePlanConfigurationHeader {
 
 export type CasePlanConfigurationItem = Pick<
   ConfigurationItem,
-  'option_id' | 'quantity' | 'variant_choice_ids'
+  'option_id' | 'quantity' | 'variant_choice_ids' | 'slot_code'
 >;
 
 export interface CasePlanConfiguration {
   configuration: CasePlanConfigurationHeader;
   items: CasePlanConfigurationItem[];
   exterior_faces: ExteriorFaceSelection[];
+  /** 見積に固定した標準見積の版の位置・用途の選択枠（v2.5 PR-S2b。v2.5 の見積でなければ空・DB が返さない古い環境では無い） */
+  position_slots?: CasePlanPositionSlot[];
 }
 
 export interface ContactInput {

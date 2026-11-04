@@ -70,6 +70,7 @@ import {
   type ContactInput,
   type CategoryInput,
   type WindowTypeInput,
+  type QuoteV25EditContext,
   type CatalogImportBatch,
   type DataStore,
   type ModelInput,
@@ -1782,6 +1783,16 @@ export class LocalStore implements DataStore {
     });
   }
 
+  // v2.5 の見積（v2.5 PR-D1）：ローカル検証モードは v2.5 の売価を使わない（スイッチが切れているのと同じ）ので、v2.5 の見積は無い
+  async getQuoteV25Context(): Promise<QuoteV25EditContext | null> {
+    return null;
+  }
+  async getQuoteV25Units(): Promise<(number | null)[]> {
+    throw new StoreError('VALIDATION', 'ローカル検証モードでは v2.5 の見積を扱いません');
+  }
+  async createQuoteRevisionV25(): Promise<Quote> {
+    throw new StoreError('VALIDATION', 'ローカル検証モードでは v2.5 の見積を扱いません');
+  }
   async createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser) {
     if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
       this.recordQuotePorConfirmation(id, input.por_confirmation_keys, actor);

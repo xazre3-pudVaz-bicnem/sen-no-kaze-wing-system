@@ -683,6 +683,13 @@ export interface Quote {
   notes: string | null;
   /** 見積Revisionを作成したスタッフ。既存見積はnull/未取得を許容する */
   created_by?: string | null;
+  /**
+   * v2.5 の標準見積で作った見積なら 'v2.5'（第 2 版以降も同じ。v2.5 PR-D1）。旧来の見積・DB の更新の前は null/未取得。
+   * v2.5 の見積の第 2 版以降は、固定した版の v2.5 の決まりで発行する（create_quote_revision_v25）
+   */
+  pricing_model?: 'v2.5' | null;
+  /** v2.5 の見積に固定した標準見積の版 */
+  standard_estimate_revision_id?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -8,7 +8,13 @@ import { formatYen } from '@/lib/domain/pricing';
 import { EMPTY_POR_SELECTION_STATE } from '@/lib/domain/quote-por';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
+import { QuoteV25RevisionForm, type QuoteV25Product } from '@/components/admin/quote-v25-revision-form';
 import { Badge } from '@/components/ui';
+import { defaultVariantIdsFor } from '@/lib/domain/preset';
+import { buildCustomerCategoryMatrix } from '@/lib/domain/customer-category-applicability';
+import { quoteV25SelectableProducts } from '@/lib/domain/quote-v25';
+import { INTERIOR_EXTERIOR_CATEGORY_CODES } from '@/lib/domain/standard-estimate-pricing';
+import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 
 export default async function AdminQuoteRevisionEditPage({
   params,
@@ -30,12 +36,14 @@ export default async function AdminQuoteRevisionEditPage({
 
   if (!isLegacyWebRevision) notFound();
 
-  const [categories, options, porState] = await Promise.all([
+  const [categories, options, porState, v25Context] = await Promise.all([
     store.listCategories(),
     store.listOptions(),
     // お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。発行時に DB が確かめる）。
     // 読み込めないときは画面を落とさず、発行を止めて再読み込みを案内する
     store.getQuotePorSelections(quote.id, actor).catch(() => ({ ...EMPTY_POR_SELECTION_STATE, loadError: true })),
+    // v2.5 の標準見積から作った見積（v2.5 PR-D1）は、固定した版の v2.5 の決まりで発行する画面にする
+    quote.pricing_model === 'v2.5' ? store.getQuoteV25Context(quote.id, actor) : Promise.resolve(null),
   ]);
 
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
@@ -66,6 +74,51 @@ export default async function AdminQuoteRevisionEditPage({
     quote.customer_name;
 
   const returnHref = `/admin/quotes?case=${encodeURIComponent(quote.id)}&tab=estimate#case-workspace`;
+
+  // v2.5 の見積：商品台帳の商品は、見積に固定した版の売価（原価は渡さない）。この商品モデル・仕様で新しく選べる商品だけ
+  // （本体仕様マトリクスで「×」のカテゴリーの商品は出さない。DB の発行でも同じ判定で止める）
+  let v25Products: QuoteV25Product[] = [];
+  if (v25Context) {
+    const [bundle, specMatrix] = await Promise.all([
+      store.getCatalogBundle(v25Context.baseModelId, { includeDraft: false }),
+      store.getSpecMatrix(),
+    ]);
+    const categoryById = new Map((bundle?.categories ?? []).map((category) => [category.id, category] as const));
+    const matrix = bundle ? buildCustomerCategoryMatrix(specMatrix, bundle.categories, [bundle.model]) : null;
+    const selectable = quoteV25SelectableProducts(
+      bundle?.options ?? [],
+      bundle?.categories ?? [],
+      matrix,
+      v25Context.modelSlug,
+      v25Context.specCode
+    );
+    const groups = bundle?.variantGroups ?? [];
+    // 選択肢の追加金額（旧来の価格の列）は v2.5 では使わないので渡さない
+    const choices = (bundle?.variantChoices ?? []).map((choice) => ({ ...choice, extra_price: 0 }));
+    const groupsByOption = new Map<string, typeof groups>();
+    for (const group of groups) groupsByOption.set(group.option_id, [...(groupsByOption.get(group.option_id) ?? []), group]);
+    const choicesByGroup = new Map<string, typeof choices>();
+    for (const choice of choices) choicesByGroup.set(choice.group_id, [...(choicesByGroup.get(choice.group_id) ?? []), choice]);
+    const defaults = new Map(selectable.map((option) => [option.id, defaultVariantIdsFor(groups, choices, [option.id])] as const));
+    const units = await store
+      .getQuoteV25Units(quote.id, selectable.map((option) => ({ option_id: option.id, choice_ids: defaults.get(option.id) ?? [] })), actor)
+      .catch(() => selectable.map(() => null));
+    v25Products = selectable.map((option, index) => {
+      const code = categoryById.get(option.category_id)?.code ?? '';
+      return {
+        id: option.id,
+        name: option.name,
+        categoryName: categoryById.get(option.category_id)?.name ?? '未分類',
+        section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
+        manufacturer: option.manufacturer ?? '',
+        modelNo: option.model_no ?? '',
+        variantGroups: [...(groupsByOption.get(option.id) ?? [])].sort((a, b) => a.sort_order - b.sort_order),
+        variantChoices: (groupsByOption.get(option.id) ?? []).flatMap((group) => choicesByGroup.get(group.id) ?? []),
+        defaultChoiceIds: defaults.get(option.id) ?? [],
+        defaultUnit: units[index] ?? null,
+      };
+    });
+  }
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-3" data-testid="legacy-revision-edit-page">
@@ -105,17 +158,32 @@ export default async function AdminQuoteRevisionEditPage({
           <div><span className="text-muted">現在の見積金額</span><strong className="ml-1">{formatYen(quote.total)}</strong></div>
         </div>
 
-        <DealerRevisionForm
-          quote={quote}
-          items={detail.items}
-          canEditBase={canEditCatalog(actor.role)}
-          products={products}
-          baseModelId={quote.base_model_id ?? ''}
-          specCode={quote.spec_code ?? ''}
-          porState={porState}
-          optionFlags={options.map((option) => ({ id: option.id, price: option.price, priceOnRequest: option.price_on_request }))}
-          sheetMode
-        />
+        {v25Context ? (
+          <QuoteV25RevisionForm
+            quote={quote}
+            items={detail.items}
+            canEditBase={canEditCatalog(actor.role)}
+            context={v25Context}
+            products={v25Products}
+            porState={porState}
+          />
+        ) : quote.pricing_model === 'v2.5' ? (
+          <p className="px-4 py-6 text-sm text-danger">
+            v2.5 の標準見積から作った見積です。DB の更新（v2.5 の正式見積）が済むまで、この画面からは発行できません。
+          </p>
+        ) : (
+          <DealerRevisionForm
+            quote={quote}
+            items={detail.items}
+            canEditBase={canEditCatalog(actor.role)}
+            products={products}
+            baseModelId={quote.base_model_id ?? ''}
+            specCode={quote.spec_code ?? ''}
+            porState={porState}
+            optionFlags={options.map((option) => ({ id: option.id, price: option.price, priceOnRequest: option.price_on_request }))}
+            sheetMode
+          />
+        )}
       </section>
     </div>
   );

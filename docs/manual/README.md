@@ -18,7 +18,7 @@
 
 - 管理メニューの並びと権限による出し分け（`components/admin/admin-nav.tsx`）
 - 見積書の 5 区分（`components/simulator/quote-sheet.tsx` / `components/mypage/quote-table.tsx` / `lib/pdf/quote-pdf.tsx`）
-- 別途工事の 9 項目（`lib/seed/catalog.ts` の `sitework(...)`。2026-10-21 の先方の決定で必須・初期選択にしない）
+- 別途工事の 9 項目（`lib/seed/catalog.ts` の `SITEWORK_CODES`）
 - 権限の名称と範囲（`lib/domain/types.ts` の `ROLE_LABELS`）
 
 配布用の HTML（hq.html / dealer.html）は手書きです。大きく変えたときは合わせて更新してください。

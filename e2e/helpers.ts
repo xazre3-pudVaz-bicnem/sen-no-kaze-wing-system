@@ -161,20 +161,10 @@ export async function signInOrRegister(page: Page, email: string, next: string, 
   if (!ok) await register(page, email, next, name);
 }
 
-/**
- * 顧客として保存 → 見積依頼までを済ませ、発行された見積 ID を返す（siteAddress を渡すと設置予定地に入れる。
- * beforeSave は保存する前にシミュレーターで行う操作＝商品を選ぶなど）
- */
-export async function requestQuoteAsCustomer(
-  page: Page,
-  email: string,
-  configName: string,
-  siteAddress?: string,
-  beforeSave?: (page: Page) => Promise<void>
-) {
+/** 顧客として保存 → 見積依頼までを済ませ、発行された見積 ID を返す（siteAddress を渡すと設置予定地に入れる） */
+export async function requestQuoteAsCustomer(page: Page, email: string, configName: string, siteAddress?: string) {
   await register(page, email, '/simulator/wing-01');
   await openFreshSimulator(page);
-  if (beforeSave) await beforeSave(page);
   const total = await readTotal(page);
   await page.getByTestId('save-button').click();
   await page.getByTestId('config-name-input').fill(configName);

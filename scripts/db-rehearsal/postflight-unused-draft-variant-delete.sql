@@ -1,4 +1,4 @@
--- 20261025101000（下書き商品の選択項目・選択肢の安全削除）の適用後の確認。読み取りだけ（真偽・関数の属性だけを返す）。
+-- 20261104100000（下書き商品の選択項目・選択肢の安全削除）の適用後の確認。読み取りだけ（真偽・関数の属性だけを返す）。
 --
 --   npx supabase db query --linked --output-format json -f scripts/db-rehearsal/postflight-unused-draft-variant-delete.sql
 --

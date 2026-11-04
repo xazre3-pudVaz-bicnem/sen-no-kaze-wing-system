@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const sql = fs.readFileSync(
-  path.resolve(process.cwd(), 'supabase/migrations/20261025101000_unused_draft_variant_safe_delete.sql'),
+  path.resolve(process.cwd(), 'supabase/migrations/20261104100000_unused_draft_variant_safe_delete.sql'),
   'utf8',
 );
 const ui = fs.readFileSync(

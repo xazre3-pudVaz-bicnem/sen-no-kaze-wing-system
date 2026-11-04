@@ -18,7 +18,7 @@ test.describe('空調商品の電源仕様', () => {
     // STEP1：電源仕様の専用欄は無い。電源は既存の「能力クラス・電源」に書ける
     await expect(page.getByTestId('product-power-spec-field')).toHaveCount(0);
     await expect(page.getByLabel('能力クラス・電源')).toBeVisible();
-    await page.getByRole('button', { name: 'URLで画像を指定' }).click();
+    // メイン画像の URL の入力は常に表示（2026-10-20 の 1cd307cc で「URLで画像を指定」の開閉をやめた）
     await page.locator('#product-main-media input[name="image_url"]').fill('/images/equipment/aircon.png');
     await page.getByTestId('option-price').fill('120000');
 

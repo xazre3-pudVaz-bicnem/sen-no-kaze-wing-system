@@ -15,6 +15,30 @@ export const EXTERIOR_FACES: { code: ExteriorFaceCode; label: string }[] = [
   { code: 'left', label: '左側面' },
 ];
 
+/** 旧来の外壁の商品（今の外壁の商品がそろっていれば、標準・候補に使わない） */
+export const LEGACY_EXTERIOR_CODES: ReadonlySet<string> = new Set(['exterior-galnote', 'exterior-wood']);
+/** 今の外壁の商品 */
+export const CURRENT_EXTERIOR_CODES: ReadonlySet<string> = new Set([
+  'exterior-nichiha-st-u18',
+  'exterior-nichiha-ns-premium18',
+  'exterior-nichiha-m-flat-premium18',
+  'exterior-wood-accent-100',
+  'exterior-current-gl-bare',
+]);
+
+/**
+ * 標準状態の外壁の 4 面に使う商品の候補：公開中の外壁の商品（シミュレーター非表示の標準の商品を含む）を表示順に並べ、
+ * 今の外壁の商品があれば旧来の 2 商品を外す（仕様の読み込み・/plans からの入口と同じ）
+ */
+export function standardExteriorWallOptions(options: ProductOption[], exteriorCategoryId: string | undefined): ProductOption[] {
+  const published = options
+    .filter((option) => option.category_id === exteriorCategoryId && option.status === 'published')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  return published.some((option) => CURRENT_EXTERIOR_CODES.has(option.code))
+    ? published.filter((option) => !LEGACY_EXTERIOR_CODES.has(option.code))
+    : published;
+}
+
 export function exteriorFaceForElevation(label: string, index: number): ExteriorFaceCode {
   if (/正面|南/.test(label)) return 'front';
   if (/右|東/.test(label)) return 'right';

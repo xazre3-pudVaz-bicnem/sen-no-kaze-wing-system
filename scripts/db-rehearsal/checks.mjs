@@ -5,6 +5,7 @@
  *   2. 未ログイン（anon）が実行できる SECURITY DEFINER 関数は許可リストの範囲だけ
  *   3. SECURITY DEFINER 関数は search_path を固定している
  *   4. アプリの Supabase 呼び出し（RPC／テーブル／列）が DB と一致している
+ *   5. SECURITY DEFINER のトリガー関数は、anon・authenticated・service_role から直接実行できない
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -51,6 +52,46 @@ export function evaluate(schema, repo = REPO) {
       check: 'anon-execute',
       message: `anon が実行できる SECURITY DEFINER 関数（許可リスト外）: ${anonDefiner.map((f) => `${f.name}(${f.types})`).join(' / ')}`,
       hint: 'Supabase は public の関数へ anon / authenticated の EXECUTE を既定で付与する。`revoke ... from public` では外れないので `from public, anon, authenticated, service_role` と明示してから必要なロールへ grant する。',
+    });
+  }
+
+  // 旧価格の列（本部商品の原価。v2.5 PR-C1b）：DB の列が lib/data/legacy-price-columns.json と合い、
+  // 金額の列は anon・authenticated から読めず、ほかの列（アプリが列名で読む）は読める
+  if (schema.signatures.some((f) => f.name === 'legacy_price_write_allowed') && schema.price_table_columns) {
+    const spec = JSON.parse(fs.readFileSync(path.join(repo, 'lib/data/legacy-price-columns.json'), 'utf8'));
+    const issues = [];
+    const byTable = new Map();
+    for (const c of schema.price_table_columns) {
+      if (!byTable.has(c.t)) byTable.set(c.t, new Map());
+      byTable.get(c.t).set(c.col, c);
+    }
+    for (const [table, { select, price }] of Object.entries(spec)) {
+      const cols = byTable.get(table) ?? new Map();
+      for (const col of price) {
+        const c = cols.get(col);
+        if (!c) issues.push(`${table}.${col} が DB に無い（金額の列）`);
+        else if (c.anon || c.authenticated) issues.push(`${table}.${col} を anon・authenticated が読める（金額の列）`);
+      }
+      for (const col of select) {
+        const c = cols.get(col);
+        if (!c) issues.push(`${table}.${col} が DB に無い（アプリが読む列）`);
+        else if (!c.anon || !c.authenticated) issues.push(`${table}.${col} を anon・authenticated が読めない（アプリが読む列。列を足す migration で grant select する）`);
+      }
+      for (const col of cols.keys()) {
+        if (!select.includes(col) && !price.includes(col)) issues.push(`${table}.${col} が legacy-price-columns.json に無い（アプリが読まない。select か price に足す）`);
+      }
+    }
+    if (issues.length) failures.push({ check: 'legacy-price-columns', message: `旧価格の列の権限・一覧の不一致 ${issues.length} 件`, details: issues });
+  }
+
+  // トリガー関数の EXECUTE はトリガーを作るときだけ確かめられ、トリガーが動くときには要らない。
+  // SECURITY DEFINER のトリガー関数に API のロールの EXECUTE を残さない（20261016113000・20261016114000 で閉じたものを戻さない）
+  const triggerOpen = schema.signatures.filter((f) => f.ret === 'trigger' && f.secdef && (f.anon || f.authenticated || f.service_role));
+  if (triggerOpen.length) {
+    failures.push({
+      check: 'trigger-execute',
+      message: `API のロールから直接実行できる SECURITY DEFINER のトリガー関数: ${[...new Set(triggerOpen.map((f) => f.name))].join(', ')}`,
+      hint: '新しいトリガー関数は `revoke execute on function ... from public, anon, authenticated, service_role` で既定の EXECUTE を外す（create or replace は権限を引き継ぐが、drop して作り直すと既定権限に戻る）。',
     });
   }
 

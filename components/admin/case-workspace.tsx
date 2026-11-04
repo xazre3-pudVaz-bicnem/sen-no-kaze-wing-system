@@ -15,6 +15,7 @@ import {
 } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { formatYen } from '@/lib/domain/pricing';
+import { isExcludedLineRemark } from '@/lib/domain/quote-por';
 import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AssignDealerForm } from '@/components/admin/dealer-forms';
@@ -845,6 +846,7 @@ export async function CaseWorkspace({
               bundle={planBundle}
               configuration={casePlanConfiguration.configuration}
               items={casePlanConfiguration.items}
+              positionSlots={casePlanConfiguration.position_slots ?? []}
               exteriorFaces={casePlanConfiguration.exterior_faces}
               estimateTemplate={planEstimateTemplate}
               elevations={planElevations}
@@ -1266,7 +1268,10 @@ export async function CaseWorkspace({
                         <td className="px-3 py-2 font-medium text-ink">{item.name}</td>
                         <td className="px-3 py-2">{item.quantity.toLocaleString('ja-JP')}</td>
                         <td className="px-3 py-2">{item.unit ?? '—'}</td>
-                        <td className="px-3 py-2 text-right font-medium">{formatYen(item.amount)}</td>
+                        <td className="px-3 py-2 text-right font-medium">
+                          {/* 対象外の行は「対象外」と出す（0 円の確定と区別する。D1 までの暫定） */}
+                          {isExcludedLineRemark(item.remark) ? '対象外' : formatYen(item.amount)}
+                        </td>
                         <td className="px-3 py-2 text-xs leading-5 text-ink-soft">{item.remark ?? '—'}</td>
                       </tr>
                     ))}

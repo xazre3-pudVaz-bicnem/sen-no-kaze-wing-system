@@ -83,8 +83,14 @@ export async function runtimeConcurrency(config) {
   const b = new pg.Client(config);
   await admin.connect();
 
+  // 版の指定（p_expected_lock_version）を持つ保存の関数があるか。引数を足した版（v2.5 PR-S1 の p_slot_selections）でも
+  // 黙って省略しないよう、引数の並びではなく引数の名前で確かめる
   const where = (await admin.query(`select (select count(*) from public.options) as options,
-    to_regprocedure('public.save_configuration_atomic(uuid, uuid, text, uuid[], text, text, text, uuid[], text, jsonb, text, text, boolean, integer)') is not null as has_lock`)).rows[0];
+    exists (
+      select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = 'save_configuration_atomic'
+         and 'p_expected_lock_version' = any(coalesce(p.proargnames, '{}'::text[]))
+    ) as has_lock`)).rows[0];
   if (!where.has_lock) {
     await admin.end();
     return { ok: true, skipped: true, results, note: 'save_configuration_atomic に p_expected_lock_version が無いため対象外' };

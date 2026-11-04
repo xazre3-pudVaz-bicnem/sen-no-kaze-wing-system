@@ -24,6 +24,8 @@ type Props = {
   taxRate: string;
   /** 保存済みの明細のうち、金額が未確定の行の品名（残っていれば発行できない。POR を含む） */
   savedUnresolvedNames: string[];
+  /** v2.5 の標準見積から作った下書き：版の率と経費の計算方法で計算する（変えられない。DB の保存も止める） */
+  ratesLocked?: boolean;
   initial: StandardQuoteEditorState;
 };
 
@@ -32,7 +34,7 @@ const pct = (value: string) => `${Math.round(Number(value) * 10000) / 100}%`;
 /** 価格の決め方の選択肢。「0円確定」「対象外」は本体以外の区分だけ（price_mode は manual・売価 0 円） */
 type PriceChoice = PriceMode | QuoteLineState;
 
-export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnresolvedNames, initial }: Props) {
+export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnresolvedNames, ratesLocked = false, initial }: Props) {
   const router = useRouter();
   const [state, setState] = useState(initial);
   const [dirty, setDirty] = useState(false);
@@ -111,7 +113,12 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
             <span className="text-xs font-semibold text-muted">
               {key === 'sales_fee_rate' ? '販売費率（100〜150%）' : key === 'expense_rate' ? '経費率（0〜30%）' : '掛率（100〜250%）'}
             </span>
-            <Input value={state[key]} inputMode="decimal" onChange={(e) => update({ [key]: e.target.value } as Partial<StandardQuoteEditorState>)} />
+            <Input
+              value={state[key]}
+              inputMode="decimal"
+              disabled={ratesLocked}
+              onChange={(e) => update({ [key]: e.target.value } as Partial<StandardQuoteEditorState>)}
+            />
             <span className="text-xs text-muted">{pct(state[key])}</span>
           </label>
         ))}
@@ -120,8 +127,11 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
           <Input value={String(state.adjustment)} inputMode="numeric" onChange={(e) => update({ adjustment: intOrNull(e.target.value) ?? 0 })} />
           <Input value={state.adjustment_reason} placeholder="調整の理由（任意）" onChange={(e) => update({ adjustment_reason: e.target.value })} />
         </label>
-        <p className="text-xs text-muted sm:col-span-4">
-          率を変えても元の標準見積には反映しません。率・内部原価はお客様・代理店には表示しません。
+        <p className="text-xs text-muted sm:col-span-4" data-testid="standard-quote-rates-note">
+          {ratesLocked
+            ? 'v2.5 の標準見積から作った見積は、版の率と経費の計算方法で計算します（変えられません。値引きなどは調整額で入れてください）。'
+            : '率を変えても元の標準見積には反映しません。'}
+          率・内部原価はお客様・代理店には表示しません。
         </p>
       </section>
 
@@ -134,7 +144,11 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
               <h3 className="font-semibold">{STANDARD_SECTION_LABEL[section]}</h3>
               <label className="flex items-center gap-2 text-xs text-muted">
                 経費
-                <Select value={state.expense_methods[section]} onChange={(e) => update({ expense_methods: { ...state.expense_methods, [section]: e.target.value as ExpenseMethod } })}>
+                <Select
+                  value={state.expense_methods[section]}
+                  disabled={ratesLocked}
+                  onChange={(e) => update({ expense_methods: { ...state.expense_methods, [section]: e.target.value as ExpenseMethod } })}
+                >
                   <option value="rate">率（{pct(state.expense_rate)}）</option>
                   <option value="none">なし</option>
                 </Select>

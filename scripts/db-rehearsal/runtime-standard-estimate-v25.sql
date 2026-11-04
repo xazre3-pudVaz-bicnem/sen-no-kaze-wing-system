@@ -455,12 +455,13 @@ begin
   perform pg_temp.sev_expect_error('v2.5 で公開した標準見積では、旧来の下書きを作れない', 'P0001', 'LOCKED',
     pg_temp.sev_run_as('authenticated', u_editor, format('select public.create_standard_estimate_draft(%L)::text', v_bmr_a)));
 
-  -- 標準見積から作る見積（PR H）は v2.5 の Revision をまだ扱わない
+  -- 標準見積から作る見積（PR H）：v2.5 の Revision からも作れる（v2.5 PR-D1c。それまでは止めていた。作り方の検査は runtime-v25-standard-quote-drafts）
   set local session_replication_role = replica;
+  insert into public.quote_requests (id, status, contact) values (v_qd, 'new', '{}'::jsonb);
   insert into public.quote_drafts (id, quote_request_id, base_model_id, spec_code, quote_kind)
-  values (v_qd, gen_random_uuid(), m_model, 'office', 'formal');
+  values (v_qd, v_qd, m_model, 'office', 'formal');
   set local session_replication_role = origin;
-  perform pg_temp.sev_expect_error('v2.5 の標準見積から見積の下書きは作れない', 'P0001', 'LOCKED',
+  perform pg_temp.sev_expect_eq('v2.5 の標準見積からも見積の下書きを作れる（PR-D1c）', v_qd::text,
     pg_temp.sev_try_super(format($q$ update public.quote_drafts set source_kind = 'standard_estimate', standard_estimate_revision_id = %L where id = %L returning id::text $q$, v_a2, v_qd)));
 
   -- ---------- 次の v2.5 の下書き：固定した原価 Version をそのまま引き継ぐ ----------

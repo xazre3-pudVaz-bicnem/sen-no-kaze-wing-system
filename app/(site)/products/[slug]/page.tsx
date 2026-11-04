@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Check } from 'lucide-react';
 import { getPublicBundleBySlug } from '@/lib/data/public-catalog';
-import { baseTotalOf, formatManYen, formatYen } from '@/lib/domain/pricing';
+import { getPublicBaseTotals, getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
+import { formatManYen, formatYen } from '@/lib/domain/pricing';
+import { pickSaleView, v25DisplayCatalog } from '@/lib/domain/standard-estimate-sale-view';
 import { IMAGE_KIND_LABELS, type ProductImageKind } from '@/lib/domain/types';
 import { breadcrumbJsonLd, buildMetadata, productJsonLd } from '@/lib/seo';
 import { PRICE_DISCLAIMER } from '@/lib/site';
@@ -22,9 +24,11 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const model = bundle?.model;
   if (!model) return buildMetadata({ title: '商品が見つかりません', description: '', path: `/products/${slug}`, noindex: true });
   const img = bundle?.images.find((i) => i.kind === 'hero')?.url ?? bundle?.images.find((i) => i.kind === 'exterior')?.url;
+  // 本体価格計は商品一覧・商品ページの表示・構造化データと同じ価格元（スイッチの後は公開中の v2.5 の標準見積）
+  const baseTotal = (await getPublicBaseTotals([model]))[model.id] ?? null;
   return buildMetadata({
     title: `${model.name}｜折り畳み式木造コンテナの仕様・価格・オプション`,
-    description: `${model.name}の外観・室内・平面図、サイズ・仕様、標準装備、追加できるオプション、本体価格${formatManYen(baseTotalOf(model))}〜。この商品で見積シミュレーションを始められます。`,
+    description: `${model.name}の外観・室内・平面図、サイズ・仕様、標準装備、追加できるオプション${baseTotal !== null ? `、本体価格${formatManYen(baseTotal)}〜` : ''}。この商品で見積シミュレーションを始められます。`,
     path: `/products/${slug}`,
     image: img,
   });
@@ -48,14 +52,27 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   const galleryKinds: ProductImageKind[] = ['exterior', 'interior', 'floorplan', 'transport'];
   const gallery = bundle.images.filter((i) => galleryKinds.includes(i.kind) && i.url !== hero?.url);
   const interior = bundle.images.find((i) => i.kind === 'interior') ?? null;
+  // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）を出さず、v2.5 の売価を出す。
+  // 仕様はシミュレーターが最初に開く仕様（先頭のプリセット）を優先し、その版が無ければ v2.5 の版がある仕様（どれも無ければ要見積）
+  const [sale, baseTotals] = await Promise.all([getSimulatorSaleViews(model.id, { preview: false }), getPublicBaseTotals([model])]);
+  /** 本体価格計（本体一式＋諸費用・税別）。商品一覧・SEO と同じ価格元。null は金額を出さない */
+  const baseTotal = baseTotals[model.id] ?? null;
+  const productLd = productJsonLd(model, [hero?.url, ...gallery.map((g) => g.url)].filter((u): u is string => Boolean(u)), baseTotal);
+  const specCandidates = [...(model.presets ?? []).map((preset) => preset.code), ...sale.saleViews.map((view) => view.spec_code)];
+  const productView = sale.v25
+    ? (specCandidates.map((code) => pickSaleView(sale.saleViews, model.slug, code, false)).find((view) => view !== null) ?? null)
+    : null;
+  const shownOptions = sale.v25
+    ? v25DisplayCatalog(bundle.options, bundle.variantGroups, bundle.variantChoices, productView).options
+    : bundle.options;
   const optionsByCategory = bundle.categories
     .filter((c) => c.code !== 'sitework')
-    .map((c) => ({ category: c, options: bundle.options.filter((o) => o.category_id === c.id && isSimulatorSelectableProduct(o)) }))
+    .map((c) => ({ category: c, options: shownOptions.filter((o) => o.category_id === c.id && isSimulatorSelectableProduct(o)) }))
     .filter((g) => g.options.length);
 
   return (
     <>
-      <JsonLd data={productJsonLd(model, [hero?.url, ...gallery.map((g) => g.url)].filter((u): u is string => Boolean(u)))} />
+      {productLd && <JsonLd data={productLd} />}
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }, { name: model.name, path: `/products/${model.slug}` }])} />
 
       {/* 全幅ヒーロー */}
@@ -78,10 +95,12 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
       <section className="border-b border-line bg-ivory">
         <Container className="grid gap-8 py-10 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
-            <div>
-              <p className="text-xs text-muted">本体価格計（本体一式＋諸費用・税別）</p>
-              <p className="font-serif text-5xl">{formatManYen(baseTotalOf(model))}〜</p>
-            </div>
+            {baseTotal !== null && (
+              <div>
+                <p className="text-xs text-muted">本体価格計（本体一式＋諸費用・税別）</p>
+                <p className="font-serif text-5xl">{formatManYen(baseTotal)}〜</p>
+              </div>
+            )}
             <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-3">
               {displaySpecs.slice(0, 3).map((s) => (
                 <div key={s.label}>

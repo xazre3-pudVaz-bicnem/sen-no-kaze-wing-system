@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Download, FileText } from 'lucide-react';
+import { ChevronDown, Download, FileText } from 'lucide-react';
 import { requireUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
@@ -16,6 +16,7 @@ import { QuoteChangeRequestForm } from '@/components/case-flow/forms';
 import { activeContract } from '@/lib/domain/electronic-contract';
 import { COMPANY } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
+import { formatYen } from '@/lib/domain/pricing';
 import { Alert, Badge, Container, Section } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { QuoteTable } from '@/components/mypage/quote-table';
@@ -34,9 +35,21 @@ export default async function QuoteDetailPage({
   const detail = await store.getQuote(id, user);
   if (!detail) notFound();
   const { quote, items, request } = detail;
+  // ここは発行済みQuoteのSnapshotとは別の、現在の保存プランの設置予定地域。
+  // 旧見積や非Web案件にConfigurationがなくても見積の閲覧を妨げない。
+  const savedPlan = quote.configuration_id
+    ? await store.getConfiguration(quote.configuration_id, user)
+    : null;
+  const savedPlanSiteArea = savedPlan
+    ? savedPlan.configuration.site_location_undecided
+      ? '未定'
+      : [savedPlan.configuration.site_prefecture, savedPlan.configuration.site_municipality].filter(Boolean).join(' ') || '未選択'
+    : null;
   const isFormal = isFormalQuote(quote);
   const canAccept = isQuoteAcceptanceEligible(quote, request);
   const canDecline = isQuoteDeclineEligible(quote, request);
+  // 現在発行中の概算見積に限り、受付後の次工程を案内する。
+  const isCurrentPreliminaryIssued = Boolean(!isFormal && quote.status === 'issued' && request?.quote_id === quote.id);
   const acceptedQuoteCaseState = getAcceptedQuoteCaseState(quote, request);
   const isFormallyAccepted = acceptedQuoteCaseState === 'formal_current';
   const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';
@@ -64,7 +77,7 @@ export default async function QuoteDetailPage({
             打合せのご希望（日程・代理店）を保存できませんでした。お手数ですが、担当からのご連絡の際にお伝えください。
           </Alert>
         )}
-        {request && (
+        {request && !isCurrentPreliminaryIssued && (
           <p className="mt-4 text-sm">
             <Link href={`/mypage/cases/${request.id}`} className="font-semibold underline-offset-4 hover:underline" data-testid="customer-case-link">
               ご依頼の進み具合（受付・日程・現地確認）を見る →
@@ -99,11 +112,47 @@ export default async function QuoteDetailPage({
           </div>
         </div>
 
+        {isCurrentPreliminaryIssued && request && (
+          <section className="card mt-5 space-y-3 p-5" data-testid="quote-preliminary-next-steps" aria-label="見積依頼後のご案内">
+            <div>
+              <h2 className="text-lg font-semibold">見積依頼は完了しています</h2>
+              <p className="mt-1 text-sm text-ink-soft">現在は概算見積の段階です。正式なご注文・ご契約はまだ行われていません。</p>
+            </div>
+            <ol className="grid gap-2 sm:grid-cols-2" data-testid="quote-preliminary-flow">
+              <li className="rounded-lg border border-line bg-sand/40 p-3 text-sm">
+                <span className="text-xs font-semibold text-forest">1. 完了</span>
+                <p className="font-semibold">概算見積のご依頼</p>
+              </li>
+              <li className="rounded-lg border border-line p-3 text-sm">
+                <span className="text-xs text-muted">2. 次の工程</span>
+                <p className="font-semibold">担当者からのご連絡</p>
+              </li>
+              <li className="rounded-lg border border-line p-3 text-sm">
+                <span className="text-xs text-muted">3. これから</span>
+                <p className="font-semibold">打合せ・現地確認</p>
+              </li>
+              <li className="rounded-lg border border-line p-3 text-sm">
+                <span className="text-xs text-muted">4. これから</span>
+                <p className="font-semibold">正式見積のご案内</p>
+              </li>
+            </ol>
+            <Link href={`/mypage/cases/${request.id}`} className="btn-secondary inline-flex" data-testid="customer-case-link">
+              ご依頼の進み具合を見る
+            </Link>
+          </section>
+        )}
+
         <Alert tone={isFormal ? 'success' : 'info'} className="mt-5">
           {isFormal
             ? '確定見積です。担当が現地条件と施工金額を反映しています。'
             : '概算見積です。運送・基礎・電気・給排水・設置工事など、現地確認後に確定する費用はまだ含まれていません。'}
         </Alert>
+
+        <div className="card mt-5 space-y-1 p-5" data-testid="quote-issued-total">
+          <p className="text-sm font-semibold text-ink-soft">{isFormal ? '確定見積金額（税込）' : '概算見積金額（税込）'}</p>
+          <p className="font-serif text-3xl tabular-nums" data-testid="quote-issued-total-value">{formatYen(quote.total)}</p>
+          <p className="text-xs text-muted">発行済み見積書の記録です。含まれる工事・別途費用については見積書の注記をご確認ください。</p>
+        </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
           <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-primary" data-testid="pdf-view">
@@ -185,8 +234,12 @@ export default async function QuoteDetailPage({
           </Alert>
         )}
         {(canRequestChange || changeRequests.length > 0) && request && (
-          <div className="card mt-6 space-y-3 p-5" data-testid="quote-change-requests">
-            <h2 className="text-base font-semibold">見積の内容を修正したいとき</h2>
+          <details className="group card mt-6 p-5" open={changeRequests.some((c) => c.status === 'open')} data-testid="quote-change-requests">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-ink [&::-webkit-details-marker]:hidden">
+              <span>見積内容の修正を依頼する{changeRequests.length > 0 ? `（履歴${changeRequests.length}件）` : ''}</span>
+              <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="mt-3 space-y-3">
             {changeRequests.map((c) => (
               <div key={c.id} className="rounded-lg bg-[#f7f8f8] p-3 text-sm">
                 <p className="text-xs text-muted">
@@ -196,8 +249,9 @@ export default async function QuoteDetailPage({
                 {c.resolution && <p className="mt-1 text-xs text-ink-soft">担当より：{c.resolution}</p>}
               </div>
             ))}
-            {canRequestChange && <QuoteChangeRequestForm quoteId={quote.id} requestId={request.id} />}
-          </div>
+              {canRequestChange && <QuoteChangeRequestForm quoteId={quote.id} requestId={request.id} />}
+            </div>
+          </details>
         )}
         {quote.status === 'superseded' && (
           <Alert tone="info" className="mt-6">
@@ -205,28 +259,34 @@ export default async function QuoteDetailPage({
           </Alert>
         )}
 
-        <div className="card mt-8 overflow-hidden">
-          {quote.preview_image_url && (
-            <div className="relative aspect-[16/7] bg-sand">
-              <SmartImage src={quote.preview_image_url} alt="完成イメージ" fill sizes="(min-width: 896px) 56rem, 100vw" className="object-cover" />
-              <span className="absolute bottom-3 left-3 rounded-full bg-ink/70 px-3 py-1 text-xs text-white">完成イメージ（参考）</span>
+        <details className="group mt-8" open={!isCurrentPreliminaryIssued} data-testid="quote-onscreen-details">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg border border-line bg-white p-4 font-semibold text-ink [&::-webkit-details-marker]:hidden">
+            <span>画面で見積明細・商品画像を確認する</span>
+            <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="card mt-3 overflow-hidden">
+            {quote.preview_image_url && (
+              <div className="relative aspect-[16/7] bg-sand">
+                <SmartImage src={quote.preview_image_url} alt="完成イメージ" fill sizes="(min-width: 896px) 56rem, 100vw" className="object-cover" />
+                <span className="absolute bottom-3 left-3 rounded-full bg-ink/70 px-3 py-1 text-xs text-white">完成イメージ（参考）</span>
+              </div>
+            )}
+            <div className="grid gap-6 p-6 sm:grid-cols-2 sm:p-8">
+              <div>
+                <p className="text-xs text-muted">お客様</p>
+                <p className="text-lg">
+                  {quote.customer_company && <span className="block">{quote.customer_company}</span>}
+                  {quote.customer_name} 様
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">件名</p>
+                <p className="text-lg">折り畳み式木造コンテナ {quote.base_model_name} 一式（工場生産分）</p>
+              </div>
             </div>
-          )}
-          <div className="grid gap-6 p-6 sm:grid-cols-2 sm:p-8">
-            <div>
-              <p className="text-xs text-muted">お客様</p>
-              <p className="text-lg">
-                {quote.customer_company && <span className="block">{quote.customer_company}</span>}
-                {quote.customer_name} 様
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted">件名</p>
-              <p className="text-lg">折り畳み式木造コンテナ {quote.base_model_name} 一式（工場生産分）</p>
-            </div>
+            <QuoteTable quote={quote} items={items} />
           </div>
-          <QuoteTable quote={quote} items={items} />
-        </div>
+        </details>
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <div className="card p-6 text-sm">
@@ -248,10 +308,37 @@ export default async function QuoteDetailPage({
             </div>
             <div className="card p-6 text-sm">
               <p className="font-semibold">ご依頼内容</p>
-              <dl className="mt-2 space-y-1 text-ink-soft">
-                <div><dt className="inline text-muted">設置予定地：</dt><dd className="inline">{request?.contact.site_address || '未記入'}</dd></div>
-                <div><dt className="inline text-muted">ご要望：</dt><dd className="inline whitespace-pre-wrap">{request?.message || '—'}</dd></div>
+              <dl className="mt-2 space-y-3 text-ink-soft" data-testid="quote-request-address-details">
+                <div data-testid="quote-contact-address">
+                  <dt className="text-xs text-muted">お客様の連絡先住所（見積依頼時）</dt>
+                  <dd className="mt-1 whitespace-pre-wrap">{request?.contact.address || '未記入'}</dd>
+                </div>
+                {savedPlanSiteArea !== null && (
+                  <div data-testid="quote-saved-plan-site-area">
+                    <dt className="text-xs text-muted">保存プランの設置予定地域（現在の設定）</dt>
+                    <dd className="mt-1">{savedPlanSiteArea}</dd>
+                  </div>
+                )}
+                <div data-testid="quote-request-site-address">
+                  <dt className="text-xs text-muted">見積依頼時の設置先情報（詳しい住所・希望地域）</dt>
+                  <dd className="mt-1 whitespace-pre-wrap">{request?.contact.site_address || '未記入'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">ご要望</dt>
+                  <dd className="mt-1 whitespace-pre-wrap">{request?.message || '—'}</dd>
+                </div>
               </dl>
+              {savedPlanSiteArea !== null && (
+                <p className="mt-3 text-xs leading-relaxed text-muted">
+                  設置予定地域は現在の保存プランの設定です。見積発行時点の地域情報を保証するものではありません。
+                </p>
+              )}
+              {request?.contact.address && request?.contact.site_address
+                && request.contact.address.trim() === request.contact.site_address.trim() && (
+                  <p className="mt-2 text-xs leading-relaxed text-muted" data-testid="quote-site-address-same-as-contact">
+                    連絡先住所と設置先情報に同じ住所が登録されています。設置場所が異なる場合は担当者へお伝えください。
+                  </p>
+                )}
             </div>
           </div>
         </div>

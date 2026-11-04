@@ -1,4 +1,4 @@
-import { requireCatalogEditor } from '@/lib/auth/session';
+import { requireAdmin } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 import { AdminPage, BackLink } from '@/components/admin/ui';
@@ -106,7 +106,7 @@ export default async function NewEstimateTemplatePage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const actor = await requireCatalogEditor('/admin/estimate-templates/new');
+  const actor = await requireAdmin('/admin/estimate-templates/new');
   const sp = await searchParams;
   const store = await getStore();
   const [models, options, categories, baseMasterResult] = await Promise.all([
@@ -169,7 +169,7 @@ export default async function NewEstimateTemplatePage({
       title="標準見積を新規作成"
       lead="シミュレーターで使用する標準見積を作成します。本体・仕様・適用地域を画面上部で設定し、そのまま明細を編集できます。"
     >
-      <BackLink href="/admin/estimate-templates" label="標準見積一覧へ戻る" />
+      <BackLink href="/admin/estimate-templates/legacy" label="旧テンプレート（参照）へ戻る" />
 
       <NewEstimateTemplateForm
         role={actor.role}

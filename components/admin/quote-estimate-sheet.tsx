@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import type { Quote, QuoteItem } from '@/lib/domain/types';
 import { QuoteReferenceDetails, QuoteTable } from '@/components/mypage/quote-table';
@@ -24,9 +25,11 @@ export function QuoteEstimateSheet({
   canRevise: boolean;
   startInEditMode?: boolean;
 }) {
-  const [editing, setEditing] = useState(startInEditMode && canRevise);
+  // v2.5 の標準見積から作った見積（v2.5 PR-D1）は、固定した版の v2.5 の決まりで発行する編集画面で改訂する
+  const v25 = quote.pricing_model === 'v2.5';
+  const [editing, setEditing] = useState(startInEditMode && canRevise && !v25);
 
-  if (editing && canRevise) {
+  if (editing && canRevise && !v25) {
     return (
       <div className="space-y-2" data-testid="quote-estimate-editing">
         <DealerRevisionForm
@@ -50,14 +53,24 @@ export function QuoteEstimateSheet({
       <LegacyAcceptedFormalizationEntry quote={quote} />
       {canRevise && (
         <div className="flex items-center justify-end border-b border-line bg-[#fafbf9] px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[#9eb6a9] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f1f7f3]"
-            data-testid="quote-edit-toggle"
-          >
-            見積内容を更新
-          </button>
+          {v25 ? (
+            <Link
+              href={`/admin/quotes/${quote.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#9eb6a9] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f1f7f3]"
+              data-testid="quote-edit-v25"
+            >
+              見積内容を更新（v2.5）
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#9eb6a9] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f1f7f3]"
+              data-testid="quote-edit-toggle"
+            >
+              見積内容を更新
+            </button>
+          )}
         </div>
       )}
       <div className="overflow-x-auto">

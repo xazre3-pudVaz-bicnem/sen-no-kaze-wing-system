@@ -332,7 +332,8 @@ export interface CasePartnerSiteInfo {
 
 /**
  * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261104150000）。
- * 製造担当（製造担当組織のメンバー・これまでの案件で本部が選んだ総代理店の利用者）と本部が使う。お客様の情報・見積の金額は含めない。
+ * 製造担当（製造担当組織のメンバー・これまでの案件で本部が選んだ総代理店の利用者）と本部が使う。お客様の情報・見積の金額は含めない
+ * （製造・出荷・施工に必要な設置場所・現地確認は、詳細の partner_info に含める。2026-11-04 の先方回答 B-3）。
  */
 export interface ManufacturingCaseSummary {
   request_id: string;
@@ -358,6 +359,8 @@ export interface ManufacturingCaseSummary {
 export interface ManufacturingCaseDetail extends ManufacturingCaseSummary {
   /** 現在の見積の明細（品名・数量・単位だけ。金額は返さない） */
   spec_items: { kind: string; name: string; quantity: number; unit: string | null }[];
+  /** 製造・出荷・施工に必要な案件の情報（B-3。DB の更新の前は無い） */
+  partner_info?: CasePartnerSiteInfo | null;
 }
 
 /** 案件の営業担当組織・製造担当組織・主担当者（画面用。DB の get_case_organizations と同じ） */

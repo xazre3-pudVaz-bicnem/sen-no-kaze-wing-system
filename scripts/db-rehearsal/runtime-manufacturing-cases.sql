@@ -169,6 +169,19 @@ begin
   perform pg_temp.mf_expect_denied('27-11 未ログインでは呼べない', '42501',
     pg_temp.mf_run_as('anon', null, format('select public.get_manufacturing_case(%L)::text', r_1)));
 
+  -- ---------- 製造・出荷・施工に必要な案件の情報（2026-11-04 の先方回答 B-3） ----------
+  set local session_replication_role = replica;
+  update public.quote_requests set case_name = 'RT 製造の案件', contact = contact || jsonb_build_object('site_address', '製造県製造市1-1', 'address', '自宅県自宅市2-2') where id = r_1;
+  insert into public.site_surveys (quote_request_id, status, surveyed_on, land, legal, survey_notes, completed_at, completed_by)
+  values (r_1, 'completed', current_date, '{"crane": "25t ラフターが必要"}'::jsonb, '{}'::jsonb, '搬入は午前中', now(), u_d_staff);
+  set local session_replication_role = origin;
+  v_out := pg_temp.mf_run_as('authenticated', u_md_staff, format('select public.get_manufacturing_case(%L)::text', r_1));
+  perform pg_temp.mf_expect_eq('27-16 製造担当は、案件名・設置場所の住所・現地確認を見られ、お客様のお名前・連絡先・ご自宅の住所は見られない（B-3）',
+    'RT 製造の案件/製造県製造市1-1/25t ラフターが必要/搬入は午前中/false/false/false',
+    coalesce((v_out::jsonb #>> '{partner_info,case_name}') || '/' || (v_out::jsonb #>> '{partner_info,site_address}') || '/' ||
+      (v_out::jsonb #>> '{partner_info,survey,land,crane}') || '/' || (v_out::jsonb #>> '{partner_info,survey,survey_notes}'), v_out) || '/' ||
+    (v_out like '%秘密%')::text || '/' || (v_out like '%090-8888%')::text || '/' || (v_out like '%自宅県%')::text);
+
   -- ---------- これまでの案件・本部 ----------
   v_out := pg_temp.mf_run_as('authenticated', u_legacy, 'select public.list_manufacturing_cases()::text');
   perform pg_temp.mf_expect_eq('27-12 これまでの案件で本部が選んだ製造の担当は、一覧と詳細で見られる', '1/RT-MF-2/RT-MF-2',

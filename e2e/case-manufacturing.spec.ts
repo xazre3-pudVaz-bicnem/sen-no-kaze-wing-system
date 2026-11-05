@@ -95,8 +95,12 @@ test.describe('製造担当（総代理店）の画面', () => {
     await expect(master).toHaveURL(/\/admin\/manufacturing\/[0-9a-f-]{36}$/);
     await expect(master.getByTestId('manufacturing-case-summary')).toContainText(dealerName);
     expect(await master.getByTestId('manufacturing-spec-item').count()).toBeGreaterThan(0);
+    // 製造・出荷・施工に必要な設置場所・現地確認の欄は出す（2026-11-04 の先方回答 B-3）。お客様のお名前・電話・ご自宅の住所・金額は出さない
+    await expect(master.getByTestId('partner-site-info')).toBeVisible();
     const text = await master.locator('main').innerText();
     expect(text).not.toContain('テスト 太郎');
+    expect(text).not.toContain('090-0000-0000');
+    expect(text).not.toContain('東京都千代田区丸の内1-1');
     expect(text).not.toContain('¥');
 
     // 受領 → 製造を始める → 1 棟目を検査済みにする

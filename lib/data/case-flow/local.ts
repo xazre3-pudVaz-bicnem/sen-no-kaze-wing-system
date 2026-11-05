@@ -979,7 +979,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
             .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
             .map((i) => ({ kind: i.kind, name: i.name, quantity: i.quantity, unit: i.unit ?? null }))
         : [];
-      return { ...row, spec_items: items };
+      return { ...row, spec_items: items, partner_info: partnerSiteInfoOf(db, requestId) };
     });
   }
 

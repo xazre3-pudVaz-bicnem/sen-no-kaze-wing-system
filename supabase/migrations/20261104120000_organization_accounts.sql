@@ -11,6 +11,8 @@
 --   同じメールアドレスでログインした本人だけが、7 日以内に 1 回だけ受けられる。DB には鍵のハッシュだけを残す
 -- * 書き込みは SECURITY DEFINER の RPC だけ。変更は audit_logs に残す
 -- * 案件・見積の権限（営業担当組織・主担当者・製造担当組織）は、この migration では変えない
+-- * 商品台帳の編集は本部だけにする（can_edit_catalog。2026-11-04 の先方回答 B-2：所有組織の区分ができるまで、
+--   総代理店・代理店は閲覧だけ）
 
 begin;
 
@@ -801,6 +803,23 @@ begin
 end;
 $$;
 
+-- ---------- 商品台帳の編集は本部だけ（2026-11-04 の先方回答 B-2） ----------
+-- 商品の所有組織の区分（総代理店商品・代理店商品）を作るまでは、総代理店・代理店の商品台帳は閲覧だけにする。
+-- 本部商品の登録・編集は本部だけ（本部専用の原価の閲覧・登録は、もともと本部だけ）。これまでは総代理店以上が編集できた（0010）。
+-- 商品台帳の表の RLS と RPC は、この関数で判定している。代理店の自社フリー商品（is_dealer）は変えない
+create or replace function public.can_edit_catalog()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_role_rank() >= 3;
+$$;
+
+comment on function public.can_edit_catalog() is
+  '商品台帳（本部商品・カテゴリー・本体・画像・プレビュー）を編集できるか。本部だけ（2026-11-04 の先方回答 B-2。所有組織の区分ができるまで、総代理店・代理店は閲覧だけ）';
+
 -- ---------- 所有者と実行権限 ----------
 
 alter function public.validate_organization_parent() owner to postgres;
@@ -861,6 +880,11 @@ begin
   end if;
   if to_regclass('public.organization_memberships_one_active_idx') is null then
     raise exception 'POSTCONDITION: one active membership per profile is not enforced';
+  end if;
+  -- 商品台帳の編集は本部だけ（B-2）。RLS から呼ぶので、利用者のロールは今までどおり実行できる
+  if pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.can_edit_catalog()'::regprocedure), 'current_role_rank() >= 3') = 0
+     or not has_function_privilege('authenticated', 'public.can_edit_catalog()', 'EXECUTE') then
+    raise exception 'POSTCONDITION: can_edit_catalog() must allow headquarters only and stay executable for RLS';
   end if;
   if not (select c.relrowsecurity from pg_class c where c.oid = 'public.organization_invitations'::regclass) then
     raise exception 'POSTCONDITION: organization_invitations RLS is not enabled';

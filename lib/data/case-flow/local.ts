@@ -42,6 +42,7 @@ import {
   type UnitUpdateInput,
   type CaseAccess,
   type CaseOrganizations,
+  type CasePartnerSiteInfo,
   type CaseRole,
   type SupervisedCaseDetail,
   type ManufacturingCaseDetail,
@@ -253,8 +254,56 @@ const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
 /** 資料を読めるか（DB の case_files_read と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の写真だけ */
 function canReadCaseFile(db: LocalDb, actor: SessionUser, access: CaseAccess, file: CaseFile): boolean {
   if (access === 'customer') return file.customer_visible;
-  if (access === 'manufacturer') return file.context === 'progress' || isLegacyManufacturer(db, actor, file.quote_request_id);
+  // 製造担当組織は施工・製造の写真と、現地確認の写真（2026-11-04 の先方回答 B-3）。DB の case_files_read と同じ
+  if (access === 'manufacturer') return file.context === 'progress' || file.context === 'site_survey' || isLegacyManufacturer(db, actor, file.quote_request_id);
   return true;
+}
+
+/**
+ * 総代理店（配下の確認・製造の担当）に見せる、製造・出荷・施工に必要な案件の情報（DB の case_partner_site_info と同じ。B-3）。
+ * お客様の氏名・会社名・連絡先・ご自宅の住所・メッセージ、打合せの希望、土地なしの場合の希望地域・予算・メモ、打合せ記録、
+ * 契約書、お客様が送った資料は含めない
+ */
+function partnerSiteInfoOf(db: LocalDb, requestId: string): CasePartnerSiteInfo | null {
+  const request = db.quoteRequests.find((r) => r.id === requestId);
+  if (!request) return null;
+  const t = tables(db);
+  const quote = request.quote_id ? db.quotes.find((q) => q.id === request.quote_id) : undefined;
+  const customer = request.user_id ? db.profiles.find((p) => p.id === request.user_id) : undefined;
+  const profile = request.configuration_id ? (t.siteProfiles ?? []).find((p) => p.configuration_id === request.configuration_id) : undefined;
+  const survey = t.siteSurveys.find((s) => s.quote_request_id === requestId);
+  const contactSite = (request.contact?.site_address ?? '').trim();
+  return {
+    case_name: (request.case_name ?? '').trim() || null,
+    customer_no: quote?.customer_no ?? customer?.customer_no ?? null,
+    site_address: contactSite || (profile?.site_address ?? '').trim() || null,
+    land: profile
+      ? {
+          land_status: profile.land_status,
+          area_sqm: profile.area_sqm,
+          land_category: profile.land_category,
+          road_access: profile.road_access,
+          electricity: profile.electricity,
+          water: profile.water,
+          drainage: profile.drainage,
+          intended_use: profile.intended_use,
+        }
+      : null,
+    survey: survey
+      ? {
+          status: survey.status,
+          surveyed_on: survey.surveyed_on,
+          land: { ...survey.land },
+          legal: { ...survey.legal },
+          survey_notes: survey.survey_notes,
+          completed_at: survey.completed_at,
+        }
+      : null,
+    survey_files: t.files
+      .filter((f) => f.quote_request_id === requestId && f.context === 'site_survey')
+      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+      .map((f) => ({ id: f.id, file_name: f.file_name, content_type: f.content_type, caption: f.caption, created_at: f.created_at })),
+  };
 }
 
 /** プランの土地の情報への関わり方（DB の configuration_site_profile_access と同じ） */
@@ -853,6 +902,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
           .sort((a, b) => (b.reported_on ?? '').localeCompare(a.reported_on ?? ''))
           .map((r) => ({ kind: r.kind, title: r.title ?? null, body: r.body ?? null, reported_on: r.reported_on ?? null, author_name: r.author_name ?? null })),
         handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
+        partner_info: partnerSiteInfoOf(db, requestId),
       };
     });
   }
@@ -2226,7 +2276,8 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const file = tables(db).files.find((f) => f.id === fileId);
       if (!file) return null;
       const access = viewAccessOf(db, actor, file.quote_request_id);
-      if (!access || !canReadCaseFile(db, actor, access, file)) return null;
+      const supervisorSurveyPhoto = !access && file.context === 'site_survey' && roleOf(db, actor, file.quote_request_id) === 'supervisor';
+      if (!supervisorSurveyPhoto && (!access || !canReadCaseFile(db, actor, access, file))) return null;
       const abs = path.join(filesDir(), 'case-files', file.storage_path);
       if (!fs.existsSync(abs)) return null;
       return { file: { ...file }, bytes: new Uint8Array(fs.readFileSync(abs)) };

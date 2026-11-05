@@ -54,7 +54,10 @@ declare
   q_1 constant uuid := '45000000-0000-4000-8000-000000000001';
   k_1 constant uuid := '46000000-0000-4000-8000-000000000001';
   mo_1 constant uuid := '47000000-0000-4000-8000-000000000001';
+  f_survey constant uuid := '48000000-0000-4000-8000-000000000001';
+  f_doc constant uuid := '48000000-0000-4000-8000-000000000002';
   v_out text;
+  v_info jsonb;
 begin
   set local session_replication_role = replica;
   insert into auth.users (id, email, raw_user_meta_data)
@@ -90,9 +93,11 @@ begin
   values (m_model, 'runtime-sv-model', '確認用モデル', 1000000, 'published') on conflict (slug) do nothing;
   insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level, site_prefecture, site_municipality)
   values (c_1, u_cust, m_model, '秘密 太郎の案件', 'quote_requested', 'office', 'full', '秘密県', '秘密市');
-  insert into public.quote_requests (id, configuration_id, user_id, quote_id, status, message, contact)
+  insert into public.quote_requests (id, configuration_id, user_id, quote_id, status, message, contact, case_name)
   values (r_1, c_1, u_cust, q_1, 'sent', 'お客様からの秘密のメッセージ',
-          jsonb_build_object('full_name', '秘密 太郎', 'phone', '090-9999-0000', 'site_address', '秘密県秘密市1-2-3'));
+          jsonb_build_object('full_name', '秘密 太郎', 'phone', '090-9999-0000', 'site_address', '秘密県秘密市1-2-3',
+                             'address', '自宅県自宅市9-9-9', 'email', 'sv-customer-secret@runtime.invalid', 'company_name', '秘密商事'),
+          'RT 確認の案件');
   insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
                              customer_name, customer_company, base_model_name, base_price, option_subtotal, installation_subtotal,
                              subtotal, tax_rate, tax, total, revision, notes, dealer_note, spec_code)
@@ -114,6 +119,19 @@ begin
   values (r_1, 'manufacturing', '製造', 'in_progress', u_d_staff);
   insert into public.case_progress_reports (quote_request_id, kind, title, body, reported_on, created_by, author_name)
   values (r_1, 'progress', '基礎の確認', '基礎の水平を確認した', current_date, u_d_staff, '代理店 担当者');
+  update public.quotes set customer_no = 'C-SV-0001' where id = q_1;
+  insert into public.configuration_site_profiles (configuration_id, land_status, site_address, area_sqm, land_category, road_access, electricity, water, drainage, note)
+  values (c_1, 'owned', '秘密県秘密市1-2-3', 120.5, 'residential', 'wide', 'available', 'unavailable', 'unknown', '土地の秘密のメモ');
+  insert into public.site_surveys (quote_request_id, status, surveyed_on, surveyor_name, land, legal, survey_notes, completed_at, completed_by)
+  values (r_1, 'completed', current_date, '代理店 担当者', '{"delivery_route": "4t 車で搬入できる"}'::jsonb,
+          '{"zoning": "第一種住居地域"}'::jsonb, '北側の境界から 2m', now(), u_d_staff);
+  insert into public.case_files (id, quote_request_id, context, storage_path, file_name, content_type, size_bytes, caption, customer_visible, uploaded_by)
+  values (f_survey, r_1, 'site_survey', 'cases/' || r_1 || '/' || f_survey || '.jpg', 'survey.jpg', 'image/jpeg', 100, '搬入経路の写真', false, u_d_staff),
+         (f_doc, r_1, 'document', 'cases/' || r_1 || '/' || f_doc || '.pdf', 'customer.pdf', 'application/pdf', 100, 'お客様が送った秘密の資料', true, u_cust);
+  insert into public.quote_request_preferences (quote_request_id, meeting_method, note)
+  values (r_1, 'online', '打合せの秘密の希望');
+  insert into public.case_notes (quote_request_id, kind, body, created_by, author_name)
+  values (r_1, 'meeting', '打合せの秘密の記録', u_d_staff, '代理店 担当者');
   set local session_replication_role = origin;
 
   -- ---------- 一覧 ----------
@@ -138,10 +156,10 @@ begin
     (v_out::jsonb -> 'quote' ->> 'total') || '/' || jsonb_array_length(v_out::jsonb -> 'items')::text || '/' ||
     (v_out::jsonb -> 'manufacturing_order' ->> 'status') || '/' || jsonb_array_length(v_out::jsonb -> 'units')::text || '/' ||
     jsonb_array_length(v_out::jsonb -> 'schedule')::text || '/' || jsonb_array_length(v_out::jsonb -> 'progress_reports')::text);
-  perform pg_temp.sv_expect_eq('26-5 詳細にはお客様の情報と見積の備考（お客様向け・社内）を含めない', '0/0/0/0/0/0/0/0',
+  perform pg_temp.sv_expect_eq('26-5 詳細にはお客様の情報と見積の備考（お客様向け・社内）を含めない（設置場所は B-3 で見せる：26-12b）', '0/0/0/0/0/0/0/0',
     position('秘密 太郎' in v_out)::text || '/' || position('秘密商事' in v_out)::text || '/' ||
     position('sv-customer-secret' in v_out)::text || '/' || position('090-9999' in v_out)::text || '/' ||
-    position('秘密県' in v_out)::text || '/' || position('秘密のメッセージ' in v_out)::text || '/' ||
+    position('自宅県' in v_out)::text || '/' || position('秘密のメッセージ' in v_out)::text || '/' ||
     position('お客様向けの秘密の備考' in v_out)::text || '/' || position('社内の秘密の備考' in v_out)::text);
   perform pg_temp.sv_expect_denied('26-6 別の総代理店の管理者は詳細を見られない', '42501',
     pg_temp.sv_run_as('authenticated', u_md2_mgr, format('select public.get_supervised_case(%L)::text', r_1)));
@@ -159,6 +177,36 @@ begin
   perform pg_temp.sv_expect_eq('26-12 直属の総代理店の管理者でも、案件・見積の表は直接読めない（顧客情報を含むため）', '0/0',
     pg_temp.sv_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.quotes where id = %L', q_1)) || '/' ||
     pg_temp.sv_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.quote_items where quote_id = %L', q_1)));
+
+  -- ---------- 製造・出荷・施工に必要な情報（2026-11-04 の先方回答 B-3） ----------
+  v_info := (pg_temp.sv_run_as('authenticated', u_md_mgr, format('select public.get_supervised_case(%L)::text', r_1))::jsonb) -> 'partner_info';
+  perform pg_temp.sv_expect_eq('26-12b 詳細に、案件名・顧客番号・設置場所の住所と条件・現地確認と写真を返す（B-3）',
+    'RT 確認の案件/C-SV-0001/秘密県秘密市1-2-3/owned/120.50/residential/wide/available/unavailable/unknown/completed/4t 車で搬入できる/第一種住居地域/北側の境界から 2m/1/搬入経路の写真',
+    coalesce((v_info ->> 'case_name') || '/' || (v_info ->> 'customer_no') || '/' || (v_info ->> 'site_address') || '/' ||
+      (v_info #>> '{land,land_status}') || '/' || (v_info #>> '{land,area_sqm}') || '/' || (v_info #>> '{land,land_category}') || '/' ||
+      (v_info #>> '{land,road_access}') || '/' || (v_info #>> '{land,electricity}') || '/' || (v_info #>> '{land,water}') || '/' ||
+      (v_info #>> '{land,drainage}') || '/' || (v_info #>> '{survey,status}') || '/' || (v_info #>> '{survey,land,delivery_route}') || '/' ||
+      (v_info #>> '{survey,legal,zoning}') || '/' || (v_info #>> '{survey,survey_notes}') || '/' ||
+      jsonb_array_length(v_info -> 'survey_files')::text || '/' || (v_info #>> '{survey_files,0,caption}'), '(none)'));
+  perform pg_temp.sv_expect_eq('26-12c 製造・出荷・施工に必要な情報にも、お客様の氏名・会社名・電話・メール・ご自宅の住所・メッセージ・打合せの希望と記録・土地のメモ・お客様が送った資料・調査者の名前は含めない',
+    '0/0/0/0/0/0/0/0/0/0/0',
+    position('秘密 太郎' in v_info::text)::text || '/' || position('秘密商事' in v_info::text)::text || '/' ||
+    position('090-9999' in v_info::text)::text || '/' || position('sv-customer-secret' in v_info::text)::text || '/' ||
+    position('自宅県' in v_info::text)::text || '/' || position('秘密のメッセージ' in v_info::text)::text || '/' ||
+    position('打合せの秘密' in v_info::text)::text || '/' || position('土地の秘密のメモ' in v_info::text)::text || '/' ||
+    position('お客様が送った秘密の資料' in v_info::text)::text || '/' || position('customer.pdf' in v_info::text)::text || '/' ||
+    position('代理店 担当者' in v_info::text)::text);
+  perform pg_temp.sv_expect_eq('26-12d 現地確認の写真は、直属の総代理店の管理者が読める（RLS）。お客様が送った資料は読めない', '1/0',
+    pg_temp.sv_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_files where id = %L', f_survey)) || '/' ||
+    pg_temp.sv_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_files where id = %L', f_doc)));
+  perform pg_temp.sv_expect_eq('26-12e 総代理店の担当者（管理者でない）とお客様は、現地確認の写真を読めない', '0/0',
+    pg_temp.sv_run_as('authenticated', u_md_staff, format('select count(*)::text from public.case_files where id = %L', f_survey)) || '/' ||
+    pg_temp.sv_run_as('authenticated', u_cust, format('select count(*)::text from public.case_files where id = %L', f_survey)));
+  perform pg_temp.sv_expect_eq('26-12g 製造担当組織（別の総代理店）は、現地確認の写真を読め、お客様が送った資料は読めない（B-3）', '1/0',
+    pg_temp.sv_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.case_files where id = %L', f_survey)) || '/' ||
+    pg_temp.sv_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.case_files where id = %L', f_doc)));
+  perform pg_temp.sv_expect_denied('26-12f 内部の部品（case_partner_site_info）は利用者から直接呼べない', '42501',
+    pg_temp.sv_run_as('authenticated', u_md_mgr, format('select public.case_partner_site_info(%L)::text', r_1)));
 
   -- ---------- 営業担当が別の総代理店の配下に移ると、前の総代理店は見られない ----------
   update public.case_workflows set sales_organization_id = o_d2 where quote_request_id = r_1;

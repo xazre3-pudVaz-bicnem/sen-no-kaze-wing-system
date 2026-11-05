@@ -581,7 +581,7 @@ export interface DataStore {
   // ---- 監査ログ ----
   listAuditLogs(opts?: { limit?: number }): Promise<AuditLog[]>;
 
-  /** 商品価格の一括更新（総代理店以上）。本体内訳マスターの一括管理表から使う */
+  /** 商品価格の一括更新（本部だけ。2026-11-04 B-2）。本体内訳マスターの一括管理表から使う */
   updateOptionPrices(items: { id: string; price: number }[]): Promise<void>;
   /**
    * 商品の状態を変える（取扱終了・再開・シミュレーター表示）。画面が読んだ版（updated_at）と一致する行だけを更新し、
@@ -604,7 +604,7 @@ export interface DataStore {
   // ---- 本体内訳マスター ----
   /** モデル・仕様ごとの本体内訳（分類表見積書）。modelId 省略で全件 */
   listBaseBreakdownItems(modelId?: string): Promise<BaseBreakdownItem[]>;
-  /** (モデル, 仕様) の本体内訳を丸ごと入れ替える（総代理店以上） */
+  /** (モデル, 仕様) の本体内訳を丸ごと入れ替える（本部だけ。2026-11-04 B-2） */
   saveBaseBreakdownItems(
     modelId: string,
     specCode: string,
@@ -668,6 +668,8 @@ export interface DataStore {
   upsertOptionImage(input: OptionImageInput): Promise<OptionImage>;
   deleteOptionImage(id: string): Promise<OptionImage | null>;
   setOptionManufacturerDocument(optionId: string, url: string | null): Promise<void>;
+  /** 新規未使用下書き専用。Storage内の画像・PDFを別ファイルへコピーする。 */
+  copyOptionMediaToNewDraft(sourceId: string, newDraftId: string): Promise<import('@/lib/storage/product-media-copy').ProductMediaCopySummary>;
   setOptionRelations(
     optionId: string,
     dependencies: { requires_option_id: string; message: string | null }[],

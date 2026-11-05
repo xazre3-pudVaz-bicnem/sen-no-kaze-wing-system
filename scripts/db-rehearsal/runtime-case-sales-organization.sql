@@ -288,8 +288,8 @@ begin
   insert into public.configuration_site_profiles (configuration_id, land_status, site_address)
   values (c_1, 'owned', '検査県検査市1-1'), (c_legacy, 'owned', '検査県検査市2-2');
   set local session_replication_role = origin;
-  perform pg_temp.cs_expect_eq('25-38 製造担当組織のメンバーが読めるのは自分たちの技術検討と施工の写真だけ（打合せ記録・現地確認・資料・設置予定地は読めない）',
-    'tech_review/0/progress/0',
+  perform pg_temp.cs_expect_eq('25-38 製造担当組織のメンバーが読めるのは自分たちの技術検討と、施工・現地確認の写真だけ（打合せ記録・現地確認の記録の表・資料・設置予定地は読めない。現地確認の写真は 2026-11-04 B-3）',
+    'tech_review/0/progress,site_survey/0',
     pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select string_agg(kind, '','' order by kind) from public.case_notes where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select string_agg(context, '','' order by context) from public.case_files where quote_request_id = %L', r_1)) || '/' ||
@@ -299,7 +299,7 @@ begin
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.case_files where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.configuration_site_profiles where configuration_id = %L', c_1)));
-  perform pg_temp.cs_expect_eq('25-40 直属の総代理店の管理者（配下の確認）は、案件の記録を表から読めない', '0/0/0/0',
+  perform pg_temp.cs_expect_eq('25-40 直属の総代理店の管理者（配下の確認）は、案件の記録を表から読めない（現地確認の写真だけは読める：2026-11-04 B-3）', '0/0/1/0',
     pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_notes where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_files where quote_request_id = %L', r_1)) || '/' ||

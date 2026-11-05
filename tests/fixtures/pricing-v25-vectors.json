@@ -73,6 +73,7 @@
           {
             "code": "base",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 574998,
             "subtotal": 574998,
@@ -128,6 +129,7 @@
           {
             "code": "option",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 33332,
             "subtotal": 33332,
@@ -183,6 +185,7 @@
           {
             "code": "interior_exterior",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 1980,
             "subtotal": 1980,
@@ -237,6 +240,7 @@
           {
             "code": "interior_exterior",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 37035,
             "subtotal": 37035,
@@ -308,6 +312,7 @@
           {
             "code": "base",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 150000,
             "subtotal": 150000,
@@ -327,6 +332,7 @@
           {
             "code": "sitework",
             "expense_target": false,
+            "expense_method": "none",
             "has_por": true,
             "priced_subtotal": 5000,
             "subtotal": null,
@@ -400,6 +406,7 @@
           {
             "code": "sitework",
             "expense_target": false,
+            "expense_method": "none",
             "has_por": false,
             "priced_subtotal": 10000,
             "subtotal": 10000,
@@ -419,6 +426,7 @@
           {
             "code": "option",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 10000,
             "subtotal": 10000,
@@ -473,6 +481,7 @@
           {
             "code": "sitework",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 10000,
             "subtotal": 10000,
@@ -528,6 +537,7 @@
           {
             "code": "base",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 9999,
             "subtotal": 9999,
@@ -582,6 +592,7 @@
           {
             "code": "option",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 0,
             "subtotal": 0,
@@ -636,6 +647,7 @@
           {
             "code": "base",
             "expense_target": true,
+            "expense_method": "rate",
             "has_por": false,
             "priced_subtotal": 2500,
             "subtotal": 2500,
@@ -923,6 +935,338 @@
                 "standard_cost": 10000
               }
             ]
+          }
+        ]
+      },
+      "error": "VALIDATION"
+    },
+    {
+      "name": "経費の手動の額（A-2 ⑥）：その区分の経費は率で計算せず手動の額。ほかの区分は率のまま",
+      "rule": "standard",
+      "input": {
+        "rates": {
+          "sales_fee_rate": "1.07",
+          "markup_rate": "1.5",
+          "expense_rate": "0.15"
+        },
+        "sections": [
+          {
+            "code": "base",
+            "lines": [
+              {
+                "key": "b1",
+                "mode": "manual",
+                "quantity": "1",
+                "manual_unit_price": 100000
+              }
+            ]
+          },
+          {
+            "code": "option",
+            "expense_amount": 12345,
+            "lines": [
+              {
+                "key": "o1",
+                "mode": "manual",
+                "quantity": "1",
+                "manual_unit_price": 50000
+              }
+            ]
+          },
+          {
+            "code": "sitework",
+            "lines": [
+              {
+                "key": "s1",
+                "mode": "manual",
+                "quantity": "1",
+                "manual_unit_price": 8000
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_por": false,
+        "subtotal": 185345,
+        "adjustment": 0,
+        "adjusted_subtotal": 185345,
+        "taxable_amount": 185345,
+        "tax": 18534,
+        "total": 203879,
+        "sections": [
+          {
+            "code": "base",
+            "expense_target": true,
+            "expense_method": "rate",
+            "has_por": false,
+            "priced_subtotal": 100000,
+            "subtotal": 100000,
+            "expense": 15000,
+            "total": 115000,
+            "lines": [
+              {
+                "key": "b1",
+                "mode": "manual",
+                "selection_cost": null,
+                "cost_unit_price": null,
+                "sale_unit_price": 100000,
+                "amount": 100000
+              }
+            ]
+          },
+          {
+            "code": "option",
+            "expense_target": true,
+            "expense_method": "fixed",
+            "has_por": false,
+            "priced_subtotal": 50000,
+            "subtotal": 50000,
+            "expense": 12345,
+            "total": 62345,
+            "lines": [
+              {
+                "key": "o1",
+                "mode": "manual",
+                "selection_cost": null,
+                "cost_unit_price": null,
+                "sale_unit_price": 50000,
+                "amount": 50000
+              }
+            ]
+          },
+          {
+            "code": "sitework",
+            "expense_target": false,
+            "expense_method": "none",
+            "has_por": false,
+            "priced_subtotal": 8000,
+            "subtotal": 8000,
+            "expense": 0,
+            "total": 8000,
+            "lines": [
+              {
+                "key": "s1",
+                "mode": "manual",
+                "selection_cost": null,
+                "cost_unit_price": null,
+                "sale_unit_price": 8000,
+                "amount": 8000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "経費の手動の額：0 円も手動の額として扱い、null は率で計算する",
+      "rule": "standard",
+      "input": {
+        "rates": {
+          "sales_fee_rate": "1.07",
+          "markup_rate": "1.5",
+          "expense_rate": "0.15"
+        },
+        "sections": [
+          {
+            "code": "interior_exterior",
+            "expense_amount": 0,
+            "lines": [
+              {
+                "key": "i1",
+                "mode": "manual",
+                "quantity": "2",
+                "manual_unit_price": 30000
+              }
+            ]
+          },
+          {
+            "code": "option",
+            "expense_amount": null,
+            "lines": [
+              {
+                "key": "o1",
+                "mode": "manual",
+                "quantity": "1",
+                "manual_unit_price": 10000
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_por": false,
+        "subtotal": 71500,
+        "adjustment": 0,
+        "adjusted_subtotal": 71500,
+        "taxable_amount": 71500,
+        "tax": 7150,
+        "total": 78650,
+        "sections": [
+          {
+            "code": "interior_exterior",
+            "expense_target": true,
+            "expense_method": "fixed",
+            "has_por": false,
+            "priced_subtotal": 60000,
+            "subtotal": 60000,
+            "expense": 0,
+            "total": 60000,
+            "lines": [
+              {
+                "key": "i1",
+                "mode": "manual",
+                "selection_cost": null,
+                "cost_unit_price": null,
+                "sale_unit_price": 30000,
+                "amount": 60000
+              }
+            ]
+          },
+          {
+            "code": "option",
+            "expense_target": true,
+            "expense_method": "rate",
+            "has_por": false,
+            "priced_subtotal": 10000,
+            "subtotal": 10000,
+            "expense": 1500,
+            "total": 11500,
+            "lines": [
+              {
+                "key": "o1",
+                "mode": "manual",
+                "selection_cost": null,
+                "cost_unit_price": null,
+                "sale_unit_price": 10000,
+                "amount": 10000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "経費の手動の額：別途見積を含む区分は、手動でも区分の経費・合計を未確定（null）にする",
+      "rule": "standard",
+      "input": {
+        "rates": {
+          "sales_fee_rate": "1.07",
+          "markup_rate": "1.5",
+          "expense_rate": "0.15"
+        },
+        "sections": [
+          {
+            "code": "option",
+            "expense_amount": 7000,
+            "lines": [
+              {
+                "key": "o1",
+                "mode": "por",
+                "quantity": "1"
+              },
+              {
+                "key": "o2",
+                "mode": "manual",
+                "quantity": "1",
+                "manual_unit_price": 5000
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_por": true,
+        "subtotal": null,
+        "adjustment": 0,
+        "adjusted_subtotal": null,
+        "taxable_amount": null,
+        "tax": null,
+        "total": null,
+        "sections": [
+          {
+            "code": "option",
+            "expense_target": true,
+            "expense_method": "fixed",
+            "has_por": true,
+            "priced_subtotal": 5000,
+            "subtotal": null,
+            "expense": null,
+            "total": null,
+            "lines": [
+              {
+                "key": "o1",
+                "mode": "por",
+                "selection_cost": null,
+                "cost_unit_price": null,
+                "sale_unit_price": null,
+                "amount": null
+              },
+              {
+                "key": "o2",
+                "mode": "manual",
+                "selection_cost": null,
+                "cost_unit_price": null,
+                "sale_unit_price": 5000,
+                "amount": 5000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "経費の手動の額：経費を掛けない区分（別途工事）には指定できない",
+      "rule": "standard",
+      "input": {
+        "rates": {
+          "sales_fee_rate": "1.07",
+          "markup_rate": "1.5",
+          "expense_rate": "0.15"
+        },
+        "sections": [
+          {
+            "code": "sitework",
+            "expense_amount": 1000,
+            "lines": []
+          }
+        ]
+      },
+      "error": "VALIDATION"
+    },
+    {
+      "name": "経費の手動の額：整数円だけ（小数・文字列・マイナスは拒否）",
+      "rule": "standard",
+      "input": {
+        "rates": {
+          "sales_fee_rate": "1.07",
+          "markup_rate": "1.5",
+          "expense_rate": "0.15"
+        },
+        "sections": [
+          {
+            "code": "option",
+            "expense_amount": "1000",
+            "lines": []
+          }
+        ]
+      },
+      "error": "VALIDATION"
+    },
+    {
+      "name": "経費の手動の額：マイナスは拒否",
+      "rule": "standard",
+      "input": {
+        "rates": {
+          "sales_fee_rate": "1.07",
+          "markup_rate": "1.5",
+          "expense_rate": "0.15"
+        },
+        "sections": [
+          {
+            "code": "option",
+            "expense_amount": -1,
+            "lines": []
           }
         ]
       },

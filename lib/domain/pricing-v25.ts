@@ -8,6 +8,7 @@
  *   manual：明細売価 = trunc(manual 売価単価 × 数量)（販売費・掛率を再適用しない）
  *   por：金額未確定。0 円として扱わず、区分・合計・税まで null（未確定）を伝える
  *   区分小計 = 金額確定済みの明細売価の合計、区分経費 = trunc(区分小計 × 経費率)（計算ルールの経費対象区分だけ）
+ *   区分の経費の手動の額（expense_amount。2026-11-04 の先方回答 A-2 ⑥）：あれば率で計算せずその額（経費対象区分だけ）
  *   auto は計算ルールの auto_price_sections の区分だけ（別途工事は販売費・経費・掛率を掛けず、manual か por。2026-10-19 先方の確定方針）
  *   税別小計 = Σ(区分小計 + 区分経費)、調整後税別額 = 税別小計 + 調整額（0 円以上）
  *   税額 = trunc(調整後税別額 × 税率)（全額課税・単一税率）、税込総額 = 調整後税別額 + 税額
@@ -20,6 +21,8 @@
 
 export type PricingSectionCode = 'base' | 'interior_exterior' | 'option' | 'sitework';
 export type PricingLineMode = 'auto' | 'manual' | 'por';
+/** 区分の経費の決め方（rate：率で計算、fixed：手動の額、none：経費を掛けない区分） */
+export type PricingExpenseMethod = 'rate' | 'fixed' | 'none';
 
 export const PRICING_SECTION_CODES: readonly PricingSectionCode[] = ['base', 'interior_exterior', 'option', 'sitework'];
 
@@ -63,7 +66,8 @@ export interface PricingInput {
   };
   /** 案件全体の調整額（整数円。省略は 0） */
   adjustment?: number | null;
-  sections: { code: PricingSectionCode; lines: PricingLineInput[] }[];
+  /** expense_amount：区分の経費の手動の額（整数円・0 以上。経費対象区分だけ。省略・null は率で計算する） */
+  sections: { code: PricingSectionCode; lines: PricingLineInput[]; expense_amount?: number | null }[];
 }
 
 export interface PricingLineResult {
@@ -78,6 +82,7 @@ export interface PricingLineResult {
 export interface PricingSectionResult {
   code: PricingSectionCode;
   expense_target: boolean;
+  expense_method: PricingExpenseMethod;
   has_por: boolean;
   /** 金額確定済みの明細だけの合計（por があっても表示用に持つ） */
   priced_subtotal: number;
@@ -253,18 +258,25 @@ export function calculatePricingV25(rule: PricingCalculationRule, taxRule: Prici
     }
 
     const expenseTarget = rule.expense_target_sections.includes(code);
+    // 経費の手動の額（A-2 ⑥）：あれば、その区分の経費は率で計算せずその額（経費対象区分だけ。DB と同じ検査）
+    let fixedExpense: bigint | null = null;
+    if (section.expense_amount !== undefined && section.expense_amount !== null) {
+      if (!expenseTarget) fail(`区分 ${code} には経費を掛けないため、経費の手動の額は指定できません`);
+      fixedExpense = parseInteger(section.expense_amount, '経費の手動の額', 0, INT4_MAX);
+    }
+    const expenseMethod: PricingExpenseMethod = fixedExpense !== null ? 'fixed' : expenseTarget ? 'rate' : 'none';
     if (sectionPor) {
       hasPor = true;
       sections.push({
-        code: code as PricingSectionCode, expense_target: expenseTarget, has_por: true,
+        code: code as PricingSectionCode, expense_target: expenseTarget, expense_method: expenseMethod, has_por: true,
         priced_subtotal: toNumber(priced), subtotal: null, expense: null, total: null, lines,
       });
     } else {
-      const expense = expenseTarget ? checked(truncMul(priced, expenseRate), '区分経費') : 0n;
+      const expense = fixedExpense ?? (expenseTarget ? checked(truncMul(priced, expenseRate), '区分経費') : 0n);
       const total = checked(priced + expense, '区分合計');
       subtotal = checked(subtotal + total, '税別小計');
       sections.push({
-        code: code as PricingSectionCode, expense_target: expenseTarget, has_por: false,
+        code: code as PricingSectionCode, expense_target: expenseTarget, expense_method: expenseMethod, has_por: false,
         priced_subtotal: toNumber(priced), subtotal: toNumber(priced), expense: toNumber(expense), total: toNumber(total), lines,
       });
     }

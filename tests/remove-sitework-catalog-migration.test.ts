@@ -32,11 +32,19 @@ describe('別途工事 9 品目の削除の migration', () => {
     expect(sql).toContain('revoke all on schema archive_a3_20261104 from public, anon, authenticated, service_role;');
     for (const table of ['option_categories', 'options', 'configurations', 'configuration_items', 'configuration_snapshots', 'quote_requests', 'quotes', 'quote_items', 'quote_documents']) {
       expect(sql).toContain(`create table archive_a3_20261104.${table} as select * from public.${table} with no data;`);
-      expect(fn).toContain(`insert into archive_a3_20261104.${table} select * from public.${table}`);
+      expect(fn).toContain(`('${table}', 'x.`);
     }
+    // 写しの表の列だけを名前で写す（後の migration が元の表に列を足しても動く。2026-11-05 の統合リハーサルで、
+    // ⑥・代理店の拡張・C-4 を適用した後に呼ぶと select * では列の数が合わなくなることが分かったため）
+    expect(fn).not.toMatch(/insert into archive_a3_20261104\.\w+ select \*/);
+    const copy = "execute pg_catalog.format('insert into archive_a3_20261104.%I (%s) select %s from public.%I x where %s',";
+    expect(fn).toContain(copy);
+    expect(fn).toContain("where a.attrelid = pg_catalog.to_regclass('archive_a3_20261104.' || v_copy.tbl) and a.attnum > 0 and not a.attisdropped;");
+    expect(fn).toContain('using v_cat, v_products, v_cfg, v_req, v_quote;');
     // 写しは消す前
-    expect(fn.indexOf('insert into archive_a3_20261104.configurations')).toBeLessThan(fn.indexOf('delete from public.configurations'));
-    expect(fn.indexOf('insert into archive_a3_20261104.options')).toBeLessThan(fn.indexOf('delete from public.options'));
+    expect(fn.indexOf(copy)).toBeLessThan(fn.indexOf('delete from public.quote_requests'));
+    expect(fn.indexOf(copy)).toBeLessThan(fn.indexOf('delete from public.configurations'));
+    expect(fn.indexOf(copy)).toBeLessThan(fn.indexOf('delete from public.options'));
   });
 
   it('削除の関数は内部用（所有者 postgres・API のロールから実行できない・search_path を固定）', () => {

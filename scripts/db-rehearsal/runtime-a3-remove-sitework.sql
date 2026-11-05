@@ -59,6 +59,15 @@ language sql as $fn$
     'quotes', jsonb_build_object('count', cardinality(p_quote), 'md5', md5(coalesce((select string_agg(x::text, ',' order by x) from unnest(p_quote) x), ''))));
 $fn$;
 
+-- 行（jsonb）から、写しの表にある列だけを残して文字列にする
+create function pg_temp.a3_archived_columns(p_row jsonb, p_table text) returns text
+language sql as $fn$
+  select coalesce(jsonb_object_agg(k, p_row -> k), '{}'::jsonb)::text
+    from pg_attribute a
+    cross join lateral (select a.attname::text as k) c
+   where a.attrelid = to_regclass('archive_a3_20261104.' || p_table) and a.attnum > 0 and not a.attisdropped;
+$fn$;
+
 do $test$
 declare
   u_cust constant uuid := '2a400000-0000-4000-8000-000000000001';
@@ -82,6 +91,8 @@ declare
   v_out text;
   v_before text;
   v_archive text;
+  v_table text;
+  v_cols text;
   i integer;
 begin
   -- ---------- migration の作り ----------
@@ -232,31 +243,28 @@ begin
     public.remove_sitework_catalog(v_expected)::text);
 
   -- ---------- 写しから元に戻せる（緊急時の手順。DB の保護の仕組みは戻す間だけ外す） ----------
+  -- 写しの表の列を名前で戻す（後の migration で足された列は既定値になる）
   set local session_replication_role = replica;
-  insert into public.option_categories select * from archive_a3_20261104.option_categories;
-  insert into public.options select * from archive_a3_20261104.options;
+  foreach v_table in array array['option_categories', 'options', 'configurations', 'configuration_items', 'configuration_snapshots',
+                                 'configuration_site_profiles', 'quote_requests', 'quote_request_preferences', 'quotes', 'quote_items', 'quote_documents'] loop
+    select string_agg(quote_ident(a.attname), ', ' order by a.attnum) into v_cols
+      from pg_attribute a where a.attrelid = to_regclass('archive_a3_20261104.' || v_table) and a.attnum > 0 and not a.attisdropped;
+    execute format('insert into public.%I (%s) select %s from archive_a3_20261104.%I', v_table, v_cols, v_cols, v_table);
+  end loop;
   update public.base_models bm set presets = a.presets from archive_a3_20261104.base_model_presets a where a.base_model_id = bm.id;
-  insert into public.configurations select * from archive_a3_20261104.configurations;
-  insert into public.configuration_items select * from archive_a3_20261104.configuration_items;
-  insert into public.configuration_snapshots select * from archive_a3_20261104.configuration_snapshots;
-  insert into public.configuration_site_profiles select * from archive_a3_20261104.configuration_site_profiles;
-  insert into public.quote_requests select * from archive_a3_20261104.quote_requests;
-  insert into public.quote_request_preferences select * from archive_a3_20261104.quote_request_preferences;
-  insert into public.quotes select * from archive_a3_20261104.quotes;
-  insert into public.quote_items select * from archive_a3_20261104.quote_items;
-  insert into public.quote_documents select * from archive_a3_20261104.quote_documents;
   set local session_replication_role = origin;
   select md5(string_agg(t.x, '|' order by t.x)) into v_archive from (
-    select row_to_json(a)::text as x from archive_a3_20261104.configurations a
-    union all select row_to_json(a)::text from archive_a3_20261104.quotes a
-    union all select row_to_json(a)::text from archive_a3_20261104.quote_items a
-    union all select row_to_json(a)::text from archive_a3_20261104.options a) t;
+    select to_jsonb(a)::text as x from archive_a3_20261104.configurations a
+    union all select to_jsonb(a)::text from archive_a3_20261104.quotes a
+    union all select to_jsonb(a)::text from archive_a3_20261104.quote_items a
+    union all select to_jsonb(a)::text from archive_a3_20261104.options a) t;
+  -- 比べるのは写しの表の列だけ（後の migration で元の表に足された列は、写しに無い）
   perform pg_temp.a3_expect_eq('A3-14 写しから同じ ID・同じ内容で戻せる（プラン・見積・見積の明細・商品）', v_archive,
     (select md5(string_agg(t.x, '|' order by t.x)) from (
-       select row_to_json(p)::text as x from public.configurations p where p.id in (c_draft, c_req)
-       union all select row_to_json(p)::text from public.quotes p where p.id = q_req
-       union all select row_to_json(p)::text from public.quote_items p where p.quote_id = q_req
-       union all select row_to_json(p)::text from public.options p where p.category_id = cat_sw) t));
+       select pg_temp.a3_archived_columns(to_jsonb(p), 'configurations') as x from public.configurations p where p.id in (c_draft, c_req)
+       union all select pg_temp.a3_archived_columns(to_jsonb(p), 'quotes') from public.quotes p where p.id = q_req
+       union all select pg_temp.a3_archived_columns(to_jsonb(p), 'quote_items') from public.quote_items p where p.quote_id = q_req
+       union all select pg_temp.a3_archived_columns(to_jsonb(p), 'options') from public.options p where p.category_id = cat_sw) t));
 end;
 $test$;
 

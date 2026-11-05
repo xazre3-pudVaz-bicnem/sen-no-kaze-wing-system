@@ -118,6 +118,9 @@ declare
   v_actual jsonb;
   v_keep_requests integer;
   v_keep_drafts integer;
+  v_copy record;
+  v_cols text;
+  v_select text;
 begin
   select c.id into v_cat from public.option_categories c where c.code = 'sitework';
   if v_cat is null then
@@ -189,9 +192,33 @@ begin
   select count(*) into v_keep_requests from public.quote_requests r where not (r.id = any(v_req));
   select count(*) into v_keep_drafts from public.quote_drafts d;
 
-  -- 写す（消す前に）
-  insert into archive_a3_20261104.option_categories select * from public.option_categories c where c.id = v_cat;
-  insert into archive_a3_20261104.options select * from public.options o where o.id = any(v_products);
+  -- 写す（消す前に）。写しの表は、この migration の時点の元の表と同じ列で作ってある。写しの表の列だけを名前で写すので、
+  -- 後の migration（v2.5 の経費・代理店の拡張・C-4 など）が元の表に列を足しても、この関数は同じように動く
+  -- （元に戻すときは、写しの表の列を名前で戻す。後から足された列は既定値になる）
+  for v_copy in
+    select t.tbl, t.cond
+      from (values
+        ('option_categories', 'x.id = $1'),
+        ('options', 'x.id = any($2)'),
+        ('configurations', 'x.id = any($3)'),
+        ('configuration_items', 'x.configuration_id = any($3)'),
+        ('configuration_snapshots', 'x.configuration_id = any($3)'),
+        ('configuration_site_profiles', 'x.configuration_id = any($3)'),
+        ('quote_requests', 'x.id = any($4)'),
+        ('quote_request_preferences', 'x.quote_request_id = any($4)'),
+        ('quotes', 'x.id = any($5)'),
+        ('quote_items', 'x.quote_id = any($5)'),
+        ('quote_documents', 'x.quote_id = any($5)')) as t(tbl, cond)
+  loop
+    select pg_catalog.string_agg(pg_catalog.quote_ident(a.attname), ', ' order by a.attnum),
+           pg_catalog.string_agg('x.' || pg_catalog.quote_ident(a.attname), ', ' order by a.attnum)
+      into v_cols, v_select
+      from pg_catalog.pg_attribute a
+     where a.attrelid = pg_catalog.to_regclass('archive_a3_20261104.' || v_copy.tbl) and a.attnum > 0 and not a.attisdropped;
+    execute pg_catalog.format('insert into archive_a3_20261104.%I (%s) select %s from public.%I x where %s',
+                              v_copy.tbl, v_cols, v_select, v_copy.tbl, v_copy.cond)
+      using v_cat, v_products, v_cfg, v_req, v_quote;
+  end loop;
   insert into archive_a3_20261104.base_model_presets (base_model_id, presets)
     select bm.id, bm.presets from public.base_models bm
      where exists (
@@ -200,15 +227,6 @@ begin
          cross join lateral pg_catalog.jsonb_array_elements_text(
            case when pg_catalog.jsonb_typeof(p.value -> 'option_codes') = 'array' then p.value -> 'option_codes' else '[]'::jsonb end) oc(code)
         where oc.code = any(v_codes));
-  insert into archive_a3_20261104.configurations select * from public.configurations x where x.id = any(v_cfg);
-  insert into archive_a3_20261104.configuration_items select * from public.configuration_items x where x.configuration_id = any(v_cfg);
-  insert into archive_a3_20261104.configuration_snapshots select * from public.configuration_snapshots x where x.configuration_id = any(v_cfg);
-  insert into archive_a3_20261104.configuration_site_profiles select * from public.configuration_site_profiles x where x.configuration_id = any(v_cfg);
-  insert into archive_a3_20261104.quote_requests select * from public.quote_requests x where x.id = any(v_req);
-  insert into archive_a3_20261104.quote_request_preferences select * from public.quote_request_preferences x where x.quote_request_id = any(v_req);
-  insert into archive_a3_20261104.quotes select * from public.quotes x where x.id = any(v_quote);
-  insert into archive_a3_20261104.quote_items select * from public.quote_items x where x.quote_id = any(v_quote);
-  insert into archive_a3_20261104.quote_documents select * from public.quote_documents x where x.quote_id = any(v_quote);
 
   -- 消す：見積依頼（見積・明細・PDF の記録が外部キーで一緒に消える）→ 見積依頼の無い見積（あれば）→ プラン（明細・写しが一緒に消える）
   -- → 標準構成から外す → 9 品目 → カテゴリー。見積はプランも参照する（quotes.configuration_id は削除時に確かめるだけ）ので、

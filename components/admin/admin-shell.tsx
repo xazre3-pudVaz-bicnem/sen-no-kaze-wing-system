@@ -86,6 +86,11 @@ export function AdminShell({
                       自社の組織・メンバー
                     </Link>
                   )}
+                  {!migrationOnly && role === 'master_dealer' && (
+                    <Link href="/admin/supervision" className="rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-sand hover:text-ink">
+                      配下の案件
+                    </Link>
+                  )}
                   {!migrationOnly && (
                     <Link href="/admin/manual" className="rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-sand hover:text-ink">
                       操作マニュアル

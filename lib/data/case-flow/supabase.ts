@@ -12,6 +12,8 @@ import type {
   CaseAccess,
   CaseOrganizations,
   CaseRole,
+  SupervisedCaseDetail,
+  SupervisedCaseSummary,
   CaseAppointment,
   CaseAppointmentInput,
   CaseFile,
@@ -201,6 +203,25 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
   }
   async setCaseManufacturingOrganization(_actor: SessionUser, requestId: string, organizationId: string | null) {
     await this.rpc<void>('set_case_manufacturing_organization', { p_request_id: requestId, p_organization_id: organizationId });
+  }
+  async listSupervisedCases(_actor: SessionUser): Promise<SupervisedCaseSummary[]> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('list_supervised_cases');
+    if (error) {
+      if (missing(error, 'list_supervised_cases')) return [];
+      fail(error);
+    }
+    return ((data as SupervisedCaseSummary[] | null) ?? []);
+  }
+  async getSupervisedCase(_actor: SessionUser, requestId: string): Promise<SupervisedCaseDetail | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_supervised_case', { p_request_id: requestId });
+    if (error) {
+      // 配下でない案件・migration 未適用は「見られない」として扱う（画面は 404）
+      if (missing(error, 'get_supervised_case') || error.code === '42501' || error.code === 'P0002') return null;
+      fail(error);
+    }
+    return (data as SupervisedCaseDetail | null) ?? null;
   }
   async getCaseProgress(_actor: SessionUser, requestId: string): Promise<CaseProgress | null> {
     const db = await this.db();

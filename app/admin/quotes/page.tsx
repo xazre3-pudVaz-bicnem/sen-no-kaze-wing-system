@@ -185,7 +185,16 @@ function CaseSummary({
   );
 }
 
-function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; canCreateQuote: boolean }) {
+function CasePageHeading({
+  caseCount,
+  canCreateQuote,
+  canSupervise = false,
+}: {
+  caseCount: number;
+  canCreateQuote: boolean;
+  /** 総代理店（と本部）は、配下の代理店の案件の進み具合を確認できる */
+  canSupervise?: boolean;
+}) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -206,6 +215,11 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
           <Link href="/admin/after-service" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
             アフター
           </Link>
+          {canSupervise && (
+            <Link href="/admin/supervision" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+              配下の案件
+            </Link>
+          )}
           {canCreateQuote && (
             <Link href="/admin/stock-ledger" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
               全国ストック台帳
@@ -279,7 +293,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-        <CasePageHeading caseCount={latest.length} canCreateQuote={false} />
+        <CasePageHeading caseCount={latest.length} canCreateQuote={false} canSupervise={actor.role === 'master_dealer'} />
         <CaseSummary
           caseCount={latest.length}
           newCount={newCount}
@@ -563,7 +577,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-      <CasePageHeading caseCount={requests.length} canCreateQuote />
+      <CasePageHeading caseCount={requests.length} canCreateQuote canSupervise />
       <CaseSummary
         caseCount={shown.length}
         newCount={newCount}

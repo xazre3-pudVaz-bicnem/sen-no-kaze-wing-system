@@ -21,7 +21,7 @@ describe('商品画像・PDFの下書き／登録済み共通表示', () => {
     expect(published).toContain('testId="registered-manufacturer-document-status"');
   });
 
-  it('追加画像とPDFの書き込み操作は下書きだけに残す', () => {
+  it('追加画像とPDFの 1 操作ずつの書き込みは下書きだけに残し、登録済み商品はまとめて反映する（PR #563）', () => {
     expect(draft).toContain('updateOptionImageAction');
     expect(draft).toContain('deleteOptionImageAction');
     expect(draft).toContain('uploadOptionManufacturerDocumentAction');
@@ -29,8 +29,9 @@ describe('商品画像・PDFの下書き／登録済み共通表示', () => {
     expect(published).not.toContain('deleteOptionImageAction');
     expect(published).not.toContain('uploadOptionManufacturerDocumentAction');
     expect(published).toContain('登録済みPDFを別タブで確認');
-    expect(published).toContain('STEP2で変更前後を確認できます');
+    expect(published).toContain('STEP 2 で変更前後を確認してから反映します');
     expect(published).toContain('review.mediaDiffs.length > 0');
+    expect(published).toContain('applyOptionMediaChangesAction(');
     expect(published).toContain('saveOptionAction(initialState, review.formData)');
   });
 

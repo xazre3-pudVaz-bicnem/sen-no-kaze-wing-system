@@ -186,20 +186,28 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(choices).not.toContain('<Button');
     expect(flow).toContain('mediaDiffs: computeMediaDiffs()');
     expect(flow).toContain('...review.mediaDiffs');
-    expect(flow).toContain('追加画像・メーカーPDFの変更案は確認できます');
+    expect(flow).toContain('追加画像・メーカーPDFの変更は、「この変更を反映」で 1 回にまとめて反映します');
   });
 
-  it('DB監査が済むまでメディア保存アクションを公開済商品へ接続しない', () => {
+  it('登録済み商品のメディアは 1 操作ずつの即時保存を使わず、DB の一括反映（apply_option_media_changes）だけで保存する（PR #563）', () => {
     expect(flow).not.toContain('OptionMediaManager');
     expect(flow).not.toContain('OptionVariantManager');
     expect(flow).not.toContain('addOptionImageAction');
     expect(flow).not.toContain('deleteOptionImageAction');
     expect(flow).not.toContain('uploadOptionManufacturerDocumentAction');
     expect(flow).toContain('review.mediaDiffs.length > 0');
-    expect(flow).toContain('disabled={pending || diffs.length === 0 || zeroPriceNeedsServerContract || review.mediaDiffs.length > 0 || state.ok}');
+    // 反映を止めていた条件は外し、画面を開いた時点の状態と変更をまとめて送る
+    expect(flow).toContain('disabled={pending || diffs.length === 0 || zeroPriceNeedsServerContract || state.ok}');
+    expect(flow).toContain('applyOptionMediaChangesAction({ optionId: option.id, expected: mediaExpected, changes: { delete: deleting, update, add, document } })');
+    expect(flow).toContain('const mediaExpected = useMemo(() => optionMediaExpectedOf(option), [option]);');
+    // 止まったら置いたファイルを消す。商品情報だけ失敗したときは、反映済みの画像・資料を二重に送らない
+    expect(flow).toContain('await discardStagedOptionMediaAction({ optionId: option.id, urls: staged });');
+    expect(flow).toContain('追加画像・メーカー資料は反映しました。商品情報は反映できませんでした。');
     expect(flow).toContain('saveOptionAction(initialState, review.formData)');
-    expect(flow).toContain('サブ画像・メーカーPDFはSTEP2で変更案を確認できます');
+    expect(flow).toContain('サブ画像・メーカーPDFの変更は、STEP 2 の「この変更を反映」で 1 回にまとめて反映し、変更の履歴を残します。');
     expect(flow).toContain('お客様が選ぶ仕様の編集は引き続き停止中です');
+    // 追加画像だけを変えても編集画面を作り直す（商品の更新日時は変わらない）
+    expect(page).toContain('key={`${option.updated_at}:${optionMediaVersionOf(option)}`}');
   });
 
   it('登録済み商品の通常価格0円への変更は既存サーバールール接続待ちとして反映を止める', () => {

@@ -3,6 +3,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
+import {
+  applyOptionMediaChangesAction,
+  createOptionMediaSignedUploadAction,
+  discardStagedOptionMediaAction,
+  uploadStagedOptionMediaAction,
+} from '@/lib/actions/option-media';
+import {
+  documentFileError,
+  galleryChangesOf,
+  galleryEditError,
+  galleryImageFileError,
+  optionMediaExpectedOf,
+  OPTION_GALLERY_MAX,
+  OPTION_GALLERY_SORT_MAX,
+  SERVER_ACTION_UPLOAD_MAX_BYTES,
+  type GalleryEdit,
+  type OptionDocumentChange,
+  type OptionMediaChanges,
+} from '@/lib/domain/option-media-changes';
 import { windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
@@ -190,8 +209,10 @@ export function RegisteredOptionEditFlow({
     () => [...(option.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
     [option.gallery_images]
   );
-  // 編集案はブラウザ内に保持する。正式メディア保存はDBの改版・競合制御監査後に接続する。
-  const [galleryEdits, setGalleryEdits] = useState<Record<string, { removed: boolean; caption: string; order: string }>>({});
+  // 編集案はブラウザ内に保持し、STEP 2 の「この変更を反映」で DB の apply_option_media_changes にまとめて反映する（PR #563）。
+  // 反映の照合に使う「画面を開いた時点の状態」は、開いたときの登録内容（反映すると画面ごと読み直す）
+  const mediaExpected = useMemo(() => optionMediaExpectedOf(option), [option]);
+  const [galleryEdits, setGalleryEdits] = useState<Record<string, GalleryEdit>>({});
   const [newGalleryImages, setNewGalleryImages] = useState<Array<{ file: File; previewUrl: string }>>([]);
   const previewUrlsRef = useRef<string[]>([]);
   const [documentAction, setDocumentAction] = useState<'keep' | 'replace' | 'remove'>('keep');
@@ -202,6 +223,18 @@ export function RegisteredOptionEditFlow({
     previewUrlsRef.current = [];
   }, []);
 
+  // ファイルの欄は選んだファイルを覚えているので、片付けるときは欄ごと作り直す
+  const [mediaInputKey, setMediaInputKey] = useState(0);
+  const resetMediaEdits = () => {
+    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrlsRef.current = [];
+    setGalleryEdits({});
+    setNewGalleryImages([]);
+    setDocumentAction('keep');
+    setNewDocument(null);
+    setMediaInputKey((key) => key + 1);
+  };
+
   const handleNewGalleryFiles = (files: FileList | null) => {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     const next = Array.from(files ?? []).map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
@@ -209,7 +242,7 @@ export function RegisteredOptionEditFlow({
     setNewGalleryImages(next);
   };
 
-  const editGallery = (id: string, change: Partial<{ removed: boolean; caption: string; order: string }>) => {
+  const editGallery = (id: string, change: Partial<GalleryEdit>) => {
     const original = galleryImages.find((image) => image.id === id);
     if (!original) return;
     setGalleryEdits((draft) => {
@@ -220,18 +253,19 @@ export function RegisteredOptionEditFlow({
 
   const computeMediaDiffs = (): DiffItem[] => {
     const changes: DiffItem[] = [];
+    // 反映するときと同じ判定（前後の空白だけの違いは変更にしない）
+    const { delete: deleting, update } = galleryChangesOf(galleryImages, galleryEdits);
     for (const image of galleryImages) {
-      const edit = galleryEdits[image.id];
-      if (!edit) continue;
-      if (edit.removed) {
+      if (deleting.includes(image.id)) {
         changes.push({ key: `gallery-delete-${image.id}`, label: '追加画像の削除', before: image.caption || image.alt || image.url, after: '削除予定' });
         continue;
       }
-      if (edit.caption !== (image.caption ?? '') || edit.order !== String(image.sort_order)) {
+      const updated = update.find((row) => row.id === image.id);
+      if (updated) {
         changes.push({
           key: `gallery-update-${image.id}`, label: '追加画像の説明・表示順',
-          before: `${image.caption ?? '説明なし'}／表示順 ${image.sort_order}`,
-          after: `${edit.caption || '説明なし'}／表示順 ${edit.order}`,
+          before: `${image.caption || '説明なし'}／表示順 ${image.sort_order}`,
+          after: `${updated.caption || '説明なし'}／表示順 ${updated.sort_order}`,
         });
       }
     }
@@ -322,21 +356,18 @@ export function RegisteredOptionEditFlow({
         setReviewError('カテゴリーを選択してください。');
         return;
       }
-      // PDF/画像の形式は確認前に検査。正式保存時にはサーバー側で再検証する必要がある。
-      for (const item of newGalleryImages) {
-        if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(item.file.type) || item.file.size > 10 * 1024 * 1024 || item.file.size === 0) {
-          setReviewError('追加画像はJPEG・PNG・WebP・AVIF、1枚10MB以下を選んでください。');
-          return;
-        }
+      // 画像・PDF の形式と説明・表示順は確認前に検査する（反映のときにサーバーと DB でもう一度確かめる）
+      const mediaError =
+        newGalleryImages.map((item) => galleryImageFileError(item.file)).find(Boolean) ??
+        Object.values(galleryEdits).map(galleryEditError).find(Boolean) ??
+        (documentAction === 'replace' ? (newDocument ? documentFileError(newDocument) : 'メーカー資料PDFを選んでください。') : null);
+      if (mediaError) {
+        setReviewError(mediaError);
+        return;
       }
-      for (const edit of Object.values(galleryEdits)) {
-        if (!edit.removed && (!/^\d+$/.test(edit.order) || Number(edit.order) > 100000 || edit.caption.length > 200)) {
-          setReviewError('追加画像の表示順は0以上100000以下、説明は200文字以内で入力してください。');
-          return;
-        }
-      }
-      if (documentAction === 'replace' && (!newDocument || !newDocument.name.toLowerCase().endsWith('.pdf') || (newDocument.type !== '' && newDocument.type !== 'application/pdf') || newDocument.size === 0 || newDocument.size > 20 * 1024 * 1024)) {
-        setReviewError('メーカー資料PDFは20MB以下のPDFファイルを選んでください。');
+      const { delete: deleting } = galleryChangesOf(galleryImages, galleryEdits);
+      if (galleryImages.length - deleting.length + newGalleryImages.length > OPTION_GALLERY_MAX) {
+        setReviewError(`追加画像は 1 商品 ${OPTION_GALLERY_MAX} 枚までです。`);
         return;
       }
       setReview(next);
@@ -381,22 +412,89 @@ export function RegisteredOptionEditFlow({
   const zeroPriceNeedsServerContract = Boolean(review && introducesUnconfirmedZeroPrice(option, review.option));
   const nextCategory = review ? categoryMap.get(review.option.category_id) : undefined;
 
+  // 新しいファイルを商品のフォルダーへ置く（3.5MB まではサーバーアクション、超えるものはブラウザから署名付きアップロード）
+  const uploadStaged = async (file: File, kind: 'gallery' | 'manufacturer'): Promise<string> => {
+    if (file.size <= SERVER_ACTION_UPLOAD_MAX_BYTES) {
+      const data = new FormData();
+      data.set('option_id', option.id);
+      data.set('kind', kind);
+      data.set('file', file);
+      const result = await uploadStagedOptionMediaAction(data);
+      if (!result.ok || !result.url) throw new Error(result.error ?? 'ファイルを送れませんでした。');
+      return result.url;
+    }
+    const contentType = kind === 'gallery' ? file.type : 'application/pdf';
+    const target = await createOptionMediaSignedUploadAction({ optionId: option.id, kind, fileName: file.name, contentType, size: file.size });
+    if (!target.ok) throw new Error(target.error);
+    const { createClient } = await import('@/lib/supabase/client');
+    const { error } = await createClient().storage.from(target.bucket).uploadToSignedUrl(target.path, target.token, file, { contentType });
+    if (error) throw new Error('ファイルを送れませんでした。通信状態を確かめて、もう一度お試しください。');
+    return target.url;
+  };
+
+  // 追加画像・メーカー資料の変更を DB で 1 回にまとめて反映する。止まったら置いたファイルを消す（反映できなかった理由を返す）
+  const applyMediaChanges = async (): Promise<string | null> => {
+    const staged: string[] = [];
+    try {
+      const { delete: deleting, update } = galleryChangesOf(galleryImages, galleryEdits);
+      const keptOrders = galleryImages
+        .filter((image) => !deleting.includes(image.id))
+        .map((image) => Number(galleryEdits[image.id]?.order ?? image.sort_order));
+      const lastOrder = Math.max(0, ...keptOrders);
+      const add: OptionMediaChanges['add'] = [];
+      for (const [index, entry] of newGalleryImages.entries()) {
+        const url = await uploadStaged(entry.file, 'gallery');
+        staged.push(url);
+        add.push({ url, caption: null, sort_order: Math.min(OPTION_GALLERY_SORT_MAX, lastOrder + (index + 1) * 10), alt: null });
+      }
+      let document: OptionDocumentChange = { action: 'keep' };
+      if (documentAction === 'remove' && option.manufacturer_document_url) document = { action: 'remove' };
+      if (documentAction === 'replace' && newDocument) {
+        const url = await uploadStaged(newDocument, 'manufacturer');
+        staged.push(url);
+        document = { action: 'replace', url };
+      }
+      // 反映に失敗したときは、サーバーが置いたファイルを消す
+      const result = await applyOptionMediaChangesAction({ optionId: option.id, expected: mediaExpected, changes: { delete: deleting, update, add, document } });
+      return result.ok ? null : (result.error ?? '追加画像・メーカー資料を反映できませんでした。');
+    } catch (error) {
+      await discardStagedOptionMediaAction({ optionId: option.id, urls: staged });
+      return error instanceof Error ? error.message : '追加画像・メーカー資料を反映できませんでした。';
+    }
+  };
+
   const applyChanges = async () => {
     if (!review || pending || zeroPriceNeedsServerContract) return;
     setPending(true);
     setState(initialState);
-    // 改版・競合制御の本番DB監査前に追加画像/PDFの即時保存Actionへ接続しない。
-    if (review.mediaDiffs.length > 0) {
-      setState({ ok: false, error: '追加画像・メーカーPDFの変更は、正式保存の安全確認が完了するまで反映できません。商品情報のみの変更はメディア編集を取り消してから反映してください。' });
-      setPending(false);
-      return;
+    const mediaChanged = review.mediaDiffs.length > 0;
+    const productChanged = diffs.length > review.mediaDiffs.length;
+    if (mediaChanged) {
+      const mediaError = await applyMediaChanges();
+      if (mediaError) {
+        setPending(false);
+        setState({ ok: false, error: mediaError });
+        return;
+      }
     }
-    const result = await saveOptionAction(initialState, review.formData);
+    if (productChanged) {
+      const result = await saveOptionAction(initialState, review.formData);
+      if (!result.ok) {
+        setPending(false);
+        if (!mediaChanged) {
+          setState(result);
+          return;
+        }
+        // 追加画像・メーカー資料は反映済み。編集案を片付け、もう一度押しても商品情報だけを送る
+        resetMediaEdits();
+        setReview((current) => (current ? { ...current, mediaDiffs: [] } : current));
+        setState({ ...result, error: `追加画像・メーカー資料は反映しました。商品情報は反映できませんでした。${result.error ?? '入力内容を確認してください。'}` });
+        return;
+      }
+    }
     setPending(false);
-    setState(result);
-    if (result.ok) {
-      router.refresh();
-    }
+    setState({ ok: true });
+    router.refresh();
   };
 
   return (
@@ -513,8 +611,8 @@ export function RegisteredOptionEditFlow({
           </section>
 
           {review.mediaDiffs.length > 0 && (
-            <Alert tone="warn">
-              追加画像・メーカーPDFの変更案は確認できますが、正式反映はDBのRevision・同時編集・履歴監査後に対応します。現時点ではメディア変更を含む保存は実行されません。
+            <Alert tone="info">
+              追加画像・メーカーPDFの変更は、「この変更を反映」で 1 回にまとめて反映します。画面を開いた後にほかの操作で追加画像・資料が変わっていた場合は反映せず、開き直していただくようご案内します。
             </Alert>
           )}
           {zeroPriceNeedsServerContract && (
@@ -530,7 +628,7 @@ export function RegisteredOptionEditFlow({
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="secondary" onClick={() => { setScreen('edit'); setState(initialState); }}>編集に戻る</Button>
-              <Button type="button" onClick={applyChanges} disabled={pending || diffs.length === 0 || zeroPriceNeedsServerContract || review.mediaDiffs.length > 0 || state.ok}>
+              <Button type="button" onClick={applyChanges} disabled={pending || diffs.length === 0 || zeroPriceNeedsServerContract || state.ok}>
                 {pending && <Spinner />}
                 この変更を反映
               </Button>
@@ -680,7 +778,7 @@ export function RegisteredOptionEditFlow({
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-main-media">
             <ProductSectionHeading
               label="3. 商品画像"
-              description="追加画像の変更案を入力して、STEP2で変更前後を確認できます。DB側の安全確認まで正式保存は停止しています。"
+              description="追加画像の説明・表示順の変更、削除、追加を入力し、STEP 2 で変更前後を確認してから反映します。"
             />
             <div className="flex flex-wrap items-start gap-3 rounded-lg border border-line bg-ivory/30 p-3" data-testid="registered-option-main-image-preview">
               <div className="w-40 max-w-full sm:w-48">
@@ -741,7 +839,7 @@ export function RegisteredOptionEditFlow({
                           >
                             {galleryEdits[image.id]?.removed ? '削除予定を取り消す' : 'この追加画像を削除予定にする'}
                           </button>
-                          {galleryEdits[image.id]?.removed && <p className="text-xs text-danger">STEP2で削除予定として表示します。まだ削除されません。</p>}
+                          {galleryEdits[image.id]?.removed && <p className="text-xs text-danger">STEP 2 の「この変更を反映」で削除します。それまでは削除されません。</p>}
                         </div>
                       </li>
                     ))}
@@ -754,6 +852,7 @@ export function RegisteredOptionEditFlow({
                     追加画像を選択（複数可）
                   </label>
                   <Input
+                    key={`gallery-file-${mediaInputKey}`}
                     id="registered-new-gallery"
                     type="file"
                     multiple
@@ -780,11 +879,11 @@ export function RegisteredOptionEditFlow({
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
             <ProductSectionHeading
               label="4. メーカー資料"
-              description="PDFの差替え・解除案を入力して、STEP2で確認できます。正式保存は安全確認まで停止しています。"
+              description="PDFの差し替え・解除を入力し、STEP 2 で確認してから反映します。"
               trailing={<ProductDocumentStatus url={option.manufacturer_document_url} testId="registered-manufacturer-document-status" />}
             />
             <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
-              サブ画像・メーカーPDFはSTEP2で変更案を確認できます。正式反映は本番DBの履歴・Revision・同時編集の監査後に接続します。お客様が選ぶ仕様の編集は引き続き停止中です。
+              サブ画像・メーカーPDFの変更は、STEP 2 の「この変更を反映」で 1 回にまとめて反映し、変更の履歴を残します。3.5MB を超えるファイルは、ブラウザから直接保存先へ送ります。お客様が選ぶ仕様の編集は引き続き停止中です。
             </p>
             <div className="space-y-2">
               <p className="text-sm font-semibold">メーカー資料PDF</p>
@@ -819,6 +918,8 @@ export function RegisteredOptionEditFlow({
                   <label className="block text-sm font-semibold">
                     新しいPDFを選択
                     <Input
+                      key={`document-file-${mediaInputKey}`}
+                      id="registered-new-document"
                       type="file"
                       accept=".pdf,application/pdf"
                       onChange={(event) => setNewDocument(event.target.files?.[0] ?? null)}
@@ -826,7 +927,7 @@ export function RegisteredOptionEditFlow({
                     {newDocument && <span className="mt-1 block break-all text-xs font-normal">{newDocument.name}</span>}
                   </label>
                 )}
-                {documentAction === 'remove' && <p className="text-xs text-danger">解除予定です。STEP2の確認前には変更されません。</p>}
+                {documentAction === 'remove' && <p className="text-xs text-danger">解除予定です。STEP 2 の「この変更を反映」で解除します。</p>}
               </div>
             </div>
           </section>

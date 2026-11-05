@@ -97,7 +97,8 @@ import {
   withLegacyTemplateSectionPrices,
   type LegacyPriceScope,
 } from './legacy-prices';
-import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
+import { assertOwnedPublicStoragePath, optionMediaPrefix, type OptionMediaKind } from '@/lib/storage/option-media';
+import type { OptionMediaChangeResult, OptionMediaChanges, OptionMediaExpected } from '@/lib/domain/option-media-changes';
 import {
   managedPublicObjectPath,
   markKeepCopiedDraft,
@@ -1459,6 +1460,23 @@ export class SupabaseStore implements DataStore {
       .update({ manufacturer_document_url: url })
       .eq('id', optionId);
     if (error) mapPgError(error);
+  }
+  async applyOptionMediaChanges(_actor: SessionUser, optionId: string, expected: OptionMediaExpected, changes: OptionMediaChanges) {
+    // 権限・開いた時点の状態の照合・Storage の置き場所の確認は DB の関数が行う（ログインした利用者として呼ぶ）
+    const db = await this.db();
+    const { data, error } = await db.rpc('apply_option_media_changes', { p_option_id: optionId, p_expected: expected, p_changes: changes });
+    if (error) mapPgError(error);
+    return data as OptionMediaChangeResult;
+  }
+  async createOptionMediaSignedUpload(optionId: string, kind: OptionMediaKind, fileName: string) {
+    const admin = createAdminClient();
+    const bucket = kind === 'gallery' ? 'product-images' : 'product-documents';
+    // 置き場所はサーバーが決める（DB の関数が受け付ける形：option-<id>/<種類>/<英数字のファイル名>）
+    const ext = kind === 'gallery' ? (fileName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg' : 'pdf';
+    const storagePath = `${optionMediaPrefix(optionId, kind)}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+    const { data, error } = await admin.storage.from(bucket).createSignedUploadUrl(storagePath);
+    if (error || !data) throw new StoreError('INTERNAL', error?.message ?? '署名付きアップロードを用意できませんでした');
+    return { bucket, path: data.path, token: data.token, url: admin.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl };
   }
   async copyOptionMediaToNewDraft(sourceId: string, newDraftId: string): Promise<ProductMediaCopySummary> {
     if (sourceId === newDraftId) throw new StoreError('VALIDATION', '同じ商品へ複製できません。');

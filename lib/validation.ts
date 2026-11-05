@@ -181,6 +181,12 @@ export const windowTypeSchema = z.object({
   status: z.enum(['active', 'retired']),
 });
 
+/**
+ * メーカー公式商品ページURLの形（DB の options_manufacturer_product_url_https_check と同じ。20261105100000）。
+ * https・ホストあり・認証情報（user@）なし・空白なし。URL として読めるかは別に確かめる
+ */
+export const MANUFACTURER_PRODUCT_URL_PATTERN = /^https:\/\/[^\s/?#@]+([/?#]\S*)?$/i;
+
 export const optionSchema = z.object({
   id: z.uuid().nullable(),
   base_model_id: z.preprocess((v) => (v === '' ? null : v), z.uuid().nullable()),
@@ -209,13 +215,14 @@ export const optionSchema = z.object({
   manufacturer_product_url: z.preprocess(
     (value) => (value == null || (typeof value === 'string' && !value.trim()) ? null : value),
     z.string().trim().max(1000, 'URLは1000文字以内で入力してください').url('有効なURLを入力してください').refine((value) => {
+      if (!MANUFACTURER_PRODUCT_URL_PATTERN.test(value)) return false;
       try {
         const url = new URL(value);
         return url.protocol === 'https:' && !url.username && !url.password;
       } catch {
         return false;
       }
-    }, 'https://から始まるメーカー公式商品ページURLを入力してください').nullable()
+    }, 'https://から始まるメーカー公式商品ページURL（空白・ログイン情報を含まない）を入力してください').nullable()
   ),
   size_note: optional(120).nullable(),
   list_price: z.preprocess((v) => (v === '' || v === undefined || v === null ? null : v), z.coerce.number().int().min(0).max(100_000_000).nullable()),

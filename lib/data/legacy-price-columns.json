@@ -34,7 +34,8 @@
       "price_unit",
       "list_price_unit",
       "discontinued_at",
-      "window_type_code"
+      "window_type_code",
+      "manufacturer_product_url"
     ],
     "price": [
       "price"

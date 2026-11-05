@@ -48,6 +48,7 @@ import { buildCustomerCategoryMatrix, effectiveCustomerSpecCodes } from '@/lib/d
 import { ruleContextForSpec } from '@/lib/domain/estimate-template';
 import { canEditCatalog, hasRoleAtLeast } from '@/lib/domain/types';
 import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
+import { MANUFACTURER_PRODUCT_URL_PATTERN } from '@/lib/validation';
 import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
   isCurrentIssuedQuote,
@@ -2267,6 +2268,11 @@ export class LocalStore implements DataStore {
         if (!windowType || (rest.window_type_code !== current && windowType.status !== 'active')) {
           throw new StoreError('VALIDATION', '使用中の窓タイプを選んでください');
         }
+      }
+      // メーカー公式商品ページURL（DB の options_manufacturer_product_url_https_check と同じ）
+      const productUrl = rest.manufacturer_product_url;
+      if (productUrl != null && (productUrl.length > 1000 || !MANUFACTURER_PRODUCT_URL_PATTERN.test(productUrl))) {
+        throw new StoreError('VALIDATION', 'https://から始まるメーカー公式商品ページURL（空白・ログイン情報を含まない）を入力してください');
       }
       if (id) {
         const o = db.options.find((x) => x.id === id);

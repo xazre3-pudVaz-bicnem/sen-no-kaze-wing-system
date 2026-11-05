@@ -153,7 +153,17 @@ begin
     pg_temp.lpg_run_as('service_role', null, format('select extra_price::text from public.option_variant_choices where id = %L', vc_hq)) || '/' ||
     pg_temp.lpg_run_as('service_role', null, format('select base_price::text from public.base_models where id = %L', m_model)));
 
-  -- ---------- 書き込み：本部商品の金額は本部だけ ----------
+  -- ---------- 書き込み：商品台帳の編集は本部だけ（2026-11-04 の先方回答 B-2） ----------
+  perform pg_temp.lpg_expect_eq('LPG-19b 総代理店は本部商品・本体を書けない（商品台帳は閲覧だけ：B-2。RLS で 0 行）', '0/0',
+    pg_temp.lpg_run_as('authenticated', u_md, format('with u as (update public.options set description = ''B-2'' where id = %L returning 1) select count(*)::text from u', o_hq)) || '/' ||
+    pg_temp.lpg_run_as('authenticated', u_md, format('with u as (update public.base_models set tagline = ''B-2'' where id = %L returning 1) select count(*)::text from u', m_model)));
+
+  -- ---------- 書き込み：本部商品の金額は本部だけ（念のための防御のトリガー） ----------
+  -- B-2 の後は総代理店が商品台帳を書けないので、金額のトリガーに届く利用者はいない。トリガーは念のため残しているので、
+  -- この検査の中だけ以前の決まり（総代理店以上が商品台帳を編集できる）に戻して確かめる（最後の rollback で元に戻る）
+  create or replace function public.can_edit_catalog() returns boolean language sql stable security definer set search_path = public as $b2$
+    select public.current_role_rank() >= 2;
+  $b2$;
   perform pg_temp.lpg_expect_error('LPG-20 総代理店は本部商品の商品価格を直接変えられない', '42501', 'FORBIDDEN: 本部商品の商品標準原価（商品価格）は本部だけが変更できます',
     pg_temp.lpg_run_as('authenticated', u_md, format('update public.options set price = 12000 where id = %L returning ''ok''', o_hq)));
   perform pg_temp.lpg_expect_eq('LPG-21 総代理店も、本部商品の金額のほかの項目は今までどおり変えられる', 'ok',

@@ -468,7 +468,7 @@ interface OptionFormProps {
   conflicts: OptionConflict[];
   /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
   defaultCategoryId?: string;
-  /** 新しい下書きへ引き継ぐ表示情報。ID・画像・選択肢・履歴は引き継がない。 */
+  /** 新しい下書きへ引き継ぐ表示情報。ID・選択肢・履歴は引き継がない（画像・メーカー PDF は保存の後に別ファイルとして複製する）。 */
   duplicateSource?: ProductOption | null;
   /** 必要に応じて商品情報の一部だけを編集するための表示モード */
   mode?: 'all' | 'product' | 'create' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
@@ -653,7 +653,7 @@ export function OptionForm({
       <input type="hidden" name="base_model_id" value={copySource?.base_model_id ?? ''} />
       <input type="hidden" name="description" value={copySource?.description ?? ''} />
       <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
-      {/* 画像・メーカー資料は複製元の Storage パスを流用せず、新商品で登録する。 */}
+      {/* 画像・メーカー資料は複製元の Storage パスを流用せず、保存の後に新しい商品の置き場所へ別ファイルとして複製する。 */}
       <input type="hidden" name="image_url" value="" />
       {copySource && showCostFields
         ? <input type="hidden" name="price" value={copySource.price} />
@@ -681,6 +681,7 @@ export function OptionForm({
     >
       <input type="hidden" name="id" value={option?.id ?? ''} />
       <input type="hidden" name="owner_id" value={option?.owner_id ?? ''} />
+      {copySource && <input type="hidden" name="copy_from" value={copySource.id} />}
       {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
       {preserveIdentifyFields}
       {preserveDetailFields}

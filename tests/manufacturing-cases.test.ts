@@ -17,7 +17,7 @@ const productionPanels = fs.readFileSync(path.join(root, 'components/case-flow/c
 const handoverPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-handover-panels.tsx'), 'utf8');
 
 describe('製造担当の案件：DB の取り決め（migration 20261104150000）', () => {
-  it('お客様の情報・見積の金額と備考・営業の記録を返さない', () => {
+  it('お客様の情報・見積の金額と備考・営業の記録を返さない（設置場所・現地確認は B-3 の専用の関数だけ）', () => {
     for (const name of ['manufacturing_case_row', 'list_manufacturing_cases', 'get_manufacturing_case']) {
       const body = functionBody(name);
       expect(body.length).toBeGreaterThan(200);
@@ -44,6 +44,9 @@ describe('製造担当の案件：DB の取り決め（migration 20261104150000�
       }
       expect(body).not.toMatch(/'notes'|\.notes\b/);
     }
+    // 製造・出荷・施工に必要な案件の情報（2026-11-04 の先方回答 B-3）は、配下の確認と同じ関数で足す
+    expect(functionBody('get_manufacturing_case')).toContain("'partner_info', public.case_partner_site_info(p_request_id)");
+    expect(migration).toContain("if to_regprocedure('public.case_partner_site_info(uuid)') is null then");
   });
 
   it('詳細は本部と製造の担当（case_access の manufacturer）だけ。一覧は所属している製造担当組織か自分あての案件に絞ってから同じ規則で確かめる', () => {

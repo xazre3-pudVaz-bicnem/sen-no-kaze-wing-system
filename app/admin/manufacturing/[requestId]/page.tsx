@@ -11,6 +11,7 @@ import { AdminPage, BackLink, Table, Td, Th } from '@/components/admin/ui';
 import { CASE_ESTIMATE_SPEC_LABELS, ITEM_KIND_LABELS } from '@/components/admin/case-estimate-review';
 import { CaseProductionPanels } from '@/components/case-flow/case-production-panels';
 import { CaseNoteForm } from '@/components/case-flow/forms';
+import { CasePartnerSiteInfoSection } from '@/components/case-flow/case-partner-site-info';
 
 export const metadata: Metadata = { title: '製造の案件 | 管理画面', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,7 @@ export default async function ManufacturingCasePage({
       title={quote ? `製造：${quote.quote_no}（第${quote.revision}版）` : '製造の案件'}
       lead={[quote?.base_model_name, spec, finish].filter(Boolean).join('・') || undefined}
       actions={<BackLink href="/admin/manufacturing" label="製造の進み具合" />}
-      notice="お客様への連絡・見積は営業担当が行います。この画面には、お客様のお名前・連絡先・設置場所などは表示していません。"
+      notice="お客様への連絡・見積は営業担当が行います。この画面には、お客様のお名前・連絡先・ご自宅の住所などは表示していません（設置場所・現地確認は製造・出荷・施工のために表示します）。"
     >
       <dl className="card grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5" data-testid="manufacturing-case-summary">
         <Field label="営業担当">{detail.sales_organization?.name ?? '本部'}</Field>
@@ -66,6 +67,8 @@ export default async function ManufacturingCasePage({
           {detail.order ? <Badge tone={detail.order.status === 'sent' ? 'warn' : 'neutral'}>{MANUFACTURING_ORDER_STATUS_LABELS[detail.order.status]}</Badge> : '届いていません'}
         </Field>
       </dl>
+
+      <CasePartnerSiteInfoSection info={detail.partner_info} />
 
       <section className="space-y-3" aria-labelledby="spec-heading">
         <h2 id="spec-heading" className="text-lg font-semibold">

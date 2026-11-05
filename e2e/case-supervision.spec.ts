@@ -3,10 +3,10 @@ import { ADMIN_EMAIL, requestQuoteAsCustomer, signInOrRegister, uniqueEmail } fr
 import { createOrganizationViaUi, issueInvitation, joinViaInvitation } from './org-helpers';
 
 // 総代理店の配下の確認（2026-10-15 先方確定）：総代理店の管理者は、配下の代理店が営業担当の案件の進み具合・仕様・見積の金額と明細を見られる。
-// お客様の情報（お名前・設置場所など）は、先方が項目を確認するまで表示しない。
+// お客様の情報：製造・出荷・施工に必要な設置場所・現地確認は表示し、お名前・連絡先・ご自宅の住所は表示しない（2026-11-04 の先方回答 B-3）。
 
 test.describe('総代理店の配下の確認', () => {
-  test('総代理店の管理者は配下の代理店の案件と見積の金額を見られ、お客様のお名前・設置場所は表示されない', async ({ browser }) => {
+  test('総代理店の管理者は配下の代理店の案件と見積の金額・設置場所を見られ、お客様のお名前・電話・ご自宅の住所は表示されない', async ({ browser }) => {
     test.setTimeout(240_000);
     const suffix = `${Date.now()}`.slice(-6);
     const masterName = `E2E配下確認総代理店${suffix}`;
@@ -70,9 +70,13 @@ test.describe('総代理店の配下の確認', () => {
     await expect(summary).toContainText(masterName);
     await expect(summary).toContainText('¥');
     expect(await masterManager.getByTestId('supervised-quote-item').count()).toBeGreaterThan(0);
+    // 製造・出荷・施工に必要な設置場所は見られる（B-3）。お客様のお名前・電話・ご自宅の住所は出さない
+    await expect(masterManager.getByTestId('partner-site-info')).toContainText(siteAddress);
+    await expect(masterManager.getByTestId('partner-site-survey')).toContainText('まだ記録がありません');
     const detailText = await masterManager.locator('main').innerText();
     expect(detailText).not.toContain('テスト 太郎');
-    expect(detailText).not.toContain(siteAddress);
+    expect(detailText).not.toContain('090-0000-0000');
+    expect(detailText).not.toContain('東京都千代田区丸の内1-1');
     const detailPath = new URL(masterManager.url()).pathname;
 
     // 案件画面（お客様の情報を含む）は開けない

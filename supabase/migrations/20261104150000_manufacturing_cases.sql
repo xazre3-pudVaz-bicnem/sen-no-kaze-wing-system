@@ -7,7 +7,9 @@
 -- * list_manufacturing_cases()：自分が製造の担当の案件（本部はすべての製造担当つきの案件）。見積番号・仕様・営業担当・主担当者・
 --   契約の済否・製造依頼と個体の進み具合
 -- * get_manufacturing_case(p_request_id)：上に加えて、現在の見積の明細（品名・数量・単位だけ。金額は返さない）
--- * **お客様の氏名・会社名・連絡先・住所・メッセージ、見積の金額・備考、設置場所・土地、現地確認・打合せ記録は返さない**
+-- * **お客様の氏名・会社名・連絡先・ご自宅の住所・メッセージ、見積の金額・備考、打合せ記録は返さない**
+-- * 詳細には、製造・出荷・施工に必要な案件の情報（案件名・顧客番号・設置場所の住所と条件・用途・現地確認の内容と写真）を足す
+--   （2026-11-04 の先方回答 B-3。配下の確認と同じ case_partner_site_info）
 -- * 判定は case_access() = 'manufacturer'（本部は admin）。書き込みは従来の RPC（製造依頼の状態・個体・工程・施工の記録・技術検討）
 
 begin;
@@ -16,6 +18,9 @@ do $preflight$
 begin
   if to_regprocedure('public.case_access(uuid)') is null or to_regprocedure('public.is_case_legacy_manufacturer(uuid)') is null then
     raise exception 'PRECONDITION: case sales organization (20261104130000) must be applied first';
+  end if;
+  if to_regprocedure('public.case_partner_site_info(uuid)') is null then
+    raise exception 'PRECONDITION: case supervision (20261104140000) must be applied first';
   end if;
 end;
 $preflight$;
@@ -123,7 +128,9 @@ begin
       select jsonb_agg(jsonb_build_object('kind', qi.kind, 'name', qi.name, 'quantity', qi.quantity, 'unit', qi.unit)
                        order by qi.sort_order, qi.id)
         from public.quote_items qi where qi.quote_id = v_quote
-    ), '[]'::jsonb)
+    ), '[]'::jsonb),
+    -- 製造・出荷・施工に必要な案件の情報（B-3。お客様の氏名・連絡先などは含めない）
+    'partner_info', public.case_partner_site_info(p_request_id)
   );
 end;
 $$;

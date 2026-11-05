@@ -18,6 +18,7 @@ import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
 import { AdminPage, BackLink, Table, Td, Th } from '@/components/admin/ui';
 import { CASE_ESTIMATE_SPEC_LABELS, ITEM_KIND_LABELS } from '@/components/admin/case-estimate-review';
+import { CasePartnerSiteInfoSection } from '@/components/case-flow/case-partner-site-info';
 
 export const metadata: Metadata = { title: '配下の案件の詳細 | 管理画面', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
 
 /**
  * 配下の案件の詳細（読み取りだけ）。仕様・見積の金額と明細・製造と施工の記録・進み具合を表示する。
- * お客様のお名前・連絡先・設置場所・打合せの記録は返ってこない（DB の get_supervised_case）。
+ * 製造・出荷・施工に必要な設置場所・現地確認は出す（2026-11-04 の先方回答 B-3）。お客様のお名前・連絡先・ご自宅の住所・打合せの記録は返ってこない（DB の get_supervised_case）。
  */
 export default async function SupervisedCasePage({ params }: { params: Promise<{ requestId: string }> }) {
   const { requestId } = await params;
@@ -73,7 +74,7 @@ export default async function SupervisedCasePage({ params }: { params: Promise<{
       title={quote ? `${quote.quote_no}（第${quote.revision}版）` : '配下の案件'}
       lead={[quote?.base_model_name, spec, finish].filter(Boolean).join('・') || undefined}
       actions={<BackLink href="/admin/supervision" label="配下の案件" />}
-      notice="お客様への対応・見積の変更は、営業担当の代理店が行います。この画面には、お客様のお名前・連絡先・設置場所などは表示していません。"
+      notice="お客様への対応・見積の変更は、営業担当の代理店が行います。この画面には、お客様のお名前・連絡先・ご自宅の住所などは表示していません（設置場所・現地確認は製造・出荷・施工のために表示します）。"
     >
       <dl className="card grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4" data-testid="supervised-case-summary">
         <Field label="営業担当">{detail.sales_organization?.name ?? '—'}</Field>
@@ -93,6 +94,8 @@ export default async function SupervisedCasePage({ params }: { params: Promise<{
           </>
         )}
       </dl>
+
+      <CasePartnerSiteInfoSection info={detail.partner_info} />
 
       <Section id="progress-heading" title="進み具合">
         <dl className="card grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">

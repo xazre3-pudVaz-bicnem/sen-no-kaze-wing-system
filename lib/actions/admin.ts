@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
-import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isLocalMode, StoreError, type DealerRevisionItem, type EstimateTemplateImportInput, type QuoteDraftSaveItem, type SessionUser } from '@/lib/data/store';
@@ -34,6 +34,7 @@ import {
   userRoleSchema,
 } from '@/lib/validation';
 import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
+import { shouldKeepCopiedDraft } from '@/lib/storage/product-media-copy';
 import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
 import { withPlanDisplaySize } from '@/lib/domain/plan-display';
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
@@ -250,6 +251,30 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   const existingOption = optionId ? await store.getOption(optionId) : null;
   if (optionId && !existingOption) return { ok: false, error: '商品が見つかりません。' };
 
+  // コピー元IDは信用せずServer Actionで再検証。既存商品への更新には使わせない。
+  const copyFrom = String(formData.get('copy_from') ?? '').trim();
+  if (copyFrom) {
+    if (optionId || !catalogEditor) return { ok: false, error: '商品を複製する権限がありません。' };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(copyFrom)) {
+      return { ok: false, error: 'コピー元の商品IDが正しくありません。' };
+    }
+    // 複製元と別ファイルで作るため、初回フォームからの任意画像差し込みを拒否する。
+    const firstImageFile = formData.get('image_file');
+    if (String(formData.get('image_url') ?? '').trim() ||
+        (firstImageFile instanceof File && firstImageFile.size > 0)) {
+      return { ok: false, error: '商品複製時の画像は自動で複製します。画像変更は下書き作成後に行ってください。' };
+    }
+    const source = await store.getOption(copyFrom);
+    const categories = await store.listCategories();
+    const sourceCategory = categories.find((category) => category.id === source?.category_id);
+    // コピー元は存在し、フリー商品・旧防火仕様でないこと。複製先のカテゴリーは変えてよい（#592 と同じ。新規登録のカテゴリーの確認は下で行う）
+    if (!source || !sourceCategory ||
+        sourceCategory.code === FREE_PRODUCT_CATEGORY_CODE ||
+        sourceCategory.code === LEGACY_FIRE_SPEC_CATEGORY_CODE) {
+      return { ok: false, error: 'この商品は複製できません。商品台帳から選び直してください。' };
+    }
+  }
+
   const requestedCategoryId = String(formData.get('category_id') ?? '').trim();
   if (!existingOption || existingOption.category_id !== requestedCategoryId) {
     const categories = await store.listCategories();
@@ -368,22 +393,38 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   const windowTypeCode = targetUsesWindowType ? formWindowType : existingOption?.window_type_code ? null : undefined;
   const optionInput = windowTypeCode === undefined ? parsed.data : { ...parsed.data, window_type_code: windowTypeCode };
   let createdId: string | null = null;
+  let copySkipped: string[] = [];
   let costNotice: string | null = null;
   try {
     const o = await store.upsertOption(optionInput);
+    // 複製するメディアの写し先（新しい下書き）は、保存の直後に覚える（#593）
+    if (!parsed.data.id) createdId = o.id;
     await store.setOptionRelations(
       o.id,
       dependencies.filter((d) => d.requires_option_id !== o.id),
       conflicts.filter((c) => c.conflicts_with_option_id !== o.id)
     );
+    if (copyFrom && createdId) {
+      const copied = await store.copyOptionMediaToNewDraft(copyFrom, createdId);
+      copySkipped = [...new Set(copied.skipped)];
+    }
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
-    if (!parsed.data.id) createdId = o.id;
     // 登録済みの商品は、本部が保存した金額を商品標準原価の Version に記録する（下書きは登録のときに記録する）
     if (o.status === 'published' && costAccess.available && costAccess.canManage) {
       costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save', costAccess));
     }
   } catch (e) {
+    // メディアの複製に失敗した場合はコピー先の新規下書きだけ取り消す。
+    // コピー元商品・コピー元ファイルには一切触れない。
+    // ただし複製の取り消し（DB）に失敗したときは、確認のため新しい下書きと複製したファイルを残す（消すとファイルが行方不明になる）
+    if (copyFrom && createdId && !shouldKeepCopiedDraft(e)) {
+      try {
+        await store.deleteOption(createdId);
+      } catch (cleanupError) {
+        console.error('[wing] failed to remove incomplete copied product draft', { createdId, cleanupError });
+      }
+    }
     return errState(e);
   }
   if (createdId) {
@@ -394,7 +435,11 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
         created: '1',
         return_to: returnTo,
       });
+      if (copySkipped.length) params.set('copy_missing', copySkipped.join(','));
       redirect('/admin/options/' + createdId + '?' + params.toString());
+    }
+    if (copySkipped.length) {
+      redirect('/admin/options/' + createdId + '?step=info&created=1&copy_missing=' + encodeURIComponent(copySkipped.join(',')));
     }
     redirect('/admin/options/' + createdId + '?step=info&created=1');
   }
@@ -1707,7 +1752,7 @@ export async function importEstimateTemplatesAction(
 
 /* ---------------- 本体内訳マスター ---------------- */
 
-/** 本体内訳マスター（分類表見積書）を丸ごと保存する（総代理店以上） */
+/** 本体内訳マスター（分類表見積書）を丸ごと保存する（本部だけ。2026-11-04 B-2） */
 export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
   // 本体内訳の金額（旧価格の列）は本部だけが登録・変更できる（v2.5 PR-C1b。DB のトリガーも止める）
@@ -1757,7 +1802,7 @@ export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: F
 }
 
 
-/** 本体内訳マスターの一括管理表：オプション価格の一括保存（総代理店以上） */
+/** 本体内訳マスターの一括管理表：オプション価格の一括保存（本部だけ。2026-11-04 B-2） */
 export async function bulkUpdateOptionPricesAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
   const costAccess = await getCostRecordingAccess();

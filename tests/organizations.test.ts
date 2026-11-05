@@ -135,6 +135,18 @@ describe('組織とアカウント：DB の取り決め（migration 202611041200
   it('案件・見積の権限（営業担当組織・主担当者・製造担当組織）はこの migration では変えない', () => {
     expect(sqlOnly).not.toMatch(/case_access|quote_requests|quotes\b|case_workflows/);
   });
+
+  it('商品台帳の編集は本部だけ（2026-11-04 の先方回答 B-2）：DB の can_edit_catalog と画面の判定をそろえる', () => {
+    const fn = sqlOnly.slice(sqlOnly.indexOf('create or replace function public.can_edit_catalog()'), sqlOnly.indexOf("comment on function public.can_edit_catalog()"));
+    expect(fn).toContain('select public.current_role_rank() >= 3;');
+    // RLS から呼ぶので、実行権限は外さない（postconditions でも確かめる）
+    expect(sqlOnly).not.toMatch(/revoke [^;]*public\.can_edit_catalog\(\)/);
+    expect(migration).toContain("raise exception 'POSTCONDITION: can_edit_catalog() must allow headquarters only and stay executable for RLS';");
+    const types = fs.readFileSync(path.join(process.cwd(), 'lib/domain/types.ts'), 'utf8');
+    expect(types).toMatch(/export function canEditCatalog\(role: RoleCode \| undefined \| null\): boolean \{\n  return hasRoleAtLeast\(role, 'admin'\);/);
+    const session = fs.readFileSync(path.join(process.cwd(), 'lib/auth/session.ts'), 'utf8');
+    expect(session).toContain("export const requireCatalogEditor = (nextPath = '/admin') => requireRole('admin', nextPath);");
+  });
 });
 
 describe('組織とアカウント：招待の Server Action', () => {

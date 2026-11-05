@@ -14,6 +14,7 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
+import { MANUFACTURER_PRODUCT_URL_ERROR, isValidManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import {
   FREE_PRODUCT_CATEGORY_CODE,
   VIEW_KEYS,
@@ -263,6 +264,11 @@ export function RegisteredOptionEditFlow({
         setReviewError('カテゴリーを選択してください。');
         return;
       }
+      // メーカー公式商品ページURLは、保存（サーバー・DB）と同じ決まりで先に確かめる
+      if (next.option.manufacturer_product_url && !isValidManufacturerProductUrl(next.option.manufacturer_product_url)) {
+        setReviewError(MANUFACTURER_PRODUCT_URL_ERROR);
+        return;
+      }
       setReview(next);
       setScreen('review');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -304,6 +310,10 @@ export function RegisteredOptionEditFlow({
   }, [categoryMap, modelMap, option, review, priceLabel, showCostFields, windowTypeLabel]);
 
   const zeroPriceNeedsServerContract = Boolean(review && introducesUnconfirmedZeroPrice(option, review.option));
+  // サーバーの入力チェックで止まった項目（STEP 2 には項目ごとの欄が無いので、まとめて出す）
+  const fieldErrorMessages = [
+    ...new Set(Object.entries(state.fieldErrors ?? {}).flatMap(([key, messages]) => (key === '_form' ? [] : (messages ?? [])))),
+  ];
   const nextCategory = review ? categoryMap.get(review.option.category_id) : undefined;
 
   const applyChanges = async () => {
@@ -362,6 +372,7 @@ export function RegisteredOptionEditFlow({
 
           {state.error && <Alert tone="danger">{state.error}</Alert>}
           {state.fieldErrors?._form?.[0] && <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>}
+          {fieldErrorMessages.length > 0 && <Alert tone="danger">{fieldErrorMessages.join(' ')}</Alert>}
           {state.ok && <Alert tone="success">変更を反映しました。最新の登録内容を読み直しています。</Alert>}
 
           <section className="card p-4 sm:p-5" aria-label="変更点一覧">

@@ -3,7 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LocalStore } from '@/lib/data/local-store';
-import { MANUFACTURER_PRODUCT_URL_PATTERN, optionSchema } from '@/lib/validation';
+import { MANUFACTURER_PRODUCT_URL_PATTERN } from '@/lib/domain/manufacturer-product-url';
+import { optionSchema } from '@/lib/validation';
 
 const source = (file: string) => readFileSync(file, 'utf8');
 const field = optionSchema.shape.manufacturer_product_url;
@@ -51,6 +52,11 @@ describe('メーカー公式商品ページの任意リンク', () => {
     expect(detail).toContain('target="_blank"');
     expect(detail).toContain('rel="noopener noreferrer"');
     expect(preview).toContain('<ProductDetail');
+    // 保存・DB と同じ決まり（lib/domain/manufacturer-product-url）を、確認画面へ進む前とリンクの表示にも使う
+    expect(registered).toContain('isValidManufacturerProductUrl(next.option.manufacturer_product_url)');
+    expect(detail).toContain('isValidManufacturerProductUrl(trimmed)');
+    // STEP 2 で止まったサーバーの項目エラーを、まとめて出す（無言で失敗しない）
+    expect(registered).toContain('{fieldErrorMessages.length > 0 && <Alert tone="danger">');
   });
 
   it('migrationはNULL可で、画像/PDF・金額・権限の構造を変更しない', () => {

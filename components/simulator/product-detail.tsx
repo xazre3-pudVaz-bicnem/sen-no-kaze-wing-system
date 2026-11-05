@@ -6,6 +6,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
+import { isValidManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import { ManufacturerDocumentModal } from './manufacturer-document-modal';
 import { ProductImageLightbox } from './product-image-lightbox';
 import { VariantPicker } from './variant-picker';
@@ -22,14 +23,10 @@ interface Props {
 }
 
 function safeManufacturerProductUrl(value: string | null | undefined): string | null {
-  if (!value?.trim()) return null;
-  try {
-    const url = new URL(value.trim());
-    if (url.protocol !== 'https:' || url.username || url.password) return null;
-    return url.href;
-  } catch {
-    return null;
-  }
+  const trimmed = value?.trim();
+  // 保存と同じ決まり（https・認証情報なし・空白なし）に合う URL だけをリンクにする
+  if (!trimmed || !isValidManufacturerProductUrl(trimmed)) return null;
+  return new URL(trimmed).href;
 }
 
 /**

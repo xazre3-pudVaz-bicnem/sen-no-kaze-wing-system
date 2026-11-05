@@ -29,9 +29,12 @@ export const ROLE_LABELS: Record<RoleCode, string> = {
 export function hasRoleAtLeast(role: RoleCode | undefined | null, min: RoleCode): boolean {
   return ROLE_RANK[role ?? 'customer'] >= ROLE_RANK[min];
 }
-/** 商品台帳（本体・カテゴリー・商品・価格・画像）を編集できるか */
+/**
+ * 商品台帳（本体・カテゴリー・商品・価格・画像）を編集できるか。本部だけ（2026-11-04 の先方回答 B-2：
+ * 商品の所有組織の区分ができるまで、総代理店・代理店の商品台帳は閲覧だけ。DB の can_edit_catalog() と同じ）
+ */
 export function canEditCatalog(role: RoleCode | undefined | null): boolean {
-  return hasRoleAtLeast(role, 'master_dealer');
+  return hasRoleAtLeast(role, 'admin');
 }
 /** 見積の別途工事・その他の入力と、自社フリー商品の登録ができるか */
 export function canEditDealerItems(role: RoleCode | undefined | null): boolean {

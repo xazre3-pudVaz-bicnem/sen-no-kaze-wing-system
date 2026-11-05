@@ -26,7 +26,7 @@ function ledgerRedirect(params: Record<string, string>): never {
  * 画面が読んだ版（updated_at）と一致するときだけ更新し、0 件なら失敗にする（古い画面の操作を成功扱いにしない）。
  * 参照保護（必須・初期選択・前提商品）・廃番の商品の再開の拒否などの判定は DB のトリガーが行う（20261016112000）。
  * 販売の再開は、仕様・供給・価格の確認のチェックが必要（2026-10-19 の先方回答）。
- * 権限は従来の商品台帳の編集権限（requireCatalogEditor）のまま。#502 の未確定事項（総代理店の編集権限）はここで変えない。
+ * 権限は商品台帳の編集権限（requireCatalogEditor。2026-11-04 の先方回答 B-2 で本部だけ）。
  */
 export async function setProductLifecycleAction(formData: FormData): Promise<void> {
   await requireCatalogEditor(ledgerPath);

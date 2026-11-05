@@ -6,7 +6,8 @@
 -- * v2.5 の版から作る下書きの明細を、版の選択枠（商品台帳の商品）と商品に紐づかない明細から作る
 --   （standard_estimate_v25_quote_draft_lines）。本体の明細は今と同じ（固定した本体 Revision の基準原価）
 --   - 選択枠（auto）：版で固定した原価単価（販売費率を掛けた後）を写し、売価 = trunc(原価単価 × 掛率)。版の売価と同じになる
---   - manual：版の売価。原価は版に無いため、売価と同じ（粗利 0）として写す（下書きで本部が直せる）
+--   - manual（売価だけを決めた選択枠・明細）：版に原価が無い。原価を売価と同じにも 0 円にもせず、この版からは下書きを作らない
+--     （2026-11-04 の先方回答 A-2 ⑤：「原価＝売価として写す」案は未承認。版から引き継ぐ原価と原価未設定の扱いを決めて反映するまで止める）
 --   - por（別途見積）：por のまま（正式保存の前に金額・0円確定（理由）・対象外のどれかにする。今と同じ）
 --   - 品名・見出しは Web の第 1 版の見積（write_standard_estimate_quote_items）と同じ（商品名 ／ 仕様、カテゴリー（位置））
 --   率・経費の方法・調整額は今と同じく版から写す。同じ明細・率なら、下書きの合計は標準見積の版の合計と一致する
@@ -49,7 +50,8 @@ $preflight$;
 -- 返す形は materialize_standard_quote_draft が apply_standard_quote_draft へ渡す明細と同じ
 -- （section_code・name・description・unit・remark・quantity・price_mode・base_unit_cost・cost_unit_price・unit_price）。
 -- v2.5 でない版は空の配列を返す。
--- p_validate：下書きを作るとき（true）は、原価のそろい・見積の明細の決まり（数量・単価・長さ）を明細の名前で確かめて止める。
+-- p_validate：下書きを作るとき（true）は、原価のそろい（auto の原価・売価だけを決めた行が無いこと）・見積の明細の決まり
+-- （数量・単価・長さ）を明細の名前で確かめて止める。
 -- 金額未確定の判定（false）は確かめずに明細だけ返す（正式保存が判定と関係のない理由で止まらないように）
 
 create function public.standard_estimate_v25_quote_draft_lines(p_revision_id uuid, p_validate boolean default true)
@@ -79,6 +81,24 @@ begin
       raise exception using errcode = 'P0001',
         message = format('LOCKED: 標準見積の版に、原価がそろっていない商品（%s）があります。標準見積の新しい版で最新原価を取り込んで公開してから作ってください', v_names);
     end if;
+    -- 売価だけを決めた行（manual の選択枠・商品に紐づかない manual の明細）は、版に原価が無い。
+    -- 原価を売価と同じにも 0 円にもして写さない（2026-11-04 の先方回答 A-2 ⑤。原価の扱いを反映するまで、この版からは作らない）
+    select string_agg('「' || x.name || '」', '・' order by x.part, x.sort_order, x.id)
+      into v_names
+      from (
+        select bi.option_name_snapshot as name, 0 as part, bi.sort_order, bi.id::text as id
+          from public.standard_estimate_revision_baseline_items bi
+         where bi.revision_id = rev.id and bi.price_mode = 'manual'
+        union all
+        select l.name, 1, l.sort_order, l.id::text
+          from public.standard_estimate_revision_v25_lines l
+         where l.revision_id = rev.id and l.price_mode = 'manual'
+      ) x;
+    if v_names is not null then
+      raise exception using errcode = 'P0001',
+        message = format('LOCKED: 標準見積の版に、売価だけを決めて原価が無い明細（%s）があります。売価だけの明細の原価の扱いを反映するまで、この版から見積下書きは作れません',
+                         pg_catalog.left(v_names, 300));
+    end if;
   end if;
 
   with src as (
@@ -102,8 +122,8 @@ begin
              'remark', null,
              'quantity', bi.quantity,
              'price_mode', bi.price_mode,
-             -- auto は版で固定した原価単価（販売費率を掛けた後）。manual の原価は版に無いため売価と同じ（粗利 0）
-             'cost_unit_price', case bi.price_mode when 'auto' then bi.cost_unit_price when 'manual' then bi.manual_unit_price end,
+             -- auto は版で固定した原価単価（販売費率を掛けた後）。manual の原価は版に無い（写さない。下書きを作るときは上で止める）
+             'cost_unit_price', case bi.price_mode when 'auto' then bi.cost_unit_price end,
              'unit_price', case bi.price_mode when 'manual' then bi.manual_unit_price end
            )
       from public.standard_estimate_revision_baseline_items bi
@@ -116,12 +136,12 @@ begin
      ) n
      where bi.revision_id = rev.id
     union all
-    -- 商品に紐づかない明細（manual / por）。manual の原価は売価と同じ（粗利 0）
+    -- 商品に紐づかない明細（manual / por）。manual の原価は版に無い（写さない。下書きを作るときは上で止める）
     select case l.section_code when 'interior_exterior' then 2 when 'option' then 3 else 4 end, 1, l.sort_order, l.id::text,
            pg_catalog.jsonb_build_object(
              'section_code', l.section_code, 'name', l.name, 'description', l.group_label, 'unit', l.unit, 'remark', l.remark,
              'quantity', l.quantity, 'price_mode', l.price_mode,
-             'cost_unit_price', case when l.price_mode = 'manual' then l.unit_price end,
+             'cost_unit_price', null,
              'unit_price', case when l.price_mode = 'manual' then l.unit_price end
            )
       from public.standard_estimate_revision_v25_lines l
@@ -158,7 +178,7 @@ end;
 $v25_draft_lines$;
 
 comment on function public.standard_estimate_v25_quote_draft_lines(uuid, boolean) is
-  'v2.5 の標準見積の版から、見積下書き（Web 以外）の明細を作る（本体は基準原価、選択枠は版で固定した原価単価、manual は版の売価で原価も同じ、por は por）。p_validate=false は確かめずに返す（金額未確定の判定用）。v2.5 でない版は空。内部用（v2.5 PR-D1c）。';
+  'v2.5 の標準見積の版から、見積下書き（Web 以外）の明細を作る（本体は基準原価、選択枠は版で固定した原価単価、por は por。売価だけを決めた manual の行は版に原価が無いため、下書きを作るときは止める）。p_validate=false は確かめずに返す（金額未確定の判定用。manual の原価は null）。v2.5 でない版は空。内部用（v2.5 PR-D1c）。';
 
 -- ---------- 既存の関数に、目印を確かめて差し込む（本体を丸ごと写さない。#529・S1・D1 と同じやり方） ----------
 

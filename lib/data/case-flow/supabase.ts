@@ -10,6 +10,8 @@ import type {
   AfterServiceRequestInput,
   AfterServiceUpdateInput,
   CaseAccess,
+  CaseOrganizations,
+  CaseRole,
   CaseAppointment,
   CaseAppointmentInput,
   CaseFile,
@@ -174,6 +176,31 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
   }
   async setCaseManufacturer(_actor: SessionUser, requestId: string, manufacturerId: string | null) {
     await this.rpc<void>('set_case_manufacturer', { p_request_id: requestId, p_manufacturer_id: manufacturerId });
+  }
+  async getCaseRole(_actor: SessionUser, requestId: string): Promise<CaseRole | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('case_role', { p_request_id: requestId });
+    if (error) {
+      // migration 未適用の DB では、これまでの判定（case_access）で代える
+      if (missing(error, 'case_role')) return (await this.getCaseAccess(_actor, requestId)) as CaseRole | null;
+      fail(error);
+    }
+    return (data as CaseRole | null) ?? null;
+  }
+  async getCaseOrganizations(_actor: SessionUser, requestId: string): Promise<CaseOrganizations | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_case_organizations', { p_request_id: requestId });
+    if (error) {
+      if (missing(error, 'get_case_organizations')) return null;
+      fail(error);
+    }
+    return (data as CaseOrganizations | null) ?? null;
+  }
+  async setCaseSalesOrganization(_actor: SessionUser, requestId: string, organizationId: string | null) {
+    await this.rpc<void>('set_case_sales_organization', { p_request_id: requestId, p_organization_id: organizationId });
+  }
+  async setCaseManufacturingOrganization(_actor: SessionUser, requestId: string, organizationId: string | null) {
+    await this.rpc<void>('set_case_manufacturing_organization', { p_request_id: requestId, p_organization_id: organizationId });
   }
   async getCaseProgress(_actor: SessionUser, requestId: string): Promise<CaseProgress | null> {
     const db = await this.db();

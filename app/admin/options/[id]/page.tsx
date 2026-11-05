@@ -200,6 +200,14 @@ export default async function EditOptionPage({
       <OptionRegistrationSaveBoundary>
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
+        {sp.deleted_variant === '1' && <Alert tone="success">未使用の選択項目・選択肢を削除しました。</Alert>}
+        {sp.copy_missing && (
+          <Alert tone="info">
+            コピー元の一部のメディアは別ファイルとして複製できませんでした（{sp.copy_missing.split(',').filter((entry) =>
+              ['メイン画像', '追加画像', 'メーカーPDF'].includes(entry)
+            ).join('・')}）。外部URLの素材などは、公開前にこの商品の画像・メーカー資料として登録し直してください。
+          </Alert>
+        )}
 
         <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -440,7 +448,7 @@ export default async function EditOptionPage({
 
             <ProductPriceUnitRouteSummary priceLabel={priceLabel} />
 
-            <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="商品登録">
+            <section className="card space-y-4 p-4 sm:p-5" aria-label="商品登録" data-testid="step2-publish-panel">
               <div>
                 <h3 className="font-semibold">登録状態</h3>
                 <p className="mt-1 text-sm text-muted">現在は下書きです。上の登録内容とお客様表示に問題がなければ登録してください。</p>
@@ -467,16 +475,21 @@ export default async function EditOptionPage({
                       </label>
                     </div>
                   )}
-                  <ConfirmSubmit
-                    message={
-                      needsZeroPriceConfirmation
-                        ? `「${option.name}」を商品価格0円で登録しますか？`
-                        : `「${option.name}」をこの内容で登録しますか？`
-                    }
-                    className="btn-primary"
-                  >
-                    この内容で登録
-                  </ConfirmSubmit>
+                  <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3" data-testid="step2-publish-actions">
+                    <Link href={stepHref('info')} className="btn-secondary btn-sm shrink-0 whitespace-nowrap">
+                      STEP1に戻る
+                    </Link>
+                    <ConfirmSubmit
+                      message={
+                        needsZeroPriceConfirmation
+                          ? `「${option.name}」を商品価格0円で登録しますか？`
+                          : `「${option.name}」をこの内容で登録しますか？`
+                      }
+                      className="btn-primary btn-sm shrink-0 whitespace-nowrap"
+                    >
+                      この内容で登録
+                    </ConfirmSubmit>
+                  </div>
                 </form>
               )}
             </section>

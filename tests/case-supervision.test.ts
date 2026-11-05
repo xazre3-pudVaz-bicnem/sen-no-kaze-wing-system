@@ -15,7 +15,7 @@ const functionBody = (name: string) => {
 };
 
 describe('総代理店の配下の確認：DB の取り決め（migration 20261104140000）', () => {
-  it('お客様の氏名・会社名・連絡先・設置場所・備考・営業の記録を返さない（顧客情報の項目は先方の確認待ち）', () => {
+  it('一覧・詳細の本体は、お客様の氏名・会社名・連絡先・設置場所・備考・営業の記録を直接返さない（設置場所・現地確認は B-3 の専用の関数だけ）', () => {
     for (const name of ['list_supervised_cases', 'get_supervised_case']) {
       const body = functionBody(name);
       expect(body.length).toBeGreaterThan(200);
@@ -59,8 +59,35 @@ describe('総代理店の配下の確認：DB の取り決め（migration 202611
     expect(migration).not.toMatch(/grant execute on function public\.(list_supervised_cases|get_supervised_case)\([^)]*\) to [^;]*anon/);
   });
 
-  it('案件・見積の表の RLS は開かない（専用の関数だけで返す）', () => {
-    expect(sqlOnly).not.toMatch(/create policy|alter policy|drop policy/);
+  it('案件・見積の表の RLS は開かない（専用の関数だけで返す）。開くのは現地確認の写真の読み取りだけ（B-3）', () => {
+    const policies = [...sqlOnly.matchAll(/(create|alter|drop) policy(?: if exists)? (\w+) on public\.(\w+)/g)].map((m) => `${m[1]} ${m[2]} ${m[3]}`);
+    expect(policies).toEqual(['drop case_files_read case_files', 'create case_files_read case_files']);
+    const policy = sqlOnly.slice(sqlOnly.indexOf('create policy case_files_read'), sqlOnly.indexOf(');', sqlOnly.indexOf('create policy case_files_read')));
+    expect(policy).toContain("or (context = 'site_survey' and public.case_role(quote_request_id) = 'supervisor')");
+    expect(policy).toContain("and (context in ('progress', 'site_survey') or public.is_case_legacy_manufacturer(quote_request_id)))");
+    expect(policy).toContain("or (customer_visible and public.case_role(quote_request_id) = 'customer')");
+  });
+
+  it('総代理店に見せる、製造・出荷・施工に必要な情報（2026-11-04 の先方回答 B-3）：案件名・顧客番号・設置場所・条件・用途・現地確認だけ', () => {
+    const body = functionBody('case_partner_site_info');
+    for (const field of [
+      "'case_name'", "'customer_no'", "'site_address'", "'land_status'", "'area_sqm'", "'land_category'", "'road_access'",
+      "'electricity'", "'water'", "'drainage'", "'intended_use'", "'survey_notes'", "'legal'",
+      "from public.case_files f where f.quote_request_id = r.id and f.context = 'site_survey'",
+    ]) {
+      expect(body, `${field} が無い`).toContain(field);
+    }
+    // お客様の氏名・会社名・電話・メール・ご自宅の住所・メッセージ、打合せの希望、土地なしの希望地域・予算・メモ、記録・契約は返さない
+    for (const field of [
+      'full_name', 'company_name', 'customer_name', 'customer_company', "'email'", "'phone'", "->> 'address'", 'r.message',
+      'desired_area', 'land_budget', 'sp.note', 'case_notes', 'contracts', 'quote_request_preferences', "'document'", 'surveyor_name',
+    ]) {
+      expect(body, `${field} が含まれている`).not.toContain(field);
+    }
+    expect(functionBody('get_supervised_case')).toContain("'partner_info', public.case_partner_site_info(p_request_id)");
+    // 内部の部品は利用者から呼べない
+    expect(migration).toContain('revoke all on function public.case_partner_site_info(uuid) from public, anon, authenticated, service_role;');
+    expect(sqlOnly).not.toMatch(/grant execute on function public\.case_partner_site_info/);
   });
 });
 

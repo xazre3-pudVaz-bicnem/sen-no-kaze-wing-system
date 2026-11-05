@@ -234,8 +234,8 @@ export interface CaseWorkflow {
 
 /**
  * 総代理店の配下の確認（DB の list_supervised_cases／get_supervised_case。20261104140000）。
- * お客様の氏名・会社名・連絡先・住所・メッセージ、設置場所・土地の情報、日程の希望、打合せ記録、見積の備考は含めない
- * （顧客情報の項目は先方の確認が済んでから足す）。
+ * お客様の氏名・会社名・連絡先・ご自宅の住所・メッセージ、日程の希望、打合せ記録、見積の備考は含めない。
+ * 詳細には、製造・出荷・施工に必要な案件の情報（partner_info。2026-11-04 の先方回答 B-3）を含める
  */
 export interface SupervisedQuoteSummary {
   id: string;
@@ -295,6 +295,39 @@ export interface SupervisedCaseDetail {
   schedule: { category: string; title: string; planned_start: string | null; planned_end: string | null; actual_start: string | null; actual_end: string | null; status: string; note: string | null }[];
   progress_reports: { kind: string; title: string | null; body: string | null; reported_on: string | null; author_name: string | null }[];
   handover_status: string;
+  /** 製造・出荷・施工に必要な案件の情報（B-3。DB の更新の前は無い） */
+  partner_info?: CasePartnerSiteInfo | null;
+}
+
+/**
+ * 総代理店（配下の確認・製造の担当）に見せる、製造・出荷・施工に必要な案件の情報（DB の case_partner_site_info。
+ * 2026-11-04 の先方回答 B-3）：案件名・顧客番号・設置場所の住所・設置場所の条件・用途・現地確認の内容と写真。
+ * お客様の氏名・会社名・電話・メール・ご自宅の住所・メッセージ、打合せの希望、土地なしの場合の希望地域・予算・メモ、
+ * 打合せ記録・本部への相談、契約書、お客様が送った資料は含めない
+ */
+export interface CasePartnerSiteInfo {
+  case_name: string | null;
+  customer_no: string | null;
+  site_address: string | null;
+  land: {
+    land_status: LandStatus;
+    area_sqm: number | null;
+    land_category: LandCategory | null;
+    road_access: RoadAccess | null;
+    electricity: UtilityStatus | null;
+    water: UtilityStatus | null;
+    drainage: UtilityStatus | null;
+    intended_use: IntendedUse | null;
+  } | null;
+  survey: {
+    status: 'draft' | 'completed';
+    surveyed_on: string | null;
+    land: Record<string, string>;
+    legal: Record<string, string>;
+    survey_notes: string | null;
+    completed_at: string | null;
+  } | null;
+  survey_files: { id: string; file_name: string; content_type: string; caption: string | null; created_at: string }[];
 }
 
 /** 案件の営業担当組織・製造担当組織・主担当者（画面用。DB の get_case_organizations と同じ） */

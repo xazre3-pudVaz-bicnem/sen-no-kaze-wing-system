@@ -36,6 +36,7 @@ import type {
   WindowType,
 } from '@/lib/domain/types';
 import type { LocalCaseFlowTables } from './case-flow/local-tables';
+import type { LocalOrganizationTables } from './organizations/local-tables';
 import type { QuotePorSelection } from '@/lib/domain/quote-por';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
@@ -94,6 +95,8 @@ export interface LocalDb {
   auditLogs: AuditLog[];
   /** 案件の進行（フェーズ4以降）。lib/data/case-flow/local.ts が使う */
   caseFlow?: LocalCaseFlowTables;
+  /** 代理店・総代理店の組織・所属・招待。lib/data/organizations/local.ts が使う */
+  organizations?: LocalOrganizationTables;
   /** 別途見積の確認の記録（DB の quote_por_confirmations と同じ。変更・削除しない。D1 までの暫定） */
   quotePorConfirmations?: LocalQuotePorConfirmation[];
   /** 窓タイプ（DB の window_types と同じ。v2.5 PR-S1/S2）。古い db.json に無ければ初期値 */

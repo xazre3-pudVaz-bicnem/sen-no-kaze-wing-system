@@ -330,6 +330,39 @@ export interface CasePartnerSiteInfo {
   survey_files: { id: string; file_name: string; content_type: string; caption: string | null; created_at: string }[];
 }
 
+/**
+ * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261104150000）。
+ * 製造担当（製造担当組織のメンバー・これまでの案件で本部が選んだ総代理店の利用者）と本部が使う。お客様の情報・見積の金額は含めない
+ * （製造・出荷・施工に必要な設置場所・現地確認は、詳細の partner_info に含める。2026-11-04 の先方回答 B-3）。
+ */
+export interface ManufacturingCaseSummary {
+  request_id: string;
+  quote: { quote_no: string; revision: number; status: string; base_model_name: string; spec_code: string | null; finish_level: string | null } | null;
+  sales_organization: { id: string; name: string } | null;
+  manufacturing_organization: { id: string; name: string } | null;
+  primary_staff_name: string | null;
+  contract_signed: boolean;
+  order: {
+    /** 取り消した製造依頼は返さない */
+    status: ManufacturingOrderStatus;
+    unit_count: number;
+    requested_delivery_on: string | null;
+    sent_at: string | null;
+    received_at: string | null;
+    completed_at: string | null;
+    units_shipped: number;
+    units_installed: number;
+  } | null;
+  activity_at: string;
+}
+
+export interface ManufacturingCaseDetail extends ManufacturingCaseSummary {
+  /** 現在の見積の明細（品名・数量・単位だけ。金額は返さない） */
+  spec_items: { kind: string; name: string; quantity: number; unit: string | null }[];
+  /** 製造・出荷・施工に必要な案件の情報（B-3。DB の更新の前は無い） */
+  partner_info?: CasePartnerSiteInfo | null;
+}
+
 /** 案件の営業担当組織・製造担当組織・主担当者（画面用。DB の get_case_organizations と同じ） */
 export interface CaseOrganizations {
   sales_organization: { id: string; name: string; organization_type: 'headquarters' | 'master_dealer' | 'dealer' } | null;

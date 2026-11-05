@@ -22,6 +22,11 @@ interface Props {
   allowStandardEstimateCategoryPick?: boolean;
   /** お客様向け見積シミュレーターでだけ、代理店検索の導線を表示する */
   showDealerFinder?: boolean;
+  /**
+   * 標準見積の明細の行ごとの注記（行の id → 文。v2.5 PR-S2）。標準の商品の行で、お客様が標準から変えた内容を示す。
+   * 金額は「選択商品の変更差額」の行のまま（二重に数えない）
+   */
+  standardLineNotes?: Record<string, string>;
 }
 
 /** 表の列（項目／数量／単位／単価／金額／備考）を揃えるための共通セル */
@@ -131,6 +136,7 @@ export function QuoteSheet({
   onPickCategory,
   allowStandardEstimateCategoryPick = false,
   showDealerFinder = false,
+  standardLineNotes = {},
 }: Props) {
   const isMobile = useSyncExternalStore(
     (onStoreChange) => {
@@ -297,6 +303,11 @@ export function QuoteSheet({
             <td className={td.name}>
               {line.group_label && <span className="mr-2 text-xs text-muted">{line.group_label}</span>}
               {line.name}
+              {standardLineNotes[line.id] && (
+                <span className="mt-0.5 block text-[0.68rem] font-semibold text-brown" data-testid="standard-line-note">
+                  {standardLineNotes[line.id]}
+                </span>
+              )}
             </td>
             <td className={td.qty}>{line.quantity == null ? '' : formatQty(line.quantity)}</td>
             <td className={td.unit}>{line.unit ?? ''}</td>

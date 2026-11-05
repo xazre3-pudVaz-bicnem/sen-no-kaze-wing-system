@@ -1,6 +1,6 @@
 import type { CatalogBundle, ModelPreset, OptionVariantChoice, OptionVariantGroup } from './types';
 import { defaultSelection, toggleOption, type RuleContext } from './rules';
-import { isQuoteSelectableProduct } from './product-lifecycle';
+import { isQuoteSelectableProduct, stoppedBaselineProducts } from './product-lifecycle';
 
 /**
  * 仕様（プラン）の標準構成を、選択ルール（依存・競合・必須）を通しながら組み立てる。
@@ -8,13 +8,14 @@ import { isQuoteSelectableProduct } from './product-lifecycle';
  */
 export function buildPresetSelection(ctx: RuleContext, preset: ModelPreset, defaults: string[] = defaultSelection(ctx)): string[] {
   const byCode = new Map(ctx.options.map((o) => [o.code, o.id]));
-  // 標準構成の商品は、シミュレーター非表示でも標準として入れる（取扱終了は入れない。DB の product_lifecycle_baseline_option_ids と同じ）。
+  // 標準構成の商品は、シミュレーター非表示でも標準として入れる（販売停止・廃番は入れない。DB の product_lifecycle_baseline_option_ids と同じ）。
   // 外すと、標準状態と差額計算の基準がずれる
   const baselineCtx: RuleContext = { ...ctx, canSelectNew: isQuoteSelectableProduct };
+  const presetIds = preset.option_codes.map((code) => byCode.get(code)).filter((id): id is string => Boolean(id));
+  // 販売停止・廃番の標準構成の商品のカテゴリーは、既定値で補わない（未承認の自動の差し替えをしない。その仕様は受付停止）
+  const stoppedCategoryIds = new Set(stoppedBaselineProducts(ctx.options, presetIds).map((option) => option.category_id));
   let cur: string[] = [];
-  for (const code of preset.option_codes) {
-    const oid = byCode.get(code);
-    if (!oid) continue;
+  for (const oid of presetIds) {
     const r = toggleOption(baselineCtx, cur, oid);
     if (!r.rejected) cur = r.next;
   }
@@ -22,6 +23,7 @@ export function buildPresetSelection(ctx: RuleContext, preset: ModelPreset, defa
   for (const oid of defaults) {
     if (cur.includes(oid)) continue;
     const o = ctx.options.find((x) => x.id === oid);
+    if (o && stoppedCategoryIds.has(o.category_id)) continue;
     const cat = ctx.categories.find((c) => c.id === o?.category_id);
     const hasCat = cur.some((x) => ctx.options.find((y) => y.id === x)?.category_id === cat?.id);
     if (o?.is_required || (cat?.is_required && !hasCat)) {

@@ -10,6 +10,7 @@ import {
   register,
   uniqueEmail,
   withExpenseAndTax,
+  fillQuoteRequestContact,
 } from './helpers';
 
 const ADMIN_EMAIL = 'admin@example.com'; // playwright.config の WING_LOCAL_ADMIN_EMAILS
@@ -38,6 +39,7 @@ test.describe('管理者フロー', () => {
     await expect(page).toHaveURL(/\?c=/);
     const configId = new URL(page.url()).searchParams.get('c')!;
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
+    await fillQuoteRequestContact(page);
     await page.getByTestId('submit-quote-request').click();
     await expect(page).toHaveURL(/\/mypage\/quotes\//);
     const quoteId = page.url().match(/quotes\/([0-9a-f-]{36})/)![1];

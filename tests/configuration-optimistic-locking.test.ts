@@ -191,9 +191,12 @@ describe('Configuration 保存の同時編集対策: アプリ', () => {
     expect(simulator).toContain('const [lockVersion, setLockVersion] = useState<number | null>(initial?.lock_version ?? null);');
     expect(simulator).toContain('expected_lock_version: configId ? lockVersion : null,');
     expect(simulator).toContain('setLockVersion(result.configuration.lock_version ?? null);');
-    // ログイン後の再開でも版を失わない
+    // 既存プランの版はサーバーから取得し、保存成功時は最新の版を記録する。
+    // 新規入口・ログイン後再開では、以前のプランIDと版をブラウザから復元しない。
     expect(simulator).toContain('lockVersion: result.configuration.lock_version ?? null');
-    expect(simulator).toContain('if (!initial) setLockVersion(draft.lockVersion ?? null);');
+    expect(simulator).toContain('canRestoreSimulatorSelection(draft, user?.id ?? null, resume)');
+    expect(simulator).not.toContain('setLockVersion(draft.lockVersion ?? null)');
+    expect(simulator).not.toContain('setConfigId(draft.configId)');
   });
 
   it('見積依頼の確認画面は表示した版を送り、DB の版と一致しなければ見積を作らない', () => {

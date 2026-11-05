@@ -76,6 +76,8 @@ describe('customer spec category guard hardening', () => {
   });
 
   it('does not regress the current exterior-wall catalog while adding history compatibility', () => {
-    expect(simulator).toContain("'exterior-nichiha-m-flat-premium18'");
+    // 今の外壁の商品の一覧は exterior-wall.ts に 1 つにまとめ、シミュレーターと /plans の入口が使う（v2.5 PR-C1）
+    expect(readFileSync('lib/domain/exterior-wall.ts', 'utf8')).toContain("'exterior-nichiha-m-flat-premium18'");
+    expect(simulator).toContain('const currentExteriorCodes = CURRENT_EXTERIOR_CODES;');
   });
 });

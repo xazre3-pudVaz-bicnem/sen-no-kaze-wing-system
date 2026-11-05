@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
+import { isSimulatorSingleProductCategory, nextSimulatorSelectedProducts } from '@/lib/domain/simulator-single-product-selection';
 import {
   equipmentCategoryPriceBreakdown,
   type EquipmentCategoryPriceState,
@@ -20,14 +21,22 @@ import { ProductDetail } from './product-detail';
 import { ProductList } from './product-list';
 import { cn } from '@/lib/utils';
 
-/** 選択項目ごとに、現在値 → 標準 → 固定 → 先頭の順で初期値を選ぶ */
-function defaultVariants(groups: OptionVariantGroup[], choices: OptionVariantChoice[], current: string[]): string[] {
+/**
+ * 選択項目ごとに、現在値 → 仕様の標準の選択肢（v2.5 の間は標準見積の選択枠の選択肢）→ 標準 → 固定 → 先頭の順で初期値を選ぶ
+ */
+function defaultVariants(
+  groups: OptionVariantGroup[],
+  choices: OptionVariantChoice[],
+  current: string[],
+  preferred: string[] = []
+): string[] {
   const out: string[] = [];
   for (const g of groups) {
     const list = choices.filter((c) => c.group_id === g.id).sort((a, b) => a.sort_order - b.sort_order);
     if (list.length === 0) continue;
     const already = list.find((c) => current.includes(c.id));
-    out.push((already ?? list.find((c) => c.kind === 'standard' || c.kind === 'fixed') ?? list[0]).id);
+    const standard = list.find((c) => preferred.includes(c.id));
+    out.push((already ?? standard ?? list.find((c) => c.kind === 'standard' || c.kind === 'fixed') ?? list[0]).id);
   }
   return out;
 }
@@ -57,6 +66,11 @@ interface Props {
   baselineVariantIds: string[];
   onClose: () => void;
   onApply: (nextSelectedInCategory: string[], variantIds: string[]) => void;
+  /**
+   * 位置・用途の選択枠（v2.5 PR-S2）の選び直し。その位置で 1 つだけ選び、外せない（位置ごとに必ず 1 つ）。
+   * options はその位置で選べる商品、selectedIds・baselineSelectedIds はその位置の今の商品と標準の商品
+   */
+  slot?: { label: string } | null;
 }
 
 /**
@@ -77,6 +91,7 @@ export function OptionPickerDialog({
   baselineVariantIds,
   onClose,
   onApply,
+  slot = null,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [detailOptionId, setDetailOptionId] = useState<string | null>(null);
@@ -86,7 +101,8 @@ export function OptionPickerDialog({
     () => options.filter((option) => selectedIds.includes(option.id)).map((option) => option.id),
     [options, selectedIds]
   );
-  const isWashbasinCategory = category.code === 'washbasin';
+  // 位置の枠は 1 商品ずつ選ぶので、標準洗面セット（2 商品で 1 つの表示）の扱いはしない
+  const isWashbasinCategory = category.code === 'washbasin' && !slot;
   const displayOptions = useMemo(
     () => (isWashbasinCategory ? washbasinDisplayOptions(options, baselineSelectedIds) : options),
     [baselineSelectedIds, isWashbasinCategory, options]
@@ -100,13 +116,10 @@ export function OptionPickerDialog({
         : selectedInCategory,
     [displayOptions, isWashbasinCategory, options, selectedInCategory]
   );
-  const isSingleSelection =
-    category.code === 'boiler' ||
-    category.code === 'aircon' ||
-    isWashbasinCategory ||
-    category.selection_mode === 'single';
-  const categoryDisplayName =
+  const isSingleSelection = Boolean(slot) || isSimulatorSingleProductCategory(category);
+  const baseCategoryName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
+  const categoryDisplayName = slot ? `${slot.label}（${baseCategoryName}）` : baseCategoryName;
 
   const detailOption = displayOptions.find((option) => option.id === detailOptionId) ?? null;
   const detailGroups = detailOption
@@ -144,7 +157,7 @@ export function OptionPickerDialog({
     return pruneHiddenVariantChoices(
       groups,
       variantChoices,
-      defaultVariants(groups, variantChoices, currentForProduct)
+      defaultVariants(groups, variantChoices, currentForProduct, baselineVariantIds)
     );
   };
 
@@ -152,11 +165,7 @@ export function OptionPickerDialog({
     isWashbasinCategory ? washbasinSelectionIdsForOption(option, options) : [option.id];
 
   const nextSelectedForOption = (option: ProductOption) =>
-    isSingleSelection
-      ? selectionIdsForOption(option)
-      : selectedInCategory.includes(option.id)
-        ? selectedInCategory
-        : [...selectedInCategory, option.id];
+    slot ? [option.id] : nextSimulatorSelectedProducts(category, selectedInCategory, option.id, selectionIdsForOption(option));
 
   const nextVariantsForOption = (option: ProductOption, optionVariants: string[]) => {
     const detailGroupIds = new Set(
@@ -208,7 +217,7 @@ export function OptionPickerDialog({
       const groupId = variantChoices.find((choice) => choice.id === choiceId)?.group_id;
       return Boolean(groupId && groupIds.has(groupId));
     });
-    const defaults = defaultVariants(groups, variantChoices, currentForProduct);
+    const defaults = defaultVariants(groups, variantChoices, currentForProduct, baselineVariantIds);
     setDraftVariantIds(pruneHiddenVariantChoices(groups, variantChoices, defaults));
     setDetailOptionId(option.id);
   };
@@ -229,7 +238,7 @@ export function OptionPickerDialog({
       const visible = visibleVariantGroups(detailGroups, variantChoices, next);
       const withDefaults = [
         ...next,
-        ...defaultVariants(visible, variantChoices, next).filter((id) => !next.includes(id)),
+        ...defaultVariants(visible, variantChoices, next, baselineVariantIds).filter((id) => !next.includes(id)),
       ];
       return pruneHiddenVariantChoices(detailGroups, variantChoices, withDefaults);
     });
@@ -282,6 +291,7 @@ export function OptionPickerDialog({
       : selectedInCategory.includes(detailOption.id)
     : false;
   const canRemove =
+    !slot &&
     Boolean(detailOption && isCurrentlySelected) &&
     (!category.is_required || displaySelectedIds.length > 1);
 

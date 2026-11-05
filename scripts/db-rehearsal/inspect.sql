@@ -29,5 +29,16 @@ select jsonb_build_object(
       'authenticated', (select coalesce(string_agg(x, ',' order by x), '') from unnest(array['SELECT','INSERT','UPDATE','DELETE']) x where has_table_privilege('authenticated', k.oid, x))
     ) order by k.relname), '[]'::jsonb)
     from pg_class k
-    where k.relnamespace = 'public'::regnamespace and k.relkind in ('r', 'p'))
+    where k.relnamespace = 'public'::regnamespace and k.relkind in ('r', 'p')),
+  -- 旧価格の列（v2.5 PR-C1b）を持つ表の列ごとの読み取りの権限（lib/data/legacy-price-columns.json と照合する）
+  'price_table_columns', (select coalesce(jsonb_agg(jsonb_build_object(
+      't', k.relname, 'col', a.attname,
+      'anon', has_column_privilege('anon', k.oid, a.attnum, 'SELECT'),
+      'authenticated', has_column_privilege('authenticated', k.oid, a.attnum, 'SELECT')
+    ) order by k.relname, a.attnum), '[]'::jsonb)
+    from pg_class k
+    join pg_attribute a on a.attrelid = k.oid and a.attnum > 0 and not a.attisdropped
+    where k.relnamespace = 'public'::regnamespace
+      and k.relname in ('options', 'option_variant_choices', 'base_models', 'base_breakdown_items',
+                        'estimate_templates', 'estimate_template_sections', 'estimate_template_lines'))
 ) as j

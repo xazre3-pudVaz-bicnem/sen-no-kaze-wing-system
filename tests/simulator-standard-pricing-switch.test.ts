@@ -54,7 +54,7 @@ describe('サイトの新価格への切り替えスイッチ：画面', () => {
     expect(data).toContain("rpc('simulator_standard_pricing_enabled')");
     // スイッチの関数が無い DB（migration 未適用）では安全側（切り替えない）
     expect(data).toContain("if (isMissingNamedFunction(error, 'simulator_standard_pricing_enabled')) return false;");
-    expect(data).toContain('if (!switchedOn && !opts.preview) return { saleViews: [], switchedOn };');
+    expect(data).toContain('if (!switchedOn && !opts.preview) return { saleViews: [], switchedOn, v25: false };');
   });
 
   it('プレビューは本部の管理者だけ。プレビュー中は保存・見積依頼をしない', () => {

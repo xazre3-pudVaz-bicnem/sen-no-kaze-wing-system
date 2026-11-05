@@ -16,6 +16,8 @@ import {
 } from '@/lib/actions/product-media-url';
 import type { OptionImage, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
+import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
 
@@ -53,11 +55,11 @@ function OptionImageEditor({
     <li className="overflow-hidden rounded-xl border border-line bg-white">
       <button
         type="button"
-        className="relative block h-32 w-full cursor-zoom-in bg-sand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:h-36"
+        className="block w-full cursor-zoom-in overflow-hidden rounded-t-xl bg-sand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
         aria-label={`${image.caption?.trim() || '追加画像'}を拡大表示`}
         onClick={() => onPreview({ src: image.url, alt: image.alt || image.caption?.trim() || '追加画像' })}
       >
-        <SmartImage src={image.url} alt={image.alt} fill sizes="160px" className="object-contain" />
+        <ProductGalleryThumbnail image={image} />
       </button>
       <div className="space-y-2 p-3">
         <ActionStatus state={state} />
@@ -398,13 +400,13 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
   return (
     <div id="product-media" className="space-y-6">
-      <section id="product-sub-images" className="card space-y-5 p-5 sm:p-6 scroll-mt-6">
+      <section id="product-sub-images" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">サブ画像 <span className="text-xs font-normal text-muted">任意</span></h2>
             <p className="mt-1 text-xs text-muted">商品詳細で見せたい追加画像がある場合だけ登録します。</p>
           </div>
-          <span className="rounded-full bg-ivory px-3 py-1 text-xs font-semibold text-ink-soft">{images.length}枚</span>
+          <ProductGalleryCount count={images.length} />
         </div>
 
         {images.length > 0 ? (
@@ -476,25 +478,14 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         </div>
       </section>
 
-      <section id="manufacturer-documents" className="card space-y-5 p-5 sm:p-6 scroll-mt-6" data-testid="manufacturer-document-section">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">4. メーカー資料</h2>
-              <span className="rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown">原則登録</span>
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。
-            </p>
-          </div>
-          <span
-            data-testid="manufacturer-document-status"
-            data-registered={option.manufacturer_document_url ? 'true' : 'false'}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${option.manufacturer_document_url ? 'bg-[#eaf6f1] text-[#245a48]' : 'bg-[#fff8e8] text-[#7c5a18]'}`}
-          >
-            {option.manufacturer_document_url ? '登録済み' : '未登録'}
-          </span>
-        </div>
+      <section id="manufacturer-documents" className="card space-y-4 p-4 sm:p-5 scroll-mt-6" data-testid="manufacturer-document-section">
+        <ProductSectionHeading
+          label="4. メーカー資料"
+          description="商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。"
+          level="h2"
+          badge={<span className="rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown">原則登録</span>}
+          trailing={<ProductDocumentStatus url={option.manufacturer_document_url} testId="manufacturer-document-status" />}
+        />
 
         {!option.manufacturer_document_url && (
           <p className="text-xs leading-5 text-ink-soft">

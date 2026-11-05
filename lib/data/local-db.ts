@@ -33,11 +33,15 @@ import type {
   EstimateTemplateSection,
   EstimateTemplateLine,
   SpecMatrix,
+  WindowType,
 } from '@/lib/domain/types';
 import type { LocalCaseFlowTables } from './case-flow/local-tables';
+import type { QuotePorSelection } from '@/lib/domain/quote-por';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
 import { buildSeedMatrix } from '@/lib/seed/matrix';
+import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
+import { takeLocalReset } from './local-reset';
 
 /**
  * ローカル検証モードの JSON データベース。
@@ -90,6 +94,18 @@ export interface LocalDb {
   auditLogs: AuditLog[];
   /** 案件の進行（フェーズ4以降）。lib/data/case-flow/local.ts が使う */
   caseFlow?: LocalCaseFlowTables;
+  /** 別途見積の確認の記録（DB の quote_por_confirmations と同じ。変更・削除しない。D1 までの暫定） */
+  quotePorConfirmations?: LocalQuotePorConfirmation[];
+  /** 窓タイプ（DB の window_types と同じ。v2.5 PR-S1/S2）。古い db.json に無ければ初期値 */
+  windowTypes?: WindowType[];
+}
+
+export interface LocalQuotePorConfirmation {
+  id: string;
+  quote_id: string;
+  selections: QuotePorSelection[];
+  confirmed_by: string;
+  confirmed_at: string;
 }
 
 export function localDir(): string {
@@ -111,6 +127,7 @@ export function emptyDb(): LocalDb {
     models: clone(seedCatalog.models),
     images: clone(seedCatalog.images),
     categories: clone(seedCatalog.categories),
+    windowTypes: clone(INITIAL_WINDOW_TYPES),
     options: clone(seedCatalog.options),
     optionImages: [],
     dependencies: clone(seedCatalog.dependencies),
@@ -243,15 +260,10 @@ function reconcileIndependentInsulation(db: LocalDb): boolean {
   return changed;
 }
 
-declare global {
-  var __wingLocalReset: boolean | undefined;
-}
-
 export function loadDb(): LocalDb {
   const p = dbPath();
-  // WING_LOCAL_RESET=1 のときはサーバー起動ごとに初期化（E2E 用）
-  if (process.env.WING_LOCAL_RESET === '1' && !globalThis.__wingLocalReset) {
-    globalThis.__wingLocalReset = true;
+  // WING_LOCAL_RESET=1 のときは初期化する（E2E 用）。WING_LOCAL_RESET_ID があれば、その実行の中で 1 回だけ（local-reset.ts）
+  if (takeLocalReset(localDir())) {
     if (fs.existsSync(p)) fs.rmSync(p);
     const files = path.join(localDir(), 'files');
     if (fs.existsSync(files)) fs.rmSync(files, { recursive: true, force: true });

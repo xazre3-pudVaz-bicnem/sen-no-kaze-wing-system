@@ -25,9 +25,9 @@ const created: StandardQuoteEditorState = {
   adjustment_reason: '端数調整',
   notes: '',
   lines: [
-    { line_key: 'b1', section_code: 'base', name: '伸縮脚', description: '1．金物', quantity: '12', unit: '本', price_mode: 'auto', base_unit_cost: 18200, cost_unit_price: null, unit_price: null, remark: null },
-    { line_key: 'o1', section_code: 'option', name: '洗面器', description: null, quantity: '1', unit: null, price_mode: 'auto', base_unit_cost: null, cost_unit_price: 46150, unit_price: null, remark: null },
-    { line_key: 'o2', section_code: 'option', name: '未定の備品', description: null, quantity: '1', unit: null, price_mode: 'por', base_unit_cost: null, cost_unit_price: null, unit_price: null, remark: null },
+    { line_key: 'b1', section_code: 'base', name: '伸縮脚', description: '1．金物', quantity: '12', unit: '本', price_mode: 'auto', base_unit_cost: 18200, cost_unit_price: null, unit_price: null, remark: null, line_state: null, line_state_reason: '' },
+    { line_key: 'o1', section_code: 'option', name: '洗面器', description: null, quantity: '1', unit: null, price_mode: 'auto', base_unit_cost: null, cost_unit_price: 46150, unit_price: null, remark: null, line_state: null, line_state_reason: '' },
+    { line_key: 'o2', section_code: 'option', name: '未定の備品', description: null, quantity: '1', unit: null, price_mode: 'por', base_unit_cost: null, cost_unit_price: null, unit_price: null, remark: null, line_state: null, line_state_reason: '' },
   ],
 };
 const saved: StandardQuoteEditorState = {
@@ -37,7 +37,7 @@ const saved: StandardQuoteEditorState = {
     created.lines[0],
     created.lines[1],
     { ...created.lines[2], price_mode: 'manual', cost_unit_price: 500, unit_price: 900 },
-    { line_key: null, section_code: 'sitework', name: '据付', description: null, quantity: '2.5', unit: 'm', price_mode: 'manual', base_unit_cost: null, cost_unit_price: 999, unit_price: 2001, remark: null },
+    { line_key: null, section_code: 'sitework', name: '据付', description: null, quantity: '2.5', unit: 'm', price_mode: 'manual', base_unit_cost: null, cost_unit_price: 999, unit_price: 2001, remark: null, line_state: null, line_state_reason: '' },
   ],
 };
 
@@ -74,6 +74,38 @@ describe('標準見積から作成した見積：試算（DB と同じ式）', (
     expect(lines[1]).toMatchObject({ price_mode: 'auto', cost_unit_price: 46150, unit_price: null });
     expect(lines[2]).toMatchObject({ price_mode: 'manual', cost_unit_price: 500, unit_price: 900 });
     expect(toStandardQuoteSaveLines(created.lines)[2]).toMatchObject({ price_mode: 'por', cost_unit_price: null, unit_price: null });
+  });
+
+  it('「0円確定」「対象外」は本体以外の「金額を入力」の 0 円の行（対象外は原価も 0 円。印はサーバーが付ける）', () => {
+    const excluded = { ...saved.lines[3], line_state: 'excluded' as const, line_state_reason: 'お客様手配' };
+    const zero = { ...saved.lines[2], line_state: 'zero_confirmed' as const, line_state_reason: 'サービス' };
+    const preview = previewStandardQuote({ ...saved, lines: [saved.lines[0], saved.lines[1], zero, excluded] }, '0.10');
+    expect(preview.errors).toEqual([]);
+    expect(preview.lines[2]).toMatchObject({ saleUnitPrice: 0, saleAmount: 0, costUnitPrice: 500 });
+    expect(preview.lines[3]).toMatchObject({ saleUnitPrice: 0, saleAmount: 0, costUnitPrice: 0, costAmount: 0 });
+    const lines = toStandardQuoteSaveLines([zero, excluded]);
+    expect(lines[0]).toMatchObject({ price_mode: 'manual', unit_price: 0, remark: null, line_state: 'zero_confirmed', line_state_reason: 'サービス' });
+    expect(lines[1]).toMatchObject({ price_mode: 'manual', unit_price: 0, line_state: 'excluded', line_state_reason: 'お客様手配' });
+
+    expect(previewStandardQuote({ ...saved, lines: [{ ...zero, line_state_reason: ' ' }] }, '0.10').errors[0]).toContain('0円確定の理由');
+    expect(previewStandardQuote({ ...saved, lines: [{ ...saved.lines[0], line_state: 'excluded' }] }, '0.10').errors[0]).toContain('本体以外');
+    expect(previewStandardQuote({ ...saved, lines: [{ ...saved.lines[1], line_state: 'excluded' }] }, '0.10').errors[0]).toContain('金額を入力');
+  });
+
+  it('RPC の返り値の備考に状態の印があれば、画面では扱いと理由に分ける', () => {
+    const base = standardQuoteStateFromPayload({
+      draft: { id: 'd', quote_request_id: 'r', parent_quote_id: null, base_model_id: 'm', spec_code: 'hotel', tax_rate: '0.10', adjustment: 0, adjustment_reason: null, subtotal: 0, tax: 0, total: 0, lock_version: 1, notes: null, source_kind: 'standard_estimate', standard_estimate_revision_id: 's' },
+      request: { id: 'r', case_name: null, status: 'reviewing', message: null, contact: null },
+      internals: null,
+      items: [
+        { line_key: 's1', kind: 'installation', name: '給排水', description: null, unit: '式', remark: '［今回の契約対象外］お客様手配', unit_price: 0, quantity: 1, amount: 0, sort_order: 4001, price_mode: 'manual', section_code: 'sitework', line_role: 'line', base_unit_cost: null, cost_unit_price: 0, cost_amount: 0 },
+        { line_key: 's2', kind: 'installation', name: '電気', description: null, unit: '式', remark: '［0円確定］：本体工事に含む', unit_price: 0, quantity: 1, amount: 0, sort_order: 4002, price_mode: 'manual', section_code: 'sitework', line_role: 'line', base_unit_cost: null, cost_unit_price: 3000, cost_amount: 3000 },
+      ],
+      standard_estimate: null,
+      parent: null,
+    });
+    expect(base.lines[0]).toMatchObject({ line_state: 'excluded', line_state_reason: 'お客様手配', remark: '' });
+    expect(base.lines[1]).toMatchObject({ line_state: 'zero_confirmed', line_state_reason: '本体工事に含む', remark: '' });
   });
 
   it('RPC の返り値から画面を作るとき、経費の行（DB が作り直す）は明細に入れない', () => {

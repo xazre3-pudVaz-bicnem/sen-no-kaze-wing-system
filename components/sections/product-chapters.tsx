@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import type { BaseModel, ProductImage } from '@/lib/domain/types';
-import { baseTotalOf, formatManYen } from '@/lib/domain/pricing';
+import { formatManYen } from '@/lib/domain/pricing';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Reveal } from '@/components/ui/reveal';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 export interface ProductChapterData {
   model: BaseModel;
   image: ProductImage | null;
+  /** 本体価格計（本体一式＋諸費用・税別）。getPublicBaseTotals の値（null は金額を出さない） */
+  baseTotal: number | null;
 }
 
 const tones = ['ivory', 'navy', 'forest'] as const;
@@ -41,7 +43,7 @@ export function ProductChapters({
   const H = headingLevel === 2 ? 'h2' : 'h3';
   return (
     <div>
-      {items.map(({ model, image }, i) => {
+      {items.map(({ model, image, baseTotal }, i) => {
         const flip = i % 2 === 1;
         const tone = tones[i % tones.length];
         const dark = tone !== 'ivory';
@@ -73,8 +75,12 @@ export function ProductChapters({
                 <p className={cn('label-en', dark ? 'text-gold' : 'text-forest')}>Model {String(i + 1).padStart(2, '0')}</p>
                 <H className={cn('mt-3 text-4xl sm:text-5xl', dark && 'text-white')}>{model.name}</H>
                 <p className={cn('mt-4 text-base sm:text-lg', dark ? 'text-white/80' : 'text-ink-soft')}>{model.tagline}</p>
-                <p className={cn('mt-8 text-xs', dark ? 'text-white/60' : 'text-muted')}>本体価格計（本体一式＋諸費用・税別）</p>
-                <p className="font-serif text-4xl">{formatManYen(baseTotalOf(model))}〜</p>
+                {baseTotal !== null && (
+                  <>
+                    <p className={cn('mt-8 text-xs', dark ? 'text-white/60' : 'text-muted')}>本体価格計（本体一式＋諸費用・税別）</p>
+                    <p className="font-serif text-4xl">{formatManYen(baseTotal)}〜</p>
+                  </>
+                )}
                 <dl className={cn('mt-8 divide-y border-y text-sm', dark ? 'divide-white/15 border-white/15' : 'divide-line border-line')}>
                   {keySpecs(model).map((s) => (
                     <div key={s.label} className="grid grid-cols-[7rem_1fr] gap-3 py-2.5">

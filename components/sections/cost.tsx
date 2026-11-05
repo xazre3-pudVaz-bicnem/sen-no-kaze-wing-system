@@ -1,12 +1,21 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { price } from '@/data/site-content';
+import { formatManYen } from '@/lib/domain/pricing';
 import { RuleHeading } from '@/components/ui/section-heading';
 import { Reveal } from '@/components/ui/reveal';
 import { cn } from '@/lib/utils';
 
-/** 費用・比較：在来工法との比較と、シミュレーターへの導線 */
-export function CostSection({ simulatorHref }: { simulatorHref: string }) {
+/**
+ * 費用・比較：在来工法との比較と、シミュレーターへの導線。
+ * Wing の本体価格計は、商品一覧・商品ページと同じ価格元（getPublicBaseTotals をモデルの slug で引いたもの）を渡す
+ */
+export function CostSection({ simulatorHref, baseTotalsBySlug }: { simulatorHref: string; baseTotalsBySlug: Record<string, number | null> }) {
+  const costOf = (c: (typeof price.compare)[number]) => {
+    if (c.cost !== null) return c.cost;
+    const total = c.modelSlug ? baseTotalsBySlug[c.modelSlug] : null;
+    return total !== null && total !== undefined ? `本体 ${formatManYen(total)}〜（税別）` : '本体価格は見積シミュレーションでご確認ください';
+  };
   return (
     <section id="price" className="scroll-mt-20 bg-forest-deep py-20 sm:py-28">
       <div className="container-x">
@@ -22,7 +31,7 @@ export function CostSection({ simulatorHref }: { simulatorHref: string }) {
             <Reveal key={c.label}>
               <div className={cn('h-full border p-8 sm:p-10', c.highlight ? 'border-gold bg-forest' : 'border-forest-line bg-forest-deep')}>
                 <p className={cn('text-sm', c.highlight ? 'text-gold' : 'text-white/60')}>{c.label}</p>
-                <p className={cn('mt-3 font-serif text-3xl sm:text-4xl', c.highlight ? 'text-white' : 'text-white/80')}>{c.cost}</p>
+                <p className={cn('mt-3 font-serif text-3xl sm:text-4xl', c.highlight ? 'text-white' : 'text-white/80')}>{costOf(c)}</p>
                 <dl className="mt-6 space-y-2 text-sm text-white/75">
                   <div className="flex gap-3">
                     <dt className="w-20 shrink-0 text-white/50">工期</dt>

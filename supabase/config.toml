@@ -3,8 +3,12 @@ project_id = "sen-no-kaze-wing-system"
 
 [auth]
 enabled = true
-site_url = "https://sen-no-kaze-wing-system.vercel.app"
+# 本番は独自ドメイン（www）。値の変更・反映（supabase config push）は本番の設定変更として別途行う（docs/custom-domain-settings.md）
+site_url = "https://www.sen-no-kaze.com"
 additional_redirect_urls = [
+  "https://www.sen-no-kaze.com/auth/callback",
+  "https://www.sen-no-kaze.com/**",
+  # 切り替え前に送ったメールのリンク（Vercel の既定のドメイン）からも戻れるよう、しばらく残す
   "https://sen-no-kaze-wing-system.vercel.app/auth/callback",
   "https://sen-no-kaze-wing-system.vercel.app/**",
   "http://localhost:3000/auth/callback",

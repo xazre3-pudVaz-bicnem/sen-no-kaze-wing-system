@@ -39,7 +39,7 @@ import type {
   MatrixRow,
   WindowType,
 } from '@/lib/domain/types';
-import { QUOTE_V25_SECTIONS, type QuoteV25Section } from '@/lib/domain/quote-v25';
+import { QUOTE_V25_SECTIONS, parseQuoteV25ExpenseSettings, type QuoteV25Section } from '@/lib/domain/quote-v25';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -1148,6 +1148,8 @@ export class SupabaseStore implements DataStore {
         expenseRate: String(value.expense_rate),
         expenseSections: sections.filter((code): code is QuoteV25Section => (QUOTE_V25_SECTIONS as string[]).includes(code)),
         taxRate: String(value.tax_rate),
+        // 区分の経費の決め方（A-2 ⑥。20261104113000 の前の DB は返さない＝手動の経費は使えない）
+        ...('expenses' in value ? { expenses: parseQuoteV25ExpenseSettings(value.expenses) ?? {} } : {}),
       },
       standardAdjustmentReason: typeof value.standard_adjustment_reason === 'string' ? value.standard_adjustment_reason : null,
     };

@@ -12,13 +12,14 @@
  *     税                 = trunc(課税小計 × 税率)
  * - price_mode：auto（率で計算）・manual（売価単価を直接入力。行ごとの掛率は持たない）・por（価格未確定。金額は NULL）
  *   POR の行は売価・原価・粗利の合計から除外し、「価格未確定の行あり」を示す
- * - 経費の計算方法は rate / none だけ（fixed は新規に使わない）
+ * - 経費の計算方法は rate / none。fixed（売価側の経費を手動の額にする）は v2.5 の標準見積の版から作った見積の下書きだけ
+ *   （2026-11-04 の先方回答 A-2 ⑥。原価側の経費は fixed の区分も率で見積もる）
  *
  * DB（RPC）が正本。この関数は画面の試算用で、DB と同じ式・同じ丸めにする（浮動小数点を使わず、1/10000 単位の整数で計算する）。
  */
 
 export type PriceMode = 'auto' | 'manual' | 'por';
-export type ExpenseMethod = 'rate' | 'none';
+export type ExpenseMethod = 'rate' | 'none' | 'fixed';
 
 export const RATE_RULES = {
   salesFeeRate: { initial: '1.0000', min: '1.0000', max: '1.5000', label: '販売費率' },
@@ -137,13 +138,21 @@ export interface SectionMoney {
   hasPor: boolean;
 }
 
-/** 区分（本体・内外装・オプション・別途工事）の小計と経費。POR の行は合計から除外する */
-export function sectionMoney(lines: LineMoney[], expenseMethod: ExpenseMethod, rates: Pick<MoneyRates, 'expenseRate'>): SectionMoney {
+/**
+ * 区分（本体・内外装・オプション・別途工事）の小計と経費。POR の行は合計から除外する。
+ * fixed は売価側の経費を fixedSaleExpense（手動の額）にし、原価側の経費は率で見積もる（A-2 ⑥）
+ */
+export function sectionMoney(
+  lines: LineMoney[],
+  expenseMethod: ExpenseMethod,
+  rates: Pick<MoneyRates, 'expenseRate'>,
+  fixedSaleExpense = 0
+): SectionMoney {
   const priced = lines.filter((line) => line.mode !== 'por');
   const costLineSubtotal = priced.reduce((sum, line) => sum + (line.costAmount ?? 0), 0);
   const saleLineSubtotal = priced.reduce((sum, line) => sum + (line.saleAmount ?? 0), 0);
-  const costExpense = expenseMethod === 'rate' ? truncMul(costLineSubtotal, rates.expenseRate) : 0;
-  const saleExpense = expenseMethod === 'rate' ? truncMul(saleLineSubtotal, rates.expenseRate) : 0;
+  const costExpense = expenseMethod === 'none' ? 0 : truncMul(costLineSubtotal, rates.expenseRate);
+  const saleExpense = expenseMethod === 'rate' ? truncMul(saleLineSubtotal, rates.expenseRate) : expenseMethod === 'fixed' ? fixedSaleExpense : 0;
   return {
     costLineSubtotal,
     saleLineSubtotal,

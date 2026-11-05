@@ -5,6 +5,7 @@
  *   - 商品台帳の商品：固定した版の v2.5 の売価（サーバーで計算した値）
  *   - 自由明細：担当者が決めた税別の売価
  *   - 明細売価 = trunc(売価単価 × 数量)、区分の経費 = trunc(区分の明細の小計 × 経費率)（経費の対象の区分だけ）
+ *   - 区分の経費を手動の額にした区分は、その額のまま（2026-11-04 の先方回答 A-2 ⑥。前の版の決め方を引き継ぐ）
  *   - 税別 = Σ(区分の明細の小計 ＋ 経費) ＋ 調整額、税 = trunc(税別 × 税率)。千円未満の切り捨てはしない
  */
 import { customerCategorySelectable, productSpecCodesAllow, type CustomerCategoryMatrix } from './customer-category-applicability';
@@ -16,6 +17,12 @@ export type QuoteV25Section = 'base' | 'interior_exterior' | 'option' | 'sitewor
 export const QUOTE_V25_SECTIONS: QuoteV25Section[] = ['base', 'interior_exterior', 'option', 'sitework'];
 export type QuoteV25LineState = 'zero_confirmed' | 'excluded';
 
+/** 区分の経費の決め方（A-2 ⑥）。fixed は手動の額（税別・整数円） */
+export type QuoteV25ExpenseSetting = { method: 'rate' } | { method: 'fixed'; amount: number } | { method: 'none' };
+export type QuoteV25ExpenseSettings = Partial<Record<QuoteV25Section, QuoteV25ExpenseSetting>>;
+/** 経費の手動の額の上限（DB と同じ） */
+export const QUOTE_V25_EXPENSE_MAX = 100_000_000;
+
 export interface QuoteV25Context {
   /** 版の経費率（例：0.15） */
   expenseRate: string;
@@ -23,6 +30,8 @@ export interface QuoteV25Context {
   expenseSections: QuoteV25Section[];
   /** 税率（例：0.10） */
   taxRate: string;
+  /** この見積の区分の経費の決め方（第 2 版の既定）。DB の更新（A-2 ⑥）の前は無く、そのときは率で計算し、手動にはできない */
+  expenses?: QuoteV25ExpenseSettings;
 }
 
 export interface QuoteV25Row {
@@ -55,7 +64,12 @@ export function quoteV25RowAmount(row: QuoteV25Row): number {
   return truncQuantity(row.quantity, row.unitPrice);
 }
 
-export function computeQuoteV25Totals(rows: QuoteV25Row[], context: QuoteV25Context, adjustment: number): QuoteV25Totals {
+export function computeQuoteV25Totals(
+  rows: QuoteV25Row[],
+  context: QuoteV25Context,
+  adjustment: number,
+  settings: QuoteV25ExpenseSettings | undefined = context.expenses
+): QuoteV25Totals {
   const zero = () => ({ base: 0, interior_exterior: 0, option: 0, sitework: 0 }) as Record<QuoteV25Section, number>;
   const lineTotals = zero();
   const expenses = zero();
@@ -66,12 +80,54 @@ export function computeQuoteV25Totals(rows: QuoteV25Row[], context: QuoteV25Cont
   }
   let rawSubtotal = 0;
   for (const section of QUOTE_V25_SECTIONS) {
-    if (context.expenseSections.includes(section)) expenses[section] = truncMul(lineTotals[section], context.expenseRate);
+    if (context.expenseSections.includes(section)) {
+      const setting = settings?.[section];
+      expenses[section] = setting?.method === 'fixed' ? setting.amount : truncMul(lineTotals[section], context.expenseRate);
+    }
     rawSubtotal += lineTotals[section] + expenses[section];
   }
   const subtotal = rawSubtotal + adjustment;
   const tax = truncMul(subtotal, context.taxRate);
   return { lineTotals, expenses, rawSubtotal, adjustment, subtotal, tax, total: subtotal + tax, hasUnresolved };
+}
+
+/** DB が返す区分の経費の決め方を読む（形が違う区分は読まない＝率で計算する） */
+export function parseQuoteV25ExpenseSettings(value: unknown): QuoteV25ExpenseSettings | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const out: QuoteV25ExpenseSettings = {};
+  for (const section of QUOTE_V25_SECTIONS) {
+    const raw = (value as Record<string, unknown>)[section];
+    if (typeof raw !== 'object' || raw === null) continue;
+    const { method, amount } = raw as { method?: unknown; amount?: unknown };
+    if (method === 'fixed' && typeof amount === 'number' && Number.isSafeInteger(amount) && amount >= 0) out[section] = { method: 'fixed', amount };
+    else if (method === 'rate' || method === 'none') out[section] = { method };
+  }
+  return out;
+}
+
+/** 同じ決め方か（手動の額は額も同じ） */
+export function sameQuoteV25ExpenseSetting(a: QuoteV25ExpenseSetting | undefined, b: QuoteV25ExpenseSetting | undefined): boolean {
+  const left = a ?? { method: 'rate' };
+  const right = b ?? { method: 'rate' };
+  if (left.method !== right.method) return false;
+  return left.method !== 'fixed' || (right.method === 'fixed' && left.amount === right.amount);
+}
+
+/**
+ * 発行で送る区分の経費の決め方（明細の source: expense）。前の版と変えた区分だけを送る
+ * （送らない区分は、サーバーが前の版の決め方を引き継ぐ。DB の更新の前は経費の決め方を送らない）
+ */
+export function quoteV25ExpenseLines(
+  context: QuoteV25Context,
+  settings: QuoteV25ExpenseSettings
+): { source: 'expense'; section: 'base' | 'interior_exterior' | 'option'; method: 'rate' | 'fixed'; amount?: number }[] {
+  if (!context.expenses) return [];
+  return (['base', 'interior_exterior', 'option'] as const).flatMap((section) => {
+    if (!context.expenseSections.includes(section)) return [];
+    const setting = settings[section];
+    if (!setting || setting.method === 'none' || sameQuoteV25ExpenseSetting(setting, context.expenses?.[section])) return [];
+    return [setting.method === 'fixed' ? { source: 'expense' as const, section, method: 'fixed' as const, amount: setting.amount } : { source: 'expense' as const, section, method: 'rate' as const }];
+  });
 }
 
 /**

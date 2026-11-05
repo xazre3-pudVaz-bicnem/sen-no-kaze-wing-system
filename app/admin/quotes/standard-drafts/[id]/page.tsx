@@ -201,6 +201,8 @@ export default async function StandardQuoteDraftPage({
         taxRate={String(draft.tax_rate)}
         savedUnresolvedNames={savedUnresolvedNames}
         ratesLocked={ratesLocked}
+        // 経費の手動の額（A-2 ⑥）：DB の更新の後は、下書きの社内の記録に手動の額の列がある
+        expenseManualAvailable={ratesLocked && Boolean(payload.internals && 'expense_amounts' in payload.internals)}
         initial={standardQuoteStateFromPayload(payload)}
       />
     </AdminPage>

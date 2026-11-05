@@ -2,11 +2,13 @@ import 'server-only';
 import { isMissingColumn, isMissingFunction, isMissingRelation } from '@/lib/data/schema-compat';
 import type { createClient } from '@/lib/supabase/server';
 import type { StandardLineSectionCode } from '@/lib/domain/standard-estimate-view';
-import type {
-  V25EditorState,
-  V25LinePriceMode,
-  V25Preview,
-  V25SlotPriceMode,
+import {
+  V25_EXPENSE_SECTIONS,
+  type V25EditorState,
+  type V25ExpenseSetting,
+  type V25LinePriceMode,
+  type V25Preview,
+  type V25SlotPriceMode,
 } from '@/lib/domain/standard-estimate-v25-view';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -44,6 +46,8 @@ export type StandardEstimateV25Data = {
   savedLineAmounts: Record<string, number | null>;
   preview: V25Preview | null;
   slotOptionIds: string[];
+  /** 区分の経費を手動の額にできる（A-2 ⑥。DB の更新 20261104113000 の後だけ） */
+  expenseManualAvailable: boolean;
   rules: { calcCode: string | null; taxCode: string | null; taxRate: string | null };
 };
 
@@ -62,7 +66,7 @@ export async function loadStandardEstimateV25(
       .select(slotColumns(withPositions))
       .eq('revision_id', revision.id)
       .order('sort_order');
-  const [firstSlotsResult, slotOptionsResult, linesResult, previewResult, calcResult, taxResult] = await Promise.all([
+  const [firstSlotsResult, slotOptionsResult, linesResult, previewResult, calcResult, taxResult, sectionsResult, expenseProbe] = await Promise.all([
     readSlots(true),
     supabase
       .from('standard_estimate_revision_slot_options')
@@ -81,11 +85,18 @@ export async function loadStandardEstimateV25(
     header.tax_rule_version_id
       ? supabase.from('tax_rule_versions').select('code, tax_rate').eq('id', header.tax_rule_version_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    supabase.from('standard_estimate_revision_sections').select('section_code, expense_method, expense_amount').eq('revision_id', revision.id),
+    // 経費の手動の額（A-2 ⑥）の DB の更新があるか（見積に決め方の列があるか。行は読まない）
+    supabase.from('quotes').select('v25_expenses').limit(0),
   ]);
   const slotsResult = firstSlotsResult.error && isMissingColumn(firstSlotsResult.error) ? await readSlots(false) : firstSlotsResult;
   if (slotsResult.error) throw new Error(`標準見積の商品を取得できませんでした: ${slotsResult.error.code ?? 'unknown'}`);
   if (slotOptionsResult.error && !isMissingRelation(slotOptionsResult.error)) {
     throw new Error(`標準見積の選べる商品を取得できませんでした: ${slotOptionsResult.error.code ?? 'unknown'}`);
+  }
+  if (sectionsResult.error) throw new Error(`標準見積の区分を取得できませんでした: ${sectionsResult.error.code ?? 'unknown'}`);
+  if (expenseProbe.error && !isMissingColumn(expenseProbe.error)) {
+    throw new Error(`見積の経費の決め方を確認できませんでした: ${expenseProbe.error.code ?? 'unknown'}`);
   }
   if (linesResult.error && !isMissingRelation(linesResult.error)) {
     throw new Error(`標準見積の明細を取得できませんでした: ${linesResult.error.code ?? 'unknown'}`);
@@ -126,6 +137,12 @@ export async function loadStandardEstimateV25(
   const selectableOf = (slotCode: string | null | undefined) =>
     slotCode ? slotOptions.filter((row) => row.slot_code === slotCode).sort((a, b) => a.sort_order - b.sort_order).map((row) => row.option_id) : [];
 
+  const sectionRows = (sectionsResult.data ?? []) as { section_code: string; expense_method: string; expense_amount: number }[];
+  const expenseOf = (code: string): V25ExpenseSetting => {
+    const row = sectionRows.find((section) => section.section_code === code);
+    return row?.expense_method === 'fixed' ? { method: 'fixed', amount: String(row.expense_amount) } : { method: 'rate', amount: '' };
+  };
+
   const initial: V25EditorState = {
     sales_fee_rate: String(revision.sales_fee_rate),
     markup_rate: String(revision.markup_rate),
@@ -161,6 +178,7 @@ export async function loadStandardEstimateV25(
       remark: line.remark ?? '',
       review_required: line.review_required,
     })),
+    expenses: Object.fromEntries(V25_EXPENSE_SECTIONS.map((code) => [code, expenseOf(code)])) as V25EditorState['expenses'],
   };
 
   return {
@@ -170,6 +188,7 @@ export async function loadStandardEstimateV25(
     preview: previewUnavailable ? null : ((previewResult.data ?? null) as V25Preview | null),
     // 保存済みの行の商品と、位置の枠の選べる商品（販売停止になっても表示・削除のために候補に残す）
     slotOptionIds: [...new Set([...slots.map((slot) => slot.option_id), ...slotOptions.map((row) => row.option_id)])],
+    expenseManualAvailable: !expenseProbe.error,
     rules: {
       calcCode: (calcResult.data as { code?: string } | null)?.code ?? null,
       taxCode: (taxResult.data as { code?: string } | null)?.code ?? null,

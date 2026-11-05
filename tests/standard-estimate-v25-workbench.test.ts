@@ -89,6 +89,7 @@ const initial: V25EditorState = {
       price_mode: 'manual', unit_price: '50000', remark: '', review_required: false,
     },
   ],
+  expenses: { base: { method: 'rate', amount: '' }, interior_exterior: { method: 'rate', amount: '' }, option: { method: 'rate', amount: '' } },
 };
 
 describe('Excel 風の画面の試算（v2.5 の正式計算と同じ入力）', () => {

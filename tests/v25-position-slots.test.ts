@@ -252,6 +252,7 @@ describe('v2.5 PR-S1：編集画面の決まり（DB の保存・公開と同じ
     adjustment_reason: '',
     slots,
     lines: [],
+  expenses: { base: { method: 'rate', amount: '' }, interior_exterior: { method: 'rate', amount: '' }, option: { method: 'rate', amount: '' } },
   });
   const row = (key: string, option_id: string, slot_code = '', slot_label = '', selectable_option_ids: string[] = [], quantity = '1') => ({
     key,

@@ -8,6 +8,20 @@ import type { StandardLineSectionCode } from './standard-estimate-view';
 export type V25SlotPriceMode = 'auto' | 'manual' | 'por';
 export type V25LinePriceMode = 'manual' | 'por';
 export type V25CostStatus = 'current' | 'stale' | 'missing';
+/** 区分の経費の決め方（rate：率で計算、fixed：金額を手動。2026-11-04 の先方回答 A-2 ⑥） */
+export type V25ExpenseMethod = 'rate' | 'fixed';
+/** 経費を掛けられる区分（計算ルール CALC-V25-1 の経費の対象。別途工事には経費を掛けない） */
+export const V25_EXPENSE_SECTIONS = ['base', 'interior_exterior', 'option'] as const;
+export type V25ExpenseSection = (typeof V25_EXPENSE_SECTIONS)[number];
+export const V25_EXPENSE_SECTION_LABEL: Record<V25ExpenseSection, string> = { base: '本体', interior_exterior: '内外装工事', option: 'オプション' };
+/** 経費の手動の額の上限（DB と同じ） */
+export const V25_EXPENSE_MAX = 100_000_000;
+
+export interface V25ExpenseSetting {
+  method: V25ExpenseMethod;
+  /** 手動の額（税別・整数円。入力中の文字列。method が fixed のときだけ使う） */
+  amount: string;
+}
 
 export const V25_SLOT_PRICE_MODE_LABEL: Record<V25SlotPriceMode, string> = {
   auto: '自動（商品の標準原価から計算）',
@@ -83,6 +97,8 @@ export interface V25EditorState {
   adjustment_reason: string;
   slots: V25SlotRow[];
   lines: V25LineRow[];
+  /** 区分の経費の決め方（手動の額は再計算で変わらない。「率で計算」に戻すまでそのまま） */
+  expenses: Record<V25ExpenseSection, V25ExpenseSetting>;
 }
 
 /** 商品の候補（その仕様でお客様が選べる、取扱中の商品。選択肢は公開中のものだけ） */
@@ -149,6 +165,12 @@ export function validateV25EditorState(
   const adjustment = state.adjustment.trim() || '0';
   if (!INTEGER.test(adjustment)) return '調整額は整数円で入力してください';
   if (Number(adjustment) !== 0 && !state.adjustment_reason.trim()) return '調整額を入れる場合は理由を入力してください';
+  for (const section of V25_EXPENSE_SECTIONS) {
+    const setting = state.expenses[section];
+    if (setting.method === 'fixed' && (!NON_NEGATIVE_INTEGER.test(setting.amount.trim()) || Number(setting.amount.trim()) > V25_EXPENSE_MAX)) {
+      return `${V25_EXPENSE_SECTION_LABEL[section]}の経費の手動の額は、0〜100,000,000 円の整数で入力してください`;
+    }
+  }
   if (state.slots.length > 200) return '商品は 200 件までです';
   if (state.lines.length > 300) return '明細は 300 行までです';
 
@@ -236,6 +258,13 @@ export function buildV25SavePayload(state: V25EditorState) {
       remark: line.remark.trim() || null,
       review_required: line.review_required,
     })),
+    // 区分の経費の決め方（A-2 ⑥）。手動の額は DB の再計算で変わらない
+    expenses: Object.fromEntries(
+      V25_EXPENSE_SECTIONS.map((section) => {
+        const setting = state.expenses[section];
+        return [section, setting.method === 'fixed' ? { method: 'fixed', amount: Number(setting.amount.trim()) } : { method: 'rate' }];
+      })
+    ),
   };
 }
 

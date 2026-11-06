@@ -28,6 +28,17 @@ export default async function ProfilePage() {
         <p className="mt-8 text-sm">
           パスワードの変更は <Link href="/reset-password/update" className="underline underline-offset-4">こちら</Link>
         </p>
+        {user.role === 'customer' && (
+          <div className="mt-10 border-t border-line pt-5" data-testid="customer-withdrawal-entry">
+            <h2 className="text-sm font-semibold">退会について</h2>
+            <p className="mt-2 text-xs leading-6 text-ink-soft">
+              退会と、過去の見積・契約など業務記録の削除は別の手続きです。
+            </p>
+            <Link href="/mypage/withdrawal" className="mt-3 inline-block text-sm text-ink-soft underline underline-offset-4 hover:text-ink">
+              退会手続きへ
+            </Link>
+          </div>
+        )}
       </Container>
     </Section>
   );

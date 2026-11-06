@@ -276,6 +276,14 @@ export type QuoteV25RevisionLine =
       remark?: string | null;
       state?: 'zero_confirmed' | 'excluded' | null;
       state_reason?: string | null;
+    }
+  | {
+      /** 区分の経費の決め方（明細にはならない。前の版から変えた区分だけ送る。2026-11-04 の先方回答 A-2 ⑥） */
+      source: 'expense';
+      section: 'base' | 'interior_exterior' | 'option';
+      method: 'rate' | 'fixed';
+      /** 手動の額（fixed のときだけ。0〜100,000,000 円の整数） */
+      amount?: number | null;
     };
 
 export interface QuoteV25RevisionInput {

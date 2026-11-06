@@ -4,6 +4,7 @@
  *
  * - 本体マスター由来の行：原価単価 = trunc(基準原価単価 × 販売費率)。基準原価単価は DB の値で、保存では送らない
  * - 経費の行は画面で持たない。区分の明細小計（POR を除く）× 経費率で、保存のたびに DB が作り直す
+ *   （v2.5 の標準見積の版から作った下書きは、区分ごとに売価側の経費を手動の額にできる。原価側は率。A-2 ⑥）
  * - POR（価格未確定）は下書きでは使えるが、残っていると発行できない
  * - 「0円確定」「対象外」は本体以外の「金額を入力」の 0 円の行。保存のときにサーバーが備考の印にする（対象外は原価も 0 円。D1 までの暫定）
  */
@@ -57,6 +58,8 @@ export interface StandardQuoteEditorState {
   expense_rate: string;
   markup_rate: string;
   expense_methods: Record<StandardSectionCode, ExpenseMethod>;
+  /** 経費を手動（fixed）にした区分の額（税別・整数円の入力中の文字列。fixed でない区分は使わない） */
+  expense_amounts: Record<StandardSectionCode, string>;
   adjustment: number;
   adjustment_reason: string;
   notes: string;
@@ -116,7 +119,12 @@ export function previewStandardQuote(state: StandardQuoteEditorState, taxRate: s
   if (ratesOk) {
     try {
       sections = Object.fromEntries(
-        STANDARD_QUOTE_SECTIONS.map((code) => [code, sectionMoney(sectionOf(code), state.expense_methods[code], rates)])
+        STANDARD_QUOTE_SECTIONS.map((code) => {
+          if (state.expense_methods[code] !== 'fixed') return [code, sectionMoney(sectionOf(code), state.expense_methods[code], rates)];
+          const amount = parseExpenseAmount(state.expense_amounts[code]);
+          if (amount === null) errors.push(`${STANDARD_QUOTE_EXPENSE_LABEL[code]}の手動の額は 0〜100,000,000 円の整数で入力してください`);
+          return [code, sectionMoney(sectionOf(code), 'fixed', rates, amount ?? 0)];
+        })
       ) as Record<StandardSectionCode, SectionMoney>;
       money = errors.length ? null : revisionMoney(STANDARD_QUOTE_SECTIONS.map((code) => sections[code]), state.adjustment, rates);
     } catch (e) {
@@ -124,6 +132,26 @@ export function previewStandardQuote(state: StandardQuoteEditorState, taxRate: s
     }
   }
   return { lines, sections, money, errors };
+}
+
+/** 経費の手動の額（0〜100,000,000 円の整数。DB と同じ）。読めなければ null */
+export function parseExpenseAmount(value: string): number | null {
+  const text = value.trim();
+  if (!/^\d{1,9}$/.test(text)) return null;
+  const amount = Number(text);
+  return amount <= 100_000_000 ? amount : null;
+}
+
+/** 保存 RPC へ渡す区分の経費の方法（手動の区分は amounts に額。fixed の額が読めない区分は 0 円で送らず、保存の前に止める） */
+export function toStandardQuoteExpenseMethods(state: Pick<StandardQuoteEditorState, 'expense_methods' | 'expense_amounts'>) {
+  const amounts = Object.fromEntries(
+    STANDARD_QUOTE_SECTIONS.flatMap((code) => {
+      if (state.expense_methods[code] !== 'fixed') return [];
+      const amount = parseExpenseAmount(state.expense_amounts[code]);
+      return amount === null ? [] : [[code, amount]];
+    })
+  );
+  return { ...state.expense_methods, ...(Object.keys(amounts).length > 0 ? { amounts } : {}) };
 }
 
 /** 保存 RPC（save_standard_quote_draft）へ渡す明細。DB が売価・金額・経費の行を計算するので、単価と方法だけを送る */
@@ -189,6 +217,8 @@ export interface StandardQuoteDraftPayload {
     expense_rate: number | string | null;
     markup_rate: number | string | null;
     expense_methods: Partial<Record<StandardSectionCode, ExpenseMethod>> | null;
+    /** 経費を手動にした区分の額（DB の更新 A-2 ⑥ の後だけ返る） */
+    expense_amounts?: Partial<Record<StandardSectionCode, number>> | null;
     cost_total: number | null;
   } | null;
   items: StandardQuoteDraftItemPayload[];
@@ -199,12 +229,16 @@ export interface StandardQuoteDraftPayload {
 /** RPC の返り値から編集画面の状態を作る（経費の行は DB が作り直すので、画面の明細には入れない） */
 export function standardQuoteStateFromPayload(payload: StandardQuoteDraftPayload): StandardQuoteEditorState {
   const methods = payload.internals?.expense_methods ?? {};
-  const method = (code: StandardSectionCode): ExpenseMethod => (methods[code] === 'none' ? 'none' : methods[code] === 'rate' ? 'rate' : code === 'sitework' ? 'none' : 'rate');
+  const method = (code: StandardSectionCode): ExpenseMethod =>
+    methods[code] === 'none' ? 'none' : methods[code] === 'rate' ? 'rate' : methods[code] === 'fixed' ? 'fixed' : code === 'sitework' ? 'none' : 'rate';
+  const amounts = payload.internals?.expense_amounts ?? {};
+  const amount = (code: StandardSectionCode) => (typeof amounts[code] === 'number' ? String(amounts[code]) : '');
   return {
     sales_fee_rate: String(payload.internals?.sales_fee_rate ?? '1.0000'),
     expense_rate: String(payload.internals?.expense_rate ?? '0.1500'),
     markup_rate: String(payload.internals?.markup_rate ?? '1.5000'),
     expense_methods: { base: method('base'), interior_exterior: method('interior_exterior'), option: method('option'), sitework: method('sitework') },
+    expense_amounts: { base: amount('base'), interior_exterior: amount('interior_exterior'), option: amount('option'), sitework: amount('sitework') },
     adjustment: Number(payload.draft.adjustment ?? 0),
     adjustment_reason: payload.draft.adjustment_reason ?? '',
     notes: payload.draft.notes ?? '',

@@ -21,6 +21,7 @@ const created: StandardQuoteEditorState = {
   expense_rate: '0.15',
   markup_rate: '1.5',
   expense_methods: { ...methods },
+  expense_amounts: { base: '', interior_exterior: '', option: '', sitework: '' },
   adjustment: -719,
   adjustment_reason: '端数調整',
   notes: '',

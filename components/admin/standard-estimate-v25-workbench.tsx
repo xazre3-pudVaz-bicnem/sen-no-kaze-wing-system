@@ -8,16 +8,20 @@ import {
   saveStandardEstimateV25DraftAction,
 } from '@/lib/actions/standard-estimate-v25';
 import { formatYen } from '@/lib/domain/pricing';
+import { truncMul } from '@/lib/domain/standard-estimate-money';
 import type { PricingCalculationRule, PricingLineResult, PricingSectionResult, PricingTaxRule } from '@/lib/domain/pricing-v25';
 import { STANDARD_SECTION_LABEL, type StandardLineSectionCode } from '@/lib/domain/standard-estimate-view';
 import {
   V25_COST_STATUS_LABEL,
+  V25_EXPENSE_SECTIONS,
   buildV25SavePayload,
   slotCostStatus,
   v25PublishBlockers,
   validateV25EditorState,
   type V25CostStatus,
   type V25EditorState,
+  type V25ExpenseMethod,
+  type V25ExpenseSection,
   type V25LinePriceMode,
   type V25LineRow,
   type V25Preview,
@@ -47,6 +51,8 @@ const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { curren
 const SLOT_MODE_LABEL: Record<V25SlotPriceMode, string> = { auto: '自動', manual: '売価入力', por: '別途見積' };
 const LINE_MODE_LABEL: Record<V25LinePriceMode, string> = { manual: '金額確定', por: '別途見積' };
 const RATE_LABEL = { sales_fee_rate: '販売費率', expense_rate: '経費率', markup_rate: '掛率' } as const;
+/** 区分の経費の行の品名（見積書の経費の行と同じ） */
+const EXPENSE_LINE_NAME: Record<V25ExpenseSection, string> = { base: '本体諸費用', interior_exterior: '内外装工事経費', option: 'オプション諸費用' };
 
 let rowSeq = 0;
 const newKey = (prefix: string) => `${prefix}-new-${(rowSeq += 1)}`;
@@ -70,6 +76,8 @@ type WorkbenchProps = {
   preview: V25Preview | null;
   /** 保存済みの税込合計（DB の計算。未確定を含むなら null） */
   savedTotal: number | null;
+  /** 区分の経費を手動の額にできる（A-2 ⑥。DB の更新の前は率だけ） */
+  expenseManualAvailable?: boolean;
 };
 
 /**
@@ -95,6 +103,7 @@ function WorkbenchBody({
   taxRule,
   preview,
   savedTotal,
+  expenseManualAvailable = false,
   notice,
   onNotice,
 }: WorkbenchProps & { notice: Notice | null; onNotice: (notice: Notice | null) => void }) {
@@ -177,6 +186,9 @@ function WorkbenchBody({
     setPercents((current) => ({ ...current, [key]: value }));
     setState((current) => ({ ...current, [key]: percentToRate(value) }));
   };
+  // 区分の経費の決め方（A-2 ⑥）：手動の額は、明細を変えても計算し直さない（「率で計算」に戻すまでそのまま）
+  const setExpense = (section: V25ExpenseSection, patch: Partial<V25EditorState['expenses'][V25ExpenseSection]>) =>
+    setState((current) => ({ ...current, expenses: { ...current.expenses, [section]: { ...current.expenses[section], ...patch } } }));
 
   const choose = (candidate: V25WorkbenchCandidate) => {
     if (!picker) return;
@@ -360,6 +372,53 @@ function WorkbenchBody({
 
   let rowNumber = 0;
   const columnCount = showCost ? 11 : 10;
+  const expensePercent = rateToPercent(state.expense_rate);
+
+  // 区分の経費の行（経費を掛ける区分だけ。別途工事には経費を掛けない）
+  const expenseRow = (code: V25ExpenseSection) => {
+    if (!expenseManualAvailable || !rule.expense_target_sections.includes(code)) return null;
+    const setting = state.expenses[code];
+    const result = sectionResult(code);
+    const invalid = calc.invalidExpenses.includes(code);
+    return (
+      <tr key={`${code}-expense`} className="border-b border-slate-200 bg-slate-50/70 align-top" data-testid="v25-wb-expense" data-section={code}>
+        <td className="border-r border-slate-200 bg-slate-50 px-1" />
+        <td className="border-r border-slate-200 px-2 py-1.5 text-muted">経費</td>
+        <td className="border-r border-slate-200 px-2 py-1.5 font-medium text-ink">{EXPENSE_LINE_NAME[code]}</td>
+        <td className="border-r border-slate-200 px-2 py-1.5 text-muted">交通費、労災、安全管理費等</td>
+        <td className="border-r border-slate-200 px-2 py-1.5 text-right tabular-nums text-muted">1</td>
+        <td className="border-r border-slate-200 px-2 py-1.5 text-muted">式</td>
+        <td className="border-r border-slate-200 px-1 py-1">
+          <Select value={setting.method} disabled={readOnly} aria-label={`経費の決め方：${EXPENSE_LINE_NAME[code]}`} className="h-7 text-xs" data-testid="v25-wb-expense-method"
+            onChange={(event) => {
+              const method = event.target.value as V25ExpenseMethod;
+              // 手動にしたときは、今の率の額から始める（別途見積を含む区分は確定分の率の額）
+              const start = result ? (result.expense ?? (state.expense_rate ? truncMul(result.priced_subtotal, state.expense_rate) : 0)) : 0;
+              setExpense(code, method === 'fixed' && setting.amount.trim() === '' ? { method, amount: String(start) } : { method });
+            }}>
+            <option value="rate">率（{expensePercent}%）</option>
+            <option value="fixed">手動</option>
+          </Select>
+        </td>
+        {showCost && <td className="border-r border-slate-200 px-2 pt-1.5 text-right text-muted">—</td>}
+        <td className="border-r border-slate-200 px-1 py-1 text-right">
+          {setting.method === 'fixed' ? (
+            <Input value={setting.amount} disabled={readOnly} inputMode="numeric" aria-label={`経費の手動の額：${EXPENSE_LINE_NAME[code]}`}
+              className={`h-7 text-right text-xs${invalid ? ' border-danger' : ''}`} data-testid="v25-wb-expense-amount"
+              onChange={(event) => setExpense(code, { amount: event.target.value })} />
+          ) : (
+            <span className="block pt-0.5 text-muted">区分の小計 × {expensePercent}%</span>
+          )}
+        </td>
+        <td className="border-r border-slate-200 px-2 pt-1.5 text-right tabular-nums">
+          {invalid ? <Badge tone="danger">額を確認</Badge> : result ? (result.expense !== null ? yen(result.expense) : '未確定') : '—'}
+        </td>
+        <td className="px-2 py-1 text-[0.68rem] leading-4 text-muted">
+          {setting.method === 'fixed' ? '手動の額（明細を変えても変わりません）' : ''}
+        </td>
+      </tr>
+    );
+  };
 
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
@@ -372,7 +431,7 @@ function WorkbenchBody({
               {label}
               <span className="font-normal text-muted">
                 小計 {result?.subtotal !== null && result?.subtotal !== undefined ? yen(result.subtotal) : result ? `${yen(result.priced_subtotal)}＋未確定` : '—'}
-                {result?.expense_target ? `・経費 ${result.expense !== null ? yen(result.expense) : '未確定'}` : ''}
+                {result?.expense_target ? `・経費 ${result.expense !== null ? yen(result.expense) : '未確定'}${result.expense_method === 'fixed' ? '（手動）' : ''}` : ''}
               </span>
               {result?.has_por && <Badge tone="warn">別途見積を含む</Badge>}
             </button>
@@ -450,6 +509,7 @@ function WorkbenchBody({
                   </tr>
                 );
               })}
+            {!collapsed.has('base') && expenseRow('base')}
 
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
@@ -723,6 +783,7 @@ function WorkbenchBody({
                         </tr>
                       );
                     })}
+                  {!collapsed.has(code) && code !== 'sitework' && expenseRow(code)}
                 </Fragment>
               );
             })}
@@ -757,6 +818,9 @@ function WorkbenchBody({
       </div>
 
       {calc.error && <Alert tone="warn">画面の試算ができません：{calc.error}</Alert>}
+      {calc.invalidExpenses.length > 0 && (
+        <Alert tone="warn">経費の手動の額は 0〜100,000,000 円の整数で入力してください（直すまで率で試算しています）。</Alert>
+      )}
       {calc.unpriced.length > 0 && (
         <Alert tone="warn">売価が未入力の行が {calc.unpriced.length} 件あります（金額に含めていません）。売価を整数円で入力するか、別途見積にしてください。</Alert>
       )}
@@ -781,6 +845,7 @@ function WorkbenchBody({
       <p className="text-[0.7rem] leading-5 text-muted">
         金額は画面の試算です。保存すると DB の正式計算で確定します（商品・選択肢を変えていない行は固定した原価のまま。原価の更新を反映するときは「最新原価を取り込む」）。
         別途工事には販売費・経費・掛率を掛けません（売価の入力か別途見積）。金額が決まっていない行は別途見積にし、0 円にはしません。
+        {expenseManualAvailable && `経費は区分ごとに「率（${expensePercent}%）」か「手動」を選べます。手動の額は明細を変えても変わらず、お客様のシミュレーター・見積でもその額のままです（社内の原価側の経費は率で見積もります）。`}
       </p>
 
       {!readOnly && (

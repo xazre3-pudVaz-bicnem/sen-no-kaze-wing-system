@@ -23,6 +23,7 @@ const base = (): V25EditorState => ({
     { key: 'l1', line_key: 'k1', section_code: 'sitework', group_label: '', name: '設置工事', quantity: '1', unit: '式', price_mode: 'manual', unit_price: '50000', remark: '', review_required: true },
     { key: 'l2', line_key: null, section_code: 'sitework', group_label: '', name: '外構工事', quantity: '1', unit: '式', price_mode: 'por', unit_price: '123', remark: '', review_required: false },
   ],
+  expenses: { base: { method: 'rate', amount: '' }, interior_exterior: { method: 'rate', amount: '' }, option: { method: 'rate', amount: '' } },
 });
 
 describe('標準見積 v2.5 の編集画面：入力の確認（DB と同じ決まり）', () => {

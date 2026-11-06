@@ -149,6 +149,8 @@ export interface StandardEstimateWorkspace {
     costs: V25WorkbenchCosts;
     rule: PricingCalculationRule;
     taxRule: PricingTaxRule;
+    /** 区分の経費を手動の額にできる（A-2 ⑥。DB の更新の後だけ） */
+    expenseManualAvailable: boolean;
   } | null;
 }
 
@@ -366,6 +368,7 @@ export async function loadStandardEstimateWorkspace(
       costs,
       rule: ruleResult.data as PricingCalculationRule,
       taxRule: taxResult.data as PricingTaxRule,
+      expenseManualAvailable: v25.expenseManualAvailable,
     },
   };
 }

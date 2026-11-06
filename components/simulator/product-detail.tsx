@@ -6,6 +6,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
+import { isValidManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import { ManufacturerDocumentModal } from './manufacturer-document-modal';
 import { ProductImageLightbox } from './product-image-lightbox';
 import { VariantPicker } from './variant-picker';
@@ -19,6 +20,13 @@ interface Props {
   isCurrentlySelected: boolean;
   compactMedia?: boolean;
   onVariantChange: (choiceId: string, groupId: string) => void;
+}
+
+function safeManufacturerProductUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  // 保存と同じ決まり（https・認証情報なし・空白なし）に合う URL だけをリンクにする
+  if (!trimmed || !isValidManufacturerProductUrl(trimmed)) return null;
+  return new URL(trimmed).href;
 }
 
 /**
@@ -40,6 +48,7 @@ export function ProductDetail({
   onVariantChange,
 }: Props) {
   const manufacturerDocumentUrl = option.manufacturer_document_url?.trim() || null;
+  const manufacturerProductUrl = safeManufacturerProductUrl(option.manufacturer_product_url);
   const [manufacturerDocumentOpen, setManufacturerDocumentOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
@@ -295,6 +304,22 @@ export function ProductDetail({
 
             {option.list_price != null && (
               <p className="mt-2 text-[0.68rem] text-muted">メーカー参考価格 {formatYen(option.list_price)}</p>
+            )}
+
+            {manufacturerProductUrl && (
+              <div className="mt-3 space-y-1" data-testid="manufacturer-product-link">
+                <a
+                  href={manufacturerProductUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-brown underline underline-offset-2 hover:no-underline"
+                >
+                  メーカー公式サイトでカラー・仕様を見る <span aria-hidden="true">↗</span>
+                </a>
+                <p className="text-[0.65rem] leading-relaxed text-muted">
+                  メーカー掲載の全仕様が千の風で選択可能とは限りません。選べる仕様はこの画面でご確認ください。
+                </p>
+              </div>
             )}
           </div>
 

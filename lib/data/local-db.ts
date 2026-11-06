@@ -34,6 +34,7 @@ import type {
   EstimateTemplateLine,
   SpecMatrix,
   WindowType,
+  QuoteInitialLine,
 } from '@/lib/domain/types';
 import type { LocalCaseFlowTables } from './case-flow/local-tables';
 import type { QuotePorSelection } from '@/lib/domain/quote-por';
@@ -41,6 +42,7 @@ import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
 import { buildSeedMatrix } from '@/lib/seed/matrix';
 import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
+import { INITIAL_QUOTE_LINES } from '@/lib/seed/quote-initial-lines';
 import { takeLocalReset } from './local-reset';
 
 /**
@@ -98,6 +100,8 @@ export interface LocalDb {
   quotePorConfirmations?: LocalQuotePorConfirmation[];
   /** 窓タイプ（DB の window_types と同じ。v2.5 PR-S1/S2）。古い db.json に無ければ初期値 */
   windowTypes?: WindowType[];
+  /** 見積の編集で最初から並べる明細（DB の quote_initial_lines と同じ。2026-11-04 先方回答 A-3）。古い db.json に無ければ初期値 */
+  quoteInitialLines?: QuoteInitialLine[];
 }
 
 export interface LocalQuotePorConfirmation {
@@ -128,6 +132,7 @@ export function emptyDb(): LocalDb {
     images: clone(seedCatalog.images),
     categories: clone(seedCatalog.categories),
     windowTypes: clone(INITIAL_WINDOW_TYPES),
+    quoteInitialLines: clone(INITIAL_QUOTE_LINES),
     options: clone(seedCatalog.options),
     optionImages: [],
     dependencies: clone(seedCatalog.dependencies),

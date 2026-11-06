@@ -187,6 +187,17 @@ export interface WindowType {
 }
 
 /**
+ * 見積の編集で最初から並べる明細（いまは別途工事の 9 種類の工事。2026-11-04 先方回答 A-3）。
+ * 金額は持たない。代理店が現地確認のうえ、使う行に金額を入れ、要らない行は外す
+ */
+export interface QuoteInitialLine {
+  section_code: 'sitework';
+  name: string;
+  unit: string;
+  sort_order: number;
+}
+
+/**
  * 標準見積の版の位置・用途の選択枠（slot_code）ごとの、お客様の選択（v2.5 PR-S1）。
  * 保存したプランの明細の 1 行（configuration_items.slot_code）になる
  */

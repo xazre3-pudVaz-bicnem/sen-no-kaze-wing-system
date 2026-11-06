@@ -38,6 +38,7 @@ import type {
   SpecMatrix,
   MatrixRow,
   WindowType,
+  QuoteInitialLine,
 } from '@/lib/domain/types';
 import { QUOTE_V25_SECTIONS, type QuoteV25Section } from '@/lib/domain/quote-v25';
 import { createClient } from '@/lib/supabase/server';
@@ -1367,6 +1368,22 @@ export class SupabaseStore implements DataStore {
     if (result.error) mapPgError(result.error);
     if (!result.data) throw new StoreError('NOT_FOUND', '窓タイプが見つかりません');
     return result.data as WindowType;
+  }
+  async listQuoteInitialLines(section: QuoteInitialLine['section_code']) {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('quote_initial_lines')
+      .select('section_code, name, unit, sort_order')
+      .eq('section_code', section)
+      .eq('is_active', true)
+      .order('sort_order')
+      .order('name');
+    if (error) {
+      // 初期明細の表（20261104110000）が無い DB では、初期明細を並べない
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as QuoteInitialLine[];
   }
   async getOptionVariants(optionId: string) {
     const db = await this.db();

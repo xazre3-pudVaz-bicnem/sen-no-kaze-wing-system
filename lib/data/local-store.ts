@@ -37,6 +37,7 @@ import type {
   SpecMatrix,
   MatrixRow,
   WindowType,
+  QuoteInitialLine,
 } from '@/lib/domain/types';
 import { computePricing } from '@/lib/domain/pricing';
 import {
@@ -48,6 +49,7 @@ import { buildCustomerCategoryMatrix, effectiveCustomerSpecCodes } from '@/lib/d
 import { ruleContextForSpec } from '@/lib/domain/estimate-template';
 import { canEditCatalog, hasRoleAtLeast } from '@/lib/domain/types';
 import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
+import { INITIAL_QUOTE_LINES } from '@/lib/seed/quote-initial-lines';
 import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
   isCurrentIssuedQuote,
@@ -2154,6 +2156,14 @@ export class LocalStore implements DataStore {
       Object.assign(found, { label, sort_order: input.sort_order, status: input.status });
       return found;
     });
+  }
+  async listQuoteInitialLines(section: QuoteInitialLine['section_code']) {
+    return this.read((db) =>
+      (db.quoteInitialLines ?? INITIAL_QUOTE_LINES)
+        .filter((line) => line.section_code === section)
+        .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ja'))
+        .map((line) => ({ ...line }))
+    );
   }
   async getOptionVariants(optionId: string) {
     return this.read((db) => {

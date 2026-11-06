@@ -16,7 +16,7 @@ import {
   type QuoteLineState,
   type QuotePorSelectionState,
 } from '@/lib/domain/quote-por';
-import type { OptionVariantChoice, OptionVariantGroup, Quote, QuoteItem } from '@/lib/domain/types';
+import type { OptionVariantChoice, OptionVariantGroup, Quote, QuoteInitialLine, QuoteItem } from '@/lib/domain/types';
 import { Alert, Badge, Button, Input, Select, Textarea } from '@/components/ui';
 import { QuotePorReview, type QuotePorReviewPatch, type QuotePorReviewRow } from './quote-por-review';
 
@@ -127,6 +127,7 @@ export function QuoteV25RevisionForm({
   context,
   products,
   porState,
+  initialSiteworkLines = [],
 }: {
   quote: Quote;
   items: QuoteItem[];
@@ -134,6 +135,8 @@ export function QuoteV25RevisionForm({
   context: QuoteV25EditContext;
   products: QuoteV25Product[];
   porState: QuotePorSelectionState;
+  /** 別途工事に最初から並べる初期明細（第 1 版を初めて編集するときだけ。画面のサーバー側で決める。2026-11-04 先方回答 A-3） */
+  initialSiteworkLines?: QuoteInitialLine[];
 }) {
   const [state, action, pending] = useActionState<QuoteV25ActionState, FormData>(createQuoteRevisionV25Action, { ok: false });
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product] as const)), [products]);
@@ -141,7 +144,7 @@ export function QuoteV25RevisionForm({
     items
       .filter((item) => !EXPENSE_KINDS.has(item.kind))
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((item) => {
+      .map((item): Row => {
         const por = item.unit_price === 0 && isPorMarkedLine(item);
         return {
           key: `parent-${item.id}`,
@@ -168,6 +171,21 @@ export function QuoteV25RevisionForm({
           isDelta: item.name.trim() === '選択商品の変更差額',
         };
       })
+      // 別途工事の初期明細（自由明細）：売価は空のまま。使う行に金額を入れ、要らない行は外す（入れないままでは発行できない）
+      .concat(
+        initialSiteworkLines.map((line): Row => ({
+          key: newKey('initial'),
+          source: 'manual',
+          section: 'sitework',
+          name: line.name,
+          unit: line.unit,
+          quantity: '1',
+          price: '',
+          remark: '',
+          state: null,
+          stateReason: '',
+        }))
+      )
   );
   const [adjustment, setAdjustment] = useState(String(quote.adjustment));
   const [adjustmentReason, setAdjustmentReason] = useState(quote.adjustment_reason ?? context.standardAdjustmentReason ?? '');

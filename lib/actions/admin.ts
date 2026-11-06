@@ -7,7 +7,8 @@ import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/ses
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { getStore, isLocalMode, StoreError, type DealerRevisionItem, type EstimateTemplateImportInput, type QuoteDraftSaveItem, type SessionUser } from '@/lib/data/store';
+import { editableOptionContext } from '@/lib/actions/option-media-access';
+import { getStore, isLocalMode, StoreError, type DealerRevisionItem, type EstimateTemplateImportInput, type QuoteDraftSaveItem } from '@/lib/data/store';
 import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
@@ -111,19 +112,6 @@ const safeAdminReturnTo = (value: FormDataEntryValue | null): string | null => {
     return null;
   }
 };
-
-async function editableOptionContext(actor: SessionUser, optionId: string) {
-  const store = await getStore();
-  const option = await store.getOption(optionId);
-  if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません。');
-  if (canEditCatalog(actor.role)) return { store, option };
-
-  const category = (await store.listCategories()).find((row) => row.id === option.category_id);
-  if (actor.role !== 'customer' && option.owner_id === actor.id && category?.code === FREE_PRODUCT_CATEGORY_CODE) {
-    return { store, option };
-  }
-  throw new StoreError('FORBIDDEN', 'この商品のメディアは編集できません。');
-}
 
 export async function saveModelAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();

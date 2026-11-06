@@ -47,6 +47,8 @@ import type {
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { QuoteV25Context } from '@/lib/domain/quote-v25';
 import type { QuotePorSelectionState } from '@/lib/domain/quote-por';
+import type { OptionMediaChangeResult, OptionMediaChanges, OptionMediaExpected } from '@/lib/domain/option-media-changes';
+import type { OptionMediaKind } from '@/lib/storage/option-media';
 
 export interface SessionUser {
   id: string;
@@ -668,6 +670,22 @@ export interface DataStore {
   upsertOptionImage(input: OptionImageInput): Promise<OptionImage>;
   deleteOptionImage(id: string): Promise<OptionImage | null>;
   setOptionManufacturerDocument(optionId: string, url: string | null): Promise<void>;
+  /**
+   * 登録済み商品の追加画像・メーカー資料PDFの変更をまとめて反映する（DB の apply_option_media_changes。PR #563）。
+   * 画面を開いた時点の状態が今と違えば反映しない（VALIDATION）。新しいファイルは先に商品のフォルダーへ置いておく
+   */
+  applyOptionMediaChanges(
+    actor: SessionUser,
+    optionId: string,
+    expected: OptionMediaExpected,
+    changes: OptionMediaChanges
+  ): Promise<OptionMediaChangeResult>;
+  /** 3.5MB を超えるファイルを、ブラウザから商品のフォルダーへ直接置くための署名付きアップロード（ローカル検証モードは null） */
+  createOptionMediaSignedUpload(
+    optionId: string,
+    kind: OptionMediaKind,
+    fileName: string
+  ): Promise<{ bucket: string; path: string; token: string; url: string } | null>;
   /** 新規未使用下書き専用。Storage内の画像・PDFを別ファイルへコピーする。 */
   copyOptionMediaToNewDraft(sourceId: string, newDraftId: string): Promise<import('@/lib/storage/product-media-copy').ProductMediaCopySummary>;
   setOptionRelations(

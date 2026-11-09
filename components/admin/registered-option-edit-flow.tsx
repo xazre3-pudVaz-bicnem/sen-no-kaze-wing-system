@@ -14,7 +14,7 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
-import { MANUFACTURER_PRODUCT_URL_ERROR, isValidManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
+import { MANUFACTURER_PRODUCT_URL_ERROR, isValidManufacturerProductUrl, normalizeManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import {
   FREE_PRODUCT_CATEGORY_CODE,
   VIEW_KEYS,
@@ -229,7 +229,11 @@ export function RegisteredOptionEditFlow({
       base_model_id: nullable(data.get('base_model_id')),
       manufacturer: nullable(data.get('manufacturer')),
       model_no: nullable(data.get('model_no')),
-      manufacturer_product_url: nullable(data.get('manufacturer_product_url')),
+      // 保存（サーバー）と同じく %エンコードした形で比べ・確かめる
+      manufacturer_product_url: (() => {
+        const url = nullable(data.get('manufacturer_product_url'));
+        return url === null ? null : normalizeManufacturerProductUrl(url);
+      })(),
       // 窓タイプ（v2.5 PR-S2）：窓タイプを使わないカテゴリーへ移すと外れる（サーバーも同じ）
       window_type_code: categories.find((category) => category.id === String(data.get('category_id') ?? ''))?.uses_window_type
         ? data.has('window_type_code')
@@ -606,7 +610,6 @@ export function RegisteredOptionEditFlow({
                 name="manufacturer_product_url"
                 type="url"
                 inputMode="url"
-                maxLength={1000}
                 placeholder="https://www.example.com/products/..."
                 defaultValue={option.manufacturer_product_url ?? ''}
               />

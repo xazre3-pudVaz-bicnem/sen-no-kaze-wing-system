@@ -43,5 +43,21 @@ test('登録済み商品にメーカー公式商品ページURLを登録する�
   await expect(review.getByTestId('manufacturer-product-link')).toHaveCount(0);
   await page.getByRole('button', { name: 'この変更を反映' }).click();
   await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
+  // 読み直して、保存された値が空（NULL）になったことを確かめる（入力欄に入れた値だけを見ない）
+  await page.reload();
   await expect(field).toHaveValue('');
+
+  // 日本語のパスは %エンコードした形で保存する（DB の ASCII の決まりに合わせる）
+  await field.fill('https://www.example.co.jp/商品/ユニットバス');
+  await page.getByRole('button', { name: '変更内容を確認' }).click();
+  await page.getByRole('button', { name: 'この変更を反映' }).click();
+  await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
+  await page.reload();
+  await expect(field).toHaveValue('https://www.example.co.jp/%E5%95%86%E5%93%81/%E3%83%A6%E3%83%8B%E3%83%83%E3%83%88%E3%83%90%E3%82%B9');
+
+  // 後の試験のため空に戻す
+  await field.fill('');
+  await page.getByRole('button', { name: '変更内容を確認' }).click();
+  await page.getByRole('button', { name: 'この変更を反映' }).click();
+  await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
 });

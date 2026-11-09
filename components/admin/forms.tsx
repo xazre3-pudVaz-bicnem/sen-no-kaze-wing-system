@@ -654,6 +654,8 @@ export function OptionForm({
       <input type="hidden" name="base_model_id" value={copySource?.base_model_id ?? ''} />
       <input type="hidden" name="description" value={copySource?.description ?? ''} />
       <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
+      {/* メーカー公式商品ページURLは複製元から引き継ぐ（画像・資料のファイルと違い、URL そのものを使ってよい） */}
+      <input type="hidden" name="manufacturer_product_url" value={copySource?.manufacturer_product_url ?? ''} />
       {/* 画像・メーカー資料は複製元の Storage パスを流用せず、保存の後に新しい商品の置き場所へ別ファイルとして複製する。 */}
       <input type="hidden" name="image_url" value="" />
       {copySource && showCostFields
@@ -908,7 +910,6 @@ export function OptionForm({
               type="url"
               inputMode="url"
               placeholder="https://www.example.com/products/..."
-              maxLength={1000}
               defaultValue={option?.manufacturer_product_url ?? ''}
             />
           </Field>

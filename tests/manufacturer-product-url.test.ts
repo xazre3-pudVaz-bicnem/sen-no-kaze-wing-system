@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LocalStore } from '@/lib/data/local-store';
-import { MANUFACTURER_PRODUCT_URL_PATTERN } from '@/lib/domain/manufacturer-product-url';
+import { MANUFACTURER_PRODUCT_URL_PATTERN, MANUFACTURER_PRODUCT_URL_PATTERN_SOURCE, normalizeManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import { optionSchema } from '@/lib/validation';
 
 const source = (file: string) => readFileSync(file, 'utf8');
@@ -23,6 +23,19 @@ describe('メーカー公式商品ページの任意リンク', () => {
     );
   });
 
+  it('日本語のパス・空白は %エンコードした形で保存する（DB の ASCII の決まりに合わせる。ブラウザが開く URL と同じ）', () => {
+    expect(field.parse('https://www.example.co.jp/商品/ドア A')).toBe('https://www.example.co.jp/%E5%95%86%E5%93%81/%E3%83%89%E3%82%A2%20A');
+    expect(field.parse('HTTPS://WWW.EXAMPLE.COM/P')).toBe('https://www.example.com/P');
+    expect(normalizeManufacturerProductUrl(' https://www.example.com/a\u00a0b ')).toBe('https://www.example.com/a%C2%A0b');
+  });
+
+  it('誤りは 1 つだけ返す（URL の形・1000 文字のどちらか）', () => {
+    expect(field.safeParse('not a URL').error?.issues).toHaveLength(1);
+    expect(field.safeParse('https://www.lixil.co.jp/' + 'a'.repeat(1000)).error?.issues.map((issue) => issue.message)).toEqual([
+      'URLは1000文字以内で入力してください（日本語などは%エンコードした長さで数えます）',
+    ]);
+  });
+
   it('非HTTPS・不正URL・認証情報つきURL・1000文字超過を拒否する', () => {
     const invalid = [
       'http://www.lixil.co.jp/product',
@@ -31,6 +44,8 @@ describe('メーカー公式商品ページの任意リンク', () => {
       'https://user:pass@www.lixil.co.jp/',
       'not a URL',
       'https://www.lixil.co.jp/' + 'a'.repeat(1000),
+      'https://exa<mple.com/p',
+      'https://a%40b/',
     ];
     for (const url of invalid) expect(field.safeParse(url).success).toBe(false);
   });
@@ -45,7 +60,12 @@ describe('メーカー公式商品ページの任意リンク', () => {
     expect(form).toContain('value={option.manufacturer_product_url ??');
     expect(actions).toContain("manufacturer_product_url: formData.get('manufacturer_product_url')");
     expect(registered).toContain('name="manufacturer_product_url"');
-    expect(registered).toContain("manufacturer_product_url: nullable(data.get('manufacturer_product_url'))");
+    expect(registered).toContain('return url === null ? null : normalizeManufacturerProductUrl(url);');
+    // 入力欄は文字数で黙って切らない（1000 文字を超えたら保存の検査で知らせる）
+    expect(form).not.toMatch(/name="manufacturer_product_url"[^>]*maxLength/);
+    expect(registered).not.toContain('maxLength={1000}');
+    // 商品の複製では URL を引き継ぐ
+    expect(form).toContain("<input type=\"hidden\" name=\"manufacturer_product_url\" value={copySource?.manufacturer_product_url ?? ''} />");
     expect(registered).toContain("key: 'manufacturer_product_url'");
     expect(detail).toContain('safeManufacturerProductUrl(option.manufacturer_product_url)');
     expect(detail).toContain('data-testid="manufacturer-product-link"');
@@ -77,7 +97,9 @@ describe('メーカー公式商品ページの任意リンク', () => {
 
   it('DBでもhttps・認証情報なし・空白なし・1000文字以内に限り、列ごとの読み取り許可と読む列の一覧に足す（v2.5 PR-C1b）', () => {
     const sql = source('supabase/migrations/20261105100000_manufacturer_product_url.sql');
-    expect(sql).toContain("manufacturer_product_url ~* '^https://[^[:space:]/?#@]+([/?#][^[:space:]]*)?$'");
+    // DB とアプリは同じ正規表現（ASCII の範囲だけで書き、PostgreSQL と JavaScript の解釈を分けない）
+    expect(sql).toContain(`manufacturer_product_url ~* '${MANUFACTURER_PRODUCT_URL_PATTERN_SOURCE}'`);
+    expect(MANUFACTURER_PRODUCT_URL_PATTERN.flags).toBe('i');
     expect(sql).toContain('char_length(manufacturer_product_url) <= 1000');
     expect(sql).toContain('grant select (manufacturer_product_url) on public.options to anon, authenticated;');
     const columns = JSON.parse(source('lib/data/legacy-price-columns.json')) as Record<string, { select: string[]; price: string[] }>;
@@ -89,13 +111,12 @@ describe('メーカー公式商品ページの任意リンク', () => {
     expect(check).toContain('runtime = mergeRuntime(runtime, await runtimeManufacturerProductUrl(client));');
   });
 
-  it('DBの検査はアプリの検査と同じ値を通し、同じ値を拒否する', () => {
-    // migration に書いた正規表現（POSIX の [:space:]）を JavaScript の正規表現に直して、アプリの検査と突き合わせる
+  it('アプリが保存する値は DB の検査を通り、アプリが拒む値は DB でも通らない（保存の前の %エンコードの後で比べる）', () => {
+    // migration に書いた正規表現は ASCII の範囲だけなので、そのまま JavaScript の正規表現として DB と同じに読める
     const sql = source('supabase/migrations/20261105100000_manufacturer_product_url.sql');
     const sqlPattern = sql.match(/manufacturer_product_url ~\* '([^']+)'/)?.[1];
-    expect(sqlPattern).toBeTruthy();
-    const pattern = new RegExp(sqlPattern!.split('[:space:]').join('\\s'), 'i');
-    expect(pattern.source).toBe(new RegExp(MANUFACTURER_PRODUCT_URL_PATTERN.source.replace('\\S', '[^\\s]'), 'i').source);
+    expect(sqlPattern).toBe(MANUFACTURER_PRODUCT_URL_PATTERN_SOURCE);
+    const pattern = new RegExp(sqlPattern!, 'i');
     const db = (value: string) => value.length <= 1000 && pattern.test(value);
     const samples = [
       'https:///path',
@@ -113,7 +134,12 @@ describe('メーカー公式商品ページの任意リンク', () => {
       'https://',
       'https://example.com/' + 'a'.repeat(981),
     ];
-    for (const value of samples) expect(db(value), value).toBe(field.safeParse(value).success);
+    for (const value of [...samples, 'https://www.example.com/a\u00a0b', 'https://www.example.co.jp/商品', 'https://exa<mple.com/p']) {
+      const parsed = field.safeParse(value);
+      expect(parsed.success ? db(String(parsed.data)) : false, value).toBe(parsed.success);
+      // DB が通す（すでに ASCII の）値は、アプリも通す
+      if (db(value)) expect(parsed.success, value).toBe(true);
+    }
   });
 });
 

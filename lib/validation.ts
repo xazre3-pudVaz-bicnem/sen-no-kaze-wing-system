@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { PRODUCT_HIGHLIGHT_MAX_LENGTH } from '@/lib/domain/product-highlight';
-import { MANUFACTURER_PRODUCT_URL_ERROR, MANUFACTURER_PRODUCT_URL_MAX_LENGTH, isValidManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
+import {
+  MANUFACTURER_PRODUCT_URL_ERROR,
+  MANUFACTURER_PRODUCT_URL_MAX_LENGTH,
+  isValidManufacturerProductUrl,
+  normalizeManufacturerProductUrl,
+} from '@/lib/domain/manufacturer-product-url';
 import { VIEW_KEYS } from '@/lib/domain/types';
 import { PREFECTURES } from '@/lib/domain/address';
 import { contactTopics } from '@/data/site-content';
@@ -207,14 +212,23 @@ export const optionSchema = z.object({
   owner_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
   manufacturer: optional(60).nullable(),
   model_no: optional(80).nullable(),
+  // 保存の前に %エンコードした形にし（日本語のパスなど）、DB と同じ決まりで 1 つの誤りだけを返す
   manufacturer_product_url: z.preprocess(
-    (value) => (value == null || (typeof value === 'string' && !value.trim()) ? null : value),
+    (value) =>
+      value == null || (typeof value === 'string' && !value.trim())
+        ? null
+        : typeof value === 'string'
+          ? normalizeManufacturerProductUrl(value)
+          : value,
     z
       .string()
-      .trim()
-      .max(MANUFACTURER_PRODUCT_URL_MAX_LENGTH, 'URLは1000文字以内で入力してください')
-      .url('有効なURLを入力してください')
-      .refine(isValidManufacturerProductUrl, MANUFACTURER_PRODUCT_URL_ERROR)
+      .superRefine((value, ctx) => {
+        if (value.length > MANUFACTURER_PRODUCT_URL_MAX_LENGTH) {
+          ctx.addIssue({ code: 'custom', message: 'URLは1000文字以内で入力してください（日本語などは%エンコードした長さで数えます）' });
+        } else if (!isValidManufacturerProductUrl(value)) {
+          ctx.addIssue({ code: 'custom', message: MANUFACTURER_PRODUCT_URL_ERROR });
+        }
+      })
       .nullable()
   ),
   size_note: optional(120).nullable(),

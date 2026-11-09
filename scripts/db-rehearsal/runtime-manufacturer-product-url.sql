@@ -71,6 +71,32 @@ begin
   perform pg_temp.mpu_expect_eq('MPU-25 ホストの無い https:// は拒否', 'ERROR 23514', pg_temp.mpu_try_set(v_opt, 'https://'));
   perform pg_temp.mpu_expect_eq('MPU-26 1001 文字は拒否', 'ERROR 23514', pg_temp.mpu_try_set(v_opt, 'https://example.com/' || repeat('a', 1001 - char_length('https://example.com/'))));
   perform pg_temp.mpu_expect_eq('MPU-27 拒否した後も値は前のまま（NULL）', null, (select manufacturer_product_url from public.options where id = v_opt));
+  -- ASCII の範囲だけを通す（DB とアプリで解釈が分かれないように。日本語のパスはアプリが %エンコードしてから保存する）
+  perform pg_temp.mpu_expect_eq('MPU-28 ASCII でない文字（ノーブレークスペース・日本語）・ホストの記号（<・%）は拒否し、%エンコードした形は通す',
+    'ERROR 23514/ERROR 23514/ERROR 23514/ERROR 23514/ok',
+    pg_temp.mpu_try_set(v_opt, 'https://www.example.com/a' || chr(160) || 'b') || '/' ||
+    pg_temp.mpu_try_set(v_opt, 'https://www.example.co.jp/商品') || '/' ||
+    pg_temp.mpu_try_set(v_opt, 'https://exa<mple.com/p') || '/' ||
+    pg_temp.mpu_try_set(v_opt, 'https://a%40b/') || '/' ||
+    pg_temp.mpu_try_set(v_opt, 'https://www.example.co.jp/%E5%95%86%E5%93%81'));
+  perform pg_temp.mpu_try_set(v_opt, null);
+
+  -- ---------- 本番の保存の経路：ログインした本部が PostgREST から UPDATE … RETURNING（列の読み取りの許可が要る。#619 と同じ形） ----------
+  insert into auth.users (id, email, raw_user_meta_data) values ('29350000-0000-4000-8000-000000000101', 'mpu-admin@runtime.invalid', '{}'::jsonb);
+  insert into public.profiles (id, email, full_name, role_code) values ('29350000-0000-4000-8000-000000000101', 'mpu-admin@runtime.invalid', 'MPU 本部', 'admin')
+    on conflict (id) do update set role_code = 'admin';
+  perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', '29350000-0000-4000-8000-000000000101')::text, true);
+  set local role authenticated;
+  begin
+    update public.options set manufacturer_product_url = 'https://www.example.com/products/admin', price = 10000
+     where id = v_opt returning manufacturer_product_url into v_out;
+  exception when others then
+    v_out := format('ERROR %s %s', sqlstate, sqlerrm);
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  perform pg_temp.mpu_expect_eq('MPU-29 本部：ログインした利用者の保存（UPDATE で金額も書き、URL を返す）が通る', 'https://www.example.com/products/admin', v_out);
+  perform pg_temp.mpu_try_set(v_opt, null);
 
   -- ---------- 公開中の商品は anon から URL が読める（下書きは読めない。options の RLS は変えていない） ----------
   perform pg_temp.mpu_try_set(v_opt, 'https://www.example.com/products/wing');

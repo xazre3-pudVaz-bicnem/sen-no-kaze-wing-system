@@ -6,14 +6,16 @@
 alter table public.options
   add column manufacturer_product_url text;
 
--- https・認証情報（user:pass@）なし・空白なし・1000 文字以内（アプリの optionSchema と同じ決まり。スキームの大文字小文字は問わない）
+-- https・ホスト（英数字・ハイフン・ドット）・任意のポート・その後ろは空白と制御文字を含まない ASCII の印字可能文字だけ・1000 文字以内
+-- （アプリの lib/domain/manufacturer-product-url.ts と同じ正規表現。スキームの大文字小文字は問わない。認証情報（user@host）は通らない）。
+-- 文字は ASCII の範囲（\x21-\x7e）で指定し、Unicode の空白などで DB とアプリの解釈が分かれないようにする。日本語のパスはアプリが %エンコードしてから保存する
 alter table public.options
   add constraint options_manufacturer_product_url_https_check
   check (
     manufacturer_product_url is null
     or (
       char_length(manufacturer_product_url) <= 1000
-      and manufacturer_product_url ~* '^https://[^[:space:]/?#@]+([/?#][^[:space:]]*)?$'
+      and manufacturer_product_url ~* '^https://[a-z0-9.-]+(:[0-9]{1,5})?([/?#][\x21-\x7e]*)?$'
     )
   );
 

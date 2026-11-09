@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8');
 const inbox = read('components/admin/contact-inbox.tsx');
-const casePage = read('app/admin/quotes/page.tsx');
+const nav = read('components/admin/admin-nav.tsx');
 const page = read('app/admin/contacts/page.tsx');
 const forms = read('components/admin/forms.tsx');
 
@@ -46,10 +46,9 @@ describe('問い合わせ受付・メーラー型UI', () => {
     expect(forms).toContain('updateContactClassificationAction');
   });
 
-  it('案件管理ページに本部向けの入口と未対応件数を表示する', () => {
-    expect(casePage).toContain('data-testid="case-contacts-link"');
-    expect(casePage).toContain('href="/admin/contacts"');
-    expect(casePage).toContain('store.getNewContactMessageCount()');
-    expect(casePage).toContain('{canCreateQuote && (');
+  it('本部だけに共通ナビの問い合わせ受付入口を提供する', () => {
+    expect(nav).toContain("href: '/admin/contacts', label: '問い合わせ受付', need: 'admin'");
+    expect(nav).toContain('getAdminUtilityLinks(role)');
+    expect(nav).toContain('{utilities.map((item) => {');
   });
 });

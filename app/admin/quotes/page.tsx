@@ -185,7 +185,7 @@ function CaseSummary({
   );
 }
 
-function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; canCreateQuote: boolean }) {
+function CasePageHeading({ caseCount, canCreateQuote, newContactCount = 0 }: { caseCount: number; canCreateQuote: boolean; newContactCount?: number }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -193,7 +193,13 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
         <p className="mt-0.5 text-xs text-ink-soft">
           Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。
         </p>
-        <p className="mt-1 flex flex-wrap gap-3 text-xs" data-testid="case-flow-links">
+        <p className="mt-1 flex flex-wrap items-center gap-3 text-xs" data-testid="case-flow-links">
+          {canCreateQuote && (
+            <Link href="/admin/contacts" className="inline-flex items-center gap-1 rounded-md border border-[#d1dfd6] bg-white px-2 py-1 font-semibold text-[#2f6b4f] hover:bg-[#eef5f0]" data-testid="case-contacts-link">
+              問い合わせ受付
+              {newContactCount > 0 && <span className="rounded-full bg-[#fff0d7] px-1.5 py-0.5 text-[0.65rem] font-bold text-[#865b19]">未対応 {newContactCount}件</span>}
+            </Link>
+          )}
           <Link href="/admin/appointments" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
             予約ボード（日程）
           </Link>
@@ -409,11 +415,12 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     );
   }
 
-  const [requests, quotes, dealers, initialDraftResumes] = await Promise.all([
+  const [requests, quotes, dealers, initialDraftResumes, newContactCount] = await Promise.all([
     store.listQuoteRequests(),
     store.listAllQuotes(),
     store.listCaseDealers(),
     store.listInitialQuoteDraftResumes(actor),
+    store.getNewContactMessageCount(),
   ]);
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
   const dealerById = new Map(dealers.map((dealer) => [dealer.id, dealer]));
@@ -563,7 +570,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-      <CasePageHeading caseCount={requests.length} canCreateQuote />
+      <CasePageHeading caseCount={requests.length} canCreateQuote newContactCount={newContactCount} />
       <CaseSummary
         caseCount={shown.length}
         newCount={newCount}

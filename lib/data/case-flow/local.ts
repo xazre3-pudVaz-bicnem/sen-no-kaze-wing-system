@@ -197,6 +197,12 @@ function notifyOrganizationManagers(db: LocalDb, organizationId: string, n: { ki
   }
 }
 
+/** 組織の ID と名前（画面用）。見つからなければ null */
+function orgRefOf(db: LocalDb, id: string | null | undefined): { id: string; name: string } | null {
+  const org = id ? db.organizations?.organizations.find((o) => o.id === id) : undefined;
+  return org ? { id: org.id, name: org.name } : null;
+}
+
 /** お客様にも見せる進み具合（DB の get_case_progress と同じ。判定は呼び出し側で行う） */
 function progressOf(db: LocalDb, requestId: string): CaseProgress {
   const t = tables(db);
@@ -762,10 +768,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
   async listSupervisedCases(actor: SessionUser): Promise<SupervisedCaseSummary[]> {
     return this.read((db) => {
       const orgs = db.organizations?.organizations ?? [];
-      const orgRef = (id: string | null | undefined) => {
-        const org = id ? orgs.find((o) => o.id === id) : undefined;
-        return org ? { id: org.id, name: org.name } : null;
-      };
+      const orgRef = (id: string | null | undefined) => orgRefOf(db, id);
       return this.supervisedRequestIds(db, actor)
         .map((requestId): SupervisedCaseSummary => {
           const workflow = tables(db).workflows.find((w) => w.quote_request_id === requestId)!;
@@ -803,11 +806,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       if (rank(actor) < 3 && !isCaseSupervisor(db, requestId, actor.id)) return null;
       if (!db.quoteRequests.some((r) => r.id === requestId)) return null;
       const t = tables(db);
-      const orgs = db.organizations?.organizations ?? [];
-      const orgRef = (id: string | null | undefined) => {
-        const org = id ? orgs.find((o) => o.id === id) : undefined;
-        return org ? { id: org.id, name: org.name } : null;
-      };
+      const orgRef = (id: string | null | undefined) => orgRefOf(db, id);
       const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
       const quote = this.supervisedQuote(db, requestId);
       // 製造依頼は、取り消し・下書きでないもの（DB の get_supervised_case と同じ。個体もその製造依頼のものだけ）
@@ -918,16 +917,12 @@ export class LocalCaseFlowStore implements CaseFlowStore {
     const t = tables(db);
     const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
     if (!request || !workflow) return null;
-    const orgs = db.organizations?.organizations ?? [];
-    const orgRef = (id: string | null | undefined) => {
-      const org = id ? orgs.find((o) => o.id === id) : undefined;
-      return org ? { id: org.id, name: org.name } : null;
-    };
     const quote = request.quote_id ? db.quotes.find((q) => q.id === request.quote_id) : undefined;
     const order = (t.orders ?? [])
       .filter((o) => o.quote_request_id === requestId && o.status !== 'canceled')
       .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-    const units = order ? (t.units ?? []).filter((u) => u.order_id === order.id) : [];
+    // 出荷・設置の数と契約の済否は、進み具合と同じ計算（DB の manufacturing_case_row と同じ）
+    const progress = progressOf(db, requestId);
     const orderUpdated = (t.orders ?? []).filter((o) => o.quote_request_id === requestId).map((o) => o.updated_at);
     return {
       request_id: requestId,
@@ -941,10 +936,10 @@ export class LocalCaseFlowStore implements CaseFlowStore {
             finish_level: quote.finish_level ?? null,
           }
         : null,
-      sales_organization: orgRef(workflow.sales_organization_id),
-      manufacturing_organization: orgRef(workflow.manufacturing_organization_id),
+      sales_organization: orgRefOf(db, workflow.sales_organization_id),
+      manufacturing_organization: orgRefOf(db, workflow.manufacturing_organization_id),
       primary_staff_name: workflow.primary_staff_id ? db.profiles.find((p) => p.id === workflow.primary_staff_id)?.full_name ?? null : null,
-      contract_signed: db.contracts.some((c) => c.quote_request_id === requestId && c.status === 'signed'),
+      contract_signed: Boolean(progress.contract_signed),
       order: order
         ? {
             status: order.status,
@@ -953,8 +948,8 @@ export class LocalCaseFlowStore implements CaseFlowStore {
             sent_at: order.sent_at ?? null,
             received_at: order.received_at ?? null,
             completed_at: order.completed_at ?? null,
-            units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
-            units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
+            units_shipped: progress.units_shipped ?? 0,
+            units_installed: progress.units_installed ?? 0,
           }
         : null,
       activity_at: [workflow.updated_at, request.updated_at ?? '', ...orderUpdated].sort().at(-1) ?? workflow.updated_at,
@@ -969,6 +964,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         .map((w) => this.manufacturingCaseRow(db, w.quote_request_id))
         .filter((row): row is ManufacturingCaseSummary => row !== null)
         .sort((a, b) => b.activity_at.localeCompare(a.activity_at))
+        .slice(0, rank(actor) >= 3 ? 300 : undefined)
     );
   }
   async getManufacturingCase(actor: SessionUser, requestId: string): Promise<ManufacturingCaseDetail | null> {
@@ -980,7 +976,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const request = db.quoteRequests.find((r) => r.id === requestId);
       const items = request?.quote_id
         ? db.quoteItems
-            .filter((i) => i.quote_id === request.quote_id)
+            .filter((i) => i.quote_id === request.quote_id && parseQuoteLineState(i.remark)?.state !== 'excluded')
             .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
             .map((i) => ({ kind: i.kind, name: i.name, quantity: i.quantity, unit: i.unit ?? null }))
         : [];

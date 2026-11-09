@@ -19,7 +19,6 @@ import {
   UNIT_STATUS_LABELS,
   canChangeOrderStatus,
   canSetUnitStatus,
-  type CaseAccess,
   type ManufacturingOrderStatus,
   type ProgressKind,
   type ScheduleCategory,
@@ -27,6 +26,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { CaseFileList } from '@/components/case-flow/case-site-panels';
+import { casePanelAccess } from '@/lib/data/case-flow/panel-access';
 import { CaseFileUploadForm, ManufacturingOrderForm, ProgressReportForm, ScheduleItemForm } from '@/components/case-flow/forms';
 
 const DONE_TEXT: Record<string, string> = {
@@ -83,11 +83,10 @@ export async function CaseProductionPanels({
   }
   if (!requestId) return null;
   const caseFlow = await getCaseFlowStore();
-  const caseAccess: CaseAccess | null = await caseFlow.getCaseAccess(actor, requestId);
   // 営業担当組織の管理者は、担当と同じものを読み取りだけで見る（編集は自分を主担当者にして行う）
-  const readOnly = (!caseAccess || caseAccess === 'customer') && (await caseFlow.getCaseRole(actor, requestId)) === 'manager';
-  if (!readOnly && (!caseAccess || caseAccess === 'customer')) return null;
-  const access: CaseAccess = readOnly ? 'staff' : (caseAccess as CaseAccess);
+  const panel = await casePanelAccess(caseFlow, actor, requestId);
+  if (!panel) return null;
+  const { access, readOnly } = panel;
   const isAdmin = access === 'admin';
   const canOperate = !readOnly && (access === 'admin' || access === 'staff');
   const formQuoteId = quoteId ?? '';
@@ -349,7 +348,7 @@ export async function CaseProductionPanels({
                 </div>
                 <p className="font-semibold">{report.title}</p>
                 {report.body && <p className="whitespace-pre-wrap text-ink-soft">{report.body}</p>}
-                <CaseFileList files={progressFiles.filter((file) => file.context_id === report.id)} actor={actor} quoteId={quoteId} requestId={requestId} back={back} />
+                <CaseFileList files={progressFiles.filter((file) => file.context_id === report.id)} actor={actor} quoteId={quoteId} requestId={requestId} back={back} readOnly={readOnly} />
                 {!readOnly && (
                   <details>
                     <summary className="cursor-pointer text-xs">この記録に写真を登録する</summary>

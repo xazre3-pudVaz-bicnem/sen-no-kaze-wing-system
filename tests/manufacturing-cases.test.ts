@@ -57,6 +57,14 @@ describe('製造担当の案件：DB の取り決め（migration 20261104150000�
     expect(list).toContain("om.profile_id = v_uid and om.status = 'active'");
     expect(list).toContain('w.manufacturing_organization_id is null and w.manufacturer_id = v_uid');
     expect(list).toContain("public.case_access(w.quote_request_id) = 'manufacturer'");
+    // 並びは画面と同じ最終の更新。本部は 300 件まで
+    expect(list).toContain('order by x.activity_at desc, x.quote_request_id');
+    expect(list).toContain('limit case when v_admin then 300 end');
+  });
+
+  it('仕様の明細に、今回の契約対象外の行を出さない（製造依頼の写しと同じ規則）', () => {
+    expect(functionBody('get_manufacturing_case')).toContain("and public.quote_line_explicit_state(qi.remark) is distinct from 'excluded'");
+    expect(migration).toContain("if to_regprocedure('public.quote_line_explicit_state(text)') is null then");
   });
 
   it('1 件分の行を作る関数は内部用。画面から呼べるのはログインした利用者だけ', () => {
@@ -75,11 +83,18 @@ describe('製造担当の画面と、営業担当組織の管理者の読み取�
     expect(actions).not.toContain('productionBack(quoteId,');
   });
 
-  it('製造・施工と引渡しのタブは、営業担当組織の管理者に読み取りだけで出す（書き込みのフォームは出さない）', () => {
+  it('製造・施工と引渡しのタブは、営業担当組織の管理者に読み取りだけで出す（書き込みのフォーム・資料の削除は出さない）', () => {
+    // 読み取りだけの判定は 1 か所（casePanelAccess）にまとめる
+    const panelAccess = fs.readFileSync(path.join(root, 'lib/data/case-flow/panel-access.ts'), 'utf8');
+    expect(panelAccess).toContain("if ((await caseFlow.getCaseRole(actor, requestId)) === 'manager') return { access: 'staff', readOnly: true };");
     for (const source of [productionPanels, handoverPanels]) {
-      expect(source).toContain("(await caseFlow.getCaseRole(actor, requestId)) === 'manager'");
+      expect(source).toContain('const panel = await casePanelAccess(caseFlow, actor, requestId);');
+      expect(source).not.toContain('getCaseRole(');
       expect(source).toContain("const canOperate = !readOnly && (access === 'admin' || access === 'staff');");
+      expect(source).toContain('back={back} readOnly={readOnly} />');
     }
+    const fileList = fs.readFileSync(path.join(root, 'components/case-flow/case-site-panels.tsx'), 'utf8');
+    expect(fileList).toContain("{!readOnly && (file.uploaded_by === actor.id || actor.role === 'admin') && (");
     expect(productionPanels).toContain('!readOnly && canChangeOrderStatus(access, order.status, step.to)');
     expect(productionPanels).toContain("const editable = !readOnly && (access !== 'manufacturer'");
     expect(handoverPanels).toContain("!readOnly && canSetPunchItemStatus(access, item.status, 'fixed')");

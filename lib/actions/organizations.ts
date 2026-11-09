@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAdmin, requireStaff, requireUser } from '@/lib/auth/session';
@@ -9,6 +10,7 @@ import { getOrganizationStore } from '@/lib/data/organizations/store';
 import { sendDirectEmail } from '@/lib/mail/send';
 import { getSiteUrl } from '@/lib/site';
 import {
+  INVITATION_COOKIE,
   INVITATION_TOKEN,
   ORGANIZATION_TYPE_LABEL,
   isValidEmail,
@@ -185,19 +187,22 @@ export async function deactivateMemberAction(formData: FormData): Promise<void> 
   redirect(error ? withParam(back, 'error', error) : withParam(back, 'removed', '1'));
 }
 
-export async function acceptInvitationAction(formData: FormData): Promise<void> {
-  const token = text(formData, 'token');
-  const back = INVITATION_TOKEN.test(token) ? `/invite/${token}` : '/mypage';
+/** 招待を受ける。鍵はフォームではなく、招待のリンクを開いたときの Cookie から読む（鍵を画面・URL に出さない） */
+export async function acceptInvitationAction(): Promise<void> {
+  const back = '/invite';
   const actor = await requireUser(back);
+  const jar = await cookies();
+  const token = jar.get(INVITATION_COOKIE)?.value ?? '';
   let error: string | null = null;
   try {
-    if (!INVITATION_TOKEN.test(token)) throw new StoreError('VALIDATION', '招待のリンクが正しくありません');
+    if (!INVITATION_TOKEN.test(token)) throw new StoreError('VALIDATION', '招待のリンクをもう一度開いてください');
     const store = await getOrganizationStore();
     await store.acceptInvitation(actor, token);
   } catch (e) {
     error = messageOf(e);
   }
   if (error) redirect(withParam(back, 'error', error));
+  jar.delete({ name: INVITATION_COOKIE, path: '/invite' });
   revalidatePath('/', 'layout');
   redirect('/admin/organization?joined=1');
 }

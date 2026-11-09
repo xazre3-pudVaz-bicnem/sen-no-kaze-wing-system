@@ -40,6 +40,7 @@ import type {
   WindowType,
 } from '@/lib/domain/types';
 import { QUOTE_V25_SECTIONS, type QuoteV25Section } from '@/lib/domain/quote-v25';
+import { MASTER_DEALER_VIA_ORGANIZATION_MESSAGE } from '@/lib/domain/organizations';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -587,6 +588,14 @@ export class SupabaseStore implements DataStore {
     if (actor.role !== 'admin') throw new StoreError('FORBIDDEN', '権限を変更できるのは管理者だけです');
     if (actor.id === userId) throw new StoreError('VALIDATION', '自分自身の権限は変更できません');
     const db = await this.db();
+    if (role === 'master_dealer') {
+      const current = await db.from('profiles').select('role_code').eq('id', userId).maybeSingle();
+      if (current.error) mapPgError(current.error);
+      if ((current.data as { role_code?: RoleCode } | null)?.role_code !== 'master_dealer') {
+        throw new StoreError('VALIDATION', MASTER_DEALER_VIA_ORGANIZATION_MESSAGE);
+      }
+    }
+    // 代理店・総代理店に所属している人の権限は、DB のトリガーが止める（組織の画面で所属を外してから）
     const { data, error } = await db.from('profiles').update({ role_code: role }).eq('id', userId).select('*').single();
     if (error) mapPgError(error);
     return data as Profile;

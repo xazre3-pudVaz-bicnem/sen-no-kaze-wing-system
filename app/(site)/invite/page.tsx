@@ -1,13 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { requireUser } from '@/lib/auth/session';
 import { getOrganizationStore } from '@/lib/data/organizations/store';
-import { INVITATION_TOKEN, ORGANIZATION_TYPE_LABEL, memberRoleLabel } from '@/lib/domain/organizations';
+import { INVITATION_COOKIE, INVITATION_TOKEN, ORGANIZATION_TYPE_LABEL, memberRoleLabel } from '@/lib/domain/organizations';
 import { acceptInvitationAction } from '@/lib/actions/organizations';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { Alert, Button } from '@/components/ui';
 
-export const metadata: Metadata = { title: '組織への招待', robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+  title: '組織への招待',
+  robots: { index: false, follow: false },
+  referrer: 'no-referrer',
+};
 export const dynamic = 'force-dynamic';
 
 const STATE_MESSAGE = {
@@ -17,16 +22,11 @@ const STATE_MESSAGE = {
   organization_inactive: '招待された組織が停止中のため、参加できません。本部にご相談ください。',
 } as const;
 
-export default async function InvitationPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ token: string }>;
-  searchParams: Promise<Record<string, string | undefined>>;
-}) {
-  const { token } = await params;
+/** 招待の画面。鍵は招待メールのリンク（/invite/鍵）を開いたときに Cookie へ移してある（app/(site)/invite/[token]/route.ts） */
+export default async function InvitationPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const actor = await requireUser(`/invite/${token}`);
+  const actor = await requireUser('/invite');
+  const token = (await cookies()).get(INVITATION_COOKIE)?.value ?? '';
   const store = await getOrganizationStore();
   const preview = INVITATION_TOKEN.test(token) ? await store.previewInvitation(actor, token) : null;
 
@@ -53,7 +53,6 @@ export default async function InvitationPage({
             </dl>
             {preview.state === 'open' ? (
               <form action={acceptInvitationAction} className="space-y-3">
-                <input type="hidden" name="token" value={token} />
                 <p className="text-xs leading-5 text-muted">参加すると、この組織のメンバーとして管理画面を使えるようになります。</p>
                 <Button type="submit" data-testid="invitation-accept">
                   参加する

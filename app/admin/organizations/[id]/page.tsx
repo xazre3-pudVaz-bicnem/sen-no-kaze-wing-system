@@ -65,7 +65,7 @@ export default async function OrganizationDetailPage({
       {sp.revoked && <Alert tone="success">招待を取り消しました。</Alert>}
       {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       {organization.status !== 'active' && (
-        <Alert tone="warn">この組織は停止中です。招待とメンバーの変更はできません。</Alert>
+        <Alert tone="warn">この組織は停止中です。メンバーは管理画面を使えず、招待とメンバーの変更もできません（再開すると戻ります）。</Alert>
       )}
       {canManage && activeManagers === 0 && organization.status === 'active' && (
         <Alert tone="warn">管理者がいません。下の「招待する」から、最初の管理者を招待してください。</Alert>
@@ -81,8 +81,8 @@ export default async function OrganizationDetailPage({
             メンバー
           </h2>
           <p className="text-xs text-muted">
-            <Badge tone="navy">管理者</Badge> は自社の全案件を確認し、担当者の追加・役割の変更ができます。
-            <Badge className="ml-1">担当者</Badge> は自分の担当案件を扱います。
+            <Badge tone="navy">管理者</Badge> は担当者の招待・役割の変更・所属の解除ができます。
+            管理者・<Badge className="ml-1">担当者</Badge> とも、自分が担当する案件を扱います。
           </p>
         </div>
         <Table minWidth="44rem">

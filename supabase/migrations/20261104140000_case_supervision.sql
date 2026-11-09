@@ -12,8 +12,10 @@
 --   お客様が送った資料、土地なしの場合の希望地域・予算・お客様のメモは返さない**。
 --   見積からも customer_name／customer_company／お客様向けの備考（notes）／社内の備考（dealer_note）は返さない
 -- * 詳細には、製造・出荷・施工に必要な情報（case_partner_site_info：案件名・顧客番号・設置場所の住所・設置場所の条件・用途・
---   現地確認の内容と写真）を足す（B-3）。製造の担当（get_manufacturing_case）も同じ関数を使う
--- * 現地確認の写真（case_files の site_survey）は、配下の確認と製造の担当からも読める（ファイルの取り出しは RLS で判定する）
+--   現地確認の内容と写真）を足す（B-3）。製造の担当の画面（次の migration 20261104150000 の get_manufacturing_case）も同じ関数を使う
+-- * 現地確認の写真（case_files の site_survey のうち画像）は、配下の確認と製造の担当からも読める。現地確認でも画像でない資料は見せない。
+--   配下の確認は、施工・製造の記録（progress）も読める（ファイルの取り出しは RLS で判定する）
+-- * 製造は、取り消していない・下書きでない製造依頼と、その個体だけを返す（進み具合の数とそろえる）
 -- * 対象は「営業担当が代理店で、その直属の総代理店の管理者」（is_case_supervisor）。本部は確認のために同じ内容を見られる
 
 begin;
@@ -55,7 +57,8 @@ as $$
            'survey_files', coalesce((
              select jsonb_agg(jsonb_build_object('id', f.id, 'file_name', f.file_name, 'content_type', f.content_type,
                                                  'caption', f.caption, 'created_at', f.created_at) order by f.created_at, f.id)
-               from public.case_files f where f.quote_request_id = r.id and f.context = 'site_survey'
+               from public.case_files f
+              where f.quote_request_id = r.id and f.context = 'site_survey' and f.content_type like 'image/%'
            ), '[]'::jsonb))
     from public.quote_requests r
     left join public.quotes q on q.id = r.quote_id
@@ -64,20 +67,94 @@ as $$
    where r.id = p_request_id;
 $$;
 
--- 現地確認の写真は、配下の確認（直属の総代理店の管理者）と製造の担当からも読める（B-3）。
--- そのほかの資料（お客様が送った資料・契約書・打合せの資料など）は今までどおり
+-- 案件の資料（case_files）を読めるか（RLS から呼ぶ。行ごとに case_role を 1 回だけ求める）。
+-- 製造担当組織と配下の確認（直属の総代理店の管理者）は、施工・製造の記録（progress）と現地確認の写真（site_survey の画像）だけ（B-3）。
+-- 現地確認の資料でも画像でないもの（PDF など）・お客様が送った資料・契約書・打合せの資料は見せない。これまでの個人の製造担当は従来どおり
+create function public.case_file_readable(p_request_id uuid, p_context text, p_content_type text, p_customer_visible boolean)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_role text := public.case_role(p_request_id);
+begin
+  return case
+    when v_role in ('admin', 'staff', 'manager') then true
+    when v_role in ('manufacturer', 'supervisor') then
+      p_context = 'progress'
+      or (p_context = 'site_survey' and coalesce(p_content_type, '') like 'image/%')
+      or (v_role = 'manufacturer' and public.is_case_legacy_manufacturer(p_request_id))
+    when v_role = 'customer' then coalesce(p_customer_visible, false)
+    else false
+  end;
+end;
+$$;
+
+comment on function public.case_file_readable(uuid, text, text, boolean) is
+  '案件の資料を読めるか（case_files の RLS）。製造担当組織・配下の確認は施工・製造の記録と現地確認の写真だけ（2026-11-04 の先方回答 B-3）。';
+
 drop policy if exists case_files_read on public.case_files;
 create policy case_files_read on public.case_files
 for select to authenticated
-using (
-  public.case_role(quote_request_id) in ('admin', 'staff', 'manager')
-  -- 製造担当組織は施工・製造の写真（progress）と現地確認の写真（site_survey）。これまでの個人の製造担当は従来どおり
-  or (public.case_role(quote_request_id) = 'manufacturer'
-      and (context in ('progress', 'site_survey') or public.is_case_legacy_manufacturer(quote_request_id)))
-  -- 配下の確認は現地確認の写真だけ（B-3）
-  or (context = 'site_survey' and public.case_role(quote_request_id) = 'supervisor')
-  or (customer_visible and public.case_role(quote_request_id) = 'customer')
-);
+using (public.case_file_readable(quote_request_id, context, content_type, customer_visible));
+
+-- ---------- 進み具合（内部用。権限は呼び出し側で確かめる） ----------
+-- 配下の案件の一覧で、行ごとに get_case_progress（読み取りの判定をやり直す）を呼ばないよう、中身だけを分ける。
+-- get_case_progress は読み取りの判定（case_role）の後にこれを返す（返す項目は 20261104130000 と同じ）
+create function public.case_progress_summary(p_request_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  w public.case_workflows;
+  s public.site_surveys;
+  o public.manufacturing_orders;
+  h public.case_handovers;
+  v_primary_name text;
+begin
+  select * into w from public.case_workflows where quote_request_id = p_request_id;
+  select * into s from public.site_surveys where quote_request_id = p_request_id;
+  select * into o from public.manufacturing_orders where quote_request_id = p_request_id and status <> 'canceled';
+  select * into h from public.case_handovers where quote_request_id = p_request_id;
+  if w.primary_staff_id is not null then
+    select p.full_name into v_primary_name from public.profiles p where p.id = w.primary_staff_id;
+  end if;
+  return jsonb_build_object(
+    'acknowledged_at', w.acknowledged_at,
+    'primary_staff_name', v_primary_name,
+    'site_survey_status', coalesce(s.status, 'none'),
+    'site_survey_completed_at', s.completed_at,
+    -- 製造：状態と棟数・出荷済み・設置済みの数だけ（仕様のスナップショット・供給手配のメモは返さない）
+    'manufacturing_status', coalesce(case when o.status = 'draft' then null else o.status end, 'none'),
+    'unit_count', o.unit_count,
+    'units_shipped', (select count(*) from public.manufacturing_units u where u.order_id = o.id and u.status in ('shipped', 'installed', 'handed_over')),
+    'units_installed', (select count(*) from public.manufacturing_units u where u.order_id = o.id and u.status in ('installed', 'handed_over')),
+    -- 契約は締結済みかどうかだけ（契約の中身は本部とお客様だけが読める）。担当代理店・製造の担当の画面の判定に使う
+    'contract_signed', exists (select 1 from public.contracts c where c.quote_request_id = p_request_id and c.status = 'signed'),
+    'handover_status', coalesce(h.status, 'none')
+  );
+end;
+$$;
+
+create or replace function public.get_case_progress(p_request_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if public.case_role(p_request_id) is null then
+    return null;
+  end if;
+  return public.case_progress_summary(p_request_id);
+end;
+$$;
 
 -- 配下の案件の一覧（総代理店の管理者・本部）
 create function public.list_supervised_cases()
@@ -112,7 +189,8 @@ begin
                             'total', q.total, 'issued_at', q.issued_at)
                      from public.quotes q where q.id = r.quote_id
                  ),
-                 'progress', public.get_case_progress(w.quote_request_id),
+                 -- 権限は下の条件で確かめているため、行ごとに読み取りの判定をやり直さない
+                 'progress', public.case_progress_summary(w.quote_request_id),
                  'activity_at', greatest(w.updated_at, r.updated_at)
                ) as row
           from public.case_workflows w
@@ -144,6 +222,7 @@ declare
   w public.case_workflows;
   r public.quote_requests;
   q public.quotes;
+  v_order public.manufacturing_orders;
 begin
   if auth.uid() is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -157,6 +236,12 @@ begin
     raise exception using errcode = 'P0002', message = 'NOT_FOUND: 案件が見つかりません';
   end if;
   select * into q from public.quotes x where x.id = r.quote_id;
+  -- 製造依頼は、取り消し・下書きでないもの（進み具合の数と同じ。下書きは製造の担当へまだ届いていない）
+  select * into v_order
+    from public.manufacturing_orders mo
+   where mo.quote_request_id = p_request_id and mo.status not in ('draft', 'canceled')
+   order by mo.created_at desc
+   limit 1;
 
   return jsonb_build_object(
     'request_id', p_request_id,
@@ -178,24 +263,18 @@ begin
              ) order by qi.sort_order, qi.id)
         from public.quote_items qi where qi.quote_id = q.id
     ), '[]'::jsonb),
-    'progress', public.get_case_progress(p_request_id),
-    'manufacturing_order', (
-      select jsonb_build_object(
-               'status', o.status, 'unit_count', o.unit_count, 'requested_delivery_on', o.requested_delivery_on,
-               'order_no', o.order_no, 'sent_at', o.sent_at, 'received_at', o.received_at, 'completed_at', o.completed_at,
-               'spec_snapshot', o.spec_snapshot)
-        from public.manufacturing_orders o
-       where o.quote_request_id = p_request_id and o.status <> 'canceled'
-       order by o.created_at desc
-       limit 1
-    ),
+    'progress', public.case_progress_summary(p_request_id),
+    'manufacturing_order', case when v_order.id is null then null else jsonb_build_object(
+      'status', v_order.status, 'unit_count', v_order.unit_count, 'requested_delivery_on', v_order.requested_delivery_on,
+      'order_no', v_order.order_no, 'sent_at', v_order.sent_at, 'received_at', v_order.received_at, 'completed_at', v_order.completed_at,
+      'spec_snapshot', v_order.spec_snapshot) end,
     'units', coalesce((
       select jsonb_agg(jsonb_build_object(
                'seq', u.seq, 'unit_no', u.unit_no, 'status', u.status, 'produced_on', u.produced_on,
                'inspected_on', u.inspected_on, 'shipped_on', u.shipped_on, 'installed_on', u.installed_on,
                'handed_over_on', u.handed_over_on, 'note', u.note
              ) order by u.seq)
-        from public.manufacturing_units u where u.quote_request_id = p_request_id
+        from public.manufacturing_units u where u.order_id = v_order.id
     ), '[]'::jsonb),
     'schedule', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -210,6 +289,12 @@ begin
              ) order by pr.reported_on desc nulls last, pr.created_at desc)
         from public.case_progress_reports pr where pr.quote_request_id = p_request_id
     ), '[]'::jsonb),
+    -- 施工・製造の記録の資料（写真など）。ファイルの取り出しは case_files の RLS（case_file_readable）で判定する
+    'progress_files', coalesce((
+      select jsonb_agg(jsonb_build_object('id', f.id, 'file_name', f.file_name, 'content_type', f.content_type,
+                                          'caption', f.caption, 'created_at', f.created_at) order by f.created_at, f.id)
+        from public.case_files f where f.quote_request_id = p_request_id and f.context = 'progress'
+    ), '[]'::jsonb),
     'handover_status', coalesce((select h.status from public.case_handovers h where h.quote_request_id = p_request_id), 'none'),
     -- 製造・出荷・施工に必要な案件の情報（B-3。お客様の氏名・連絡先などは含めない）
     'partner_info', public.case_partner_site_info(p_request_id)
@@ -218,9 +303,16 @@ end;
 $$;
 
 alter function public.case_partner_site_info(uuid) owner to postgres;
+alter function public.case_file_readable(uuid, text, text, boolean) owner to postgres;
+alter function public.case_progress_summary(uuid) owner to postgres;
+alter function public.get_case_progress(uuid) owner to postgres;
 alter function public.list_supervised_cases() owner to postgres;
 alter function public.get_supervised_case(uuid) owner to postgres;
 revoke all on function public.case_partner_site_info(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.case_progress_summary(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.case_file_readable(uuid, text, text, boolean) from public, anon, authenticated, service_role;
+-- 資料の表の RLS から呼ぶ
+grant execute on function public.case_file_readable(uuid, text, text, boolean) to authenticated;
 revoke all on function public.list_supervised_cases() from public, anon, authenticated, service_role;
 revoke all on function public.get_supervised_case(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.list_supervised_cases() to authenticated;
@@ -233,13 +325,18 @@ begin
   for v_fn in
     select p.oid, p.proname, p.prosecdef, pg_get_userbyid(p.proowner) as owner_name, p.proconfig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-     where n.nspname = 'public' and p.proname in ('list_supervised_cases', 'get_supervised_case')
+     where n.nspname = 'public'
+       and p.proname in ('list_supervised_cases', 'get_supervised_case', 'case_partner_site_info', 'case_progress_summary',
+                         'case_file_readable', 'get_case_progress')
   loop
     if v_fn.prosecdef is distinct from true or v_fn.owner_name <> 'postgres' then
       raise exception 'POSTCONDITION: % must be postgres-owned SECURITY DEFINER', v_fn.proname;
     end if;
     if not coalesce(v_fn.proconfig, '{}'::text[]) @> array['search_path=""']::text[] then
       raise exception 'POSTCONDITION: % search_path must be empty', v_fn.proname;
+    end if;
+    if v_fn.proname in ('case_partner_site_info', 'case_progress_summary') then
+      continue;
     end if;
     if has_function_privilege('anon', v_fn.oid, 'EXECUTE') or has_function_privilege('service_role', v_fn.oid, 'EXECUTE')
        or not has_function_privilege('authenticated', v_fn.oid, 'EXECUTE') then
@@ -249,8 +346,19 @@ begin
   -- 内部の部品（B-3）は利用者から呼べない
   if has_function_privilege('anon', 'public.case_partner_site_info(uuid)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.case_partner_site_info(uuid)', 'EXECUTE')
-     or has_function_privilege('service_role', 'public.case_partner_site_info(uuid)', 'EXECUTE') then
-    raise exception 'POSTCONDITION: case_partner_site_info must not be executable by application roles';
+     or has_function_privilege('service_role', 'public.case_partner_site_info(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.case_progress_summary(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.case_progress_summary(uuid)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.case_progress_summary(uuid)', 'EXECUTE') then
+    raise exception 'POSTCONDITION: case_partner_site_info / case_progress_summary must not be executable by application roles';
+  end if;
+  -- 資料の表は case_file_readable() の範囲だけ
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'case_files' and policyname = 'case_files_read'
+       and qual like '%case_file_readable(quote_request_id, context, content_type, customer_visible)%'
+  ) then
+    raise exception 'POSTCONDITION: case_files must be readable only through case_file_readable()';
   end if;
 end;
 $postcondition$;

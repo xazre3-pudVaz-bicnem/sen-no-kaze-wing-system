@@ -20,6 +20,8 @@ type AdminShellProps = {
   fullName: string;
   companyName: string | null;
   migrationOnly?: boolean;
+  /** 配下の案件を見られるか（本部と総代理店の組織の管理者） */
+  canSupervise?: boolean;
 };
 
 /** 管理画面共通のヘッダーと権限別ナビゲーション。 */
@@ -30,6 +32,7 @@ export function AdminShell({
   fullName,
   companyName,
   migrationOnly = false,
+  canSupervise = false,
 }: AdminShellProps) {
   const homeHref = migrationOnly ? '/admin/base-migration' : '/admin';
   const roleLabel = ADMIN_HEADER_ROLE_LABELS[role] ?? ROLE_LABELS[role];
@@ -86,7 +89,7 @@ export function AdminShell({
                       自社の組織・メンバー
                     </Link>
                   )}
-                  {!migrationOnly && role === 'master_dealer' && (
+                  {!migrationOnly && role === 'master_dealer' && canSupervise && (
                     <Link href="/admin/supervision" className="rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-sand hover:text-ink">
                       配下の案件
                     </Link>

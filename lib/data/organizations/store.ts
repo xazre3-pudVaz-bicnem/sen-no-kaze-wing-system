@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SessionUser } from '@/lib/data/store';
 import { isLocalMode } from '@/lib/data/store';
+import { isManagerRole } from '@/lib/domain/organizations';
 import type {
   AssignableMemberRole,
   InvitationPreview,
@@ -51,4 +52,15 @@ export async function getOrganizationStore(): Promise<OrganizationStore> {
     cached = new SupabaseOrganizationStore();
   }
   return cached;
+}
+
+/**
+ * 配下の案件（総代理店の配下の確認）を見られるか。本部と、有効な総代理店の組織の管理者だけ
+ * （DB の list_supervised_cases・is_case_supervisor と同じ。メニューと画面の出し分けに使い、最終の判定は DB）
+ */
+export async function canSuperviseCases(actor: SessionUser): Promise<boolean> {
+  if (actor.role === 'admin') return true;
+  if (actor.role !== 'master_dealer') return false;
+  const mine = await (await getOrganizationStore()).getMyOrganization(actor);
+  return Boolean(mine && mine.organization_type === 'master_dealer' && mine.status === 'active' && isManagerRole(mine.member_role));
 }

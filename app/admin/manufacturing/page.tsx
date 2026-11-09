@@ -29,17 +29,20 @@ export default async function ManufacturingBoardPage({ searchParams }: { searchP
     // 製造担当の案件（製造依頼の前の技術検討から）。代理店は製造の担当にならないため読まない
     actor.role === 'dealer' ? Promise.resolve([]) : caseFlow.listManufacturingCases(actor),
   ]);
-  // 製造の担当：組織あての製造依頼は製造担当組織のメンバー、これまでの製造依頼は本部が選んだ総代理店の利用者（最終の判定は DB）
+  // 製造の担当：組織あての製造依頼は製造担当組織のメンバー、これまでの製造依頼は本部が選んだ総代理店の利用者（最終の判定は DB）。
+  // DB は案件の主担当者を製造の担当より先に「担当」と判定する（総代理店が営業と製造の両方を担当する案件でも、主担当者は製造の操作をしない）
   const accessOf = (order: (typeof orders)[number]) =>
     actor.role === 'admin'
       ? 'admin'
-      : order.manufacturing_organization_id
-        ? order.manufacturing_organization_id === mine?.organization_id
-          ? 'manufacturer'
-          : 'staff'
-        : order.manufacturer_id === actor.id && actor.role === 'master_dealer'
-          ? 'manufacturer'
-          : 'staff';
+      : order.primary_staff_id === actor.id
+        ? 'staff'
+        : order.manufacturing_organization_id
+          ? order.manufacturing_organization_id === mine?.organization_id
+            ? 'manufacturer'
+            : 'staff'
+          : order.manufacturer_id === actor.id && actor.role === 'master_dealer'
+            ? 'manufacturer'
+            : 'staff';
 
   return (
     <AdminPage

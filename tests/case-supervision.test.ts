@@ -16,8 +16,10 @@ const functionBody = (name: string) => {
 
 describe('総代理店の配下の確認：DB の取り決め（migration 20261104140000）', () => {
   it('一覧・詳細の本体は、お客様の氏名・会社名・連絡先・設置場所・備考・営業の記録を直接返さない（設置場所・現地確認は B-3 の専用の関数だけ）', () => {
+    // 詳細の施工・製造の記録の資料（progress）の一覧は、資料の表から context = 'progress' だけを返す（下の試験）
+    const progressFiles = "from public.case_files f where f.quote_request_id = p_request_id and f.context = 'progress'";
     for (const name of ['list_supervised_cases', 'get_supervised_case']) {
-      const body = functionBody(name);
+      const body = functionBody(name).replace(progressFiles, '');
       expect(body.length).toBeGreaterThan(200);
       for (const field of [
         'customer_name',
@@ -59,13 +61,39 @@ describe('総代理店の配下の確認：DB の取り決め（migration 202611
     expect(migration).not.toMatch(/grant execute on function public\.(list_supervised_cases|get_supervised_case)\([^)]*\) to [^;]*anon/);
   });
 
-  it('案件・見積の表の RLS は開かない（専用の関数だけで返す）。開くのは現地確認の写真の読み取りだけ（B-3）', () => {
+  it('案件・見積の表の RLS は開かない（専用の関数だけで返す）。開くのは資料の読み取り（施工・製造の記録と現地確認の写真。B-3）だけ', () => {
     const policies = [...sqlOnly.matchAll(/(create|alter|drop) policy(?: if exists)? (\w+) on public\.(\w+)/g)].map((m) => `${m[1]} ${m[2]} ${m[3]}`);
     expect(policies).toEqual(['drop case_files_read case_files', 'create case_files_read case_files']);
-    const policy = sqlOnly.slice(sqlOnly.indexOf('create policy case_files_read'), sqlOnly.indexOf(');', sqlOnly.indexOf('create policy case_files_read')));
-    expect(policy).toContain("or (context = 'site_survey' and public.case_role(quote_request_id) = 'supervisor')");
-    expect(policy).toContain("and (context in ('progress', 'site_survey') or public.is_case_legacy_manufacturer(quote_request_id)))");
-    expect(policy).toContain("or (customer_visible and public.case_role(quote_request_id) = 'customer')");
+    expect(migration).toContain('using (public.case_file_readable(quote_request_id, context, content_type, customer_visible));');
+    // 判定は 1 行に case_role を 1 回。製造担当組織・配下の確認は施工・製造の記録と現地確認の写真（画像）だけ
+    const readable = sqlOnly.slice(
+      sqlOnly.indexOf('create function public.case_file_readable('),
+      sqlOnly.indexOf('\n$$;', sqlOnly.indexOf('create function public.case_file_readable('))
+    );
+    expect(readable.split('public.case_role(').length - 1).toBe(1);
+    expect(readable).toContain("when v_role in ('manufacturer', 'supervisor') then");
+    expect(readable).toContain("p_context = 'progress'");
+    expect(readable).toContain("(p_context = 'site_survey' and coalesce(p_content_type, '') like 'image/%')");
+    expect(readable).toContain("(v_role = 'manufacturer' and public.is_case_legacy_manufacturer(p_request_id))");
+    expect(readable).toContain("when v_role = 'customer' then coalesce(p_customer_visible, false)");
+    expect(migration).toContain('grant execute on function public.case_file_readable(uuid, text, text, boolean) to authenticated;');
+  });
+
+  it('製造は、取り消し・下書きでない製造依頼と、その個体だけを返す（進み具合の数とそろえる）', () => {
+    const detail = functionBody('get_supervised_case');
+    expect(detail).toContain("where mo.quote_request_id = p_request_id and mo.status not in ('draft', 'canceled')");
+    expect(detail).toContain('from public.manufacturing_units u where u.order_id = v_order.id');
+    expect(detail).not.toContain('from public.manufacturing_units u where u.quote_request_id');
+  });
+
+  it('一覧は、権限を確かめた行の進み具合を内部の関数で求める（行ごとに読み取りの判定をやり直さない）', () => {
+    expect(functionBody('list_supervised_cases')).toContain("'progress', public.case_progress_summary(w.quote_request_id)");
+    expect(functionBody('list_supervised_cases')).not.toContain('get_case_progress');
+    const progress = sqlOnly.slice(sqlOnly.indexOf('create or replace function public.get_case_progress('), sqlOnly.indexOf('\n$$;', sqlOnly.indexOf('create or replace function public.get_case_progress(')));
+    expect(progress).toContain('if public.case_role(p_request_id) is null then');
+    expect(progress).toContain('return public.case_progress_summary(p_request_id);');
+    expect(migration).toContain('revoke all on function public.case_progress_summary(uuid) from public, anon, authenticated, service_role;');
+    expect(sqlOnly).not.toMatch(/grant execute on function public\.case_progress_summary/);
   });
 
   it('総代理店に見せる、製造・出荷・施工に必要な情報（2026-11-04 の先方回答 B-3）：案件名・顧客番号・設置場所・条件・用途・現地確認だけ', () => {
@@ -73,7 +101,7 @@ describe('総代理店の配下の確認：DB の取り決め（migration 202611
     for (const field of [
       "'case_name'", "'customer_no'", "'site_address'", "'land_status'", "'area_sqm'", "'land_category'", "'road_access'",
       "'electricity'", "'water'", "'drainage'", "'intended_use'", "'survey_notes'", "'legal'",
-      "from public.case_files f where f.quote_request_id = r.id and f.context = 'site_survey'",
+      "where f.quote_request_id = r.id and f.context = 'site_survey' and f.content_type like 'image/%'",
     ]) {
       expect(body, `${field} が無い`).toContain(field);
     }

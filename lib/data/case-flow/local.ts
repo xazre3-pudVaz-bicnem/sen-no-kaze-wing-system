@@ -221,6 +221,26 @@ function progressOf(db: LocalDb, requestId: string): CaseProgress {
   };
 }
 
+/**
+ * 所属を外れたメンバーが主担当者の、その組織の案件は、主担当者と見積の担当を外し、組織の管理者へ 1 回だけ知らせる
+ * （DB のトリガー release_cases_of_departed_member と同じ）。所属を外した後に呼ぶ。外した件数を返す
+ */
+export function releaseCasesOfDepartedMember(db: LocalDb, organizationId: string, profileId: string, actorId: string): number {
+  const released = (db.caseFlow?.workflows ?? []).filter(
+    (w) => w.sales_organization_id === organizationId && w.primary_staff_id === profileId
+  );
+  for (const workflow of released) applyCaseMainStaff(db, workflow.quote_request_id, null, actorId);
+  if (released.length > 0) {
+    notifyOrganizationManagers(db, organizationId, {
+      kind: 'case_primary_released',
+      title: '主担当者のいない案件があります',
+      body: `所属を外れたメンバーが主担当者だった案件（${released.length} 件）の主担当者を外しました。主担当者を決め直してください。`,
+      link: '/admin/quotes',
+    });
+  }
+  return released.length;
+}
+
 function caseDealerId(db: LocalDb, requestId: string): string | null {
   const request = db.quoteRequests.find((r) => r.id === requestId);
   const quote = request?.quote_id ? db.quotes.find((q) => q.id === request.quote_id) : null;
@@ -251,11 +271,15 @@ function isHandedOver(db: LocalDb, requestId: string): boolean {
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
-/** 資料を読めるか（DB の case_files_read と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の写真だけ */
+/** 製造担当組織・配下の確認に見せる資料（施工・製造の記録と、現地確認の写真。DB の case_file_readable と同じ。B-3） */
+function partnerVisibleCaseFile(file: CaseFile): boolean {
+  return file.context === 'progress' || (file.context === 'site_survey' && file.content_type.startsWith('image/'));
+}
+
+/** 資料を読めるか（DB の case_file_readable と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の記録と現地確認の写真だけ */
 function canReadCaseFile(db: LocalDb, actor: SessionUser, access: CaseAccess, file: CaseFile): boolean {
   if (access === 'customer') return file.customer_visible;
-  // 製造担当組織は施工・製造の写真と、現地確認の写真（2026-11-04 の先方回答 B-3）。DB の case_files_read と同じ
-  if (access === 'manufacturer') return file.context === 'progress' || file.context === 'site_survey' || isLegacyManufacturer(db, actor, file.quote_request_id);
+  if (access === 'manufacturer') return partnerVisibleCaseFile(file) || isLegacyManufacturer(db, actor, file.quote_request_id);
   return true;
 }
 
@@ -300,7 +324,7 @@ function partnerSiteInfoOf(db: LocalDb, requestId: string): CasePartnerSiteInfo 
         }
       : null,
     survey_files: t.files
-      .filter((f) => f.quote_request_id === requestId && f.context === 'site_survey')
+      .filter((f) => f.quote_request_id === requestId && f.context === 'site_survey' && f.content_type.startsWith('image/'))
       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
       .map((f) => ({ id: f.id, file_name: f.file_name, content_type: f.content_type, caption: f.caption, created_at: f.created_at })),
   };
@@ -446,58 +470,19 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       if (input.preferred_dealer_id && !t.dealerProfiles.some((p) => p.dealer_id === input.preferred_dealer_id && p.published)) {
         throw invalid('指定した代理店は選べません');
       }
-      // お客様が選んだ代理店（組織）。有効な代理店・総代理店で、管理者がいる組織だけ選べる（DB と同じ）
-      const preferredOrg = input.preferred_organization_id
-        ? db.organizations?.organizations.find((o) => o.id === input.preferred_organization_id)
-        : null;
-      if (
-        input.preferred_organization_id &&
-        (!preferredOrg ||
-          preferredOrg.status !== 'active' ||
-          preferredOrg.organization_type === 'headquarters' ||
-          organizationManagers(db, preferredOrg.id).length === 0)
-      ) {
-        throw invalid('指定した代理店は選べません');
-      }
+      // 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261104160000 と同じ時に入れる）
       const current = t.preferences.find((p) => p.quote_request_id === requestId);
       const before = current?.preferred_dealer_id ?? null;
       const next: QuoteRequestPreferences = {
         quote_request_id: requestId,
-        ...input,
-        preferred_organization_id: input.preferred_organization_id ?? null,
+        preferred_dealer_id: input.preferred_dealer_id,
+        meeting_method: input.meeting_method,
+        preferred_slots: input.preferred_slots,
+        note: input.note,
         updated_at: nowIso(),
       };
       if (current) Object.assign(current, next);
       else t.preferences.push(next);
-      // 営業担当組織が未定なら、お客様が選んだ代理店を営業担当にする（いったん決まった後は、本部だけが変える）
-      if (preferredOrg) {
-        const workflow = workflowOf(db, requestId, actor.id);
-        if (!workflow.sales_organization_id) {
-          workflow.sales_organization_id = preferredOrg.id;
-          workflow.sales_assigned_at = nowIso();
-          if (workflow.manufacturing_auto !== false || !workflow.manufacturing_organization_id) {
-            workflow.manufacturing_organization_id = defaultManufacturingOrganization(db, preferredOrg.id);
-            workflow.manufacturing_auto = true;
-            workflow.manufacturing_assigned_at = nowIso();
-          }
-          workflow.updated_at = nowIso();
-          applyCaseMainStaff(db, requestId, null, actor.id);
-          notifyOrganizationManagers(db, preferredOrg.id, {
-            kind: 'case_sales_assigned',
-            title: 'お客様から見積のご依頼が届きました',
-            body: 'お客様があなたの組織を選びました。案件の内容を確認し、主担当者を決めてください。',
-            link: `/admin/quotes?request=${requestId}`,
-          });
-          notify(db, {
-            recipient_id: null,
-            audience: 'admin',
-            kind: 'case_sales_assigned',
-            title: 'お客様が代理店を選びました',
-            body: '選ばれた代理店を営業担当にしました。必要なら案件の「受付・担当」で変えられます。',
-            link: `/admin/quotes?request=${requestId}`,
-          });
-        }
-      }
       if (input.preferred_dealer_id && input.preferred_dealer_id !== before) {
         notify(db, {
           recipient_id: null,
@@ -679,12 +664,23 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       if ((workflow.sales_organization_id ?? null) === organizationId) return;
       const before = workflow.manufacturing_organization_id ?? null;
       const auto = workflow.manufacturing_auto !== false || !workflow.manufacturing_organization_id;
+      const nextManufacturer = auto ? defaultManufacturingOrganization(db, organizationId) : before;
+      // 製造依頼を送った後は、製造担当が変わる変更をしない（DB と同じ）
+      if (
+        nextManufacturer !== before &&
+        (tables(db).orders ?? []).some((o) => o.quote_request_id === requestId && o.status !== 'draft' && o.status !== 'canceled')
+      ) {
+        throw invalid(
+          '製造依頼を送った後は、製造担当が変わる営業担当組織の変更はできません（先に製造担当を今の総代理店に固定するか、製造依頼を取り消してください）'
+        );
+      }
       workflow.sales_organization_id = organizationId;
       workflow.sales_assigned_at = organizationId ? nowIso() : null;
+      workflow.sales_assigned_by = organizationId ? actor.id : null;
       if (auto) {
-        workflow.manufacturing_organization_id = defaultManufacturingOrganization(db, organizationId);
+        workflow.manufacturing_organization_id = nextManufacturer;
         workflow.manufacturing_auto = true;
-        if (workflow.manufacturing_organization_id !== before) workflow.manufacturing_assigned_at = nowIso();
+        if (nextManufacturer !== before) workflow.manufacturing_assigned_at = nowIso();
       }
       workflow.updated_at = nowIso();
       // 主担当者は、新しい営業担当組織のメンバー（本部なら本部の利用者）のときだけ残す
@@ -721,6 +717,10 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         throw invalid('製造担当は、有効な総代理店から選んでください');
       }
       const workflow = workflowOf(db, requestId, actor.id);
+      // これまでの案件（営業担当組織が無い）は、本部が個人として選ぶ製造の担当のまま（DB と同じ）
+      if (!workflow.sales_organization_id) {
+        throw invalid('製造担当組織は、営業担当組織を決めた案件で選べます（これまでの案件は「製造の担当」を使ってください）');
+      }
       const next = organizationId ?? defaultManufacturingOrganization(db, workflow.sales_organization_id);
       const before = workflow.manufacturing_organization_id ?? null;
       if (
@@ -810,8 +810,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       };
       const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
       const quote = this.supervisedQuote(db, requestId);
+      // 製造依頼は、取り消し・下書きでないもの（DB の get_supervised_case と同じ。個体もその製造依頼のものだけ）
       const order = (t.orders ?? [])
-        .filter((o) => o.quote_request_id === requestId && o.status !== 'canceled')
+        .filter((o) => o.quote_request_id === requestId && o.status !== 'canceled' && o.status !== 'draft')
         .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
       return {
         request_id: requestId,
@@ -871,7 +872,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
             }
           : null,
         units: (t.units ?? [])
-          .filter((u) => u.quote_request_id === requestId)
+          .filter((u) => Boolean(order) && u.order_id === order!.id)
           .sort((a, b) => a.seq - b.seq)
           .map((u) => ({
             seq: u.seq,
@@ -901,6 +902,10 @@ export class LocalCaseFlowStore implements CaseFlowStore {
           .filter((r) => r.quote_request_id === requestId)
           .sort((a, b) => (b.reported_on ?? '').localeCompare(a.reported_on ?? ''))
           .map((r) => ({ kind: r.kind, title: r.title ?? null, body: r.body ?? null, reported_on: r.reported_on ?? null, author_name: r.author_name ?? null })),
+        progress_files: t.files
+          .filter((f) => f.quote_request_id === requestId && f.context === 'progress')
+          .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+          .map((f) => ({ id: f.id, file_name: f.file_name, content_type: f.content_type, caption: f.caption, created_at: f.created_at })),
         handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
         partner_info: partnerSiteInfoOf(db, requestId),
       };
@@ -1394,6 +1399,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
             ...o,
             case_label: quote ? `${quote.quote_no} ${quote.customer_name} 様` : (o.spec_snapshot?.quote_no ?? '案件'),
             case_quote_id: quote?.id ?? null,
+            primary_staff_id: t.workflows.find((w) => w.quote_request_id === o.quote_request_id)?.primary_staff_id ?? null,
             units_total: units.length,
             units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
             units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
@@ -2276,8 +2282,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const file = tables(db).files.find((f) => f.id === fileId);
       if (!file) return null;
       const access = viewAccessOf(db, actor, file.quote_request_id);
-      const supervisorSurveyPhoto = !access && file.context === 'site_survey' && roleOf(db, actor, file.quote_request_id) === 'supervisor';
-      if (!supervisorSurveyPhoto && (!access || !canReadCaseFile(db, actor, access, file))) return null;
+      // 配下の確認（直属の総代理店の管理者）は、施工・製造の記録と現地確認の写真だけ（DB の case_file_readable と同じ）
+      const supervisorFile = !access && partnerVisibleCaseFile(file) && roleOf(db, actor, file.quote_request_id) === 'supervisor';
+      if (!supervisorFile && (!access || !canReadCaseFile(db, actor, access, file))) return null;
       const abs = path.join(filesDir(), 'case-files', file.storage_path);
       if (!fs.existsSync(abs)) return null;
       return { file: { ...file }, bytes: new Uint8Array(fs.readFileSync(abs)) };

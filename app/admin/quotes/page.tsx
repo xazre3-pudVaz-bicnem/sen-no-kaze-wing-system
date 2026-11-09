@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { MapPin } from 'lucide-react';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { canSuperviseCases } from '@/lib/data/organizations/store';
 import { formatYen } from '@/lib/domain/pricing';
 import {
   QUOTE_REQUEST_STATUS_LABELS,
@@ -293,7 +294,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-        <CasePageHeading caseCount={latest.length} canCreateQuote={false} canSupervise={actor.role === 'master_dealer'} />
+        <CasePageHeading caseCount={latest.length} canCreateQuote={false} canSupervise={actor.role === 'master_dealer' && (await canSuperviseCases(actor))} />
         <CaseSummary
           caseCount={latest.length}
           newCount={newCount}

@@ -80,23 +80,29 @@ declare
   u_mgr2 constant uuid := '20000000-0000-4000-8000-000000000005';
   u_admin2 constant uuid := '20000000-0000-4000-8000-000000000006';
   u_md_mgr constant uuid := '20000000-0000-4000-8000-000000000007';
+  u_later constant uuid := '20000000-0000-4000-8000-000000000008';
+  u_unconfirmed constant uuid := '20000000-0000-4000-8000-000000000009';
   v_md uuid;
   v_dealer uuid;
   v_dealer2 uuid;
   v_out text;
   v_membership uuid;
   v_audit_before bigint;
+  i integer;
 begin
   set local session_replication_role = replica;
-  insert into auth.users (id, email, raw_user_meta_data)
+  -- 招待を受けられるのはメールアドレスの確認が済んだアカウントだけ（u_unconfirmed は確認前）
+  insert into auth.users (id, email, raw_user_meta_data, email_confirmed_at)
   values
-    (u_admin, 'org-admin@runtime.invalid', '{}'::jsonb),
-    (u_mgr, 'org-manager@runtime.invalid', '{}'::jsonb),
-    (u_staff, 'org-staff@runtime.invalid', '{}'::jsonb),
-    (u_other, 'org-other@runtime.invalid', '{}'::jsonb),
-    (u_mgr2, 'org-manager2@runtime.invalid', '{}'::jsonb),
-    (u_admin2, 'org-admin2@runtime.invalid', '{}'::jsonb),
-    (u_md_mgr, 'org-md-manager@runtime.invalid', '{}'::jsonb);
+    (u_admin, 'org-admin@runtime.invalid', '{}'::jsonb, now()),
+    (u_mgr, 'org-manager@runtime.invalid', '{}'::jsonb, now()),
+    (u_staff, 'org-staff@runtime.invalid', '{}'::jsonb, now()),
+    (u_other, 'org-other@runtime.invalid', '{}'::jsonb, now()),
+    (u_mgr2, 'org-manager2@runtime.invalid', '{}'::jsonb, now()),
+    (u_admin2, 'org-admin2@runtime.invalid', '{}'::jsonb, now()),
+    (u_md_mgr, 'org-md-manager@runtime.invalid', '{}'::jsonb, now()),
+    (u_later, 'org-later@runtime.invalid', '{}'::jsonb, now()),
+    (u_unconfirmed, 'org-unconfirmed@runtime.invalid', '{}'::jsonb, null);
   insert into public.profiles (id, email, full_name, role_code)
   values
     (u_admin, 'org-admin@runtime.invalid', '本部 管理者', 'admin'),
@@ -105,7 +111,9 @@ begin
     (u_other, 'org-other@runtime.invalid', '別の 会員', 'customer'),
     (u_mgr2, 'org-manager2@runtime.invalid', '代理店 管理者2', 'customer'),
     (u_admin2, 'org-admin2@runtime.invalid', '本部 管理者2', 'admin'),
-    (u_md_mgr, 'org-md-manager@runtime.invalid', '総代理店 管理者', 'customer');
+    (u_md_mgr, 'org-md-manager@runtime.invalid', '総代理店 管理者', 'customer'),
+    (u_later, 'org-later@runtime.invalid', '停止後 招待', 'customer'),
+    (u_unconfirmed, 'org-unconfirmed@runtime.invalid', '確認前 会員', 'customer');
   set local session_replication_role = origin;
 
   select count(*) into v_audit_before from public.audit_logs where entity = 'organization';
@@ -227,6 +235,8 @@ begin
   -- ---------- 組織の停止 ----------
   perform pg_temp.org_expect_denied('24-34 有効な配下の代理店がある総代理店は停止できない', 'P0001',
     pg_temp.org_run_as('authenticated', u_admin, format($q$ select public.update_organization(%L, '検査総代理店', null, 'inactive')::text $q$, v_md)));
+  -- 停止の前に、未使用の招待を 1 件残しておく（停止で取り消されることを 24-43・24-49 で確かめる）
+  perform pg_temp.org_invite('before-suspend', u_mgr, v_dealer, 'org-later@runtime.invalid', 'editor');
   perform pg_temp.org_run_as('authenticated', u_admin, format($q$ select public.update_organization(%L, '検査代理店', %L, 'inactive')::text $q$, v_dealer, v_md));
   perform pg_temp.org_expect_denied('24-35 停止中の組織では、管理者も招待できない', '42501',
     pg_temp.org_run_as('authenticated', u_mgr, format($q$ select token from public.invite_organization_member(%L, 'w@runtime.invalid', 'editor') $q$, v_dealer)));
@@ -243,6 +253,90 @@ begin
 
   perform pg_temp.org_expect_eq('24-40 組織・招待・参加・役割・所属の変更は監査ログに残る', 'true',
     ((select count(*) from public.audit_logs where entity = 'organization') - v_audit_before >= 12)::text);
+
+  -- ---------- 組織の停止と再開（2026-11-09 の独立レビューの指摘への対応） ----------
+  perform pg_temp.org_expect_eq('24-43 組織を停止すると、メンバーは会員に戻り（所属は残る）、未使用の招待は取り消される',
+    'customer/customer/active/revoked',
+    (select p.role_code from public.profiles p where p.id = u_mgr) || '/' ||
+    (select p.role_code from public.profiles p where p.id = u_mgr2) || '/' ||
+    (select m.status from public.organization_memberships m where m.profile_id = u_mgr and m.organization_id = v_dealer) || '/' ||
+    (select case when i.revoked_at is not null then 'revoked' else 'open' end from public.organization_invitations i
+      where i.token_hash = encode(sha256(convert_to(pg_temp.org_token('before-suspend'), 'UTF8')), 'hex')));
+  perform pg_temp.org_expect_denied('24-44 停止中の組織のメンバーは、メンバーの一覧を見られない', '42501',
+    pg_temp.org_run_as('authenticated', u_mgr, format($q$ select count(*)::text from public.list_organization_members(%L) $q$, v_dealer)));
+  perform pg_temp.org_expect_denied('24-45 停止中の組織のメンバーを、本部の会員一覧から代理店に戻すことはできない', 'P0001',
+    pg_temp.org_run_as('authenticated', u_admin, format($q$ update public.profiles set role_code = 'dealer' where id = %L returning role_code $q$, u_mgr)));
+  v_out := pg_temp.org_run_as('authenticated', u_admin, format($q$ select public.update_organization(%L, '検査総代理店', null, 'inactive')::text $q$, v_md));
+  perform pg_temp.org_expect_eq('24-46 配下の代理店がすべて停止中なら総代理店を停止でき、そのメンバーも会員に戻る', 'ok/customer',
+    coalesce(nullif(v_out, ''), 'ok') || '/' || (select p.role_code from public.profiles p where p.id = u_md_mgr));
+  perform pg_temp.org_expect_denied('24-47 停止中の総代理店の配下の代理店は、親を変えずに再開できない', 'P0001',
+    pg_temp.org_run_as('authenticated', u_admin, format($q$ select public.update_organization(%L, '検査代理店', %L, 'active')::text $q$, v_dealer, v_md)));
+  perform pg_temp.org_run_as('authenticated', u_admin, format($q$ select public.update_organization(%L, '検査総代理店', null, 'active')::text $q$, v_md));
+  v_out := pg_temp.org_run_as('authenticated', u_admin, format($q$ select public.update_organization(%L, '検査代理店', %L, 'active')::text $q$, v_dealer, v_md));
+  perform pg_temp.org_expect_eq('24-48 総代理店・代理店の順に再開すると、メンバーの利用者の種類が戻る', 'ok/dealer/dealer/master_dealer',
+    coalesce(nullif(v_out, ''), 'ok') || '/' || (select p.role_code from public.profiles p where p.id = u_mgr)
+      || '/' || (select p.role_code from public.profiles p where p.id = u_mgr2)
+      || '/' || (select p.role_code from public.profiles p where p.id = u_md_mgr));
+  perform pg_temp.org_expect_denied('24-49 停止の前に発行した招待は、再開しても使えない', 'P0001',
+    pg_temp.org_run_as('authenticated', u_later, format($q$ select public.accept_organization_invitation(%L)::text $q$, pg_temp.org_token('before-suspend'))));
+
+  -- ---------- 所属と利用者の種類を合わせる ----------
+  perform pg_temp.org_expect_eq('24-50 所属しているメンバーを、本部の会員一覧から会員・本部の管理者に変えることはできない', 'P0001/P0001',
+    substr(pg_temp.org_run_as('authenticated', u_admin, format($q$ update public.profiles set role_code = 'customer' where id = %L returning role_code $q$, u_mgr)), 7, 5)
+      || '/' || substr(pg_temp.org_run_as('authenticated', u_admin, format($q$ update public.profiles set role_code = 'admin' where id = %L returning role_code $q$, u_mgr)), 7, 5));
+  perform pg_temp.org_expect_eq('24-51 所属を外れた人の権限は、これまでどおり本部の会員一覧から変えられる', 'dealer',
+    pg_temp.org_run_as('authenticated', u_admin, format($q$ update public.profiles set role_code = 'dealer' where id = %L returning role_code $q$, u_staff)));
+  update public.profiles set role_code = 'customer' where id = u_staff;
+
+  -- ---------- 招待：メールアドレスの確認・送りすぎの上限 ----------
+  perform pg_temp.org_invite('unconfirmed', u_admin, v_dealer2, 'org-unconfirmed@runtime.invalid', 'editor');
+  perform pg_temp.org_expect_denied('24-52 メールアドレスの確認が済んでいないアカウントは、招待を受けられない', '42501',
+    pg_temp.org_run_as('authenticated', u_unconfirmed, format($q$ select public.accept_organization_invitation(%L)::text $q$, pg_temp.org_token('unconfirmed'))));
+  perform pg_temp.org_invite('rate', u_admin, v_dealer2, 'org-rate@runtime.invalid', 'editor');
+  perform pg_temp.org_invite('rate', u_admin, v_dealer2, 'org-rate@runtime.invalid', 'editor');
+  perform pg_temp.org_invite('rate', u_admin, v_dealer2, 'org-rate@runtime.invalid', 'editor');
+  perform pg_temp.org_expect_denied('24-53 同じメールアドレスへの招待は 24 時間に 3 回まで（本部も同じ）', 'P0001',
+    pg_temp.org_invite('rate', u_admin, v_dealer2, 'org-rate@runtime.invalid', 'editor'));
+  for i in 1..25 loop
+    v_out := pg_temp.org_invite('bulk-' || i, u_mgr, v_dealer, 'org-bulk-' || i || '@runtime.invalid', 'editor');
+    exit when v_out <> 'token';
+  end loop;
+  perform pg_temp.org_expect_eq('24-54 組織の管理者からの招待は、1 つの組織から 24 時間に 20 件まで', 'P0001/20',
+    substr(v_out, 7, 5) || '/' || (select count(*)::text from public.organization_invitations i
+      where i.organization_id = v_dealer and i.created_at > clock_timestamp() - interval '24 hours'));
+  perform pg_temp.org_expect_eq('24-55 本部は、組織ごとの件数の上限に関係なく招待できる', 'token',
+    pg_temp.org_invite('bulk-hq', u_admin, v_dealer, 'org-bulk-hq@runtime.invalid', 'editor'));
+
+  -- ---------- 本体マスターの登録・編集は本部の組織だけ（B-2） ----------
+  insert into public.organization_memberships (organization_id, profile_id, member_role, status, is_primary)
+  select o.id, u_admin2, 'owner', 'active', true
+    from public.organizations o
+   where o.organization_type = 'headquarters' and o.status = 'active'
+   order by o.created_at
+   limit 1;
+  perform pg_temp.org_expect_eq('24-56 本体マスターを登録・編集できるのは本部の組織だけ（総代理店の管理者は不可）', 'false/42501/true',
+    pg_temp.org_run_as('authenticated', u_md_mgr, format($q$ select public.can_create_base_master_for_org(%L)::text $q$, v_md))
+      || '/' || substr(pg_temp.org_run_as('authenticated', u_md_mgr,
+           format($q$ select public.create_base_master_draft(gen_random_uuid(), %L, '検査本体')::text $q$, v_md)), 7, 5)
+      || '/' || pg_temp.org_run_as('authenticated', u_admin2, $q$
+           select public.can_create_base_master_for_org(m.organization_id)::text
+             from public.organization_memberships m where m.profile_id = auth.uid() and m.status = 'active' $q$));
+
+  -- ---------- 組織の表を読める範囲 ----------
+  -- 結果：代理店の行/総代理店の行/別の代理店の行/本部の行があるか/それ以外の行の数
+  perform pg_temp.org_expect_eq('24-57 代理店のメンバーが読める組織は、自社・直属の総代理店・本部だけ', '1/1/0/true/0',
+    pg_temp.org_run_as('authenticated', u_mgr, format($q$
+      select count(*) filter (where id = %1$L)::text || '/' || count(*) filter (where id = %2$L)::text || '/'
+             || count(*) filter (where id = %3$L)::text || '/' || (count(*) filter (where organization_type = 'headquarters') > 0)::text
+             || '/' || count(*) filter (where organization_type <> 'headquarters' and id not in (%1$L, %2$L, %3$L))::text
+        from public.organizations $q$, v_dealer, v_md, v_dealer2)));
+  perform pg_temp.org_expect_eq('24-58 総代理店のメンバーは配下の代理店の行を直接読めず、会員はどの組織も読めない', '0/1/0/true/0|0',
+    pg_temp.org_run_as('authenticated', u_md_mgr, format($q$
+      select count(*) filter (where id = %1$L)::text || '/' || count(*) filter (where id = %2$L)::text || '/'
+             || count(*) filter (where id = %3$L)::text || '/' || (count(*) filter (where organization_type = 'headquarters') > 0)::text
+             || '/' || count(*) filter (where organization_type <> 'headquarters' and id not in (%1$L, %2$L, %3$L))::text
+        from public.organizations $q$, v_dealer, v_md, v_dealer2))
+      || '|' || pg_temp.org_run_as('authenticated', u_other, $q$ select count(*)::text from public.organizations $q$));
 end;
 $test$;
 

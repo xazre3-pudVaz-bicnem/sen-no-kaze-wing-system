@@ -82,7 +82,12 @@ export function UpdateOrganizationForm({ organization, parents }: { organization
         ) : (
           <input type="hidden" name="parent_organization_id" value="" />
         )}
-        <Field label="状態" htmlFor="org-edit-status" required hint="停止すると、招待やメンバーの変更ができなくなります。">
+        <Field
+          label="状態"
+          htmlFor="org-edit-status"
+          required
+          hint="停止すると、メンバーは管理画面を使えなくなり（所属は残ります）、未使用の招待は取り消されます。再開すると元に戻ります。"
+        >
           <Select id="org-edit-status" name="status" defaultValue={organization.status}>
             <option value="active">有効</option>
             <option value="inactive">停止</option>

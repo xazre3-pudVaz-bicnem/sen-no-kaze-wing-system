@@ -98,7 +98,7 @@ try {
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
     runtime = mergeRuntime(runtime, await runtimeOrganizationAccounts(client, { connectionString: url }));
-    runtime = mergeRuntime(runtime, await runtimeCaseSalesOrganization(client));
+    runtime = mergeRuntime(runtime, await runtimeCaseSalesOrganization(client, { connectionString: url }));
     printRuntime(runtime);
   }
   const out = arg('--out');

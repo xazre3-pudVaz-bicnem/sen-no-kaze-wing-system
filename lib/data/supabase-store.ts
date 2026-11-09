@@ -187,6 +187,17 @@ function mapPgError(e: { code?: string; message?: string } | null): never {
 
 const num = (v: unknown) => Number(v ?? 0);
 
+/** 代理店の案件一覧で、見積の ID を 1 回に読む件数（ID は URL に載る） */
+const DEALER_QUOTE_ID_CHUNK = 100;
+
+/** 発行日の新しい順。発行前（NULL）は先（DB の order by issued_at desc と同じ） */
+function compareIssuedAtDesc(a: string | null | undefined, b: string | null | undefined): number {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+  return b.localeCompare(a);
+}
+
 function toQuote(r: Record<string, unknown>): Quote {
   return { ...(r as unknown as Quote), tax_rate: num(r.tax_rate) };
 }
@@ -1087,12 +1098,22 @@ export class SupabaseStore implements DataStore {
     if (requestMetaError && !isMissingFunction(requestMetaError)) mapPgError(requestMetaError);
     const requestMetaRows = requestMetaError ? [] : requestMeta ?? [];
     const quoteIds = (requestMetaRows as Array<{ quote_id: string }>).map((row) => row.quote_id);
-    const base = db.from('quotes').select('*, profiles!quotes_user_id_fkey(email)');
-    const { data, error } = await (requestMetaError
-      ? base.eq('dealer_id', dealerId)
-      : base.in('id', quoteIds.length > 0 ? quoteIds : ['00000000-0000-0000-0000-000000000000'])
-    ).order('issued_at', { ascending: false });
-    if (error) mapPgError(error);
+    const select = '*, profiles!quotes_user_id_fkey(email)';
+    let data: unknown[];
+    if (requestMetaError) {
+      const legacy = await db.from('quotes').select(select).eq('dealer_id', dealerId).order('issued_at', { ascending: false });
+      if (legacy.error) mapPgError(legacy.error);
+      data = legacy.data ?? [];
+    } else {
+      // 見積の ID は URL に載るため、案件が多くても長くなりすぎないよう分けて読み、発行日の新しい順（発行前が先）に並べ直す
+      const chunks: string[][] = [];
+      for (let i = 0; i < quoteIds.length; i += DEALER_QUOTE_ID_CHUNK) chunks.push(quoteIds.slice(i, i + DEALER_QUOTE_ID_CHUNK));
+      const results = await Promise.all(chunks.map((ids) => db.from('quotes').select(select).in('id', ids)));
+      for (const result of results) if (result.error) mapPgError(result.error);
+      data = results
+        .flatMap((result) => result.data ?? [])
+        .sort((a, b) => compareIssuedAtDesc((a as Quote).issued_at, (b as Quote).issued_at));
+    }
     const requestMetaByQuoteId = new Map(
       (requestMetaRows as Array<{
         quote_id: string;

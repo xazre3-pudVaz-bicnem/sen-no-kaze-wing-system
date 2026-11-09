@@ -54,6 +54,8 @@ export type BoardAppointment = CaseAppointment & { case_label: string; quote_id:
 export type BoardManufacturingOrder = ManufacturingOrder & {
   case_label: string;
   case_quote_id: string | null;
+  /** 案件の主担当者（DB は主担当者を製造の担当より先に「担当」と判定するため、画面の操作の出し分けに使う） */
+  primary_staff_id: string | null;
   units_total: number;
   units_shipped: number;
   units_installed: number;

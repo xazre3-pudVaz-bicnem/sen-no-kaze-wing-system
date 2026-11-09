@@ -2,6 +2,7 @@ import 'server-only';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { StoreError, type SessionUser } from '@/lib/data/store';
 import { loadDb, saveDb, type LocalDb } from '@/lib/data/local-db';
+import { releaseCasesOfDepartedMember } from '@/lib/data/case-flow/local';
 import type { RoleCode } from '@/lib/domain/types';
 import {
   INVITATION_DAYS,
@@ -334,6 +335,8 @@ export class LocalOrganizationStore implements OrganizationStore {
     member.status = 'inactive';
     member.is_primary = false;
     member.updated_at = now();
+    // 主担当者だった案件は、主担当者と見積の担当を外す（DB のトリガーと同じ。別の組織に入り直しても前の案件を見られない）
+    releaseCasesOfDepartedMember(db, org.id, member.profile_id, actor.id);
     const profile = db.profiles.find((p) => p.id === member.profile_id);
     if (profile && (profile.role_code === 'dealer' || profile.role_code === 'master_dealer')) {
       profile.role_code = 'customer';

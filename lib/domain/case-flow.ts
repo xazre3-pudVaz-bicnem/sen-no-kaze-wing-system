@@ -167,8 +167,6 @@ export interface PreferredSlot {
 export interface QuoteRequestPreferences {
   quote_request_id: string;
   preferred_dealer_id: string | null;
-  /** お客様が選んだ代理店（組織）。営業担当組織が未定なら、その組織を営業担当にする */
-  preferred_organization_id?: string | null;
   meeting_method: MeetingMethod | null;
   preferred_slots: PreferredSlot[];
   note: string | null;
@@ -177,7 +175,6 @@ export interface QuoteRequestPreferences {
 
 export interface QuoteRequestPreferencesInput {
   preferred_dealer_id: string | null;
-  preferred_organization_id?: string | null;
   meeting_method: MeetingMethod | null;
   preferred_slots: PreferredSlot[];
   note: string | null;
@@ -225,6 +222,7 @@ export interface CaseWorkflow {
   /** 営業担当組織（本部・総代理店・代理店）。NULL は本部が受付中（相談）または従来の案件（20261104130000） */
   sales_organization_id?: string | null;
   sales_assigned_at?: string | null;
+  sales_assigned_by?: string | null;
   /** 製造担当組織（総代理店）。manufacturing_auto なら営業担当組織から自動で決める */
   manufacturing_organization_id?: string | null;
   manufacturing_auto?: boolean;

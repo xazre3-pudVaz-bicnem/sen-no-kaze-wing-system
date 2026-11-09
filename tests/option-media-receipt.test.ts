@@ -31,7 +31,8 @@ describe('置いたファイルの受け取り', () => {
     expect(isValidOptionMediaReceipt(OPTION, URL_B, receipt)).toBe(false);
     const [expires, mac] = receipt.split('.');
     expect(isValidOptionMediaReceipt(OPTION, URL_A, `${Number(expires) + 1}.${mac}`)).toBe(false);
-    const tampered = `${mac.slice(0, -1)}${mac.endsWith('A') ? 'B' : 'A'}`;
+    // 署名の先頭の文字を変える（base64url の末尾の文字は下位 2 ビットが使われないため、末尾を変えても同じ署名になることがある）
+    const tampered = `${mac.startsWith('A') ? 'B' : 'A'}${mac.slice(1)}`;
     expect(isValidOptionMediaReceipt(OPTION, URL_A, `${expires}.${tampered}`)).toBe(false);
     expect(isValidOptionMediaReceipt(OPTION, URL_A, '')).toBe(false);
     expect(isValidOptionMediaReceipt(OPTION, URL_A, 'not-a-receipt')).toBe(false);

@@ -233,9 +233,13 @@ describe('DB の apply_option_media_changes（20261105110000）', () => {
     expect(compare).toBeGreaterThan(lockImages);
   });
 
-  it('Storage の商品のフォルダーにあり、種類と大きさがバケットの決まりに合うファイルだけを紐付ける', () => {
-    expect(migration).toContain("v_path !~ ('^option-' || p_option_id::text || '/gallery/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$')");
-    expect(migration).toContain("v_path !~ ('^option-' || p_option_id::text || '/manufacturer/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\\.pdf$')");
+  it('Storage の商品のフォルダーにあり、種類と大きさがバケットの決まりに合うファイルだけを紐付ける（Supabase のホストの URL だけ）', () => {
+    expect(migration).toContain("v_url !~ ('^https://[a-z0-9-]+\\.supabase\\.co' || c_image_marker || 'option-' || p_option_id::text || '/gallery/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$')");
+    expect(migration).toContain("v_url !~ ('^https://[a-z0-9-]+\\.supabase\\.co' || c_document_marker || 'option-' || p_option_id::text || '/manufacturer/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\\.pdf$')");
+    // 同じファイルかは置き場所（パス）で比べる
+    expect(migration).toContain('if exists (select 1 from public.option_images i where split_part(i.url, c_image_marker, 2) = v_path) then');
+    // 上限は枚数を増やすときだけ
+    expect(migration).toContain("if v_count > c_gallery_max and v_count > jsonb_array_length(v_before -> 'gallery') then");
     expect(migration).toContain("from storage.objects o where o.bucket_id = 'product-images' and o.name = v_path");
     expect(migration).toContain("from storage.objects o where o.bucket_id = 'product-documents' and o.name = v_path");
     expect(migration).toContain("not in ('image/jpeg', 'image/png', 'image/webp', 'image/avif')");
@@ -244,7 +248,14 @@ describe('DB の apply_option_media_changes（20261105110000）', () => {
 
   it('履歴を残し、ほかの行が使っていないファイルだけを「参照されなくなったファイル」として返す（Storage のファイルは消さない）', () => {
     expect(migration).toContain("perform public.write_audit(\n      'media', 'option', p_option_id,");
-    for (const table of ['public.option_images i where i.url = t.u', 'o.image_url = t.u or o.manufacturer_document_url = t.u', 'public.option_variant_choices c where c.image_url = t.u', 'public.quote_items qi where qi.image_url = t.u']) {
+    // 使っているかは Storage の置き場所（バケットとパス）で比べる
+    for (const table of [
+      "public.option_images i where split_part(i.url, '/storage/v1/object/public/', 2) = t.p",
+      "split_part(coalesce(o.image_url, ''), '/storage/v1/object/public/', 2) = t.p",
+      "split_part(coalesce(o.manufacturer_document_url, ''), '/storage/v1/object/public/', 2) = t.p",
+      "public.option_variant_choices c where split_part(coalesce(c.image_url, ''), '/storage/v1/object/public/', 2) = t.p",
+      "public.quote_items qi where split_part(coalesce(qi.image_url, ''), '/storage/v1/object/public/', 2) = t.p",
+    ]) {
       expect(migration).toContain(table);
     }
     expect(migration).not.toMatch(/delete from storage\.objects/i);
@@ -271,12 +282,35 @@ describe('サーバーアクションと画面', () => {
     for (const [, params] of exported) expect(params).not.toMatch(/actor|SessionUser/);
     expect(actions.match(/await requireStaff\(\)/g)).toHaveLength(4);
     expect(actions.match(/await editableOptionContext\(actor, /g)).toHaveLength(4);
-    expect(read('lib/actions/admin.ts')).toContain("import { editableOptionContext } from '@/lib/actions/option-media-access';");
+    expect(read('lib/actions/admin.ts')).toContain("import { draftMediaContext, editableOptionContext } from '@/lib/actions/option-media-access';");
+    // URL からの登録も同じ判定を使う（写しを持たない）
+    expect(read('lib/actions/product-media-url.ts')).toContain("import { draftMediaContext, editableOptionContext } from '@/lib/actions/option-media-access';");
+    expect(read('lib/actions/product-media-url.ts')).not.toContain('async function editableOptionContext(');
   });
 
-  it('反映に失敗したら置いたファイルを消し、成功したら参照されなくなったファイルだけを消す（今参照しているファイルは消さない）', () => {
+  it('旧来の追加画像・メーカー資料の操作（1 件ずつ書き換える）は下書きの商品だけ。登録済みの商品は STEP 2 の一括反映だけ', () => {
+    const admin = read('lib/actions/admin.ts');
+    const legacy = admin.slice(admin.indexOf('export async function addOptionImageAction('), admin.indexOf('export async function addProductImageAction('));
+    expect(legacy.match(/await draftMediaContext\(actor, optionId\)/g)).toHaveLength(5);
+    expect(legacy).not.toContain('await editableOptionContext(actor, optionId)');
+    const url = read('lib/actions/product-media-url.ts');
+    expect(url.slice(url.indexOf('export async function addOptionImageFromUrlAction(')).match(/await draftMediaContext\(actor, optionId\)/g)).toHaveLength(2);
+    expect(read('lib/actions/option-media-access.ts')).toContain("if (context.option.status === 'published') {");
+  });
+
+  it('置いたファイルはサーバーが署名した受け取りが付き、受け取りのあるファイルだけを消す（ブラウザが送った URL だけを信じない）', () => {
+    expect(actions).toContain('return { ok: true, url, receipt: optionMediaReceipt(optionId, url) };');
+    expect(actions).toContain('return { ok: true, ...target, receipt: optionMediaReceipt(optionId, target.url) };');
+    expect(actions).toContain('items.filter((item) => isValidOptionMediaReceipt(optionId, item.url, item.receipt))');
+    // 反映の失敗ではサーバーが勝手に消さない（画面が受け取りを添えて消す）
+    expect(actions).not.toContain('discardStaged(store');
+    expect(flow).toContain('discardStagedOptionMediaAction({ optionId: option.id, items: staged })');
+    // 保存処理は自分のプロジェクトの Storage の URL（ホストまで）だけを紐付ける
+    expect(read('lib/data/supabase-store.ts')).toContain("throw new StoreError('VALIDATION', '追加画像・メーカー資料の置き場所が正しくありません。画面を開き直してから、もう一度お試しください。');");
+  });
+
+  it('成功したら参照されなくなったファイルだけを消す（今参照しているファイルは消さない）', () => {
     expect(actions).toContain('await removeOptionMediaFiles(store, optionId, result.unreferenced_urls);');
-    expect(actions).toContain('if (store) await discardStaged(store, optionId, stagedUrlsOf(changes));');
     expect(actions).toContain('urls.filter((url) => !referenced.has(url))');
   });
 

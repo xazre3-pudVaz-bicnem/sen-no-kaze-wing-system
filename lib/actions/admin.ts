@@ -7,7 +7,7 @@ import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/ses
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { editableOptionContext } from '@/lib/actions/option-media-access';
+import { draftMediaContext, editableOptionContext } from '@/lib/actions/option-media-access';
 import { getStore, isLocalMode, StoreError, type DealerRevisionItem, type EstimateTemplateImportInput, type QuoteDraftSaveItem } from '@/lib/data/store';
 import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
@@ -750,7 +750,7 @@ export async function addOptionImageAction(_prev: AdminFormState, formData: Form
 
   let uploadedUrl: string | null = null;
   try {
-    const { store, option } = await editableOptionContext(actor, optionId);
+    const { store, option } = await draftMediaContext(actor, optionId);
     const file = formData.get('file');
     if (!(file instanceof File) || file.size === 0) {
       return { ok: false, fieldErrors: { file: ['サブ画像を選択してください。'] } };
@@ -803,7 +803,7 @@ export async function updateOptionImageAction(_prev: AdminFormState, formData: F
   if (!optionId || !imageId) return { ok: false, error: '商品画像が指定されていません。' };
 
   try {
-    const { store, option } = await editableOptionContext(actor, optionId);
+    const { store, option } = await draftMediaContext(actor, optionId);
     const existing = option.gallery_images?.find((row) => row.id === imageId);
     if (!existing) return { ok: false, error: '商品画像が見つかりません。' };
     const parsed = optionImageSchema.safeParse({
@@ -830,7 +830,7 @@ export async function deleteOptionImageAction(formData: FormData): Promise<void>
   const imageId = String(formData.get('id') ?? '').trim();
   if (!optionId || !imageId) throw new StoreError('VALIDATION', '商品画像が指定されていません。');
 
-  const { store, option } = await editableOptionContext(actor, optionId);
+  const { store, option } = await draftMediaContext(actor, optionId);
   const existing = option.gallery_images?.find((row) => row.id === imageId);
   if (!existing) throw new StoreError('NOT_FOUND', '商品画像が見つかりません。');
 
@@ -856,7 +856,7 @@ export async function uploadOptionManufacturerDocumentAction(
 
   let uploadedUrl: string | null = null;
   try {
-    const { store, option } = await editableOptionContext(actor, optionId);
+    const { store, option } = await draftMediaContext(actor, optionId);
     const file = formData.get('file');
     if (!(file instanceof File) || file.size === 0) {
       return { ok: false, fieldErrors: { file: ['メーカー資料PDFを選択してください。'] } };
@@ -905,7 +905,7 @@ export async function deleteOptionManufacturerDocumentAction(formData: FormData)
   const optionId = String(formData.get('option_id') ?? '').trim();
   if (!optionId) throw new StoreError('VALIDATION', '商品が指定されていません。');
 
-  const { store, option } = await editableOptionContext(actor, optionId);
+  const { store, option } = await draftMediaContext(actor, optionId);
   const currentUrl = option.manufacturer_document_url ?? null;
   await store.setOptionManufacturerDocument(optionId, null);
   if (currentUrl) {

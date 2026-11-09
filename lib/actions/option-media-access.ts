@@ -19,3 +19,16 @@ export async function editableOptionContext(actor: SessionUser, optionId: string
   }
   throw new StoreError('FORBIDDEN', 'この商品のメディアは編集できません。');
 }
+
+/**
+ * 旧来の追加画像・メーカー資料の操作（商品登録の STEP 1 の画面。1 件ずつ DB と Storage を書き換える）は、下書きの商品だけ。
+ * 登録済みの商品は、商品の変更確認（STEP 2）から apply_option_media_changes でまとめて反映する
+ * （行ロック・開いた時点の状態の照合・履歴・参照の確認を通さずに変えない。PR #563 の独立レビューの指摘）
+ */
+export async function draftMediaContext(actor: SessionUser, optionId: string) {
+  const context = await editableOptionContext(actor, optionId);
+  if (context.option.status === 'published') {
+    throw new StoreError('VALIDATION', '登録済みの商品の追加画像・メーカー資料は、商品の変更確認（STEP 2）からまとめて反映してください。');
+  }
+  return context;
+}

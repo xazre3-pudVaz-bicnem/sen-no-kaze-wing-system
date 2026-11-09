@@ -42,6 +42,7 @@ import type {
 import { QUOTE_V25_SECTIONS, type QuoteV25Section } from '@/lib/domain/quote-v25';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createPublicClient } from '@/lib/supabase/public';
 import {
   catalogImportPathsForUser,
   catalogImportUploadPath,
@@ -1462,6 +1463,22 @@ export class SupabaseStore implements DataStore {
     if (error) mapPgError(error);
   }
   async applyOptionMediaChanges(_actor: SessionUser, optionId: string, expected: OptionMediaExpected, changes: OptionMediaChanges) {
+    // 紐付けるファイルは、このプロジェクトの Storage の公開 URL（ホストまで同じ）の、この商品のフォルダーのものだけ
+    // （DB の関数は Supabase のホストと置き場所・ファイルの有無を確かめる。ここでは自分のプロジェクトのホストまで照合する）
+    const publicClient = createPublicClient();
+    const imageProbe = publicClient.storage.from('product-images').getPublicUrl('__clone_probe__').data.publicUrl;
+    const documentProbe = publicClient.storage.from('product-documents').getPublicUrl('__clone_probe__').data.publicUrl;
+    const owned = (url: string, probe: string, kind: OptionMediaKind) => {
+      const objectPath = managedPublicObjectPath(url, probe);
+      const prefix = optionMediaPrefix(optionId, kind);
+      return Boolean(objectPath && objectPath.startsWith(prefix) && objectPath.length > prefix.length && !objectPath.slice(prefix.length).includes('/'));
+    };
+    if (
+      changes.add.some((item) => !owned(item.url, imageProbe, 'gallery')) ||
+      (changes.document.action === 'replace' && !owned(changes.document.url, documentProbe, 'manufacturer'))
+    ) {
+      throw new StoreError('VALIDATION', '追加画像・メーカー資料の置き場所が正しくありません。画面を開き直してから、もう一度お試しください。');
+    }
     // 権限・開いた時点の状態の照合・Storage の置き場所の確認は DB の関数が行う（ログインした利用者として呼ぶ）
     const db = await this.db();
     const { data, error } = await db.rpc('apply_option_media_changes', { p_option_id: optionId, p_expected: expected, p_changes: changes });

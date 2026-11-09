@@ -144,13 +144,13 @@ begin
   end if;
   for v_item in select e from jsonb_array_elements(coalesce(p_changes -> 'add', '[]'::jsonb)) e loop
     v_url := v_item ->> 'url';
-    if v_url is null or char_length(v_url) > 1000 or position(c_image_marker in v_url) = 0 then
+    -- 置き場所：Supabase の公開 URL（https://<プロジェクト>.supabase.co/storage/v1/object/public/product-images/）の、
+    -- この商品の追加画像のフォルダーだけ（ほかのホストの URL は紐付けない。独自ドメインにするときはここも変える）
+    if v_url is null or char_length(v_url) > 1000
+       or v_url !~ ('^https://[a-z0-9-]+\.supabase\.co' || c_image_marker || 'option-' || p_option_id::text || '/gallery/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$') then
       raise exception 'VALIDATION: 追加画像の置き場所が正しくありません';
     end if;
     v_path := substr(v_url, position(c_image_marker in v_url) + char_length(c_image_marker));
-    if v_path !~ ('^option-' || p_option_id::text || '/gallery/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$') then
-      raise exception 'VALIDATION: 追加画像の置き場所が正しくありません';
-    end if;
     select o.metadata into v_meta from storage.objects o where o.bucket_id = 'product-images' and o.name = v_path;
     if not found then
       raise exception 'VALIDATION: 追加画像のファイルが見つかりません。画像を選び直してください';
@@ -160,7 +160,8 @@ begin
        or (case when v_meta ->> 'size' ~ '^[0-9]{1,12}$' then (v_meta ->> 'size')::bigint else 0 end) not between 1 and 10485760 then
       raise exception 'VALIDATION: 追加画像は JPEG・PNG・WebP・AVIF、1 枚 10MB 以下のファイルだけ紐付けられます';
     end if;
-    if exists (select 1 from public.option_images i where i.url = v_url) then
+    -- 同じファイルかは Storage の置き場所で比べる（URL のホストの書き方が違っても、同じファイルを 2 行に紐付けない）
+    if exists (select 1 from public.option_images i where split_part(i.url, c_image_marker, 2) = v_path) then
       raise exception 'VALIDATION: 同じ画像ファイルが既に登録されています';
     end if;
     begin
@@ -180,8 +181,9 @@ begin
     v_added := v_added + 1;
   end loop;
 
+  -- 上限は枚数を増やすときだけ（上限を超えている既存の商品でも、説明・表示順・削除はできる）
   select count(*) into v_count from public.option_images i where i.option_id = p_option_id;
-  if v_count > c_gallery_max then
+  if v_count > c_gallery_max and v_count > jsonb_array_length(v_before -> 'gallery') then
     raise exception 'VALIDATION: 追加画像は 1 商品 % 枚までです', c_gallery_max;
   end if;
 
@@ -192,13 +194,12 @@ begin
   end if;
   if v_action = 'replace' then
     v_url := p_changes -> 'document' ->> 'url';
-    if v_url is null or char_length(v_url) > 1000 or position(c_document_marker in v_url) = 0 then
+    -- 置き場所：Supabase の公開 URL の、この商品のメーカー資料のフォルダーの PDF だけ（追加画像と同じ）
+    if v_url is null or char_length(v_url) > 1000
+       or v_url !~ ('^https://[a-z0-9-]+\.supabase\.co' || c_document_marker || 'option-' || p_option_id::text || '/manufacturer/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.pdf$') then
       raise exception 'VALIDATION: メーカー資料の置き場所が正しくありません';
     end if;
     v_path := substr(v_url, position(c_document_marker in v_url) + char_length(c_document_marker));
-    if v_path !~ ('^option-' || p_option_id::text || '/manufacturer/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.pdf$') then
-      raise exception 'VALIDATION: メーカー資料の置き場所が正しくありません';
-    end if;
     select o.metadata into v_meta from storage.objects o where o.bucket_id = 'product-documents' and o.name = v_path;
     if not found then
       raise exception 'VALIDATION: メーカー資料のファイルが見つかりません。PDF を選び直してください';
@@ -207,7 +208,7 @@ begin
        or (case when v_meta ->> 'size' ~ '^[0-9]{1,12}$' then (v_meta ->> 'size')::bigint else 0 end) not between 1 and 20971520 then
       raise exception 'VALIDATION: メーカー資料は 20MB 以下の PDF だけ紐付けられます';
     end if;
-    if v_url = v_option.manufacturer_document_url then
+    if split_part(coalesce(v_option.manufacturer_document_url, ''), c_document_marker, 2) = v_path then
       raise exception 'VALIDATION: 今と同じメーカー資料です';
     end if;
     if v_option.manufacturer_document_url is not null then
@@ -238,13 +239,18 @@ begin
       v_before, v_after);
   end if;
 
-  -- 参照されなくなったファイル：ほかの行（追加画像・メイン画像・メーカー資料・選択肢の画像・発行済みの見積の明細）が使っていないものだけ返す
+  -- 参照されなくなったファイル：ほかの行（追加画像・メイン画像・メーカー資料・選択肢の画像・発行済みの見積の明細）が使っていないものだけ返す。
+  -- 使っているかは Storage の置き場所（バケットとパス）で比べる（URL のホストの書き方が違っても、使われているファイルを消さない）
   select coalesce(array_agg(t.u order by t.n), '{}') into v_unreferenced
-    from (select x.u, min(x.n) as n from unnest(v_unreferenced) with ordinality as x(u, n) group by x.u) t
-   where not exists (select 1 from public.option_images i where i.url = t.u)
-     and not exists (select 1 from public.options o where o.image_url = t.u or o.manufacturer_document_url = t.u)
-     and not exists (select 1 from public.option_variant_choices c where c.image_url = t.u)
-     and not exists (select 1 from public.quote_items qi where qi.image_url = t.u);
+    from (select x.u, min(x.n) as n, split_part(x.u, '/storage/v1/object/public/', 2) as p
+            from unnest(v_unreferenced) with ordinality as x(u, n) group by x.u) t
+   where t.p <> ''
+     and not exists (select 1 from public.option_images i where split_part(i.url, '/storage/v1/object/public/', 2) = t.p)
+     and not exists (select 1 from public.options o
+                      where split_part(coalesce(o.image_url, ''), '/storage/v1/object/public/', 2) = t.p
+                         or split_part(coalesce(o.manufacturer_document_url, ''), '/storage/v1/object/public/', 2) = t.p)
+     and not exists (select 1 from public.option_variant_choices c where split_part(coalesce(c.image_url, ''), '/storage/v1/object/public/', 2) = t.p)
+     and not exists (select 1 from public.quote_items qi where split_part(coalesce(qi.image_url, ''), '/storage/v1/object/public/', 2) = t.p);
 
   return jsonb_build_object(
     'gallery', (select coalesce(jsonb_agg(to_jsonb(i) order by i.sort_order, i.id), '[]'::jsonb) from public.option_images i where i.option_id = p_option_id),

@@ -265,6 +265,44 @@ begin
     (select count(*)::text from public.option_images where option_id = o_hq) || '|' ||
     coalesce((select string_agg(u, ',') from jsonb_array_elements_text(v_out::jsonb -> 'unreferenced_urls') u), '(none)'));
 
+  -- ---------- 置き場所のホスト・同じファイルの判定（独立レビューの指摘） ----------
+  insert into storage.objects (bucket_id, name, metadata)
+  values ('product-images', 'option-' || o_hq || '/gallery/host1.png', '{"mimetype":"image/png","size":100}');
+  perform pg_temp.omc_expect_error('OMC-36 Supabase 以外のホストの URL は、置き場所のパスが正しくても紐付けない', 'P0001', 'VALIDATION: 追加画像の置き場所が正しくありません',
+    pg_temp.omc_run_as('authenticated', u_admin, pg_temp.omc_call(o_hq, pg_temp.omc_expected(o_hq),
+      jsonb_build_object('add', jsonb_build_array(jsonb_build_object('url',
+        'https://evil.example/storage/v1/object/public/product-images/option-' || o_hq || '/gallery/host1.png', 'sort_order', 60))))));
+  perform pg_temp.omc_expect_error('OMC-37 ホストの書き方が違っても、同じファイル（置き場所）を 2 行に紐付けない', 'P0001', 'VALIDATION: 同じ画像ファイル',
+    pg_temp.omc_run_as('authenticated', u_admin, pg_temp.omc_call(o_hq, pg_temp.omc_expected(o_hq),
+      jsonb_build_object('add', jsonb_build_array(jsonb_build_object('url',
+        'https://other.supabase.co/storage/v1/object/public/product-images/option-' || o_hq || '/gallery/img1.png', 'sort_order', 60))))));
+  -- 別のホストの URL で同じファイルを使っている行があれば、削除しても「参照されなくなったファイル」に入れない
+  perform pg_temp.omc_run_as('authenticated', u_admin, pg_temp.omc_call(o_hq, pg_temp.omc_expected(o_hq),
+    jsonb_build_object('add', jsonb_build_array(jsonb_build_object('url', v_img || 'host1.png', 'sort_order', 60)))));
+  update public.options set image_url = 'https://other.supabase.co/storage/v1/object/public/product-images/option-' || o_hq || '/gallery/host1.png' where id = o_hq;
+  v_out := pg_temp.omc_run_as('authenticated', u_admin, pg_temp.omc_call(o_hq, pg_temp.omc_expected(o_hq),
+    jsonb_build_object('delete', (select jsonb_agg(id) from public.option_images where option_id = o_hq and url = v_img || 'host1.png'))));
+  perform pg_temp.omc_expect_eq('OMC-38 使っているかは置き場所で比べる（別のホストの URL のメイン画像が使うファイルは消す対象にしない）', '2|(none)',
+    (select count(*)::text from public.option_images where option_id = o_hq) || '|' ||
+    coalesce((select string_agg(u, ',') from jsonb_array_elements_text(v_out::jsonb -> 'unreferenced_urls') u), '(none)'));
+
+  -- ---------- 上限を超えている既存の商品（旧来の画面で 31 枚以上になったもの） ----------
+  for n in 1..31 loop
+    insert into public.option_images (option_id, url, alt, caption, sort_order)
+    values (o_other, c_base || 'product-images/option-' || o_other || '/gallery/old' || n || '.png', 'OMC', null, 200 + n);
+  end loop;
+  v_out := pg_temp.omc_run_as('authenticated', u_admin, pg_temp.omc_call(o_other, pg_temp.omc_expected(o_other),
+    jsonb_build_object('update', jsonb_build_array(jsonb_build_object(
+      'id', (select id from public.option_images where option_id = o_other order by sort_order limit 1), 'caption', '説明だけ', 'sort_order', 201)))));
+  perform pg_temp.omc_expect_eq('OMC-56 上限を超えている商品でも、枚数を増やさない変更（説明・表示順）はできる', '31|説明だけ',
+    (select count(*)::text from public.option_images where option_id = o_other) || '|' ||
+    coalesce((select caption from public.option_images where option_id = o_other and caption = '説明だけ'), v_out));
+  insert into storage.objects (bucket_id, name, metadata)
+  values ('product-images', 'option-' || o_other || '/gallery/more.png', '{"mimetype":"image/png","size":100}');
+  perform pg_temp.omc_expect_error('OMC-57 上限を超えている商品に、さらに足すことはできない', 'P0001', 'VALIDATION: 追加画像は 1 商品 30 枚まで',
+    pg_temp.omc_run_as('authenticated', u_admin, pg_temp.omc_call(o_other, pg_temp.omc_expected(o_other),
+      jsonb_build_object('add', jsonb_build_array(jsonb_build_object('url', c_base || 'product-images/option-' || o_other || '/gallery/more.png', 'sort_order', 300))))));
+
   -- ---------- 旧フリー商品の持ち主の代理店 ----------
   perform pg_temp.omc_run_as('authenticated', u_dealer, pg_temp.omc_call(o_free, pg_temp.omc_expected(o_free),
     jsonb_build_object('add', jsonb_build_array(jsonb_build_object('url', c_base || 'product-images/option-' || o_free || '/gallery/free1.png', 'caption', '自社', 'sort_order', 0)))));

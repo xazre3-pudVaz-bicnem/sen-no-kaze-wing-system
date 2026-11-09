@@ -12,15 +12,19 @@ import {
 import {
   documentFileError,
   galleryChangesOf,
+  galleryCountExceeds,
   galleryEditError,
   galleryImageFileError,
   optionMediaExpectedOf,
   OPTION_GALLERY_MAX,
   OPTION_GALLERY_SORT_MAX,
   SERVER_ACTION_UPLOAD_MAX_BYTES,
+  mapWithLimit,
   type GalleryEdit,
   type OptionDocumentChange,
+  type OptionMediaChangeResult,
   type OptionMediaChanges,
+  type StagedMedia,
 } from '@/lib/domain/option-media-changes';
 import { windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
@@ -205,13 +209,20 @@ export function RegisteredOptionEditFlow({
   };
   const mainImagePreview = selectedImagePreview ?? (imageUrlInput.trim() || null);
 
+  // 反映した後の追加画像・メーカー資料。商品情報の保存だけが失敗したときは画面を読み直さない（入力を残す）ので、
+  // 反映の結果をここに持ち、表示と次の照合に使う（独立レビューの指摘：古い状態のまま照合して衝突になる）
+  const [appliedMedia, setAppliedMedia] = useState<Pick<OptionMediaChangeResult, 'gallery' | 'manufacturer_document_url'> | null>(null);
+  const mediaOption = useMemo(
+    () => (appliedMedia ? { ...option, gallery_images: appliedMedia.gallery, manufacturer_document_url: appliedMedia.manufacturer_document_url } : option),
+    [option, appliedMedia]
+  );
   const galleryImages = useMemo(
-    () => [...(option.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
-    [option.gallery_images]
+    () => [...(mediaOption.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    [mediaOption.gallery_images]
   );
   // 編集案はブラウザ内に保持し、STEP 2 の「この変更を反映」で DB の apply_option_media_changes にまとめて反映する（PR #563）。
-  // 反映の照合に使う「画面を開いた時点の状態」は、開いたときの登録内容（反映すると画面ごと読み直す）
-  const mediaExpected = useMemo(() => optionMediaExpectedOf(option), [option]);
+  // 反映の照合に使う「画面を開いた時点の状態」は、開いたときの登録内容（反映すると画面ごと読み直す。商品情報の保存だけ失敗したときは反映の結果）
+  const mediaExpected = useMemo(() => optionMediaExpectedOf(mediaOption), [mediaOption]);
   const [galleryEdits, setGalleryEdits] = useState<Record<string, GalleryEdit>>({});
   const [newGalleryImages, setNewGalleryImages] = useState<Array<{ file: File; previewUrl: string }>>([]);
   const previewUrlsRef = useRef<string[]>([]);
@@ -272,13 +283,13 @@ export function RegisteredOptionEditFlow({
     for (const [index, image] of newGalleryImages.entries()) {
       changes.push({ key: `gallery-add-${index}`, label: '追加画像の追加', before: 'なし', after: image.file.name });
     }
-    if (documentAction === 'remove' && option.manufacturer_document_url) {
+    if (documentAction === 'remove' && mediaOption.manufacturer_document_url) {
       changes.push({ key: 'document-remove', label: 'メーカー資料PDF', before: '登録済み', after: '解除予定' });
     }
     if (documentAction === 'replace' && newDocument) {
       changes.push({
         key: 'document-replace', label: 'メーカー資料PDF',
-        before: option.manufacturer_document_url ? '登録済み' : '未登録', after: `登録予定：${newDocument.name}`,
+        before: mediaOption.manufacturer_document_url ? '登録済み' : '未登録', after: `登録予定：${newDocument.name}`,
       });
     }
     return changes;
@@ -366,7 +377,8 @@ export function RegisteredOptionEditFlow({
         return;
       }
       const { delete: deleting } = galleryChangesOf(galleryImages, galleryEdits);
-      if (galleryImages.length - deleting.length + newGalleryImages.length > OPTION_GALLERY_MAX) {
+      // 上限は枚数を増やすときだけ（上限を超えている既存の商品でも、説明・表示順・削除はできる。DB と同じ）
+      if (galleryCountExceeds(galleryImages.length, galleryImages.length - deleting.length + newGalleryImages.length)) {
         setReviewError(`追加画像は 1 商品 ${OPTION_GALLERY_MAX} 枚までです。`);
         return;
       }
@@ -413,52 +425,62 @@ export function RegisteredOptionEditFlow({
   const nextCategory = review ? categoryMap.get(review.option.category_id) : undefined;
 
   // 新しいファイルを商品のフォルダーへ置く（3.5MB まではサーバーアクション、超えるものはブラウザから署名付きアップロード）
-  const uploadStaged = async (file: File, kind: 'gallery' | 'manufacturer'): Promise<string> => {
+  // 置いたファイルには、サーバーが署名した受け取りが付く（反映しなかったときは、受け取りを添えて消してもらう）
+  const uploadStaged = async (file: File, kind: 'gallery' | 'manufacturer', staged: StagedMedia[]): Promise<string> => {
     if (file.size <= SERVER_ACTION_UPLOAD_MAX_BYTES) {
       const data = new FormData();
       data.set('option_id', option.id);
       data.set('kind', kind);
       data.set('file', file);
       const result = await uploadStagedOptionMediaAction(data);
-      if (!result.ok || !result.url) throw new Error(result.error ?? 'ファイルを送れませんでした。');
+      if (!result.ok || !result.url || !result.receipt) throw new Error(result.error ?? 'ファイルを送れませんでした。');
+      staged.push({ url: result.url, receipt: result.receipt });
       return result.url;
     }
     const contentType = kind === 'gallery' ? file.type : 'application/pdf';
     const target = await createOptionMediaSignedUploadAction({ optionId: option.id, kind, fileName: file.name, contentType, size: file.size });
     if (!target.ok) throw new Error(target.error);
+    // 送る前に受け取りを控える（途中で失敗しても、置いた分を消せるように）
+    staged.push({ url: target.url, receipt: target.receipt });
     const { createClient } = await import('@/lib/supabase/client');
     const { error } = await createClient().storage.from(target.bucket).uploadToSignedUrl(target.path, target.token, file, { contentType });
     if (error) throw new Error('ファイルを送れませんでした。通信状態を確かめて、もう一度お試しください。');
     return target.url;
   };
 
-  // 追加画像・メーカー資料の変更を DB で 1 回にまとめて反映する。止まったら置いたファイルを消す（反映できなかった理由を返す）
+  // 追加画像・メーカー資料の変更を DB で 1 回にまとめて反映する。反映しなかったときは置いたファイルを受け取りを添えて消す
+  // （反映できなかった理由を返す）。新しい追加画像は 3 枚ずつ並べて送る
   const applyMediaChanges = async (): Promise<string | null> => {
-    const staged: string[] = [];
+    const staged: StagedMedia[] = [];
+    const discard = () => (staged.length > 0 ? discardStagedOptionMediaAction({ optionId: option.id, items: staged }).catch(() => undefined) : Promise.resolve());
     try {
       const { delete: deleting, update } = galleryChangesOf(galleryImages, galleryEdits);
       const keptOrders = galleryImages
         .filter((image) => !deleting.includes(image.id))
         .map((image) => Number(galleryEdits[image.id]?.order ?? image.sort_order));
       const lastOrder = Math.max(0, ...keptOrders);
-      const add: OptionMediaChanges['add'] = [];
-      for (const [index, entry] of newGalleryImages.entries()) {
-        const url = await uploadStaged(entry.file, 'gallery');
-        staged.push(url);
-        add.push({ url, caption: null, sort_order: Math.min(OPTION_GALLERY_SORT_MAX, lastOrder + (index + 1) * 10), alt: null });
-      }
+      const urls = await mapWithLimit(newGalleryImages, 3, (entry) => uploadStaged(entry.file, 'gallery', staged));
+      const add: OptionMediaChanges['add'] = urls.map((url, index) => ({
+        url,
+        caption: null,
+        sort_order: Math.min(OPTION_GALLERY_SORT_MAX, lastOrder + (index + 1) * 10),
+        alt: null,
+      }));
       let document: OptionDocumentChange = { action: 'keep' };
-      if (documentAction === 'remove' && option.manufacturer_document_url) document = { action: 'remove' };
+      if (documentAction === 'remove' && mediaOption.manufacturer_document_url) document = { action: 'remove' };
       if (documentAction === 'replace' && newDocument) {
-        const url = await uploadStaged(newDocument, 'manufacturer');
-        staged.push(url);
+        const url = await uploadStaged(newDocument, 'manufacturer', staged);
         document = { action: 'replace', url };
       }
-      // 反映に失敗したときは、サーバーが置いたファイルを消す
       const result = await applyOptionMediaChangesAction({ optionId: option.id, expected: mediaExpected, changes: { delete: deleting, update, add, document } });
-      return result.ok ? null : (result.error ?? '追加画像・メーカー資料を反映できませんでした。');
+      if (!result.ok) {
+        await discard();
+        return result.error ?? '追加画像・メーカー資料を反映できませんでした。';
+      }
+      if (result.media) setAppliedMedia(result.media);
+      return null;
     } catch (error) {
-      await discardStagedOptionMediaAction({ optionId: option.id, urls: staged });
+      await discard();
       return error instanceof Error ? error.message : '追加画像・メーカー資料を反映できませんでした。';
     }
   };
@@ -880,16 +902,16 @@ export function RegisteredOptionEditFlow({
             <ProductSectionHeading
               label="4. メーカー資料"
               description="PDFの差し替え・解除を入力し、STEP 2 で確認してから反映します。"
-              trailing={<ProductDocumentStatus url={option.manufacturer_document_url} testId="registered-manufacturer-document-status" />}
+              trailing={<ProductDocumentStatus url={mediaOption.manufacturer_document_url} testId="registered-manufacturer-document-status" />}
             />
             <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
               サブ画像・メーカーPDFの変更は、STEP 2 の「この変更を反映」で 1 回にまとめて反映し、変更の履歴を残します。3.5MB を超えるファイルは、ブラウザから直接保存先へ送ります。お客様が選ぶ仕様の編集は引き続き停止中です。
             </p>
             <div className="space-y-2">
               <p className="text-sm font-semibold">メーカー資料PDF</p>
-              {option.manufacturer_document_url ? (
+              {mediaOption.manufacturer_document_url ? (
                 <a
-                  href={option.manufacturer_document_url}
+                  href={mediaOption.manufacturer_document_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex min-h-10 items-center rounded-lg border border-line px-3 py-2 text-sm text-brown underline underline-offset-2 hover:bg-ivory"
@@ -911,8 +933,8 @@ export function RegisteredOptionEditFlow({
                   }}
                 >
                   <option value="keep">変更しない</option>
-                  <option value="replace">{option.manufacturer_document_url ? '新しいPDFへ差し替える' : 'PDFを新規登録する'}</option>
-                  {option.manufacturer_document_url && <option value="remove">PDFの登録を解除する</option>}
+                  <option value="replace">{mediaOption.manufacturer_document_url ? '新しいPDFへ差し替える' : 'PDFを新規登録する'}</option>
+                  {mediaOption.manufacturer_document_url && <option value="remove">PDFの登録を解除する</option>}
                 </Select>
                 {documentAction === 'replace' && (
                   <label className="block text-sm font-semibold">

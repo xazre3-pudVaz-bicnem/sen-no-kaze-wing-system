@@ -121,3 +121,36 @@ export function documentFileError(file: { name: string; type: string; size: numb
   }
   return null;
 }
+
+/**
+ * 追加画像のファイルの種類から決める拡張子（ローカル検証モードはファイルの種類の記録を持たないので、置くときに種類に合った拡張子で置く。
+ * Supabase は Storage が記録した種類で確かめる。同じファイルで結果を分けない）
+ */
+export function galleryImageExtension(contentType: string): string | null {
+  return ({ 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/avif': '.avif' } as Record<string, string>)[contentType] ?? null;
+}
+
+/** 紐付ける前に置いたファイル（URL と、置いたサーバーが署名した受け取り） */
+export interface StagedMedia {
+  url: string;
+  receipt: string;
+}
+
+/** 反映した後の追加画像の枚数が上限を超えるか。上限を超えている既存の商品でも、枚数を増やさない変更（説明・表示順・削除）はできる */
+export function galleryCountExceeds(before: number, after: number): boolean {
+  return after > OPTION_GALLERY_MAX && after > before;
+}
+
+/** items を limit 件ずつ並べて処理し、結果を元の順で返す（1 件でも失敗したら、その誤りを返す） */
+export async function mapWithLimit<T, R>(items: readonly T[], limit: number, run: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await run(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker));
+  return results;
+}

@@ -53,6 +53,8 @@ import {
   OPTION_GALLERY_IMAGE_MAX_BYTES,
   OPTION_GALLERY_MAX,
   OPTION_GALLERY_SORT_MAX,
+  galleryCountExceeds,
+  galleryImageExtension,
   type OptionMediaChangeResult,
   type OptionMediaChanges,
   type OptionMediaExpected,
@@ -2395,6 +2397,7 @@ export class LocalStore implements DataStore {
         });
       const galleryOf = () => db.optionImages.filter((row) => row.option_id === optionId);
       const before = snapshot(galleryOf(), option.manufacturer_document_url ?? null);
+      const beforeCount = galleryOf().length;
       if (before !== snapshot(expected.gallery, expected.manufacturer_document_url)) {
         throw new StoreError('VALIDATION', '追加画像・メーカー資料が、画面を開いた後にほかの操作で変わりました。画面を開き直してから、もう一度変更してください');
       }
@@ -2472,7 +2475,8 @@ export class LocalStore implements DataStore {
           created_at: nowIso(),
         });
       }
-      if (galleryOf().length > OPTION_GALLERY_MAX) throw new StoreError('VALIDATION', `追加画像は 1 商品 ${OPTION_GALLERY_MAX} 枚までです`);
+      // 上限は枚数を増やすときだけ（DB と同じ）
+      if (galleryCountExceeds(beforeCount, galleryOf().length)) throw new StoreError('VALIDATION', `追加画像は 1 商品 ${OPTION_GALLERY_MAX} 枚までです`);
 
       // メーカー資料PDF（差し替え・解除）
       const documentChange = changes.document;
@@ -2738,7 +2742,8 @@ export class LocalStore implements DataStore {
     return `/api/local-files/${safeFolder}/${name}`;
   }
   async uploadOptionImage(file: UploadInput, optionId: string) {
-    const ext = path.extname(file.fileName).toLowerCase() || '.jpg';
+    // 種類に合った拡張子で置く（反映のときは拡張子で確かめるため。Supabase は Storage が記録した種類で確かめる）
+    const ext = galleryImageExtension(file.contentType) ?? (path.extname(file.fileName).toLowerCase() || '.jpg');
     const name = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
     const relative = `${optionMediaPrefix(optionId, 'gallery')}${name}`;
     const abs = path.join(filesDir(), ...relative.split('/'));

@@ -199,9 +199,11 @@ describe('登録済み商品の変更確認フロー', () => {
     // 反映を止めていた条件は外し、画面を開いた時点の状態と変更をまとめて送る
     expect(flow).toContain('disabled={pending || diffs.length === 0 || zeroPriceNeedsServerContract || state.ok}');
     expect(flow).toContain('applyOptionMediaChangesAction({ optionId: option.id, expected: mediaExpected, changes: { delete: deleting, update, add, document } })');
-    expect(flow).toContain('const mediaExpected = useMemo(() => optionMediaExpectedOf(option), [option]);');
-    // 止まったら置いたファイルを消す。商品情報だけ失敗したときは、反映済みの画像・資料を二重に送らない
-    expect(flow).toContain('await discardStagedOptionMediaAction({ optionId: option.id, urls: staged });');
+    expect(flow).toContain('const mediaExpected = useMemo(() => optionMediaExpectedOf(mediaOption), [mediaOption]);');
+    // 止まったら置いたファイルを受け取りを添えて消す。商品情報だけ失敗したときは、反映済みの画像・資料を二重に送らず、
+    // 反映の結果で照合の状態を新しくする（画面を読み直さずに入力を残す）
+    expect(flow).toContain('discardStagedOptionMediaAction({ optionId: option.id, items: staged })');
+    expect(flow).toContain('if (result.media) setAppliedMedia(result.media);');
     expect(flow).toContain('追加画像・メーカー資料は反映しました。商品情報は反映できませんでした。');
     expect(flow).toContain('saveOptionAction(initialState, review.formData)');
     expect(flow).toContain('サブ画像・メーカーPDFの変更は、STEP 2 の「この変更を反映」で 1 回にまとめて反映し、変更の履歴を残します。');

@@ -12,14 +12,17 @@ import {
   OPTION_GALLERY_CAPTION_MAX,
   OPTION_GALLERY_MAX,
   OPTION_GALLERY_SORT_MAX,
-  type OptionMediaChanges,
+  type OptionMediaChangeResult,
 } from '@/lib/domain/option-media-changes';
+import { isValidOptionMediaReceipt, optionMediaReceipt } from '@/lib/storage/option-media-receipt';
 
 /**
  * 登録済み商品の追加画像・メーカー資料PDFの正式保存（PR #563。2026-11-04 の先方回答 C-4）。
- * 1. 新しいファイルを商品のフォルダーへ置く（3.5MB まではこのサーバーアクション、超えるものは署名付きアップロード）
+ * 1. 新しいファイルを商品のフォルダーへ置く（3.5MB まではこのサーバーアクション、超えるものは署名付きアップロード）。
+ *    置いたファイルには、サーバーが署名した受け取りを返す
  * 2. applyOptionMediaChangesAction で 1 回にまとめて反映する（DB の apply_option_media_changes。行ロック・開いた時点の状態の照合・履歴）
- * 3. 反映に失敗したら置いたファイルを消し、成功したら参照されなくなったファイルを消す（それ以外の未参照のファイルは消さない）
+ * 3. 成功したら参照されなくなったファイルを消す。反映しなかったときは、画面が受け取りを添えて discardStagedOptionMediaAction で
+ *    置いたファイルを消す（受け取りの無いファイル・まだ参照されているファイルは消さない。既存の未参照のファイルには触れない）
  */
 
 export interface OptionMediaActionState {
@@ -27,6 +30,10 @@ export interface OptionMediaActionState {
   error?: string;
   message?: string;
   url?: string;
+  /** 置いたファイルの受け取り（紐付ける前に消すときに使う） */
+  receipt?: string;
+  /** 反映した後の追加画像・メーカー資料（画面の照合の状態を更新するため） */
+  media?: Pick<OptionMediaChangeResult, 'gallery' | 'manufacturer_document_url'>;
 }
 
 function failure(e: unknown): OptionMediaActionState {
@@ -51,7 +58,7 @@ export async function uploadStagedOptionMediaAction(formData: FormData): Promise
       kind === 'gallery'
         ? await store.uploadOptionImage({ bytes, contentType: file.type, fileName: file.name }, optionId)
         : await store.uploadProductDocument({ bytes, contentType: 'application/pdf', fileName: file.name }, optionId);
-    return { ok: true, url };
+    return { ok: true, url, receipt: optionMediaReceipt(optionId, url) };
   } catch (e) {
     return failure(e);
   }
@@ -66,7 +73,7 @@ const signedUploadSchema = z.object({
 });
 
 export type OptionMediaSignedUpload =
-  | { ok: true; bucket: string; path: string; token: string; url: string }
+  | { ok: true; bucket: string; path: string; token: string; url: string; receipt: string }
   | { ok: false; error: string };
 
 /** 3.5MB を超えるファイルは、ブラウザから商品のフォルダーへ直接置く（置き場所はサーバーが決める。ローカル検証モードでは使えない） */
@@ -82,7 +89,7 @@ export async function createOptionMediaSignedUploadAction(input: z.input<typeof 
     const { store } = await editableOptionContext(actor, optionId);
     const target = await store.createOptionMediaSignedUpload(optionId, kind, fileName);
     if (!target) return { ok: false, error: 'この環境では 3.5MB を超えるファイルを送れません。' };
-    return { ok: true, ...target };
+    return { ok: true, ...target, receipt: optionMediaReceipt(optionId, target.url) };
   } catch (e) {
     return { ok: false, error: failure(e).error ?? '処理中にエラーが発生しました。' };
   }
@@ -108,59 +115,61 @@ const applySchema = z.object({
   }),
 });
 
-/** 変更をまとめて反映する。失敗したら、このとき置いたファイル（まだどこからも参照されていないもの）を消す */
+/** 変更をまとめて反映する。反映しなかったときに置いたファイルを消すのは、画面が受け取りを添えて discardStagedOptionMediaAction で行う */
 export async function applyOptionMediaChangesAction(input: z.input<typeof applySchema>): Promise<OptionMediaActionState> {
   const actor = await requireStaff();
   const parsed = applySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: '追加画像・メーカー資料の変更の内容が正しくありません。' };
   const { optionId, expected, changes } = parsed.data;
-  let store: DataStore | null = null;
   try {
-    ({ store } = await editableOptionContext(actor, optionId));
+    const { store } = await editableOptionContext(actor, optionId);
     const result = await store.applyOptionMediaChanges(actor, optionId, expected, changes);
     await removeOptionMediaFiles(store, optionId, result.unreferenced_urls);
     revalidatePath(`/admin/options/${optionId}`);
     updateTag(CATALOG_TAG);
-    return { ok: true, message: '追加画像・メーカー資料を反映しました。' };
+    return {
+      ok: true,
+      message: '追加画像・メーカー資料を反映しました。',
+      media: { gallery: result.gallery, manufacturer_document_url: result.manufacturer_document_url },
+    };
   } catch (e) {
-    if (store) await discardStaged(store, optionId, stagedUrlsOf(changes));
     return failure(e);
   }
 }
 
-const discardSchema = z.object({ optionId: z.uuid(), urls: z.array(z.string().max(1000)).max(OPTION_GALLERY_MAX + 1) });
+const discardSchema = z.object({
+  optionId: z.uuid(),
+  items: z.array(z.object({ url: z.string().max(1000), receipt: z.string().max(100) })).max(OPTION_GALLERY_MAX + 1),
+});
 
-/** アップロードの途中で止めたときに、紐付ける前のファイルを消す */
+/**
+ * 紐付ける前のファイルを消す（アップロードの途中で止めた・反映しなかったとき）。
+ * このサーバーが置いた受け取りのあるファイルで、今その商品が参照していないものだけを消す
+ */
 export async function discardStagedOptionMediaAction(input: z.input<typeof discardSchema>): Promise<void> {
   const actor = await requireStaff();
   const parsed = discardSchema.safeParse(input);
-  if (!parsed.success || parsed.data.urls.length === 0) return;
+  if (!parsed.success || parsed.data.items.length === 0) return;
+  const { optionId, items } = parsed.data;
+  const urls = items.filter((item) => isValidOptionMediaReceipt(optionId, item.url, item.receipt)).map((item) => item.url);
+  if (urls.length < items.length) console.warn('[wing] staged option media cleanup skipped files without a valid receipt', items.length - urls.length);
+  if (urls.length === 0) return;
   try {
-    const { store } = await editableOptionContext(actor, parsed.data.optionId);
-    await discardStaged(store, parsed.data.optionId, parsed.data.urls);
+    const { store } = await editableOptionContext(actor, optionId);
+    const option = await store.getOption(optionId);
+    const referenced = new Set(
+      [...(option?.gallery_images ?? []).map((image) => image.url), option?.manufacturer_document_url, option?.image_url].filter(
+        (url): url is string => Boolean(url)
+      )
+    );
+    await removeOptionMediaFiles(
+      store,
+      optionId,
+      urls.filter((url) => !referenced.has(url))
+    );
   } catch (error) {
     console.warn('[wing] staged option media cleanup failed', error);
   }
-}
-
-function stagedUrlsOf(changes: OptionMediaChanges): string[] {
-  return [...changes.add.map((item) => item.url), ...(changes.document.action === 'replace' ? [changes.document.url] : [])];
-}
-
-/** 紐付ける前のファイルだけを消す（今その商品が参照しているファイルは、送られてきても消さない） */
-async function discardStaged(store: DataStore, optionId: string, urls: string[]) {
-  if (urls.length === 0) return;
-  const option = await store.getOption(optionId);
-  const referenced = new Set(
-    [...(option?.gallery_images ?? []).map((image) => image.url), option?.manufacturer_document_url, option?.image_url].filter(
-      (url): url is string => Boolean(url)
-    )
-  );
-  await removeOptionMediaFiles(
-    store,
-    optionId,
-    urls.filter((url) => !referenced.has(url))
-  );
 }
 
 /** ファイルを消す（置き場所が商品のフォルダーでなければストアが拒否する）。失敗しても反映の結果は変えない */

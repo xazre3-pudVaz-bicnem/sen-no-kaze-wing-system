@@ -20,8 +20,6 @@ export type QuoteV25LineState = 'zero_confirmed' | 'excluded';
 /** 区分の経費の決め方（A-2 ⑥）。fixed は手動の額（税別・整数円） */
 export type QuoteV25ExpenseSetting = { method: 'rate' } | { method: 'fixed'; amount: number } | { method: 'none' };
 export type QuoteV25ExpenseSettings = Partial<Record<QuoteV25Section, QuoteV25ExpenseSetting>>;
-/** 経費の手動の額の上限（DB と同じ） */
-export const QUOTE_V25_EXPENSE_MAX = 100_000_000;
 
 export interface QuoteV25Context {
   /** 版の経費率（例：0.15） */

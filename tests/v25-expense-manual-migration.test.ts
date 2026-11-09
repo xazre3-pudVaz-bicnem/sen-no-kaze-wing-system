@@ -38,7 +38,7 @@ describe('A-2 ⑥ 経費の手動指定の migration（20261104113000）', () =>
     expect(sqlOnly.trim().endsWith('commit;')).toBe(true);
   });
 
-  it('既存の関数は丸ごと作り直さず、目印を確かめて差し込む（15 本・34 か所。所有者・権限・search_path が変われば止める）', () => {
+  it('既存の関数は丸ごと作り直さず、目印を確かめて差し込む（15 本・35 か所。所有者・権限・search_path が変われば止める）', () => {
     expect(sqlOnly).not.toMatch(/create\s+or\s+replace\s+function/i);
     expect(sqlOnly).toContain("raise exception 'PRECONDITION: the definition of % has % markers (expected 1)'");
     expect(sqlOnly).toContain("raise exception 'POSTCONDITION: owner / security definer / search_path / ACL of % changed (% -> %)'");
@@ -52,7 +52,7 @@ describe('A-2 ⑥ 経費の手動指定の migration（20261104113000）', () =>
       standard_estimate_v25_configuration_money: 1,
       write_standard_estimate_quote_items: 3,
       get_quote_v25_context: 1,
-      create_quote_revision_v25: 6,
+      create_quote_revision_v25: 7,
       apply_standard_quote_draft: 5,
       materialize_standard_quote_draft: 2,
       save_standard_quote_draft: 1,
@@ -114,9 +114,17 @@ describe('A-2 ⑥ 経費の手動指定の migration（20261104113000）', () =>
     ]) {
       expect(sqlOnly).toContain(`alter function public.${fn} owner to postgres;`);
       expect(sqlOnly).toContain(`revoke all on function public.${fn} from public, anon, authenticated, service_role;`);
-      expect(sqlOnly).not.toContain(`grant execute on function public.${fn}`);
     }
+    // check 制約の検査だけは、表に書ける service_role が実行できる（check 制約の関数は書き込むロールの権限で動く）
+    expect((sqlOnly.match(/grant execute on function public\./g) ?? []).length).toBe(1);
+    expect(sqlOnly).toContain('grant execute on function public.quote_expense_amounts_valid(jsonb, jsonb) to service_role;');
     expect((sqlOnly.match(/set search_path = ''/g) ?? []).length).toBe(5);
+  });
+
+  it('Web の第 2 版以降：明細は 300 行まで（経費の決め方は明細に数えない）', () => {
+    expect(sqlOnly).toContain("where (e.value ->> 'source') is distinct from 'expense') > 300 then");
+    expect(sqlOnly).toContain('if pg_catalog.jsonb_array_length(p_lines) > 303');
+    expect(sqlOnly).toContain("raise exception 'POSTCONDITION: the line limit of create_quote_revision_v25 was not patched';");
   });
 
   it('データは変えない（列を足すだけ。既存の見積・下書き・発行の記録の新しい列は空のまま）', () => {

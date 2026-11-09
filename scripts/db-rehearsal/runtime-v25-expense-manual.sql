@@ -389,6 +389,13 @@ begin
   perform pg_temp.exp_expect_error('EXP-28 決め方は「率で計算」か「金額を手動」だけ', 'P0001', 'VALIDATION: 1 行目：経費の決め方は',
     pg_temp.exp_revise(u_dealer, v_q3, jsonb_build_array(jsonb_build_object('source', 'expense', 'section', 'option', 'method', 'none'))
       || pg_temp.exp_parent_lines(v_q3)));
+  -- 明細は 300 行まで。経費の決め方は明細に数えない（300 行の明細と経費の決め方を一緒に送れる）
+  perform pg_temp.exp_expect_error('EXP-44 明細が 301 行なら止める', 'P0001', 'VALIDATION: 明細は 300 行までです',
+    pg_temp.exp_revise(u_dealer, v_q3, (select jsonb_agg(jsonb_build_object('source', 'manual')) from generate_series(1, 301))));
+  v_out := pg_temp.exp_revise(u_dealer, v_q3, (select jsonb_agg(jsonb_build_object('source', 'manual')) from generate_series(1, 300))
+    || jsonb_build_array(jsonb_build_object('source', 'expense', 'section', 'option', 'method', 'rate')));
+  perform pg_temp.exp_expect_eq('EXP-45 明細 300 行＋経費の決め方 1 つは、行数の上限で止めない（後の行の検査へ進む）', 'true',
+    (v_out like 'ERROR P0001:%' and v_out not like '%明細は 300 行まで%')::text || case when v_out like 'ERROR P0001:%' then '' else ' ' || v_out end);
   -- 本部は本体諸費用も変えられる：本体を率に、オプションを手動 12,345 円に
   v_out := pg_temp.exp_revise(u_admin, v_q3, pg_temp.exp_parent_lines(v_q3, jsonb_build_array(
     jsonb_build_object('source', 'expense', 'section', 'base', 'method', 'rate'),
@@ -494,6 +501,12 @@ begin
     has_function_privilege('authenticated', 'public.quote_v25_default_expenses(text[])', 'EXECUTE')::text || '/' ||
     has_function_privilege('anon', 'public.quote_v25_expense_description(text, text)', 'EXECUTE')::text || '/' ||
     has_function_privilege('authenticated', 'public.quotes_v25_expenses_guard()', 'EXECUTE')::text);
+  -- check 制約の関数は書き込むロールの実行権限で動く。表に書ける service_role の書き込みでも、手動の額の検査が動く
+  perform pg_temp.exp_expect_eq('EXP-43 権限：手動の額の check 制約は service_role の書き込みでも動く（検査の関数を実行できる。anon はできない）', 'ok/true/false',
+    pg_temp.exp_run_as('service_role', null,
+      format($q$ update public.quote_draft_internals set expense_amounts = expense_amounts where draft_id = %L returning 'ok' $q$, v_rdraft))
+    || '/' || has_function_privilege('service_role', 'public.quote_expense_amounts_valid(jsonb, jsonb)', 'EXECUTE')::text
+    || '/' || has_function_privilege('anon', 'public.quote_expense_amounts_valid(jsonb, jsonb)', 'EXECUTE')::text);
 end;
 $test$;
 

@@ -61,7 +61,12 @@ const lineSchema = z.discriminatedUnion('source', [
 
 const payloadSchema = z.object({
   quote_id: uuid,
-  lines: z.array(lineSchema).max(300),
+  // 明細は 300 行まで。経費の決め方（source: expense。区分ごとに 1 つ・3 区分まで）は明細に数えない（DB と同じ）
+  lines: z
+    .array(lineSchema)
+    .max(300 + 3)
+    .refine((lines) => lines.filter((line) => line.source !== 'expense').length <= 300, '明細は 300 行までです')
+    .refine((lines) => lines.filter((line) => line.source === 'expense').length <= 3, '経費の決め方は区分ごとに 1 つです'),
   adjustment: z.number().int().min(-100_000_000).max(100_000_000),
   adjustment_reason: z.string().trim().max(500).nullable(),
   dealer_note: z.string().trim().max(1000).nullable(),

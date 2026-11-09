@@ -13,6 +13,12 @@ import {
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
+/**
+ * 経費の手動の額（A-2 ⑥）の DB の更新（20261104113000）があると分かったか。列は消えないので、一度分かったら
+ * 読み込みのたびに確かめない（切り替えの間だけ、見積の列の有無を 1 回確かめる）
+ */
+let expenseManualColumnSeen = false;
+
 export type StandardEstimateV25Header = {
   pricing_model: 'legacy' | 'v2.5';
   calc_rule_version_id: string | null;
@@ -86,8 +92,8 @@ export async function loadStandardEstimateV25(
       ? supabase.from('tax_rule_versions').select('code, tax_rate').eq('id', header.tax_rule_version_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase.from('standard_estimate_revision_sections').select('section_code, expense_method, expense_amount').eq('revision_id', revision.id),
-    // 経費の手動の額（A-2 ⑥）の DB の更新があるか（見積に決め方の列があるか。行は読まない）
-    supabase.from('quotes').select('v25_expenses').limit(0),
+    // 経費の手動の額（A-2 ⑥）の DB の更新があるか（見積に決め方の列があるか。行は読まない。分かった後は確かめない）
+    expenseManualColumnSeen ? Promise.resolve({ error: null }) : supabase.from('quotes').select('v25_expenses').limit(0),
   ]);
   const slotsResult = firstSlotsResult.error && isMissingColumn(firstSlotsResult.error) ? await readSlots(false) : firstSlotsResult;
   if (slotsResult.error) throw new Error(`標準見積の商品を取得できませんでした: ${slotsResult.error.code ?? 'unknown'}`);
@@ -98,6 +104,7 @@ export async function loadStandardEstimateV25(
   if (expenseProbe.error && !isMissingColumn(expenseProbe.error)) {
     throw new Error(`見積の経費の決め方を確認できませんでした: ${expenseProbe.error.code ?? 'unknown'}`);
   }
+  if (!expenseProbe.error) expenseManualColumnSeen = true;
   if (linesResult.error && !isMissingRelation(linesResult.error)) {
     throw new Error(`標準見積の明細を取得できませんでした: ${linesResult.error.code ?? 'unknown'}`);
   }

@@ -11,9 +11,9 @@ import { formatYen } from '@/lib/domain/pricing';
 import { truncMul } from '@/lib/domain/standard-estimate-money';
 import type { PricingCalculationRule, PricingLineResult, PricingSectionResult, PricingTaxRule } from '@/lib/domain/pricing-v25';
 import { STANDARD_SECTION_LABEL, type StandardLineSectionCode } from '@/lib/domain/standard-estimate-view';
+import { STANDARD_QUOTE_EXPENSE_LABEL } from '@/lib/domain/standard-quote-view';
 import {
   V25_COST_STATUS_LABEL,
-  V25_EXPENSE_SECTIONS,
   buildV25SavePayload,
   slotCostStatus,
   v25PublishBlockers,
@@ -52,7 +52,6 @@ const SLOT_MODE_LABEL: Record<V25SlotPriceMode, string> = { auto: '自動', manu
 const LINE_MODE_LABEL: Record<V25LinePriceMode, string> = { manual: '金額確定', por: '別途見積' };
 const RATE_LABEL = { sales_fee_rate: '販売費率', expense_rate: '経費率', markup_rate: '掛率' } as const;
 /** 区分の経費の行の品名（見積書の経費の行と同じ） */
-const EXPENSE_LINE_NAME: Record<V25ExpenseSection, string> = { base: '本体諸費用', interior_exterior: '内外装工事経費', option: 'オプション諸費用' };
 
 let rowSeq = 0;
 const newKey = (prefix: string) => `${prefix}-new-${(rowSeq += 1)}`;
@@ -339,7 +338,7 @@ function WorkbenchBody({
       onNotice({ tone: 'danger', text: problem });
       return;
     }
-    run(() => saveStandardEstimateV25DraftAction({ revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(state) }));
+    run(() => saveStandardEstimateV25DraftAction({ revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(state, expenseManualAvailable ? rule.expense_target_sections : []) }));
   };
 
   const toggleSection = (code: string) =>
@@ -384,12 +383,12 @@ function WorkbenchBody({
       <tr key={`${code}-expense`} className="border-b border-slate-200 bg-slate-50/70 align-top" data-testid="v25-wb-expense" data-section={code}>
         <td className="border-r border-slate-200 bg-slate-50 px-1" />
         <td className="border-r border-slate-200 px-2 py-1.5 text-muted">経費</td>
-        <td className="border-r border-slate-200 px-2 py-1.5 font-medium text-ink">{EXPENSE_LINE_NAME[code]}</td>
+        <td className="border-r border-slate-200 px-2 py-1.5 font-medium text-ink">{STANDARD_QUOTE_EXPENSE_LABEL[code]}</td>
         <td className="border-r border-slate-200 px-2 py-1.5 text-muted">交通費、労災、安全管理費等</td>
         <td className="border-r border-slate-200 px-2 py-1.5 text-right tabular-nums text-muted">1</td>
         <td className="border-r border-slate-200 px-2 py-1.5 text-muted">式</td>
         <td className="border-r border-slate-200 px-1 py-1">
-          <Select value={setting.method} disabled={readOnly} aria-label={`経費の決め方：${EXPENSE_LINE_NAME[code]}`} className="h-7 text-xs" data-testid="v25-wb-expense-method"
+          <Select value={setting.method} disabled={readOnly} aria-label={`経費の決め方：${STANDARD_QUOTE_EXPENSE_LABEL[code]}`} className="h-7 text-xs" data-testid="v25-wb-expense-method"
             onChange={(event) => {
               const method = event.target.value as V25ExpenseMethod;
               // 手動にしたときは、今の率の額から始める（別途見積を含む区分は確定分の率の額）
@@ -403,7 +402,7 @@ function WorkbenchBody({
         {showCost && <td className="border-r border-slate-200 px-2 pt-1.5 text-right text-muted">—</td>}
         <td className="border-r border-slate-200 px-1 py-1 text-right">
           {setting.method === 'fixed' ? (
-            <Input value={setting.amount} disabled={readOnly} inputMode="numeric" aria-label={`経費の手動の額：${EXPENSE_LINE_NAME[code]}`}
+            <Input value={setting.amount} disabled={readOnly} inputMode="numeric" aria-label={`経費の手動の額：${STANDARD_QUOTE_EXPENSE_LABEL[code]}`}
               className={`h-7 text-right text-xs${invalid ? ' border-danger' : ''}`} data-testid="v25-wb-expense-amount"
               onChange={(event) => setExpense(code, { amount: event.target.value })} />
           ) : (

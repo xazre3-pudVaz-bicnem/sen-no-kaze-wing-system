@@ -13,6 +13,7 @@ import {
 } from '@/lib/domain/quote-v25';
 import { sectionMoney } from '@/lib/domain/standard-estimate-money';
 import { buildV25SavePayload, validateV25EditorState, type V25EditorState } from '@/lib/domain/standard-estimate-v25-view';
+import { standardQuoteExpenseAmountsSchema } from '@/lib/validation';
 import {
   calculateV25Workbench,
   type V25WorkbenchBaseLine,
@@ -34,7 +35,13 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
+vi.mock('@/lib/actions/standard-quotes', () => ({
+  saveStandardQuoteDraftAction: vi.fn(),
+  finalizeStandardQuoteDraftAction: vi.fn(),
+}));
+
 const { StandardEstimateV25Workbench } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardQuoteEditor } = await import('@/components/admin/standard-quote-editor');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8').split('\r').join('');
 
@@ -121,6 +128,33 @@ describe('A-2 ⑥ 標準見積（Excel 風の画面）：区分の経費を率�
       interior_exterior: { method: 'rate' },
       option: { method: 'fixed', amount: 30000 },
     });
+  });
+
+  it('保存の形：経費の決め方は計算ルールの経費の対象の区分だけ送る（対象外の区分は DB が止めるため。空なら送らない）', () => {
+    const fixed = state({ option: { method: 'fixed', amount: '30000' } });
+    expect(buildV25SavePayload(fixed, ['base', 'option']).expenses).toEqual({ base: { method: 'rate' }, option: { method: 'fixed', amount: 30000 } });
+    expect(buildV25SavePayload(fixed, ['base', 'interior_exterior', 'option', 'sitework']).expenses).toEqual({
+      base: { method: 'rate' },
+      interior_exterior: { method: 'rate' },
+      option: { method: 'fixed', amount: 30000 },
+    });
+    expect('expenses' in buildV25SavePayload(fixed, [])).toBe(false);
+  });
+
+  it('本部の見積下書きの保存の検査：手動の区分の額だけを持てる（zod 4 の partialRecord。区分のキー・額の範囲は確かめる）', () => {
+    expect(standardQuoteExpenseAmountsSchema.safeParse({ base: 30000 }).success).toBe(true);
+    expect(standardQuoteExpenseAmountsSchema.safeParse({}).success).toBe(true);
+    expect(standardQuoteExpenseAmountsSchema.safeParse({ base: 1, option: 100_000_000 }).success).toBe(true);
+    expect(standardQuoteExpenseAmountsSchema.safeParse({ option: 100_000_001 }).success).toBe(false);
+    expect(standardQuoteExpenseAmountsSchema.safeParse({ option: 1.5 }).success).toBe(false);
+    expect(standardQuoteExpenseAmountsSchema.safeParse({ unknown: 1 }).success).toBe(false);
+    // 画面が送る形（手動の区分だけ）がそのまま通る
+    const methods = toStandardQuoteExpenseMethods({
+      expense_methods: { base: 'fixed', interior_exterior: 'rate', option: 'rate', sitework: 'none' },
+      expense_amounts: { base: '30000', interior_exterior: '', option: '', sitework: '' },
+    });
+    expect(methods.amounts).toEqual({ base: 30000 });
+    expect(standardQuoteExpenseAmountsSchema.safeParse(methods.amounts).success).toBe(true);
   });
 
   const render = (expenseManualAvailable: boolean, initial: V25EditorState) =>
@@ -282,11 +316,40 @@ describe('A-2 ⑥ Web 以外の案件の下書き：v2.5 の版から作った�
     expect(toStandardQuoteExpenseMethods(state)).toEqual({ base: 'rate', interior_exterior: 'rate', option: 'fixed', sitework: 'none' });
   });
 
-  it('画面：v2.5 の版から作った下書きで、DB の更新の後だけ「手動」を選べる（別途工事・旧来の下書きは今のまま）', () => {
-    const editor = read('components/admin/standard-quote-editor.tsx');
-    expect(editor).toContain("disabled={ratesLocked && !(expenseManualAvailable && section !== 'sitework')}");
-    expect(editor).toContain("{ratesLocked && expenseManualAvailable && section !== 'sitework' ? (");
-    expect(editor).toContain('data-testid="standard-quote-expense-amount"');
+  const renderEditor = (props: { ratesLocked: boolean; expenseManualAvailable: boolean; initial: StandardQuoteEditorState }) =>
+    renderToStaticMarkup(
+      createElement(StandardQuoteEditor, { draftId: 'd1', lockVersion: 1, taxRate: '0.10', savedUnresolvedNames: [], ...props })
+    );
+  // 経費の選択の欄（区分の順：本体・内外装工事・オプション・別途工事）
+  const expenseSelects = (html: string) =>
+    [...html.matchAll(/<select[^>]*data-testid="standard-quote-expense-method"[^>]*>([\s\S]*?)<\/select>/g)].map((match) => ({
+      disabled: /\sdisabled=""/.test(match[0].slice(0, match[0].indexOf('>'))),
+      options: [...match[1].matchAll(/<option value="([a-z]+)"/g)].map((option) => option[1]),
+    }));
+
+  it('画面：v2.5 の版から作った下書きで、DB の更新の後だけ、経費を掛ける区分で「手動」を選べる（掛けない区分・別途工事・旧来の下書きは今のまま）', () => {
+    const v25 = standardQuoteStateFromPayload(
+      payload({
+        sales_fee_rate: '1.0700', expense_rate: '0.1500', markup_rate: '1.5000',
+        // 内外装工事を経費の対象外にした計算ルールの版から作った下書き（保存済みの方法が「なし」）
+        expense_methods: { base: 'fixed', interior_exterior: 'none', option: 'rate', sitework: 'none' },
+        expense_amounts: { base: 50000 },
+        cost_total: 0,
+      })
+    );
+    expect(expenseSelects(renderEditor({ ratesLocked: true, expenseManualAvailable: true, initial: v25 }))).toEqual([
+      { disabled: false, options: ['rate', 'fixed'] },
+      { disabled: true, options: ['rate', 'none'] },
+      { disabled: false, options: ['rate', 'fixed'] },
+      { disabled: true, options: ['rate', 'none'] },
+    ]);
+    // DB の更新の前は、今と同じく変えられない
+    expect(expenseSelects(renderEditor({ ratesLocked: true, expenseManualAvailable: false, initial: v25 })).every((select) => select.disabled)).toBe(true);
+    // 旧来の下書き（版の率に縛られない）は「率」「なし」
+    const legacy = standardQuoteStateFromPayload(payload(null));
+    expect(expenseSelects(renderEditor({ ratesLocked: false, expenseManualAvailable: false, initial: legacy }))).toEqual(
+      Array.from({ length: 4 }, () => ({ disabled: false, options: ['rate', 'none'] }))
+    );
     expect(read('app/admin/quotes/standard-drafts/[id]/page.tsx')).toContain(
       "expenseManualAvailable={ratesLocked && Boolean(payload.internals && 'expense_amounts' in payload.internals)}"
     );

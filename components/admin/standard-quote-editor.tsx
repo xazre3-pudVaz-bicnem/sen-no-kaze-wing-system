@@ -48,6 +48,10 @@ export function StandardQuoteEditor({
 }: Props) {
   const router = useRouter();
   const [state, setState] = useState(initial);
+  // 経費を手動にできる区分：v2.5 の版から作った下書きで、経費を掛ける区分だけ（A-2 ⑥）。
+  // 経費を掛けない区分（計算ルールの対象外・別途工事）は保存済みの方法が「なし」なので、今のまま「なし」で変えられない
+  const manualExpenseSection = (section: StandardSectionCode) =>
+    ratesLocked && expenseManualAvailable && section !== 'sitework' && initial.expense_methods[section] !== 'none';
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -157,10 +161,10 @@ export function StandardQuoteEditor({
               <h3 className="font-semibold">{STANDARD_SECTION_LABEL[section]}</h3>
               <label className="flex items-center gap-2 text-xs text-muted">
                 経費
-                {/* v2.5 の版から作った下書きは、経費を掛ける区分で「率」か「手動」（A-2 ⑥）。別途工事・旧来の下書きは今のまま */}
+                {/* v2.5 の版から作った下書きは、経費を掛ける区分で「率」か「手動」（A-2 ⑥）。経費を掛けない区分・旧来の下書きは今のまま */}
                 <Select
                   value={state.expense_methods[section]}
-                  disabled={ratesLocked && !(expenseManualAvailable && section !== 'sitework')}
+                  disabled={ratesLocked && !manualExpenseSection(section)}
                   data-testid="standard-quote-expense-method"
                   onChange={(e) => {
                     const next = e.target.value as ExpenseMethod;
@@ -172,7 +176,7 @@ export function StandardQuoteEditor({
                   }}
                 >
                   <option value="rate">率（{pct(state.expense_rate)}）</option>
-                  {ratesLocked && expenseManualAvailable && section !== 'sitework' ? (
+                  {manualExpenseSection(section) ? (
                     <option value="fixed">手動</option>
                   ) : (
                     <option value="none">なし</option>

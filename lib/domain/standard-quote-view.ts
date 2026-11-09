@@ -23,6 +23,7 @@ import {
 } from './standard-estimate-money';
 import type { StandardSectionCode } from './standard-estimate-view';
 import { splitQuoteLineStateRemark, type QuoteLineState } from './quote-por';
+import { V25_EXPENSE_MAX } from './standard-estimate-v25-view';
 
 export const STANDARD_QUOTE_SECTIONS: StandardSectionCode[] = ['base', 'interior_exterior', 'option', 'sitework'];
 
@@ -139,7 +140,7 @@ export function parseExpenseAmount(value: string): number | null {
   const text = value.trim();
   if (!/^\d{1,9}$/.test(text)) return null;
   const amount = Number(text);
-  return amount <= 100_000_000 ? amount : null;
+  return amount <= V25_EXPENSE_MAX ? amount : null;
 }
 
 /** 保存 RPC へ渡す区分の経費の方法（手動の区分は amounts に額。fixed の額が読めない区分は 0 円で送らず、保存の前に止める） */

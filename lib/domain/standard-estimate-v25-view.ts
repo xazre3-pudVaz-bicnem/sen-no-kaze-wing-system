@@ -14,7 +14,9 @@ export type V25ExpenseMethod = 'rate' | 'fixed';
 export const V25_EXPENSE_SECTIONS = ['base', 'interior_exterior', 'option'] as const;
 export type V25ExpenseSection = (typeof V25_EXPENSE_SECTIONS)[number];
 export const V25_EXPENSE_SECTION_LABEL: Record<V25ExpenseSection, string> = { base: '本体', interior_exterior: '内外装工事', option: 'オプション' };
-/** 経費の手動の額の上限（DB と同じ） */
+/**
+ * 経費の手動の額の上限（税別・整数円。DB の検査と同じ）。標準見積・見積の編集画面・本部の見積下書き・保存の検査で共通に使う
+ */
 export const V25_EXPENSE_MAX = 100_000_000;
 
 export interface V25ExpenseSetting {
@@ -222,8 +224,13 @@ export function validateV25EditorState(
   return null;
 }
 
-/** 画面の状態を save_standard_estimate_v25_draft の p_payload にする（選択肢は選択項目の順に並べる） */
-export function buildV25SavePayload(state: V25EditorState) {
+/**
+ * 画面の状態を save_standard_estimate_v25_draft の p_payload にする（選択肢は選択項目の順に並べる）。
+ * expenseSections：経費の決め方を送る区分（版の計算ルールの経費の対象。DB は対象外の区分の指定を止めるので、対象の区分だけ送る。
+ * 空なら送らない＝今の決め方のまま）
+ */
+export function buildV25SavePayload(state: V25EditorState, expenseSections: readonly string[] = V25_EXPENSE_SECTIONS) {
+  const expenseTargets = V25_EXPENSE_SECTIONS.filter((section) => expenseSections.includes(section));
   return {
     rates: {
       sales_fee_rate: state.sales_fee_rate.trim(),
@@ -259,12 +266,16 @@ export function buildV25SavePayload(state: V25EditorState) {
       review_required: line.review_required,
     })),
     // 区分の経費の決め方（A-2 ⑥）。手動の額は DB の再計算で変わらない
-    expenses: Object.fromEntries(
-      V25_EXPENSE_SECTIONS.map((section) => {
-        const setting = state.expenses[section];
-        return [section, setting.method === 'fixed' ? { method: 'fixed', amount: Number(setting.amount.trim()) } : { method: 'rate' }];
-      })
-    ),
+    ...(expenseTargets.length > 0
+      ? {
+          expenses: Object.fromEntries(
+            expenseTargets.map((section) => {
+              const setting = state.expenses[section];
+              return [section, setting.method === 'fixed' ? { method: 'fixed', amount: Number(setting.amount.trim()) } : { method: 'rate' }];
+            })
+          ),
+        }
+      : {}),
   };
 }
 

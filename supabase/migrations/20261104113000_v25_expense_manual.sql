@@ -526,6 +526,19 @@ select pg_temp.expense_patch_function(
     end if;$new$
 );
 
+-- 明細は 300 行まで。経費の決め方（source: expense。区分ごとに 1 つ）は明細に数えない（区分は 3 つなので全体は 303 まで）
+select pg_temp.expense_patch_function(
+  'public.create_quote_revision_v25(uuid, jsonb, integer, text, text)'::regprocedure,
+  $old$  if pg_catalog.jsonb_array_length(p_lines) > 300 then
+    raise exception 'VALIDATION: 明細は 300 行までです' using errcode = 'P0001';
+  end if;$old$,
+  $new$  if pg_catalog.jsonb_array_length(p_lines) > 303
+     or (select pg_catalog.count(*) from pg_catalog.jsonb_array_elements(p_lines) as e(value)
+          where (e.value ->> 'source') is distinct from 'expense') > 300 then
+    raise exception 'VALIDATION: 明細は 300 行までです' using errcode = 'P0001';
+  end if;$new$
+);
+
 select pg_temp.expense_patch_function(
   'public.create_quote_revision_v25(uuid, jsonb, integer, text, text)'::regprocedure,
   $old$    if v_section = any(rule.expense_target_sections) then
@@ -799,6 +812,9 @@ revoke all on function public.standard_estimate_v25_expense_settings(uuid) from 
 revoke all on function public.quote_v25_default_expenses(text[]) from public, anon, authenticated, service_role;
 revoke all on function public.quote_v25_expense_description(text, text) from public, anon, authenticated, service_role;
 revoke all on function public.quotes_v25_expenses_guard() from public, anon, authenticated, service_role;
+-- 手動の額の検査は、下書き・発行の記録の check 制約から呼ぶ。check 制約の関数は書き込む側のロールの実行権限で動くので、
+-- 2 つの表に書ける service_role（サーバーの保守用）には実行を許す（中身は検査だけ。表に書けない anon・authenticated には許さない）
+grant execute on function public.quote_expense_amounts_valid(jsonb, jsonb) to service_role;
 
 -- ---------- postconditions ----------
 
@@ -824,17 +840,21 @@ begin
      or pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.prepare_quote_revision_draft(uuid, uuid)'::regprocedure), 's.expense_amounts') = 0 then
     raise exception 'POSTCONDITION: the expense functions were not patched';
   end if;
-  -- 内部の部品は API のロールから実行できない
+  -- 内部の部品は API のロールから実行できない（check 制約の検査だけは、表に書ける service_role が実行できる）
   foreach v_name in array array[
     'public.quote_expense_amounts_valid(jsonb, jsonb)', 'public.standard_estimate_v25_expense_settings(uuid)',
     'public.quote_v25_default_expenses(text[])', 'public.quote_v25_expense_description(text, text)', 'public.quotes_v25_expenses_guard()'
   ] loop
     if has_function_privilege('anon', v_name, 'EXECUTE')
        or has_function_privilege('authenticated', v_name, 'EXECUTE')
-       or has_function_privilege('service_role', v_name, 'EXECUTE') then
-      raise exception 'POSTCONDITION: % must not be executable by API roles', v_name;
+       or has_function_privilege('service_role', v_name, 'EXECUTE') <> (v_name = 'public.quote_expense_amounts_valid(jsonb, jsonb)') then
+      raise exception 'POSTCONDITION: unexpected EXECUTE privilege on % for API roles', v_name;
     end if;
   end loop;
+  if pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.create_quote_revision_v25(uuid, jsonb, integer, text, text)'::regprocedure),
+                       'is distinct from ''expense'') > 300') = 0 then
+    raise exception 'POSTCONDITION: the line limit of create_quote_revision_v25 was not patched';
+  end if;
   -- 既存のデータは変えていない（列を足しただけ）
   if exists (select 1 from public.quotes where v25_expenses is not null)
      or exists (select 1 from public.quote_draft_internals where expense_amounts <> '{}'::jsonb)

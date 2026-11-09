@@ -100,8 +100,11 @@ export interface LocalDb {
   quotePorConfirmations?: LocalQuotePorConfirmation[];
   /** 窓タイプ（DB の window_types と同じ。v2.5 PR-S1/S2）。古い db.json に無ければ初期値 */
   windowTypes?: WindowType[];
-  /** 見積の編集で最初から並べる明細（DB の quote_initial_lines と同じ。2026-11-04 先方回答 A-3）。古い db.json に無ければ初期値 */
-  quoteInitialLines?: QuoteInitialLine[];
+  /**
+   * 見積の編集で最初から並べる明細（DB の quote_initial_lines と同じ。2026-11-04 先方回答 A-3）。古い db.json に無ければ初期値。
+   * is_active が false の行は並べない（DB の is_active と同じ。省略は使う）
+   */
+  quoteInitialLines?: (QuoteInitialLine & { is_active?: boolean })[];
 }
 
 export interface LocalQuotePorConfirmation {

@@ -2160,9 +2160,10 @@ export class LocalStore implements DataStore {
   async listQuoteInitialLines(section: QuoteInitialLine['section_code']) {
     return this.read((db) =>
       (db.quoteInitialLines ?? INITIAL_QUOTE_LINES)
-        .filter((line) => line.section_code === section)
+        // 使わない行（is_active が false）は並べない（Supabase 版と同じ）
+        .filter((line) => line.section_code === section && ('is_active' in line ? line.is_active !== false : true))
         .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ja'))
-        .map((line) => ({ ...line }))
+        .map((line): QuoteInitialLine => ({ section_code: line.section_code, name: line.name, unit: line.unit, sort_order: line.sort_order }))
     );
   }
   async getOptionVariants(optionId: string) {

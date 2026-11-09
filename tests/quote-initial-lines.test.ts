@@ -71,4 +71,15 @@ describe('ローカル検証モードの読み取り', () => {
     const lines = await new LocalStore().listQuoteInitialLines('sitework');
     expect(lines.map((line) => line.name)).toEqual(NAMES);
   });
+
+  it('使わない行（is_active が false）は並べない（Supabase 版の is_active の絞り込みと同じ）', async () => {
+    await new LocalStore().listQuoteInitialLines('sitework');
+    const file = path.join(dir, 'db.json');
+    const db = JSON.parse(fs.readFileSync(file, 'utf8'));
+    db.quoteInitialLines = INITIAL_QUOTE_LINES.map((line) => (line.name === '梱包養生' ? { ...line, is_active: false } : { ...line, is_active: true }));
+    fs.writeFileSync(file, JSON.stringify(db), 'utf8');
+    const lines = await new LocalStore().listQuoteInitialLines('sitework');
+    expect(lines.map((line) => line.name)).toEqual(NAMES.filter((name) => name !== '梱包養生'));
+    expect(lines.every((line) => !('is_active' in line))).toBe(true);
+  });
 });

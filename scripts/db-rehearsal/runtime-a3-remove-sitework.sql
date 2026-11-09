@@ -50,13 +50,19 @@ language sql as $fn$
   values (p_step, '拒否（' || p_code || ' ' || p_kind || '）', p_actual, p_actual like 'ERROR ' || p_code || ': ' || p_kind || '%');
 $fn$;
 
--- 対象の集合の照合値（ID の昇順・カンマ区切りの md5）
+-- 対象の集合の照合値（件数・ID の昇順・カンマ区切りの md5・状態ごとの件数）
 create function pg_temp.a3_expected(p_cfg uuid[], p_req uuid[], p_quote uuid[]) returns jsonb
 language sql as $fn$
   select jsonb_build_object(
-    'configurations', jsonb_build_object('count', cardinality(p_cfg), 'md5', md5(coalesce((select string_agg(x::text, ',' order by x) from unnest(p_cfg) x), ''))),
-    'quote_requests', jsonb_build_object('count', cardinality(p_req), 'md5', md5(coalesce((select string_agg(x::text, ',' order by x) from unnest(p_req) x), ''))),
-    'quotes', jsonb_build_object('count', cardinality(p_quote), 'md5', md5(coalesce((select string_agg(x::text, ',' order by x) from unnest(p_quote) x), ''))));
+    'configurations', jsonb_build_object('count', cardinality(p_cfg), 'md5', md5(coalesce((select string_agg(x::text, ',' order by x) from unnest(p_cfg) x), '')),
+      'by_status', (select coalesce(jsonb_object_agg(s.status, s.n), '{}'::jsonb)
+                      from (select c.status::text as status, count(*) as n from public.configurations c where c.id = any(p_cfg) group by 1) s)),
+    'quote_requests', jsonb_build_object('count', cardinality(p_req), 'md5', md5(coalesce((select string_agg(x::text, ',' order by x) from unnest(p_req) x), '')),
+      'by_status', (select coalesce(jsonb_object_agg(s.status, s.n), '{}'::jsonb)
+                      from (select r.status::text as status, count(*) as n from public.quote_requests r where r.id = any(p_req) group by 1) s)),
+    'quotes', jsonb_build_object('count', cardinality(p_quote), 'md5', md5(coalesce((select string_agg(x::text, ',' order by x) from unnest(p_quote) x), '')),
+      'by_status', (select coalesce(jsonb_object_agg(s.status, s.n), '{}'::jsonb)
+                      from (select q.status::text as status, count(*) as n from public.quotes q where q.id = any(p_quote) group by 1) s)));
 $fn$;
 
 -- 行（jsonb）から、写しの表にある列だけを残して文字列にする
@@ -77,6 +83,8 @@ declare
   cat_keep constant uuid := '2a400000-0000-4000-8000-000000000202';
   o_keep constant uuid := '2a400000-0000-4000-8000-000000000300';
   o_extra constant uuid := '2a400000-0000-4000-8000-000000000310';
+  o_keep2 constant uuid := '2a400000-0000-4000-8000-000000000311';
+  q_child constant uuid := '2a400000-0000-4000-8000-000000000602';
   c_draft constant uuid := '2a400000-0000-4000-8000-000000000401';
   c_req constant uuid := '2a400000-0000-4000-8000-000000000402';
   c_keep constant uuid := '2a400000-0000-4000-8000-000000000403';
@@ -91,15 +99,16 @@ declare
   v_out text;
   v_before text;
   v_archive text;
-  v_table text;
-  v_cols text;
   i integer;
 begin
   -- ---------- migration の作り ----------
   perform pg_temp.a3_expect_eq('A3-0 初期明細は 9 種類の工事（削除する 9 品目の名前・並び順のまま）',
     '運送費/設計監理及び確認申請費/梱包養生/現場設置工事/電気設備工事/給排水給湯設備工事/基礎工事（設置後工事）/廃材処分費/別途現場諸費用',
     (select string_agg(l.name, '/' order by l.sort_order) from public.quote_initial_lines l where l.section_code = 'sitework' and l.is_active));
-  perform pg_temp.a3_expect_eq('A3-0b 削除の関数は API のロールから実行できず、写しの場所は API のロールから使えない', 'false/false/false/false/false/false',
+  perform pg_temp.a3_expect_eq('A3-0b 削除・戻す関数は API のロールから実行できず、写しの場所は API のロールから使えない', 'false/false/false/false/false/false/false/false/false',
+    has_function_privilege('anon', 'archive_a3_20261104.restore_removed_rows()', 'EXECUTE')::text || '/' ||
+    has_function_privilege('authenticated', 'archive_a3_20261104.restore_removed_rows()', 'EXECUTE')::text || '/' ||
+    has_function_privilege('service_role', 'archive_a3_20261104.restore_removed_rows()', 'EXECUTE')::text || '/' ||
     has_function_privilege('anon', 'public.remove_sitework_catalog(jsonb)', 'EXECUTE')::text || '/' ||
     has_function_privilege('authenticated', 'public.remove_sitework_catalog(jsonb)', 'EXECUTE')::text || '/' ||
     has_function_privilege('service_role', 'public.remove_sitework_catalog(jsonb)', 'EXECUTE')::text || '/' ||
@@ -127,7 +136,8 @@ begin
             'PRD-9481' || lpad(i::text, 2, '0'), true, true, true, i);
   end loop;
   insert into public.options (id, category_id, code, name, price, status, product_no, sort_order)
-  values (o_keep, cat_keep, 'runtime-a3-keep', 'A3 残す商品', 1000, 'published', 'PRD-948100', 1);
+  values (o_keep, cat_keep, 'runtime-a3-keep', 'A3 残す商品', 1000, 'published', 'PRD-948100', 1),
+         (o_keep2, cat_keep, 'runtime-a3-keep2', 'A3 残す商品 2', 2000, 'published', 'PRD-948120', 2);
   insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
   values (c_draft, u_cust, m_model, '下書き（9 品目を含む）', 'draft', 'hotel', 'full'),
          (c_req, u_cust, m_model, '見積依頼済み（9 品目を含む）', 'quote_requested', 'hotel', 'full'),
@@ -196,6 +206,37 @@ begin
   set local session_replication_role = replica;
   delete from public.guest_plans where token_hash = repeat('a', 64);
   set local session_replication_role = origin;
+  -- 状態が変われば止める（例：確認の後に見積が承諾された）
+  perform pg_temp.a3_expect_error('A3-3b 対象の状態ごとの件数が違えば止める（見積の承諾など）', 'P0001', 'A3_STOP: 削除の対象（プラン・見積依頼・見積）が確認のときと違う',
+    pg_temp.a3_try(format('select public.remove_sitework_catalog(%L::jsonb)::text', jsonb_set(v_expected, '{quotes,by_status}', '{"accepted": 1}'::jsonb))));
+  -- 9 品目に外部キーで一緒に消える行（依存のルール）があれば止める
+  set local session_replication_role = replica;
+  insert into public.option_dependencies (option_id, requires_option_id) values ('2a400000-0000-4000-8000-000000000301', o_keep);
+  set local session_replication_role = origin;
+  perform pg_temp.a3_expect_error('A3-5b 9 品目に一緒に消える行（画像・選択肢・依存のルールなど）があれば止める', 'P0001', 'A3_STOP: 9 品目・カテゴリーに、画像・選択肢',
+    pg_temp.a3_try(format('select public.remove_sitework_catalog(%L::jsonb)::text', v_expected)));
+  set local session_replication_role = replica;
+  delete from public.option_dependencies where option_id = '2a400000-0000-4000-8000-000000000301';
+  -- 残す見積が、削除する見積を親にしていれば止める（参照が空になるため）
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, parent_quote_id, valid_until, customer_name, base_model_name, base_price, option_subtotal,
+                             installation_subtotal, subtotal, tax_rate, tax, total, status, quote_kind, base_model_id, spec_code)
+  values (q_child, 'RT-A3-Q2', r_manual, null, q_req, now() + interval '30 days', '検査', 'A3 検査モデル', 1000, 0, 0, 1000, 0.10, 100, 1100, 'issued', 'formal', m_model, 'hotel');
+  set local session_replication_role = origin;
+  perform pg_temp.a3_expect_error('A3-5c 削除する見積を、残す見積・見積依頼が参照していれば止める', 'P0001', 'A3_STOP: 削除する見積を、残す見積・見積依頼が参照',
+    pg_temp.a3_try(format('select public.remove_sitework_catalog(%L::jsonb)::text', v_expected)));
+  set local session_replication_role = replica;
+  delete from public.quotes where id = q_child;
+  -- 商品の削除の保護だけが見る状態（例：残すプランの写しの形式が崩れていて、商品の参照を確かめられない）でも A3_STOP として止める
+  insert into public.configuration_snapshots (configuration_id, reason, snapshot) values (c_keep, 'saved', '{"lines":"broken"}'::jsonb);
+  set local session_replication_role = origin;
+  perform pg_temp.a3_expect_error('A3-5d 商品の削除の保護が止める状態なら、A3_STOP として止める（ここまでの削除も戻る）', 'P0001', 'A3_STOP: 9 品目（',
+    pg_temp.a3_try(format('select public.remove_sitework_catalog(%L::jsonb)::text', v_expected)));
+  set local session_replication_role = replica;
+  delete from public.configuration_snapshots where configuration_id = c_keep;
+  -- 期限切れのログインなしの一時保存は止める理由にしない（読み込まれないため。消さずに残る）
+  insert into public.guest_plans (token_hash, base_model_id, plan, created_at, expires_at)
+  values (repeat('b', 64), m_model, '{"option_ids":["2a400000-0000-4000-8000-000000000302"]}'::jsonb, now() - interval '31 days', now() - interval '1 day');
+  set local session_replication_role = origin;
   perform pg_temp.a3_expect_eq('A3-7 止めたときは何も消していない（プラン・見積依頼・見積・9 品目の件数）', v_before,
     (select count(*) from public.configurations)::text || '/' || (select count(*) from public.quote_requests)::text || '/' ||
     (select count(*) from public.quotes)::text || '/' || (select count(*) from public.options where category_id = cat_sw)::text);
@@ -241,18 +282,25 @@ begin
     (select count(*) from archive_a3_20261104.quote_documents where quote_id = q_req)::text);
   perform pg_temp.a3_expect_eq('A3-13 二度目は何もしない（9 品目が無いため）', '{"skipped": true}',
     public.remove_sitework_catalog(v_expected)::text);
+  perform pg_temp.a3_expect_eq('A3-6b 期限切れのログインなしの一時保存は止める理由にせず、消さずに残す', '1',
+    (select count(*) from public.guest_plans where token_hash = repeat('b', 64))::text);
 
-  -- ---------- 写しから元に戻せる（緊急時の手順。DB の保護の仕組みは戻す間だけ外す） ----------
-  -- 写しの表の列を名前で戻す（後の migration で足された列は既定値になる）
-  set local session_replication_role = replica;
-  foreach v_table in array array['option_categories', 'options', 'configurations', 'configuration_items', 'configuration_snapshots',
-                                 'configuration_site_profiles', 'quote_requests', 'quote_request_preferences', 'quotes', 'quote_items', 'quote_documents'] loop
-    select string_agg(quote_ident(a.attname), ', ' order by a.attnum) into v_cols
-      from pg_attribute a where a.attrelid = to_regclass('archive_a3_20261104.' || v_table) and a.attnum > 0 and not a.attisdropped;
-    execute format('insert into public.%I (%s) select %s from archive_a3_20261104.%I', v_table, v_cols, v_cols, v_table);
-  end loop;
-  update public.base_models bm set presets = a.presets from archive_a3_20261104.base_model_presets a where a.base_model_id = bm.id;
-  set local session_replication_role = origin;
+  -- ---------- 写しから元に戻せる（緊急時の手順：archive_a3_20261104.restore_removed_rows()。別の migration から呼ぶ） ----------
+  -- 写しの後に、本部がプラン 1 の標準構成を変えた（商品を足し、並べ替えた）
+  update public.base_models set presets = jsonb_set(presets, '{0,option_codes}', '["runtime-a3-keep2","runtime-a3-keep"]'::jsonb) where id = m_model;
+  v_out := archive_a3_20261104.restore_removed_rows()::text;
+  perform pg_temp.a3_expect_eq('A3-15 写しのすべての行を戻す（カテゴリー 1・商品 9・プラン 2・明細 4・写し 1・設置場所 0・見積依頼 1・希望 0・見積 1・見積の明細 3・PDF の記録 1・標準構成 1）',
+    '1/9/2/4/1/0/1/0/1/3/1/1',
+    concat_ws('/', v_out::jsonb ->> 'option_categories', v_out::jsonb ->> 'options', v_out::jsonb ->> 'configurations', v_out::jsonb ->> 'configuration_items',
+              v_out::jsonb ->> 'configuration_snapshots', v_out::jsonb ->> 'configuration_site_profiles', v_out::jsonb ->> 'quote_requests',
+              v_out::jsonb ->> 'quote_request_preferences', v_out::jsonb ->> 'quotes', v_out::jsonb ->> 'quote_items', v_out::jsonb ->> 'quote_documents',
+              v_out::jsonb ->> 'base_model_presets'));
+  perform pg_temp.a3_expect_eq('A3-16 標準構成は 9 品目を元の位置へ差し戻し、写しの後の本部の変更（足した商品）は残す',
+    '["sw-transport", "runtime-a3-keep", "sw-electric", "runtime-a3-keep2"]/["runtime-a3-keep"]',
+    (select (p.value -> 'option_codes')::text from public.base_models bm, jsonb_array_elements(bm.presets) p(value) where bm.id = m_model and p.value ->> 'code' = 'p1') || '/' ||
+    (select (p.value -> 'option_codes')::text from public.base_models bm, jsonb_array_elements(bm.presets) p(value) where bm.id = m_model and p.value ->> 'code' = 'p2'));
+  perform pg_temp.a3_expect_error('A3-17 戻す先に同じ行があれば、何も戻さずに止まる（二度目の実行）', '23505', 'duplicate key',
+    pg_temp.a3_try('select archive_a3_20261104.restore_removed_rows()::text'));
   select md5(string_agg(t.x, '|' order by t.x)) into v_archive from (
     select to_jsonb(a)::text as x from archive_a3_20261104.configurations a
     union all select to_jsonb(a)::text from archive_a3_20261104.quotes a

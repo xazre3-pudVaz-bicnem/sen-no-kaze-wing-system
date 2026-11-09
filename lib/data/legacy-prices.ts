@@ -26,8 +26,10 @@ export function legacyTableColumns(table: LegacyPriceTable): string {
  * （SET の EXCLUDED の列にも元の表の読み取りの権限が要り、金額の列を書くと 42501 になるため。UPDATE と INSERT は金額の列を書ける）
  */
 export type LegacyPriceWriteTable = 'options' | 'option_variant_choices' | 'base_models';
-export function isLegacyPriceWriteTable(table: string): table is LegacyPriceWriteTable {
-  return table === 'options' || table === 'option_variant_choices' || table === 'base_models';
+
+/** 金額の列を持つ表か（legacy-price-columns.json の表。upsert では保存できない） */
+export function hasLegacyPriceColumns(table: string): table is LegacyPriceTable {
+  return Object.hasOwn(legacyPriceColumns, table);
 }
 
 /**

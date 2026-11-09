@@ -239,6 +239,29 @@ begin
        $q$insert into public.base_models (id, slug, name, base_price, status) values (%L, 'runtime-lpg-model', '旧価格の検査用モデル', 1200000, 'published')
           on conflict (id) do update set base_price = excluded.base_price returning 'ok'$q$, m_model))
        like 'ERROR 42501: permission denied for table base_models%')::text);
+  -- PostgREST の更新（PATCH）と同じ文の形：SET の値は送った本文（json_to_record）から読み、元の表の金額の列は読まない
+  v_out := pg_temp.lpg_run_as('authenticated', u_admin, format(
+      $q$with pgrst_source as (
+           update public.options set name = pgrst_body.name, price = pgrst_body.price
+             from (select '{"name":"本部商品","price":12600}'::json as json_data) pgrst_payload,
+                  lateral (select "name", "price" from json_to_record(pgrst_payload.json_data) as _("name" text, "price" integer)) pgrst_body
+            where public.options.id = %L
+           returning public.options.id, public.options.name, public.options.status)
+         select count(*)::text from pgrst_source$q$, o_hq));
+  perform pg_temp.lpg_expect_eq('LPG-32b 本部：PostgREST の更新と同じ文の形（UPDATE … FROM json_to_record … RETURNING 金額のほかの列）で金額を書ける', '1/12600',
+    v_out || '/' || (select price::text from public.options where id = o_hq));
+  -- 総代理店の保存は、金額を変えずに書き戻す UPDATE になる（金額のほかの項目は今までどおり変えられる）
+  v_out := pg_temp.lpg_run_as('authenticated', u_md, format('update public.options set name = ''本部商品（総代理店）'', price = %s where id = %L returning ''ok''',
+             (select price from public.options where id = o_hq), o_hq));
+  v_out := v_out || '/' || pg_temp.lpg_run_as('authenticated', u_md, format('update public.option_variant_choices set name = ''黒（総代理店）'', extra_price = %s where id = %L returning ''ok''',
+             (select extra_price from public.option_variant_choices where id = vc_hq), vc_hq));
+  v_out := v_out || '/' || pg_temp.lpg_run_as('authenticated', u_md, format('update public.base_models set tagline = ''総代理店'', base_price = %s where id = %L returning ''ok''',
+             (select base_price from public.base_models where id = m_model), m_model));
+  perform pg_temp.lpg_expect_eq('LPG-35 総代理店：金額を変えずに書き戻す保存（UPDATE）は、商品・選択肢・本体とも通る（金額は変わらない）', 'ok/ok/ok/12600/2500/1150000',
+    v_out || '/' ||
+    (select price::text from public.options where id = o_hq) || '/' ||
+    (select extra_price::text from public.option_variant_choices where id = vc_hq) || '/' ||
+    (select base_price::text from public.base_models where id = m_model));
   perform pg_temp.lpg_expect_eq('LPG-34 本部：保存する行が無いときの新しい行の追加（ID を指定した INSERT で金額も書く）は通る', 'ok',
     pg_temp.lpg_run_as('authenticated', u_admin, format(
       $q$insert into public.options (id, base_model_id, category_id, code, name, price, status) values ('7d300000-0000-4000-8000-000000000099', %L, %L, 'runtime-lpg-new', '新しい商品', 500, 'draft') returning 'ok'$q$,

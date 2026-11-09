@@ -945,6 +945,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   price: '価格変更',
   status: '公開状態',
   role: '権限変更',
+  media: '画像・資料',
 };
 export const AUDIT_ENTITY_LABELS: Record<string, string> = {
   option: '商品',

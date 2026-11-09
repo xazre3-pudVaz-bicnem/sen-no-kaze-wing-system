@@ -46,7 +46,19 @@ import {
 import { categoriesInScope, validateSelection, type RuleContext } from '@/lib/domain/rules';
 import { buildCustomerCategoryMatrix, effectiveCustomerSpecCodes } from '@/lib/domain/customer-category-applicability';
 import { ruleContextForSpec } from '@/lib/domain/estimate-template';
-import { canEditCatalog, hasRoleAtLeast } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, hasRoleAtLeast } from '@/lib/domain/types';
+import {
+  OPTION_DOCUMENT_MAX_BYTES,
+  OPTION_GALLERY_CAPTION_MAX,
+  OPTION_GALLERY_IMAGE_MAX_BYTES,
+  OPTION_GALLERY_MAX,
+  OPTION_GALLERY_SORT_MAX,
+  galleryCountExceeds,
+  galleryImageExtension,
+  type OptionMediaChangeResult,
+  type OptionMediaChanges,
+  type OptionMediaExpected,
+} from '@/lib/domain/option-media-changes';
 import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
 import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
@@ -2361,6 +2373,156 @@ export class LocalStore implements DataStore {
       option.updated_at = nowIso();
     });
   }
+  async applyOptionMediaChanges(
+    actor: SessionUser,
+    optionId: string,
+    expected: OptionMediaExpected,
+    changes: OptionMediaChanges
+  ): Promise<OptionMediaChangeResult> {
+    // DB の apply_option_media_changes（20261105110000）と同じ判定。途中で止まったら保存しない（mutate は例外のとき書き込まない）
+    return this.mutate((db) => {
+      const option = db.options.find((row) => row.id === optionId);
+      if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません');
+      const category = db.categories.find((row) => row.id === option.category_id);
+      const ownsFreeProduct = actor.role !== 'customer' && option.owner_id === actor.id && category?.code === FREE_PRODUCT_CATEGORY_CODE;
+      if (!canEditCatalog(actor.role) && !ownsFreeProduct) {
+        throw new StoreError('FORBIDDEN', 'この商品の追加画像・メーカー資料は編集できません');
+      }
+
+      // 画面を開いた時点の状態と今の状態を照合する（追加画像は id の順。説明の空は NULL とみなす）
+      const snapshot = (rows: { id: string; url: string; caption: string | null; sort_order: number }[], documentUrl: string | null) =>
+        JSON.stringify({
+          gallery: [...rows].sort((a, b) => a.id.localeCompare(b.id)).map((row) => [row.id.toLowerCase(), row.url, row.caption || null, row.sort_order]),
+          document: documentUrl || null,
+        });
+      const galleryOf = () => db.optionImages.filter((row) => row.option_id === optionId);
+      const before = snapshot(galleryOf(), option.manufacturer_document_url ?? null);
+      const beforeCount = galleryOf().length;
+      if (before !== snapshot(expected.gallery, expected.manufacturer_document_url)) {
+        throw new StoreError('VALIDATION', '追加画像・メーカー資料が、画面を開いた後にほかの操作で変わりました。画面を開き直してから、もう一度変更してください');
+      }
+
+      const ownedFile = (url: string, kind: 'gallery' | 'manufacturer') => {
+        const label = kind === 'gallery' ? '追加画像' : 'メーカー資料';
+        let relative: string;
+        try {
+          relative = assertOwnedLocalMediaPath(url, optionId, kind);
+        } catch {
+          throw new StoreError('VALIDATION', `${label}の置き場所が正しくありません`);
+        }
+        const fileName = relative.slice(relative.lastIndexOf('/') + 1);
+        const pattern = kind === 'gallery' ? /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/ : /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.pdf$/;
+        if (!pattern.test(fileName)) throw new StoreError('VALIDATION', `${label}の置き場所が正しくありません`);
+        const abs = path.join(filesDir(), ...relative.split('/'));
+        if (!fs.existsSync(abs)) {
+          throw new StoreError('VALIDATION', kind === 'gallery' ? '追加画像のファイルが見つかりません。画像を選び直してください' : 'メーカー資料のファイルが見つかりません。PDF を選び直してください');
+        }
+        // ローカルにはファイルの種類の記録が無いので、拡張子と大きさで確かめる（Storage のバケットの決まりと同じ範囲）
+        const size = fs.statSync(abs).size;
+        if (kind === 'gallery' && (!/\.(jpe?g|png|webp|avif)$/i.test(fileName) || size < 1 || size > OPTION_GALLERY_IMAGE_MAX_BYTES)) {
+          throw new StoreError('VALIDATION', '追加画像は JPEG・PNG・WebP・AVIF、1 枚 10MB 以下のファイルだけ紐付けられます');
+        }
+        if (kind === 'manufacturer' && (size < 1 || size > OPTION_DOCUMENT_MAX_BYTES)) {
+          throw new StoreError('VALIDATION', 'メーカー資料は 20MB 以下の PDF だけ紐付けられます');
+        }
+      };
+      const sortOrderOf = (value: number) => {
+        if (!Number.isInteger(value) || value < 0 || value > OPTION_GALLERY_SORT_MAX) {
+          throw new StoreError('VALIDATION', `追加画像の表示順は 0 以上 ${OPTION_GALLERY_SORT_MAX} 以下で入力してください`);
+        }
+        return value;
+      };
+      const captionOf = (value: string | null) => {
+        const caption = value?.trim() || null;
+        if (caption && caption.length > OPTION_GALLERY_CAPTION_MAX) {
+          throw new StoreError('VALIDATION', `追加画像の説明は ${OPTION_GALLERY_CAPTION_MAX} 文字以内で入力してください`);
+        }
+        return caption;
+      };
+
+      // 削除
+      const removedUrls: string[] = [];
+      if (new Set(changes.delete).size !== changes.delete.length) throw new StoreError('VALIDATION', '削除する追加画像が重なっています');
+      const deleting = galleryOf().filter((row) => changes.delete.includes(row.id));
+      if (deleting.length !== changes.delete.length) throw new StoreError('VALIDATION', '削除する追加画像が見つかりません');
+      removedUrls.push(...[...deleting].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)).map((row) => row.url));
+      db.optionImages = db.optionImages.filter((row) => !(row.option_id === optionId && changes.delete.includes(row.id)));
+
+      // 説明・表示順の変更
+      const updated = new Set<string>();
+      for (const item of changes.update) {
+        if (updated.has(item.id) || changes.delete.includes(item.id)) throw new StoreError('VALIDATION', '変更する追加画像の指定が正しくありません');
+        const sortOrder = sortOrderOf(item.sort_order);
+        const caption = captionOf(item.caption);
+        const row = db.optionImages.find((image) => image.id === item.id && image.option_id === optionId);
+        if (!row) throw new StoreError('VALIDATION', '変更する追加画像が見つかりません');
+        row.caption = caption;
+        row.sort_order = sortOrder;
+        updated.add(item.id);
+      }
+
+      // 追加
+      for (const item of changes.add) {
+        ownedFile(item.url, 'gallery');
+        if (db.optionImages.some((row) => row.url === item.url)) throw new StoreError('VALIDATION', '同じ画像ファイルが既に登録されています');
+        db.optionImages.push({
+          id: randomUUID(),
+          option_id: optionId,
+          url: item.url,
+          alt: (item.alt?.trim() || option.name).slice(0, 200),
+          caption: captionOf(item.caption),
+          sort_order: sortOrderOf(item.sort_order),
+          created_at: nowIso(),
+        });
+      }
+      // 上限は枚数を増やすときだけ（DB と同じ）
+      if (galleryCountExceeds(beforeCount, galleryOf().length)) throw new StoreError('VALIDATION', `追加画像は 1 商品 ${OPTION_GALLERY_MAX} 枚までです`);
+
+      // メーカー資料PDF（差し替え・解除）
+      const documentChange = changes.document;
+      if (documentChange.action === 'replace') {
+        ownedFile(documentChange.url, 'manufacturer');
+        if (documentChange.url === option.manufacturer_document_url) throw new StoreError('VALIDATION', '今と同じメーカー資料です');
+        if (option.manufacturer_document_url) removedUrls.push(option.manufacturer_document_url);
+        option.manufacturer_document_url = documentChange.url;
+        option.updated_at = nowIso();
+      } else if (documentChange.action === 'remove') {
+        if (!option.manufacturer_document_url) throw new StoreError('VALIDATION', 'メーカー資料は登録されていません');
+        removedUrls.push(option.manufacturer_document_url);
+        option.manufacturer_document_url = null;
+        option.updated_at = nowIso();
+      }
+
+      // 履歴
+      if (snapshot(galleryOf(), option.manufacturer_document_url ?? null) !== before) {
+        const documentLabel = documentChange.action === 'replace' ? '差し替え' : documentChange.action === 'remove' ? '解除' : '変更なし';
+        this.pushAudit(db, actor, {
+          action: 'media',
+          entity: 'option',
+          entity_id: optionId,
+          summary: `追加画像・メーカー資料を変更：${option.name}（追加画像 削除 ${deleting.length}・変更 ${updated.size}・追加 ${changes.add.length}／メーカー資料 ${documentLabel}）`,
+        });
+      }
+
+      // 参照されなくなったファイル：ほかの行（追加画像・メイン画像・メーカー資料・選択肢の画像・見積の明細）が使っていないものだけ
+      const stillUsed = (url: string) =>
+        db.optionImages.some((row) => row.url === url) ||
+        db.options.some((row) => row.image_url === url || row.manufacturer_document_url === url) ||
+        db.variantChoices.some((row) => row.image_url === url) ||
+        db.quoteItems.some((row) => row.image_url === url);
+      return {
+        gallery: galleryOf()
+          .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+          .map((row) => ({ ...row })),
+        manufacturer_document_url: option.manufacturer_document_url ?? null,
+        unreferenced_urls: [...new Set(removedUrls)].filter((url) => !stillUsed(url)),
+      };
+    });
+  }
+  async createOptionMediaSignedUpload(): Promise<null> {
+    // ローカル検証モードには署名付きアップロードが無い（3.5MB までのファイルをサーバーアクションで送る）
+    return null;
+  }
   async copyOptionMediaToNewDraft(sourceId: string, newDraftId: string): Promise<ProductMediaCopySummary> {
     if (sourceId === newDraftId) throw new StoreError('VALIDATION', '同じ商品へ複製できません。');
     const [source, target] = await Promise.all([this.getOption(sourceId), this.getOption(newDraftId)]);
@@ -2580,7 +2742,8 @@ export class LocalStore implements DataStore {
     return `/api/local-files/${safeFolder}/${name}`;
   }
   async uploadOptionImage(file: UploadInput, optionId: string) {
-    const ext = path.extname(file.fileName).toLowerCase() || '.jpg';
+    // 種類に合った拡張子で置く（反映のときは拡張子で確かめるため。Supabase は Storage が記録した種類で確かめる）
+    const ext = galleryImageExtension(file.contentType) ?? (path.extname(file.fileName).toLowerCase() || '.jpg');
     const name = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
     const relative = `${optionMediaPrefix(optionId, 'gallery')}${name}`;
     const abs = path.join(filesDir(), ...relative.split('/'));

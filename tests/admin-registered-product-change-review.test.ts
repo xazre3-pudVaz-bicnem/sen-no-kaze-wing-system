@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'), 'utf8');
 const newPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'), 'utf8');
 const flow = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/registered-option-edit-flow.tsx'), 'utf8');
-const variantHeading = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-variant-group-heading.tsx'), 'utf8');
 const identityView = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-identity-status.tsx'), 'utf8');
 
 describe('登録済み商品の変更確認フロー', () => {
@@ -158,45 +157,59 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(edit).toContain('name="status" value="published"');
   });
 
-  it('追加画像を画像欄にまとめ、PDFとお客様選択は参照専用を維持する', () => {
+  it('登録済みの追加画像とPDFをSTEP1で変更案として編集し、STEP2で差分確認する', () => {
     const imageSection = flow.indexOf('data-testid="registered-product-main-media"');
     const gallerySection = flow.indexOf('data-testid="registered-option-current-gallery"');
     const pdfSection = flow.indexOf('data-testid="registered-option-pending-subedit"');
     const choicesSection = flow.indexOf('data-testid="registered-option-current-choices"');
     const priceSection = flow.indexOf('data-testid="registered-product-pricing"');
+    expect(imageSection).toBeGreaterThan(-1);
     expect(gallerySection).toBeGreaterThan(imageSection);
     expect(pdfSection).toBeGreaterThan(gallerySection);
     expect(choicesSection).toBeGreaterThan(pdfSection);
     expect(priceSection).toBeGreaterThan(choicesSection);
     const gallery = flow.slice(gallerySection, pdfSection);
-    const readOnly = flow.slice(pdfSection, priceSection);
+    const pdf = flow.slice(pdfSection, choicesSection);
+    const choices = flow.slice(choicesSection, priceSection);
     expect(gallery).toContain('galleryImages.map(');
-    expect(gallery).not.toContain('<Button');
-    expect(gallery).not.toContain('<Input');
-    expect(gallery).not.toContain('<form');
-    expect(readOnly).toContain('option.manufacturer_document_url');
-    expect(readOnly).toContain('orderedVariantGroups.map(');
-    expect(readOnly).toContain('orderedVariantChoices.filter(');
-    expect(readOnly).toContain('VARIANT_KIND_LABELS[choice.kind]');
-    expect(readOnly).toContain("choice.price_on_request ? '別途見積'");
-    expect(readOnly).toContain('<ProductVariantGroupHeading group={group} choiceCount={choices.length} headingLevel="h4" />');
-    expect(variantHeading).toContain("group.status === 'published'");
-    expect(readOnly).toContain("choice.status === 'draft'");
-    expect(readOnly).toContain('rel="noopener noreferrer"');
-    expect(readOnly).not.toContain('<form');
-    expect(readOnly).not.toContain('<Input');
-    expect(readOnly).not.toContain('<Button');
-    expect(readOnly).not.toContain('<Checkbox');
-    expect(readOnly).not.toContain('name=');
-    expect(flow).toContain('saveOptionAction(initialState, review.formData)');
+    expect(gallery).toContain('registered-new-gallery');
+    expect(gallery).toContain('handleNewGalleryFiles(event.target.files)');
+    expect(flow).toContain('setNewGalleryImages(next)');
+    expect(gallery).toContain('editGallery(image.id,');
+    expect(gallery).toContain('この追加画像を削除予定にする');
+    expect(pdf).toContain("documentAction === 'replace'");
+    expect(pdf).toContain("documentAction === 'remove'");
+    expect(pdf).toContain('登録済みPDFを別タブで確認');
+    expect(choices).toContain('orderedVariantGroups.map(');
+    expect(choices).toContain('VARIANT_KIND_LABELS[choice.kind]');
+    expect(choices).not.toContain('<Input');
+    expect(choices).not.toContain('<Button');
+    expect(flow).toContain('mediaDiffs: computeMediaDiffs()');
+    expect(flow).toContain('...review.mediaDiffs');
+    expect(flow).toContain('追加画像・メーカーPDFの変更は、「この変更を反映」で 1 回にまとめて反映します');
   });
 
-  it('別保存の資料・お客様選択は仮実装せず接続待ちにする', () => {
-    expect(flow).toContain('registered-option-pending-subedit');
-    expect(flow).toContain('サブ画像・メーカーPDF・お客様が選ぶ仕様');
-    expect(flow).toContain('変更確認フローへの接続待ち');
+  it('登録済み商品のメディアは 1 操作ずつの即時保存を使わず、DB の一括反映（apply_option_media_changes）だけで保存する（PR #563）', () => {
     expect(flow).not.toContain('OptionMediaManager');
     expect(flow).not.toContain('OptionVariantManager');
+    expect(flow).not.toContain('addOptionImageAction');
+    expect(flow).not.toContain('deleteOptionImageAction');
+    expect(flow).not.toContain('uploadOptionManufacturerDocumentAction');
+    expect(flow).toContain('review.mediaDiffs.length > 0');
+    // 反映を止めていた条件は外し、画面を開いた時点の状態と変更をまとめて送る
+    expect(flow).toContain('disabled={pending || diffs.length === 0 || zeroPriceNeedsServerContract || state.ok}');
+    expect(flow).toContain('applyOptionMediaChangesAction({ optionId: option.id, expected: mediaExpected, changes: { delete: deleting, update, add, document } })');
+    expect(flow).toContain('const mediaExpected = useMemo(() => optionMediaExpectedOf(mediaOption), [mediaOption]);');
+    // 止まったら置いたファイルを受け取りを添えて消す。商品情報だけ失敗したときは、反映済みの画像・資料を二重に送らず、
+    // 反映の結果で照合の状態を新しくする（画面を読み直さずに入力を残す）
+    expect(flow).toContain('discardStagedOptionMediaAction({ optionId: option.id, items: staged })');
+    expect(flow).toContain('if (result.media) setAppliedMedia(result.media);');
+    expect(flow).toContain('追加画像・メーカー資料は反映しました。商品情報は反映できませんでした。');
+    expect(flow).toContain('saveOptionAction(initialState, review.formData)');
+    expect(flow).toContain('サブ画像・メーカーPDFの変更は、STEP 2 の「この変更を反映」で 1 回にまとめて反映し、変更の履歴を残します。');
+    expect(flow).toContain('お客様が選ぶ仕様の編集は引き続き停止中です');
+    // 追加画像だけを変えても編集画面を作り直す（商品の更新日時は変わらない）
+    expect(page).toContain('key={`${option.updated_at}:${optionMediaVersionOf(option)}`}');
   });
 
   it('登録済み商品の通常価格0円への変更は既存サーバールール接続待ちとして反映を止める', () => {

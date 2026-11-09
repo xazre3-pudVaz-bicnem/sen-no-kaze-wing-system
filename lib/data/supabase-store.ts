@@ -87,6 +87,7 @@ import {
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import {
   getLegacyPriceScope,
+  isLegacyPriceWriteTable,
   legacyTableColumns,
   withLegacyBreakdownPrices,
   withLegacyChoicePrices,
@@ -1320,18 +1321,30 @@ export class SupabaseStore implements DataStore {
   private async upsert<T>(table: string, input: { id?: string | null } & Record<string, unknown>): Promise<T> {
     const db = await this.db();
     const { id, ...rest } = input;
-    // 明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する。
-    const q = id ? db.from(table).upsert({ id, ...rest }, { onConflict: 'id' }) : db.from(table).insert(rest);
-    if (table === 'options' || table === 'option_variant_choices' || table === 'base_models') {
+    if (isLegacyPriceWriteTable(table)) {
       // 旧価格の列は読み返せない（v2.5 PR-C1b）。金額のほかの列を返し、金額はサーバーで足す
-      const { data, error } = await q.select(legacyTableColumns(table)).single();
-      if (error) mapPgError(error);
-      const row = data as unknown as T & { id: string };
+      const columns = legacyTableColumns(table);
+      let row: (T & { id: string }) | null = null;
+      if (id) {
+        // 既存の行は UPDATE で書く。INSERT … ON CONFLICT DO UPDATE（upsert）は、SET の EXCLUDED の列にも元の表の
+        // 読み取りの権限を求める（PostgreSQL の決まり）ため、読めない金額の列を書くと 42501 になる（2026-11-09 本番の商品の自動保存）
+        const updated = await db.from(table).update(rest).eq('id', id).select(columns).maybeSingle();
+        if (updated.error) mapPgError(updated.error);
+        row = updated.data as unknown as (T & { id: string }) | null;
+      }
+      if (!row) {
+        // 明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する（更新する行が無ければ、その ID で足す）
+        const inserted = await db.from(table).insert(id ? { id, ...rest } : rest).select(columns).single();
+        if (inserted.error) mapPgError(inserted.error);
+        row = inserted.data as unknown as T & { id: string };
+      }
       const scope = await this.legacyPriceScope();
       if (table === 'options') return (await withLegacyOptionPrices([row], scope))[0] as T;
       if (table === 'option_variant_choices') return (await withLegacyChoicePrices([row], scope))[0] as T;
       return (await withLegacyModelPrices([row], scope))[0] as T;
     }
+    // 明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する。
+    const q = id ? db.from(table).upsert({ id, ...rest }, { onConflict: 'id' }) : db.from(table).insert(rest);
     const { data, error } = await q.select('*').single();
     if (error) mapPgError(error);
     return data as T;

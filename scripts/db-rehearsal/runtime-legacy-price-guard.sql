@@ -213,6 +213,36 @@ begin
   perform pg_temp.lpg_expect_error('LPG-31 旧テンプレートの取込（replace_estimate_templates_with_baselines）：総代理店は金額のある旧テンプレートを差し替えられない', '42501',
     'FORBIDDEN: 旧テンプレート（Excel の標準見積） の金額は本部だけが登録・変更・削除できます',
     pg_temp.lpg_run_as('authenticated', u_md, format('select public.replace_estimate_templates_with_baselines(%L::jsonb)::text || ''ok''', v_template)));
+
+  -- ---------- アプリの保存の形（2026-11-09 本番の商品の自動保存の 42501） ----------
+  -- 金額の列は読めないため、INSERT … ON CONFLICT DO UPDATE（PostgREST の upsert）で SET の EXCLUDED の金額を書くと、本部でも 42501 になる
+  -- （PostgreSQL は EXCLUDED の列にも元の表の読み取りの権限を求める）。アプリは既存の行を UPDATE、無ければ INSERT で書く
+  -- 更新と確認は別の文にする（同じ文の副問い合わせは、文の始まりの状態を見るため）
+  v_out := pg_temp.lpg_run_as('authenticated', u_admin, format('update public.options set name = ''本部商品'', price = 12500 where id = %L returning ''ok''', o_hq));
+  v_out := v_out || '/' || pg_temp.lpg_run_as('authenticated', u_admin, format('update public.option_variant_choices set name = ''黒'', extra_price = 2500 where id = %L returning ''ok''', vc_hq));
+  v_out := v_out || '/' || pg_temp.lpg_run_as('authenticated', u_admin, format('update public.base_models set name = ''旧価格の検査用モデル'', base_price = 1150000 where id = %L returning ''ok''', m_model));
+  perform pg_temp.lpg_expect_eq('LPG-32 本部：既存の行の保存（UPDATE で金額も書き、金額のほかの列を返す）は商品・選択肢・本体とも通る', 'ok/ok/ok/12500/2500/1150000',
+    v_out || '/' ||
+    (select price::text from public.options where id = o_hq) || '/' ||
+    (select extra_price::text from public.option_variant_choices where id = vc_hq) || '/' ||
+    (select base_price::text from public.base_models where id = m_model));
+  perform pg_temp.lpg_expect_eq('LPG-33 本部でも、upsert の形（ON CONFLICT DO UPDATE SET 金額 = EXCLUDED.金額）は 42501（アプリはこの形で書かない）', 'true/true/true',
+    (pg_temp.lpg_run_as('authenticated', u_admin, format(
+       $q$insert into public.options (id, base_model_id, category_id, code, name, price, status) values (%L, %L, %L, 'runtime-lpg-hq', '本部商品', 13000, 'published')
+          on conflict (id) do update set name = excluded.name, price = excluded.price returning 'ok'$q$, o_hq, m_model, c_items))
+       like 'ERROR 42501: permission denied for table options%')::text || '/' ||
+    (pg_temp.lpg_run_as('authenticated', u_admin, format(
+       $q$insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status) values (%L, %L, 'black', '黒', 'option', 3000, 'published')
+          on conflict (id) do update set extra_price = excluded.extra_price returning 'ok'$q$, vc_hq, vg_hq))
+       like 'ERROR 42501: permission denied for table option_variant_choices%')::text || '/' ||
+    (pg_temp.lpg_run_as('authenticated', u_admin, format(
+       $q$insert into public.base_models (id, slug, name, base_price, status) values (%L, 'runtime-lpg-model', '旧価格の検査用モデル', 1200000, 'published')
+          on conflict (id) do update set base_price = excluded.base_price returning 'ok'$q$, m_model))
+       like 'ERROR 42501: permission denied for table base_models%')::text);
+  perform pg_temp.lpg_expect_eq('LPG-34 本部：保存する行が無いときの新しい行の追加（ID を指定した INSERT で金額も書く）は通る', 'ok',
+    pg_temp.lpg_run_as('authenticated', u_admin, format(
+      $q$insert into public.options (id, base_model_id, category_id, code, name, price, status) values ('7d300000-0000-4000-8000-000000000099', %L, %L, 'runtime-lpg-new', '新しい商品', 500, 'draft') returning 'ok'$q$,
+      m_model, c_items)));
 end;
 $behavior$;
 

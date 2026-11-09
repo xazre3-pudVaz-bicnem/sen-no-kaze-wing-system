@@ -21,6 +21,16 @@ export function legacyTableColumns(table: LegacyPriceTable): string {
 }
 
 /**
+ * 旧価格の列を持ち、アプリが行をそのまま保存する表（商品・選択肢・本体モデル）。
+ * 金額の列は読み返せないので、保存の返り値に金額を足す。また、保存は upsert（INSERT … ON CONFLICT DO UPDATE）を使わない
+ * （SET の EXCLUDED の列にも元の表の読み取りの権限が要り、金額の列を書くと 42501 になるため。UPDATE と INSERT は金額の列を書ける）
+ */
+export type LegacyPriceWriteTable = 'options' | 'option_variant_choices' | 'base_models';
+export function isLegacyPriceWriteTable(table: string): table is LegacyPriceWriteTable {
+  return table === 'options' || table === 'option_variant_choices' || table === 'base_models';
+}
+
+/**
  * 金額を足す範囲。
  * - all：すべての金額（スイッチが切れている間は旧シミュレーターの売価として今までどおり。本部。ローカル検証モード）
  * - non-hq：本部商品の外（旧フリー商品）の金額だけ。本部商品・本体・本体内訳・旧テンプレートの金額は 0（スイッチが入った後の本部以外）

@@ -2,9 +2,11 @@ import 'server-only';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { StoreError, type SessionUser } from '@/lib/data/store';
 import { loadDb, saveDb, type LocalDb } from '@/lib/data/local-db';
+import { releaseCasesOfDepartedMember } from '@/lib/data/case-flow/local';
 import type { RoleCode } from '@/lib/domain/types';
 import {
   INVITATION_DAYS,
+  INVITATION_LIMITS,
   INVITATION_TOKEN,
   isManagerRole,
   isValidEmail,
@@ -183,7 +185,17 @@ export class LocalOrganizationStore implements OrganizationStore {
       throw new StoreError('VALIDATION', '総代理店には直属の組織を設定できません');
     }
     if (input.parent_organization_id === org.id) throw new StoreError('VALIDATION', '自分自身を直属の総代理店にはできません');
-    if (input.parent_organization_id !== org.parent_organization_id) validateParent(t, input.parent_organization_id, true);
+    // 親を変えるとき、または有効のまま・再開するときは、直属の総代理店が有効であること（DB と同じ）
+    if (input.parent_organization_id && (input.parent_organization_id !== org.parent_organization_id || input.status === 'active')) {
+      if (input.parent_organization_id === org.parent_organization_id) {
+        const parent = t.organizations.find((o) => o.id === input.parent_organization_id);
+        if (!parent || parent.organization_type !== 'master_dealer' || parent.status !== 'active') {
+          throw new StoreError('VALIDATION', '直属の総代理店が停止中です。先に総代理店を再開するか、直属の総代理店を変えてください');
+        }
+      } else {
+        validateParent(t, input.parent_organization_id, true);
+      }
+    }
     if (
       org.organization_type === 'master_dealer' &&
       input.status === 'inactive' &&
@@ -192,10 +204,36 @@ export class LocalOrganizationStore implements OrganizationStore {
     ) {
       throw new StoreError('VALIDATION', '有効な配下の代理店がある総代理店は停止できません（先に代理店の直属の総代理店を変えてください）');
     }
+    const wasActive = org.status === 'active';
     org.name = name;
     org.parent_organization_id = input.parent_organization_id;
     org.status = input.status;
     org.updated_at = now();
+    // 停止：メンバーを会員と同じ扱いにし（所属は残す）、未使用の招待を取り消す。再開：メンバーの利用者の種類を戻す
+    const memberRoleCode: RoleCode = org.organization_type === 'master_dealer' ? 'master_dealer' : 'dealer';
+    const roleChange: { from: RoleCode; to: RoleCode } | null =
+      wasActive && input.status === 'inactive'
+        ? { from: memberRoleCode, to: 'customer' }
+        : !wasActive && input.status === 'active'
+          ? { from: 'customer', to: memberRoleCode }
+          : null;
+    if (roleChange) {
+      for (const membership of t.memberships.filter((m) => m.organization_id === org.id && m.status === 'active')) {
+        const profile = db.profiles.find((p) => p.id === membership.profile_id);
+        if (profile?.role_code === roleChange.from) {
+          profile.role_code = roleChange.to;
+          profile.updated_at = now();
+        }
+      }
+    }
+    if (wasActive && input.status === 'inactive') {
+      for (const open of t.invitations.filter(
+        (i) => i.organization_id === org.id && !i.accepted_at && !i.revoked_at && new Date(i.expires_at) > new Date()
+      )) {
+        open.revoked_at = now();
+        open.revoked_by = actor.id;
+      }
+    }
     audit(db, actor, 'organization_update', org.id, `組織を変更：${name}`);
     saveDb(db);
   }
@@ -224,7 +262,10 @@ export class LocalOrganizationStore implements OrganizationStore {
     const db = loadDb();
     const t = tables(db);
     const canSeeEmail = isAdmin(db, actor) || isManager(db, actor, organizationId);
-    const isMember = t.memberships.some((m) => m.organization_id === organizationId && m.profile_id === actor.id && m.status === 'active');
+    // 停止中の組織のメンバーは見られない（DB と同じ）
+    const isMember =
+      t.organizations.find((o) => o.id === organizationId)?.status === 'active' &&
+      t.memberships.some((m) => m.organization_id === organizationId && m.profile_id === actor.id && m.status === 'active');
     if (!canSeeEmail && !isMember) throw new StoreError('FORBIDDEN', 'この組織のメンバーは見られません');
     return t.memberships
       .filter((m) => m.organization_id === organizationId && (canSeeEmail || m.status === 'active'))
@@ -294,6 +335,8 @@ export class LocalOrganizationStore implements OrganizationStore {
     member.status = 'inactive';
     member.is_primary = false;
     member.updated_at = now();
+    // 主担当者だった案件は、主担当者と見積の担当を外す（DB のトリガーと同じ。別の組織に入り直しても前の案件を見られない）
+    releaseCasesOfDepartedMember(db, org.id, member.profile_id, actor.id);
     const profile = db.profiles.find((p) => p.id === member.profile_id);
     if (profile && (profile.role_code === 'dealer' || profile.role_code === 'master_dealer')) {
       profile.role_code = 'customer';
@@ -346,6 +389,21 @@ export class LocalOrganizationStore implements OrganizationStore {
         normalizeEmail(db.profiles.find((p) => p.id === m.profile_id)?.email ?? '') === normalized
     );
     if (alreadyMember) throw new StoreError('VALIDATION', 'このメールアドレスの方は、すでにこの組織に所属しています');
+    // 招待メールの送りすぎを防ぐ（DB と同じ。取り消した招待も数える）
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const recent = t.invitations.filter((i) => i.organization_id === org.id && new Date(i.created_at).getTime() > since);
+    if (recent.filter((i) => i.email === normalized).length >= INVITATION_LIMITS.perEmail) {
+      throw new StoreError(
+        'VALIDATION',
+        `同じメールアドレスへの招待は、24 時間に ${INVITATION_LIMITS.perEmail} 回までです。時間をおいてからお試しください`
+      );
+    }
+    if (!isAdmin(db, actor) && recent.length >= INVITATION_LIMITS.perOrganization) {
+      throw new StoreError(
+        'VALIDATION',
+        `1 つの組織からの招待は、24 時間に ${INVITATION_LIMITS.perOrganization} 件までです。時間をおいてからお試しいただくか、本部にご相談ください`
+      );
+    }
 
     const issuedAt = now();
     for (const open of t.invitations.filter((i) => i.organization_id === org.id && i.email === normalized && !i.accepted_at && !i.revoked_at)) {
@@ -429,7 +487,8 @@ export class LocalOrganizationStore implements OrganizationStore {
     if (new Date(invitation.expires_at) < new Date()) {
       throw new StoreError('VALIDATION', '招待の有効期限が切れています。招待した方に、もう一度送ってもらってください');
     }
-    // ログインに使うメールアドレス（本人が変えられるプロフィールのメールアドレスではない）と照合する
+    // ログインに使うメールアドレス（本人が変えられるプロフィールのメールアドレスではない）と照合する。
+    // DB はメールアドレスの確認が済んだアカウントだけに限る。ローカル検証モードには確認の仕組みが無いため照合だけ
     const loginEmail = normalizeEmail(db.users.find((u) => u.id === actor.id)?.email ?? '');
     if (loginEmail !== invitation.email) throw new StoreError('FORBIDDEN', '招待されたメールアドレスでログインしてください');
     const org = t.organizations.find((o) => o.id === invitation.organization_id);

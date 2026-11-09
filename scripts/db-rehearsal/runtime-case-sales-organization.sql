@@ -124,12 +124,15 @@ begin
     (q_legacy, 'RT-CS-L', r_legacy, c_legacy, u_cust2, u_legacy, 'issued', now() + interval '30 days', 'お客様2', '組織検査用モデル', 1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 1, null);
   set local session_replication_role = origin;
 
-  -- ---------- お客様が代理店を選ぶ → 営業担当組織と製造担当（直属の総代理店）が決まる ----------
-  perform pg_temp.cs_expect_denied('25-1 管理者のいない代理店は選べない', 'P0001',
-    pg_temp.cs_run_as('authenticated', u_cust, format($q$ select public.set_quote_request_preferences(%L, jsonb_build_object('preferred_organization_id', %L))::text $q$, r_1, o_d3)));
-  select count(*) into v_notifications_before from public.notifications where recipient_id = u_d_mgr;
+  -- ---------- 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261104160000） ----------
+  -- お客様が組織を直接指定しても、営業担当組織は決まらない（決める条件と合わせて 20261104160000 で入れる）
   v_out := pg_temp.cs_run_as('authenticated', u_cust, format($q$ select public.set_quote_request_preferences(%L, jsonb_build_object('preferred_organization_id', %L))::text $q$, r_1, o_d));
-  perform pg_temp.cs_expect_eq('25-2 お客様が選んだ代理店が営業担当になり、製造担当は直属の総代理店に自動で決まる', 'ok/検査代理店/検査総代理店/true',
+  perform pg_temp.cs_expect_eq('25-1 お客様は、ご依頼の希望から営業担当組織を決められない', 'ok/(none)',
+    coalesce(nullif(v_out, ''), 'ok') || '/' ||
+    coalesce((select w.sales_organization_id::text from public.case_workflows w where w.quote_request_id = r_1), '(none)'));
+  select count(*) into v_notifications_before from public.notifications where recipient_id = u_d_mgr;
+  v_out := pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_sales_organization(%L, %L)::text', r_1, o_d));
+  perform pg_temp.cs_expect_eq('25-2 本部が営業担当組織を決めると、製造担当は直属の総代理店に自動で決まる', 'ok/検査代理店/検査総代理店/true',
     coalesce(nullif(v_out, ''), 'ok') || '/' ||
     (select coalesce(s.name, '-') || '/' || coalesce(m.name, '-') || '/' || w.manufacturing_auto::text
        from public.case_workflows w
@@ -268,6 +271,11 @@ begin
     pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_manufacturing_organization(%L, %L)::text', r_1, o_md)));
   perform pg_temp.cs_expect_eq('25-30 製造担当組織のメンバーは製造依頼を読める', '1',
     pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.manufacturing_orders where quote_request_id = %L', r_1)));
+  -- 製造担当が自動の案件で、送った後に営業担当組織を変えると製造担当が変わる場合は止める（自動にして確かめ、元に戻す）
+  update public.case_workflows set manufacturing_auto = true where quote_request_id = r_1;
+  perform pg_temp.cs_expect_denied('25-44 製造依頼を送った後は、製造担当が変わる営業担当組織の変更はできない', 'P0001',
+    pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_sales_organization(%L, %L)::text', r_1, o_d3)));
+  update public.case_workflows set manufacturing_auto = false where quote_request_id = r_1;
 
   -- ---------- 製造担当組織には、顧客情報の項目が決まるまで製造・施工の記録だけを見せる ----------
   -- これまでの案件では、本部が個人として選んだ製造の担当（総代理店の利用者）に従来どおり見せる
@@ -318,7 +326,17 @@ begin
   -- ---------- 所属を外れた担当者は、案件を扱えない ----------
   select m.id into v_membership from public.organization_memberships m where m.profile_id = u_d_staff and m.status = 'active';
   perform pg_temp.cs_run_as('authenticated', u_d_mgr, format('select public.deactivate_organization_member(%L)::text', v_membership));
-  perform pg_temp.cs_expect_eq('25-31 所属を外れた主担当者は、案件を扱えない', '(null)/0',
+  perform pg_temp.cs_expect_eq('25-31 所属を外れた主担当者は案件を扱えず、主担当者と見積の担当が外れ、管理者に知らせる', '(null)/0/(none)/0/true',
+    pg_temp.cs_run_as('authenticated', u_d_staff, format('select public.case_role(%L)', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.quotes where quote_request_id = %L', r_1)) || '/' ||
+    coalesce((select w.primary_staff_id::text from public.case_workflows w where w.quote_request_id = r_1), '(none)') || '/' ||
+    (select count(*)::text from public.quotes where quote_request_id = r_1 and dealer_id = u_d_staff) || '/' ||
+    ((select count(*) from public.notifications where recipient_id = u_d_mgr and kind = 'case_primary_released') > 0)::text);
+  -- 別の組織に入り直しても、前の組織の案件は見積の担当として見られない
+  insert into public.organization_memberships (organization_id, profile_id, member_role, status, is_primary)
+  values (o_d2, u_d_staff, 'editor', 'active', true);
+  update public.profiles set role_code = 'dealer' where id = u_d_staff;
+  perform pg_temp.cs_expect_eq('25-43 所属を外れた人が別の組織に入り直しても、前の組織の案件は見られない', '(null)/0',
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select public.case_role(%L)', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.quotes where quote_request_id = %L', r_1)));
 
@@ -329,6 +347,8 @@ begin
     pg_temp.cs_run_as('authenticated', u_admin, format('select public.assign_quote_dealer(%L, %L)::text', q_1b, u_legacy)));
   perform pg_temp.cs_expect_denied('25-34 営業担当組織が決まっている案件には、これまでの「総代理店の利用者を製造担当にする」は使えない', 'P0001',
     pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_manufacturer(%L, %L)::text', r_1, u_md_mgr)));
+  perform pg_temp.cs_expect_denied('25-45 これまでの案件（営業担当組織が無い）には、製造担当組織を付けられない（個人の製造の担当が黙って外れるため）', 'P0001',
+    pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_manufacturing_organization(%L, %L)::text', r_legacy, o_md)));
 
   -- ---------- 内部の関数は利用者から呼べない・変更は監査ログに残る ----------
   perform pg_temp.cs_expect_denied('25-35 主担当者をそろえる内部の関数は、利用者から呼べない', '42501',

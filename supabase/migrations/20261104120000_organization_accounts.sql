@@ -12,7 +12,13 @@
 -- * 書き込みは SECURITY DEFINER の RPC だけ。変更は audit_logs に残す
 -- * 案件・見積の権限（営業担当組織・主担当者・製造担当組織）は、この migration では変えない
 -- * 商品台帳の編集は本部だけにする（can_edit_catalog。2026-11-04 の先方回答 B-2：所有組織の区分ができるまで、
---   総代理店・代理店は閲覧だけ）
+--   総代理店・代理店は閲覧だけ）。本体マスターの登録・編集も本部の組織だけ（can_create_base_master_for_org）
+-- * 組織を停止すると、メンバーの利用者の種類を会員に戻し（所属は残す）、未使用の招待を取り消す。再開すると戻す。
+--   停止中の総代理店の配下の代理店は再開できない
+-- * 代理店・総代理店に所属している人の利用者の種類は、所属と合わせる（トリガー。本部の会員一覧から変えられない）
+-- * 招待を受けるのは、メールアドレスの確認が済んだアカウントだけ。招待は同じメールアドレスへ 24 時間に 3 回、
+--   1 つの組織から 24 時間に 20 件まで（本部は組織ごとの件数を数えない）
+-- * 組織の表を読めるのは、本部・自分の組織・代理店から見た直属の総代理店・代理店以上から見た本部の組織だけ
 
 begin;
 
@@ -44,6 +50,22 @@ begin
        and p.role_code = 'admin'
   ) then
     raise exception 'PRECONDITION: a global admin is an active member of a dealer organization; resolve before applying';
+  end if;
+  -- 所属と利用者の種類を合わせるトリガーを入れる前に、今の所属がそろっていること
+  if exists (
+    select 1
+      from public.organization_memberships m
+      join public.profiles p on p.id = m.profile_id
+      join public.organizations o on o.id = m.organization_id
+     where m.status = 'active'
+       and o.organization_type in ('master_dealer', 'dealer')
+       and p.role_code is distinct from case
+             when o.status <> 'active' then 'customer'
+             when o.organization_type = 'master_dealer' then 'master_dealer'
+             else 'dealer'
+           end
+  ) then
+    raise exception 'PRECONDITION: a dealer organization member has a role_code that does not match the organization; resolve before applying';
   end if;
 end;
 $preflight$;
@@ -213,11 +235,14 @@ begin
   if p_organization_type = 'master_dealer' and p_parent_organization_id is not null then
     raise exception using errcode = 'P0001', message = 'VALIDATION: 総代理店には直属の組織を設定できません';
   end if;
-  if p_parent_organization_id is not null and not exists (
-    select 1 from public.organizations o
+  -- 親の行を共有ロックする（同時に親が停止されて、停止中の総代理店の配下に有効な代理店ができないように）
+  if p_parent_organization_id is not null then
+    perform 1 from public.organizations o
      where o.id = p_parent_organization_id and o.organization_type = 'master_dealer' and o.status = 'active'
-  ) then
-    raise exception using errcode = 'P0001', message = 'VALIDATION: 直属の総代理店が見つかりません（停止中の総代理店は選べません）';
+       for share;
+    if not found then
+      raise exception using errcode = 'P0001', message = 'VALIDATION: 直属の総代理店が見つかりません（停止中の総代理店は選べません）';
+    end if;
   end if;
 
   loop
@@ -253,6 +278,9 @@ as $$
 declare
   v_org public.organizations%rowtype;
   v_name text := pg_catalog.btrim(coalesce(p_name, ''));
+  v_member_role_code text;
+  v_role_changed integer := 0;
+  v_revoked integer := 0;
 begin
   if auth.uid() is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -276,13 +304,21 @@ begin
   if v_org.organization_type = 'master_dealer' and p_parent_organization_id is not null then
     raise exception using errcode = 'P0001', message = 'VALIDATION: 総代理店には直属の組織を設定できません';
   end if;
+  -- 親を変えるとき、または有効のまま・再開するときは、直属の総代理店が有効であること
+  -- （停止中の総代理店の配下の代理店を、親を変えずに再開できないようにする）。
+  -- 親の行を共有ロックして、同時に親が停止されないようにする
   if p_parent_organization_id is not null
-     and p_parent_organization_id is distinct from v_org.parent_organization_id
-     and not exists (
-       select 1 from public.organizations o
-        where o.id = p_parent_organization_id and o.organization_type = 'master_dealer' and o.status = 'active'
-     ) then
-    raise exception using errcode = 'P0001', message = 'VALIDATION: 直属の総代理店が見つかりません（停止中の総代理店は選べません）';
+     and (p_parent_organization_id is distinct from v_org.parent_organization_id or p_status = 'active') then
+    perform 1 from public.organizations o
+     where o.id = p_parent_organization_id and o.organization_type = 'master_dealer' and o.status = 'active'
+       for share;
+    if not found then
+      raise exception using errcode = 'P0001', message = case
+        when p_parent_organization_id is not distinct from v_org.parent_organization_id
+          then 'VALIDATION: 直属の総代理店が停止中です。先に総代理店を再開するか、直属の総代理店を変えてください'
+        else 'VALIDATION: 直属の総代理店が見つかりません（停止中の総代理店は選べません）'
+      end;
+    end if;
   end if;
   if v_org.organization_type = 'master_dealer' and p_status = 'inactive' and v_org.status = 'active' and exists (
     select 1 from public.organizations c where c.parent_organization_id = v_org.id and c.status = 'active'
@@ -298,10 +334,43 @@ begin
          updated_at = now()
    where o.id = v_org.id;
 
+  -- 停止と再開：メンバーの利用者の種類（role_code）を合わせる。所属は残すので、再開すると戻る。
+  -- 停止中のメンバーは会員と同じ扱い（管理画面・見積の担当・招待などの代理店・総代理店の権限を使えない）。
+  -- 組織の状態を先に変えてから利用者の種類を変える（所属と利用者の種類を合わせるトリガーが、変えた後の状態で確かめる）
+  v_member_role_code := case v_org.organization_type when 'master_dealer' then 'master_dealer' else 'dealer' end;
+  if v_org.status = 'active' and p_status = 'inactive' then
+    update public.profiles p
+       set role_code = 'customer'
+     where p.role_code = v_member_role_code
+       and exists (
+         select 1 from public.organization_memberships m
+          where m.profile_id = p.id and m.organization_id = v_org.id and m.status = 'active'
+       );
+    get diagnostics v_role_changed = row_count;
+    -- 未使用の招待は取り消す（再開しても、停止前に発行した招待は使えない）
+    update public.organization_invitations i
+       set revoked_at = pg_catalog.clock_timestamp(), revoked_by = auth.uid()
+     where i.organization_id = v_org.id
+       and i.accepted_at is null
+       and i.revoked_at is null
+       and i.expires_at > pg_catalog.clock_timestamp();
+    get diagnostics v_revoked = row_count;
+  elsif v_org.status = 'inactive' and p_status = 'active' then
+    update public.profiles p
+       set role_code = v_member_role_code
+     where p.role_code = 'customer'
+       and exists (
+         select 1 from public.organization_memberships m
+          where m.profile_id = p.id and m.organization_id = v_org.id and m.status = 'active'
+       );
+    get diagnostics v_role_changed = row_count;
+  end if;
+
   perform public.write_organization_audit('organization_update', 'organization', v_org.id,
     '組織を変更：' || v_name,
     pg_catalog.jsonb_build_object('name', v_org.name, 'parent_organization_id', v_org.parent_organization_id, 'status', v_org.status),
-    pg_catalog.jsonb_build_object('name', v_name, 'parent_organization_id', p_parent_organization_id, 'status', p_status));
+    pg_catalog.jsonb_build_object('name', v_name, 'parent_organization_id', p_parent_organization_id, 'status', p_status,
+      'members_role_changed', v_role_changed, 'invitations_revoked', v_revoked));
 end;
 $$;
 
@@ -324,10 +393,15 @@ begin
   if v_actor is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
   end if;
-  select * into v_org from public.organizations o where o.id = p_organization_id;
+  if not (public.is_admin() or public.is_organization_manager(p_organization_id)) then
+    raise exception using errcode = '42501', message = 'FORBIDDEN: 招待できるのは、本部とその組織の管理者だけです';
+  end if;
+  -- 組織の行をロックする（同時に停止されたとき、停止で取り消す招待から漏れないように。招待の件数の上限も順に数える）
+  select * into v_org from public.organizations o where o.id = p_organization_id for update;
   if not found then
     raise exception using errcode = 'P0002', message = 'NOT_FOUND: 組織が見つかりません';
   end if;
+  -- ロックを待つ間に管理者でなくなった場合も止める
   if not (public.is_admin() or public.is_organization_manager(v_org.id)) then
     raise exception using errcode = '42501', message = 'FORBIDDEN: 招待できるのは、本部とその組織の管理者だけです';
   end if;
@@ -350,6 +424,19 @@ begin
      where m.organization_id = v_org.id and m.status = 'active' and pg_catalog.lower(p.email) = v_email
   ) then
     raise exception using errcode = 'P0001', message = 'CONFLICT: このメールアドレスの方は、すでにこの組織に所属しています';
+  end if;
+  -- 招待メールの送りすぎを防ぐ（取り消した招待も数える）
+  if (select count(*) from public.organization_invitations i
+       where i.organization_id = v_org.id and i.email = v_email
+         and i.created_at > pg_catalog.clock_timestamp() - interval '24 hours') >= 3 then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 同じメールアドレスへの招待は、24 時間に 3 回までです。時間をおいてからお試しください';
+  end if;
+  if not public.is_admin() and (select count(*) from public.organization_invitations i
+       where i.organization_id = v_org.id
+         and i.created_at > pg_catalog.clock_timestamp() - interval '24 hours') >= 20 then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 1 つの組織からの招待は、24 時間に 20 件までです。時間をおいてからお試しいただくか、本部にご相談ください';
   end if;
 
   -- 同じ組織・メールアドレスの未使用の招待は取り消して、新しく発行し直す（リンクを紛失したときなど）
@@ -417,6 +504,7 @@ declare
   v_inv public.organization_invitations%rowtype;
   v_org public.organizations%rowtype;
   v_email text;
+  v_email_confirmed_at timestamptz;
   v_role_code text;
   v_new_role_code text;
 begin
@@ -443,9 +531,15 @@ begin
     raise exception using errcode = 'P0001', message = 'VALIDATION: 招待の有効期限が切れています。招待した方に、もう一度送ってもらってください';
   end if;
 
-  select pg_catalog.lower(u.email) into v_email from auth.users u where u.id = v_actor;
+  select pg_catalog.lower(u.email), u.email_confirmed_at into v_email, v_email_confirmed_at from auth.users u where u.id = v_actor;
   if v_email is distinct from v_inv.email then
     raise exception using errcode = '42501', message = 'FORBIDDEN: 招待されたメールアドレスでログインしてください';
+  end if;
+  -- メールアドレスの確認が済んだアカウントだけ
+  -- （会員登録のメール確認（Supabase の Confirm email）が OFF の間は、登録した時点で確認済みになる）
+  if v_email_confirmed_at is null then
+    raise exception using errcode = '42501',
+      message = 'FORBIDDEN: メールアドレスの確認が済んでいません。確認メールのリンクを開いてから、もう一度お試しください';
   end if;
 
   select * into v_org from public.organizations o where o.id = v_inv.organization_id for share;
@@ -684,7 +778,7 @@ as $$
    limit 1;
 $$;
 
--- 組織のメンバー（本部と、その組織の有効なメンバー。メールアドレスは本部と管理者にだけ返す）
+-- 組織のメンバー（本部と、有効な組織の有効なメンバー。メールアドレスは本部と管理者にだけ返す）
 create function public.list_organization_members(p_organization_id uuid)
 returns table (
   membership_id uuid,
@@ -707,8 +801,11 @@ begin
   if not (
     v_can_see_email
     or exists (
-      select 1 from public.organization_memberships m
+      select 1
+        from public.organization_memberships m
+        join public.organizations o on o.id = m.organization_id
        where m.organization_id = p_organization_id and m.profile_id = auth.uid() and m.status = 'active'
+         and o.status = 'active'
     )
   ) then
     raise exception using errcode = '42501', message = 'FORBIDDEN: この組織のメンバーは見られません';
@@ -820,6 +917,104 @@ $$;
 comment on function public.can_edit_catalog() is
   '商品台帳（本部商品・カテゴリー・本体・画像・プレビュー）を編集できるか。本部だけ（2026-11-04 の先方回答 B-2。所有組織の区分ができるまで、総代理店・代理店は閲覧だけ）';
 
+-- 本体マスター（base_masters）の登録・編集・公開も本部の組織だけ（B-2）。これまでは総代理店の組織のメンバーも
+-- 自社の本体マスターを登録・編集できた（20260914112000）。can_edit_base_master はこの関数で判定している
+create or replace function public.can_create_base_master_for_org(p_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.organizations o
+     where o.id = p_organization_id
+       and o.status = 'active'
+       and o.organization_type = 'headquarters'
+       and public.current_organization_member_rank(o.id) >= 1
+  );
+$$;
+
+comment on function public.can_create_base_master_for_org(uuid) is
+  'その組織の本体マスターを登録・編集できるか。本部の組織の編集者以上だけ（2026-11-04 の先方回答 B-2。総代理店・代理店は閲覧だけ）';
+
+-- ---------- 所属と利用者の種類を合わせる ----------
+-- 代理店・総代理店に所属している人の role_code は、所属先の組織の種類（停止中なら customer）と同じでなければならない。
+-- 本部の会員一覧の「権限の変更」で、所属したまま本部の管理者にしたり、管理者を会員に戻したのに所属先の管理者の
+-- 操作（招待など）が続けられたりしないようにする。変えるときは、組織の画面で所属を外す（外すと会員に戻る）
+create function public.enforce_profile_role_matches_organization()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_expected text;
+begin
+  if new.role_code is not distinct from old.role_code then
+    return new;
+  end if;
+  select case
+           when o.status <> 'active' then 'customer'
+           when o.organization_type = 'master_dealer' then 'master_dealer'
+           else 'dealer'
+         end
+    into v_expected
+    from public.organization_memberships m
+    join public.organizations o on o.id = m.organization_id
+   where m.profile_id = new.id
+     and m.status = 'active'
+     and o.organization_type in ('master_dealer', 'dealer')
+   limit 1;
+  if found and new.role_code is distinct from v_expected then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 代理店・総代理店に所属している方の権限は変えられません。組織の画面で所属を外してから変えてください（所属を外すと会員に戻ります）';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_profiles_role_matches_organization
+before update of role_code on public.profiles
+for each row execute function public.enforce_profile_role_matches_organization();
+
+-- ---------- 組織の表を読める範囲 ----------
+-- これまでは代理店以上の全員が、すべての組織（名前・コード・状態・直属の総代理店）を読めた（20260914112000）。
+-- 本部・自分の組織・代理店から見た直属の総代理店・代理店以上から見た本部の組織（本体マスターの所有者の表示）に絞る。
+-- 組織の一覧・配下の案件など、ほかの組織の情報は SECURITY DEFINER の RPC が権限を確かめてから返す
+create function public.can_read_organization(p_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.is_admin()
+      or exists (
+        select 1
+          from public.organization_memberships m
+          join public.organizations mine on mine.id = m.organization_id
+         where m.profile_id = auth.uid()
+           and m.status = 'active'
+           and (mine.id = p_organization_id or mine.parent_organization_id = p_organization_id)
+      )
+      or (
+        public.current_role_rank() >= 1
+        and exists (
+          select 1 from public.organizations t
+           where t.id = p_organization_id and t.organization_type = 'headquarters'
+        )
+      );
+$$;
+
+comment on function public.can_read_organization(uuid) is
+  '組織の表の行を読めるか（RLS から呼ぶ）。本部・自分の組織・代理店から見た直属の総代理店・代理店以上から見た本部の組織だけ。';
+
+drop policy if exists organizations_staff_read on public.organizations;
+create policy organizations_staff_read on public.organizations
+for select using (public.can_read_organization(id));
+
 -- ---------- 所有者と実行権限 ----------
 
 alter function public.validate_organization_parent() owner to postgres;
@@ -837,6 +1032,9 @@ alter function public.get_my_organization() owner to postgres;
 alter function public.list_organization_members(uuid) owner to postgres;
 alter function public.list_organization_invitations(uuid) owner to postgres;
 alter function public.get_organization_invitation(text) owner to postgres;
+alter function public.can_create_base_master_for_org(uuid) owner to postgres;
+alter function public.enforce_profile_role_matches_organization() owner to postgres;
+alter function public.can_read_organization(uuid) owner to postgres;
 
 revoke all on function public.validate_organization_parent() from public, anon, authenticated, service_role;
 revoke all on function public.write_organization_audit(text, text, uuid, text, jsonb, jsonb) from public, anon, authenticated, service_role;
@@ -854,6 +1052,8 @@ revoke all on function public.get_my_organization() from public, anon, authentic
 revoke all on function public.list_organization_members(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.list_organization_invitations(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.get_organization_invitation(text) from public, anon, authenticated, service_role;
+revoke all on function public.enforce_profile_role_matches_organization() from public, anon, authenticated, service_role;
+revoke all on function public.can_read_organization(uuid) from public, anon, authenticated, service_role;
 
 grant execute on function public.is_organization_manager(uuid) to authenticated;
 grant execute on function public.create_organization(text, text, uuid) to authenticated;
@@ -868,6 +1068,8 @@ grant execute on function public.get_my_organization() to authenticated;
 grant execute on function public.list_organization_members(uuid) to authenticated;
 grant execute on function public.list_organization_invitations(uuid) to authenticated;
 grant execute on function public.get_organization_invitation(text) to authenticated;
+-- 組織の表の RLS から呼ぶ
+grant execute on function public.can_read_organization(uuid) to authenticated;
 
 -- ---------- postconditions ----------
 
@@ -885,6 +1087,27 @@ begin
   if pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.can_edit_catalog()'::regprocedure), 'current_role_rank() >= 3') = 0
      or not has_function_privilege('authenticated', 'public.can_edit_catalog()', 'EXECUTE') then
     raise exception 'POSTCONDITION: can_edit_catalog() must allow headquarters only and stay executable for RLS';
+  end if;
+  -- 本体マスターの登録・編集も本部の組織だけ（B-2）
+  if pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.can_create_base_master_for_org(uuid)'::regprocedure), 'master_dealer') > 0
+     or pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.can_create_base_master_for_org(uuid)'::regprocedure),
+                          'organization_type = ''headquarters''') = 0 then
+    raise exception 'POSTCONDITION: can_create_base_master_for_org() must allow headquarters only';
+  end if;
+  if not exists (
+    select 1 from pg_trigger
+     where tgrelid = 'public.profiles'::regclass and tgname = 'trg_profiles_role_matches_organization'
+       and not tgisinternal and tgenabled = 'O'
+  ) then
+    raise exception 'POSTCONDITION: trg_profiles_role_matches_organization trigger is missing';
+  end if;
+  -- 組織の表は can_read_organization() の範囲だけ（ほかの許可の policy が無いこと）
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'organizations' and policyname = 'organizations_staff_read'
+       and cmd = 'SELECT' and qual like '%can_read_organization(id)%'
+  ) or (select count(*) from pg_policies where schemaname = 'public' and tablename = 'organizations') <> 1 then
+    raise exception 'POSTCONDITION: organizations must be readable only through can_read_organization()';
   end if;
   if not (select c.relrowsecurity from pg_class c where c.oid = 'public.organization_invitations'::regclass) then
     raise exception 'POSTCONDITION: organization_invitations RLS is not enabled';
@@ -906,7 +1129,8 @@ begin
          'create_organization', 'update_organization', 'invite_organization_member', 'revoke_organization_invitation',
          'accept_organization_invitation', 'set_organization_member_role', 'deactivate_organization_member',
          'list_organizations_for_admin', 'get_my_organization', 'list_organization_members',
-         'list_organization_invitations', 'get_organization_invitation'
+         'list_organization_invitations', 'get_organization_invitation',
+         'enforce_profile_role_matches_organization', 'can_read_organization'
        )
   loop
     if v_fn.prosecdef is distinct from true or v_fn.owner_name <> 'postgres' then
@@ -918,7 +1142,7 @@ begin
     if has_function_privilege('anon', v_fn.oid, 'EXECUTE') or has_function_privilege('service_role', v_fn.oid, 'EXECUTE') then
       raise exception 'POSTCONDITION: % must not be executable by anon / service_role', v_fn.proname;
     end if;
-    if v_fn.proname in ('validate_organization_parent', 'write_organization_audit') then
+    if v_fn.proname in ('validate_organization_parent', 'write_organization_audit', 'enforce_profile_role_matches_organization') then
       if has_function_privilege('authenticated', v_fn.oid, 'EXECUTE') then
         raise exception 'POSTCONDITION: % must not be executable by authenticated', v_fn.proname;
       end if;

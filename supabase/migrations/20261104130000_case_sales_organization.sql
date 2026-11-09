@@ -18,6 +18,10 @@
 --   回されたアフター）と自分たちの技術検討だけ。現地確認・打合せ記録や相談・設置予定地と土地・そのほかの資料は、総代理店に見せる
 --   顧客情報の項目が先方の確認で決まるまで見せない（これまでの案件で本部が個人として選んだ製造の担当は従来どおり）
 -- * 営業担当組織が無い案件（これまでの案件）は、従来どおり見積の担当（dealer_id）で判定する
+-- * 営業担当組織を決める・変えるのは本部（set_case_sales_organization）。お客様が見積依頼で選んだ代理店を営業担当にする仕組みは
+--   20261104160000 で、決める条件（依頼の直後の 1 回だけ・公開中の紹介ページ・設置予定地）と合わせて入れる
+--   （2026-11-09 の独立レビューを受けて、決める条件と合わせて入れるよう分けた）
+-- * 組織の所属を外れたメンバーが主担当者の案件は、主担当者と見積の担当を外す（別の組織に入り直しても前の案件を見られない）
 
 begin;
 
@@ -59,12 +63,6 @@ comment on column public.case_workflows.manufacturing_organization_id is
 
 create index case_workflows_sales_org_idx on public.case_workflows(sales_organization_id) where sales_organization_id is not null;
 create index case_workflows_manufacturing_org_idx on public.case_workflows(manufacturing_organization_id) where manufacturing_organization_id is not null;
-
-alter table public.quote_request_preferences
-  add column preferred_organization_id uuid references public.organizations(id) on delete set null;
-
-comment on column public.quote_request_preferences.preferred_organization_id is
-  'お客様が選んだ代理店（組織）。営業担当組織が未定なら、その組織を営業担当にする。';
 
 alter table public.manufacturing_orders
   add column manufacturing_organization_id uuid references public.organizations(id) on delete restrict;
@@ -140,6 +138,25 @@ as $$
   );
 $$;
 
+-- 自分が管理者の営業担当組織の案件（一覧で行ごとに is_case_sales_manager を呼ばないよう、1 回でまとめて求める）
+create function public.my_sales_managed_request_ids()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select w.quote_request_id
+    from public.case_workflows w
+    join public.organizations o on o.id = w.sales_organization_id
+    join public.organization_memberships m on m.organization_id = o.id
+   where o.status = 'active'
+     and o.organization_type in ('master_dealer', 'dealer')
+     and m.profile_id = auth.uid()
+     and m.status = 'active'
+     and m.member_role in ('owner', 'admin');
+$$;
+
 -- 自分が、案件の営業担当（代理店）の直属の総代理店の管理者か（配下の進み具合を確認する立場）
 create function public.is_case_supervisor(p_request_id uuid)
 returns boolean
@@ -161,7 +178,8 @@ as $$
   );
 $$;
 
--- 営業担当組織から決まる製造担当（代理店なら直属の総代理店、総代理店なら自身、本部なら未定）
+-- 営業担当組織から決まる製造担当（代理店なら直属の総代理店、総代理店なら自身、本部なら未定）。
+-- 停止中の総代理店は製造担当にしない（未定にして本部が決める）
 create function public.default_manufacturing_organization(p_sales_organization_id uuid)
 returns uuid
 language sql
@@ -169,13 +187,13 @@ stable
 security definer
 set search_path = ''
 as $$
-  select case o.organization_type
-           when 'dealer' then o.parent_organization_id
-           when 'master_dealer' then o.id
-           else null
-         end
+  select m.id
     from public.organizations o
-   where o.id = p_sales_organization_id;
+    join public.organizations m
+      on m.id = case o.organization_type when 'dealer' then o.parent_organization_id when 'master_dealer' then o.id end
+   where o.id = p_sales_organization_id
+     and m.organization_type = 'master_dealer'
+     and m.status = 'active';
 $$;
 
 -- 組織の有効な管理者へ通知する
@@ -409,7 +427,7 @@ using (
   user_id = auth.uid()
   or public.is_admin()
   or (public.is_dealer() and dealer_id = auth.uid())
-  or (quote_request_id is not null and public.is_case_sales_manager(quote_request_id))
+  or public.is_case_sales_manager(quote_request_id)
 );
 
 drop policy if exists quote_items_select on public.quote_items;
@@ -424,7 +442,7 @@ using (
          q.user_id = auth.uid()
          or public.is_admin()
          or (public.is_dealer() and q.dealer_id = auth.uid())
-         or (q.quote_request_id is not null and public.is_case_sales_manager(q.quote_request_id))
+         or public.is_case_sales_manager(q.quote_request_id)
        )
   )
 );
@@ -478,6 +496,51 @@ as $$
          p_action, 'quote_request', p_request_id, p_summary, p_before, p_after;
 $$;
 
+-- ---------- 所属を外れたメンバーが主担当者の案件 ----------
+-- 所属を外れた（所属の状態が有効でなくなった）メンバーが主担当者の、その組織の案件は、主担当者と見積の担当（quotes.dealer_id）を外す。
+-- 見積の担当が残ると、別の組織に入り直したときに、前の組織の案件を見積の担当として見られてしまうため。
+-- 組織の停止では外さない（所属は残り、停止中は利用者の種類が会員になる。再開すると同じ担当で続けられる）。
+-- 組織の管理者へ、主担当者を決め直すよう 1 回だけ知らせる
+create function public.release_cases_of_departed_member()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_request uuid;
+  v_count integer := 0;
+begin
+  if old.status = 'active' and new.status is distinct from 'active' then
+    for v_request in
+      select w.quote_request_id
+        from public.case_workflows w
+       where w.sales_organization_id = new.organization_id
+         and w.primary_staff_id = new.profile_id
+       order by w.quote_request_id
+         for update
+    loop
+      perform public.apply_case_main_staff(v_request, null, auth.uid());
+      perform public.write_case_audit(v_request, 'case_primary_staff', '所属を外れたため、主担当者を外しました',
+        pg_catalog.jsonb_build_object('primary_staff_id', new.profile_id),
+        pg_catalog.jsonb_build_object('primary_staff_id', null));
+      v_count := v_count + 1;
+    end loop;
+    if v_count > 0 then
+      perform public.notify_organization_managers(new.organization_id, 'case_primary_released',
+        '主担当者のいない案件があります',
+        '所属を外れたメンバーが主担当者だった案件（' || v_count::text || ' 件）の主担当者を外しました。主担当者を決め直してください。',
+        '/admin/quotes');
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger organization_memberships_release_cases
+after update of status on public.organization_memberships
+for each row execute function public.release_cases_of_departed_member();
+
 -- ---------- 営業担当組織（本部だけが決める・変える） ----------
 
 create function public.set_case_sales_organization(p_request_id uuid, p_organization_id uuid)
@@ -520,6 +583,14 @@ begin
              when w.manufacturing_auto or w.manufacturing_organization_id is null then public.default_manufacturing_organization(p_organization_id)
              else w.manufacturing_organization_id
            end;
+  -- 製造依頼を送った後は、製造担当が変わる変更をしない（送った製造依頼の送り先と食い違うため。set_case_manufacturing_organization と同じ）
+  if v_mfg is distinct from w.manufacturing_organization_id and exists (
+    select 1 from public.manufacturing_orders o
+     where o.quote_request_id = p_request_id and o.status not in ('draft', 'canceled')
+  ) then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 製造依頼を送った後は、製造担当が変わる営業担当組織の変更はできません（先に製造担当を今の総代理店に固定するか、製造依頼を取り消してください）';
+  end if;
   update public.case_workflows cw
      set sales_organization_id = p_organization_id,
          sales_assigned_at = case when p_organization_id is null then null else now() end,
@@ -595,6 +666,12 @@ begin
   insert into public.case_workflows (quote_request_id, updated_by) values (p_request_id, v_uid)
   on conflict (quote_request_id) do nothing;
   select * into w from public.case_workflows cw where cw.quote_request_id = p_request_id for update;
+  -- これまでの案件（営業担当組織が無い）は、本部が個人として選ぶ製造の担当（set_case_manufacturer）のまま。
+  -- 製造担当組織を付けると、個人の製造の担当が黙って外れるため、先に営業担当組織を決めてもらう
+  if w.sales_organization_id is null then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 製造担当組織は、営業担当組織を決めた案件で選べます（これまでの案件は「製造の担当」を使ってください）';
+  end if;
   v_mfg := coalesce(p_organization_id, public.default_manufacturing_organization(w.sales_organization_id));
   if v_mfg is distinct from w.manufacturing_organization_id and exists (
     select 1 from public.manufacturing_orders o
@@ -644,7 +721,8 @@ begin
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
   end if;
 
-  select * into w from public.case_workflows cw where cw.quote_request_id = p_request_id;
+  -- 案件の受付・担当の行をロックしてから判定する（同時に本部が営業担当組織を変えても、変えた後の組織で判定する）
+  select * into w from public.case_workflows cw where cw.quote_request_id = p_request_id for update;
   if w.sales_organization_id is not null then
     -- 組織の案件：主担当者を決めるのは本部と、営業担当組織の管理者
     if not (coalesce(public.current_role_rank(), 0) >= 3 or public.is_case_sales_manager(p_request_id)) then
@@ -660,7 +738,6 @@ begin
         raise exception 'VALIDATION: 主担当者は、営業担当組織のメンバーから選んでください' using errcode = 'P0001';
       end if;
     end if;
-    perform 1 from public.case_workflows cw where cw.quote_request_id = p_request_id for update;
     perform public.apply_case_main_staff(p_request_id, p_staff_id, v_uid);
     if p_staff_id is not null and p_staff_id <> v_uid then
       perform public.notify(p_staff_id, case when public.role_rank(v_role) >= 3 then 'admin' else 'dealer' end, 'case_primary_assigned',
@@ -692,7 +769,11 @@ begin
 
   insert into public.case_workflows (quote_request_id, updated_by) values (p_request_id, v_uid)
   on conflict (quote_request_id) do nothing;
-  perform 1 from public.case_workflows cw where cw.quote_request_id = p_request_id for update;
+  select * into w from public.case_workflows cw where cw.quote_request_id = p_request_id for update;
+  -- 判定の後に、同時に営業担当組織が決まった案件は、組織の案件として決め直してもらう
+  if w.sales_organization_id is not null then
+    raise exception 'LOCKED: 案件の営業担当組織が決まりました。画面を読み込み直してから、もう一度お試しください' using errcode = 'P0001';
+  end if;
   update public.case_workflows
      set primary_staff_id = p_staff_id,
          primary_assigned_at = case when p_staff_id is null then null else now() end,
@@ -744,142 +825,6 @@ begin
     perform public.notify(v_customer, 'customer', 'case_acknowledged', 'ご依頼を受け付けました',
       '担当より、打合せの日程などのご連絡をいたします。進み具合はマイページで確認できます。',
       '/mypage/cases/' || p_request_id::text);
-  end if;
-end;
-$$;
-
--- ---------- お客様が選んだ代理店（組織）を営業担当にする ----------
-
-create or replace function public.set_quote_request_preferences(p_request_id uuid, p_preferences jsonb)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_uid uuid := auth.uid();
-  v_access text;
-  v_before uuid;
-  v_dealer uuid;
-  v_org uuid;
-  v_method text;
-  v_slots jsonb := '[]'::jsonb;
-  e jsonb;
-  v_date date;
-  v_period text;
-  v_sales uuid;
-begin
-  if v_uid is null then
-    raise exception 'UNAUTHENTICATED' using errcode = '42501';
-  end if;
-  v_access := public.case_access(p_request_id);
-  if v_access is null or v_access not in ('customer', 'admin') then
-    raise exception 'FORBIDDEN: ご依頼の希望を変更できるのは、ご依頼のお客様と本部だけです' using errcode = '42501';
-  end if;
-  if p_preferences is null or jsonb_typeof(p_preferences) <> 'object' then
-    raise exception 'VALIDATION: 入力内容を確認してください' using errcode = 'P0001';
-  end if;
-
-  if nullif(btrim(coalesce(p_preferences ->> 'preferred_dealer_id', '')), '') is not null then
-    begin
-      v_dealer := (p_preferences ->> 'preferred_dealer_id')::uuid;
-    exception when invalid_text_representation then
-      raise exception 'VALIDATION: 相談したい代理店の指定が正しくありません' using errcode = 'P0001';
-    end;
-    if not exists (select 1 from public.dealer_profiles d where d.dealer_id = v_dealer and d.published) then
-      raise exception 'VALIDATION: 指定した代理店は選べません' using errcode = 'P0001';
-    end if;
-  end if;
-  -- お客様が選んだ代理店（組織）。有効な代理店・総代理店で、管理者がいる組織だけ選べる
-  if nullif(btrim(coalesce(p_preferences ->> 'preferred_organization_id', '')), '') is not null then
-    begin
-      v_org := (p_preferences ->> 'preferred_organization_id')::uuid;
-    exception when invalid_text_representation then
-      raise exception 'VALIDATION: 相談したい代理店の指定が正しくありません' using errcode = 'P0001';
-    end;
-    if not exists (
-      select 1
-        from public.organizations o
-       where o.id = v_org
-         and o.status = 'active'
-         and o.organization_type in ('master_dealer', 'dealer')
-         and exists (
-           select 1 from public.organization_memberships m
-            where m.organization_id = o.id and m.status = 'active' and m.member_role in ('owner', 'admin')
-         )
-    ) then
-      raise exception 'VALIDATION: 指定した代理店は選べません' using errcode = 'P0001';
-    end if;
-  end if;
-  v_method := public.cf_text(p_preferences, 'meeting_method', 20, '打合せの方法');
-  if v_method is not null and v_method not in ('onsite', 'online', 'visit', 'phone') then
-    raise exception 'VALIDATION: 打合せの方法が正しくありません' using errcode = 'P0001';
-  end if;
-  if p_preferences ? 'preferred_slots' and jsonb_typeof(p_preferences -> 'preferred_slots') <> 'null' then
-    if jsonb_typeof(p_preferences -> 'preferred_slots') <> 'array' or jsonb_array_length(p_preferences -> 'preferred_slots') > 3 then
-      raise exception 'VALIDATION: 打合せの希望日は 3 つまでです' using errcode = 'P0001';
-    end if;
-    for e in select value from jsonb_array_elements(p_preferences -> 'preferred_slots')
-    loop
-      begin
-        v_date := (e ->> 'date')::date;
-      exception when others then
-        raise exception 'VALIDATION: 打合せの希望日の形式が正しくありません' using errcode = 'P0001';
-      end;
-      v_period := coalesce(nullif(e ->> 'period', ''), 'any');
-      if v_date is null or v_date < current_date or v_date > current_date + 365 then
-        raise exception 'VALIDATION: 打合せの希望日は今日から 1 年以内の日付にしてください' using errcode = 'P0001';
-      end if;
-      if v_period not in ('am', 'pm', 'evening', 'any') then
-        raise exception 'VALIDATION: 打合せの希望の時間帯が正しくありません' using errcode = 'P0001';
-      end if;
-      v_slots := v_slots || jsonb_build_array(jsonb_build_object('date', v_date::text, 'period', v_period));
-    end loop;
-  end if;
-
-  select preferred_dealer_id into v_before from public.quote_request_preferences where quote_request_id = p_request_id for update;
-  insert into public.quote_request_preferences (quote_request_id, preferred_dealer_id, preferred_organization_id, meeting_method, preferred_slots, note, updated_by)
-  values (p_request_id, v_dealer, v_org, v_method, v_slots, public.cf_text(p_preferences, 'note', 1000, '日程のご要望'), v_uid)
-  on conflict (quote_request_id) do update
-    set preferred_dealer_id = excluded.preferred_dealer_id,
-        preferred_organization_id = excluded.preferred_organization_id,
-        meeting_method = excluded.meeting_method,
-        preferred_slots = excluded.preferred_slots,
-        note = excluded.note,
-        updated_by = excluded.updated_by;
-
-  if v_dealer is not null and v_dealer is distinct from v_before then
-    perform public.notify(null, 'admin', 'case_preferred_dealer', 'お客様が相談したい代理店を指定しました',
-      '案件の「受付・担当」で、担当代理店を割り当ててください。', '/admin/quotes?request=' || p_request_id::text);
-  end if;
-
-  -- 営業担当組織が未定なら、お客様が選んだ代理店を営業担当にする（いったん決まった後は、本部だけが変える）
-  if v_org is not null then
-    insert into public.case_workflows (quote_request_id, updated_by) values (p_request_id, v_uid)
-    on conflict (quote_request_id) do nothing;
-    select w.sales_organization_id into v_sales from public.case_workflows w where w.quote_request_id = p_request_id for update;
-    if v_sales is null then
-      update public.case_workflows w
-         set sales_organization_id = v_org,
-             sales_assigned_at = now(),
-             sales_assigned_by = v_uid,
-             manufacturing_organization_id = case when w.manufacturing_auto or w.manufacturing_organization_id is null
-                                                  then public.default_manufacturing_organization(v_org)
-                                                  else w.manufacturing_organization_id end,
-             manufacturing_auto = (w.manufacturing_auto or w.manufacturing_organization_id is null),
-             manufacturing_assigned_at = now(),
-             updated_by = v_uid,
-             updated_at = now()
-       where w.quote_request_id = p_request_id;
-      -- 営業担当が決まる前の見積の担当は外す（担当は組織の管理者が決める）
-      perform public.apply_case_main_staff(p_request_id, null, v_uid);
-      perform public.notify_organization_managers(v_org, 'case_sales_assigned',
-        'お客様から見積のご依頼が届きました',
-        'お客様があなたの組織を選びました。案件の内容を確認し、主担当者を決めてください。',
-        '/admin/quotes?request=' || p_request_id::text);
-      perform public.notify(null, 'admin', 'case_sales_assigned', 'お客様が代理店を選びました',
-        '選ばれた代理店を営業担当にしました。必要なら案件の「受付・担当」で変えられます。', '/admin/quotes?request=' || p_request_id::text);
-    end if;
   end if;
 end;
 $$;
@@ -1269,7 +1214,7 @@ AS $function$
     r.contact ->> 'site_address'
   from public.quotes as q
   join public.quote_requests as r on r.id = q.quote_request_id
-  where (q.dealer_id = (select auth.uid()) or public.is_case_sales_manager(r.id))
+  where (q.dealer_id = (select auth.uid()) or r.id in (select public.my_sales_managed_request_ids()))
     and (select public.is_dealer());
 $function$;
 
@@ -1302,6 +1247,7 @@ declare
   v_uid uuid := auth.uid();
   v_rank integer;
   v_result jsonb;
+  v_managed uuid[];
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -1312,6 +1258,8 @@ begin
     raise exception 'FORBIDDEN: 顧客管理を閲覧できるのは代理店以上です'
       using errcode = '42501';
   end if;
+  -- 自分が管理者の営業担当組織の案件（行ごとに判定の関数を呼ばない）
+  v_managed := array(select public.my_sales_managed_request_ids());
 
   with accessible_requests as (
     select r.*
@@ -1323,7 +1271,7 @@ begin
            where aq.quote_request_id = r.id
              and aq.dealer_id = v_uid
         )
-        or public.is_case_sales_manager(r.id)
+        or r.id = any(v_managed)
   ),
   case_rows as (
     select
@@ -1394,7 +1342,7 @@ begin
       select q.id
         from public.quotes as q
        where q.quote_request_id = r.id
-         and (v_rank >= 3 or q.dealer_id = v_uid or public.is_case_sales_manager(r.id))
+         and (v_rank >= 3 or q.dealer_id = v_uid or r.id = any(v_managed))
        order by q.revision desc, q.issued_at desc, q.updated_at desc, q.id desc
        limit 1
     ) as open_quote on true
@@ -1533,6 +1481,7 @@ declare
   v_uid uuid := auth.uid();
   v_rank integer;
   v_result jsonb;
+  v_managed uuid[];
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -1543,6 +1492,8 @@ begin
     raise exception 'FORBIDDEN: 顧客管理を閲覧できるのは代理店以上です'
       using errcode = '42501';
   end if;
+  -- 自分が管理者の営業担当組織の案件（行ごとに判定の関数を呼ばない）
+  v_managed := array(select public.my_sales_managed_request_ids());
 
   with accessible_requests as (
     select r.*
@@ -1554,7 +1505,7 @@ begin
            where aq.quote_request_id = r.id
              and aq.dealer_id = v_uid
         )
-        or public.is_case_sales_manager(r.id)
+        or r.id = any(v_managed)
   ),
   case_rows as (
     select
@@ -1637,7 +1588,7 @@ begin
       select q.id
         from public.quotes as q
        where q.quote_request_id = r.id
-         and (v_rank >= 3 or q.dealer_id = v_uid or public.is_case_sales_manager(r.id))
+         and (v_rank >= 3 or q.dealer_id = v_uid or r.id = any(v_managed))
        order by q.revision desc, q.issued_at desc, q.updated_at desc, q.id desc
        limit 1
     ) as open_quote on true
@@ -1733,7 +1684,7 @@ begin
                   'base_model_name', cr.latest_model_name,
                   'issued_at', cr.latest_issued_at,
                   'total', cr.latest_total,
-                  'can_open_quote', v_rank >= 3 or cr.latest_dealer_id = v_uid or public.is_case_sales_manager(cr.case_id)
+                  'can_open_quote', v_rank >= 3 or cr.latest_dealer_id = v_uid or cr.case_id = any(v_managed)
                 )
               end
           )
@@ -1758,7 +1709,7 @@ begin
             'base_model_name', q.base_model_name,
             'issued_at', q.issued_at,
             'total', q.total,
-            'can_open_quote', v_rank >= 3 or q.dealer_id = v_uid or public.is_case_sales_manager(cr.case_id)
+            'can_open_quote', v_rank >= 3 or q.dealer_id = v_uid or cr.case_id = any(v_managed)
           )
           order by q.issued_at desc, q.revision desc, q.updated_at desc, q.id desc
         )
@@ -1867,12 +1818,14 @@ alter function public.validate_case_workflow_organizations() owner to postgres;
 alter function public.is_active_organization_member(uuid, uuid) owner to postgres;
 alter function public.is_case_sales_manager(uuid) owner to postgres;
 alter function public.is_case_supervisor(uuid) owner to postgres;
+alter function public.my_sales_managed_request_ids() owner to postgres;
 alter function public.default_manufacturing_organization(uuid) owner to postgres;
 alter function public.notify_organization_managers(uuid, text, text, text, text) owner to postgres;
 alter function public.case_role(uuid) owner to postgres;
 alter function public.is_case_legacy_manufacturer(uuid) owner to postgres;
 alter function public.apply_case_main_staff(uuid, uuid, uuid) owner to postgres;
 alter function public.write_case_audit(uuid, text, text, jsonb, jsonb) owner to postgres;
+alter function public.release_cases_of_departed_member() owner to postgres;
 alter function public.set_case_sales_organization(uuid, uuid) owner to postgres;
 alter function public.set_case_manufacturing_organization(uuid, uuid) owner to postgres;
 alter function public.get_case_organizations(uuid) owner to postgres;
@@ -1881,10 +1834,12 @@ alter function public.get_case_organizations(uuid) owner to postgres;
 revoke all on function public.validate_case_workflow_organizations() from public, anon, authenticated, service_role;
 revoke all on function public.is_active_organization_member(uuid, uuid) from public, anon, authenticated, service_role;
 revoke all on function public.is_case_supervisor(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.my_sales_managed_request_ids() from public, anon, authenticated, service_role;
 revoke all on function public.default_manufacturing_organization(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.notify_organization_managers(uuid, text, text, text, text) from public, anon, authenticated, service_role;
 revoke all on function public.apply_case_main_staff(uuid, uuid, uuid) from public, anon, authenticated, service_role;
 revoke all on function public.write_case_audit(uuid, text, text, jsonb, jsonb) from public, anon, authenticated, service_role;
+revoke all on function public.release_cases_of_departed_member() from public, anon, authenticated, service_role;
 
 -- 権限の判定（RLS から呼ぶ。自分の関わり方だけを返す）。見積の表は未ログインでも RLS を通るため、is_case_sales_manager は anon にも許す
 revoke all on function public.is_case_sales_manager(uuid) from public, anon, authenticated, service_role;
@@ -1908,7 +1863,8 @@ do $postcondition$
 declare
   v_fn record;
   v_internal text[] := array['validate_case_workflow_organizations', 'is_active_organization_member', 'is_case_supervisor',
-                             'default_manufacturing_organization', 'notify_organization_managers', 'apply_case_main_staff', 'write_case_audit'];
+                             'default_manufacturing_organization', 'notify_organization_managers', 'apply_case_main_staff', 'write_case_audit',
+                             'release_cases_of_departed_member', 'my_sales_managed_request_ids'];
 begin
   for v_fn in
     select p.oid, p.proname, p.prosecdef, pg_get_userbyid(p.proowner) as owner_name, p.proconfig
@@ -1917,7 +1873,8 @@ begin
        and p.proname in (
          'validate_case_workflow_organizations', 'is_active_organization_member', 'is_case_sales_manager', 'is_case_supervisor',
          'default_manufacturing_organization', 'notify_organization_managers', 'case_role', 'is_case_legacy_manufacturer',
-         'apply_case_main_staff', 'write_case_audit', 'set_case_sales_organization', 'set_case_manufacturing_organization', 'get_case_organizations',
+         'apply_case_main_staff', 'write_case_audit', 'release_cases_of_departed_member', 'my_sales_managed_request_ids',
+         'set_case_sales_organization', 'set_case_manufacturing_organization', 'get_case_organizations',
          'case_access', 'assign_case_primary_staff', 'acknowledge_case', 'set_quote_request_preferences', 'get_case_progress',
          'configuration_site_profile_access', 'get_case_plan_configuration', 'send_manufacturing_order', 'set_case_manufacturer',
          'assign_quote_dealer', 'list_dealer_quote_request_meta', 'get_dealer_quote_request_current',
@@ -1947,6 +1904,13 @@ begin
   end if;
   if not exists (select 1 from pg_trigger where tgrelid = 'public.case_workflows'::regclass and tgname = 'case_workflows_organizations_validate' and not tgisinternal) then
     raise exception 'POSTCONDITION: case_workflows_organizations_validate trigger is missing';
+  end if;
+  if not exists (
+    select 1 from pg_trigger
+     where tgrelid = 'public.organization_memberships'::regclass and tgname = 'organization_memberships_release_cases'
+       and not tgisinternal and tgenabled = 'O'
+  ) then
+    raise exception 'POSTCONDITION: organization_memberships_release_cases trigger is missing';
   end if;
   if (select count(*) from pg_policies where schemaname = 'public' and qual ~ 'case_role') < 15 then
     raise exception 'POSTCONDITION: case read policies must use case_role()';

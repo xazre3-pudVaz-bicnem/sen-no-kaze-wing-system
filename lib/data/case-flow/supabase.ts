@@ -421,10 +421,15 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
     }
     const orders = (data ?? []) as ManufacturingOrder[];
     if (orders.length === 0) return [];
-    const [{ data: units }, { data: quotes }] = await Promise.all([
+    const requestIds = [...new Set(orders.map((o) => o.quote_request_id))];
+    const [{ data: units }, { data: quotes }, { data: workflows }] = await Promise.all([
       db.from('manufacturing_units').select('order_id, status').in('order_id', orders.map((o) => o.id)),
-      db.from('quotes').select('id, quote_no, customer_name, quote_request_id, revision').in('quote_request_id', orders.map((o) => o.quote_request_id)).order('revision', { ascending: false }),
+      db.from('quotes').select('id, quote_no, customer_name, quote_request_id, revision').in('quote_request_id', requestIds).order('revision', { ascending: false }),
+      db.from('case_workflows').select('quote_request_id, primary_staff_id').in('quote_request_id', requestIds),
     ]);
+    const primaryStaff = new Map(
+      ((workflows ?? []) as { quote_request_id: string; primary_staff_id: string | null }[]).map((w) => [w.quote_request_id, w.primary_staff_id])
+    );
     const labels = new Map<string, { label: string; quote_id: string }>();
     for (const quote of (quotes ?? []) as { id: string; quote_no: string; customer_name: string; quote_request_id: string }[]) {
       if (!labels.has(quote.quote_request_id)) labels.set(quote.quote_request_id, { label: `${quote.quote_no} ${quote.customer_name} 様`, quote_id: quote.id });
@@ -437,6 +442,7 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
         // 総代理店は見積（お客様名）を読めないことがあるため、そのときは製造仕様の見積番号を見出しにする
         case_label: labels.get(order.quote_request_id)?.label ?? order.spec_snapshot?.quote_no ?? '案件',
         case_quote_id: labels.get(order.quote_request_id)?.quote_id ?? null,
+        primary_staff_id: primaryStaff.get(order.quote_request_id) ?? null,
         units_total: mine.length,
         units_shipped: mine.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
         units_installed: mine.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,

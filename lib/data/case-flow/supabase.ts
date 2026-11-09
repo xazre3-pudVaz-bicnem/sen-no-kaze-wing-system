@@ -117,6 +117,16 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
     }
     return (data ?? []) as DealerProfile[];
   }
+  async listSelectableDealerIds(_actor: SessionUser): Promise<string[] | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('list_selectable_dealer_ids');
+    if (error) {
+      // DB の更新（20261104160000）の前は、公開中の代理店をそのまま候補にする
+      if (missing(error, 'list_selectable_dealer_ids')) return null;
+      fail(error);
+    }
+    return ((data ?? []) as string[]).filter((id) => typeof id === 'string');
+  }
   async listDealerProfiles(actor: SessionUser): Promise<DealerProfile[]> {
     const db = await this.db();
     let q = db.from('dealer_profiles').select('*').order('display_name');

@@ -45,7 +45,11 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   const selectedSiteAreaLabel = configuration.site_location_undecided
     ? '未定'
     : [configuration.site_prefecture, configuration.site_municipality].filter(Boolean).join(' ') || '未選択';
-  const dealers = (await caseFlow.listPublishedDealerProfiles())
+  // 候補は、営業担当にできる組織（有効・管理者あり）の有効なメンバーの代理店だけ（DB の list_selectable_dealer_ids。
+  // 選ぶとその組織から連絡する）。DB の更新の前は公開中の代理店をそのまま出す
+  const [published, selectable] = await Promise.all([caseFlow.listPublishedDealerProfiles(), caseFlow.listSelectableDealerIds(user)]);
+  const dealers = published
+    .filter((dealer) => selectable === null || selectable.includes(dealer.dealer_id))
     .filter((dealer) => dealerServesArea(dealer, configuration.site_prefecture ?? null, configuration.site_municipality ?? null))
     .map((dealer) => ({ id: dealer.dealer_id, name: dealer.display_name }));
   // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）で計算せず、v2.5 の標準見積の売価で出す（DB の保存・見積依頼と同じ）

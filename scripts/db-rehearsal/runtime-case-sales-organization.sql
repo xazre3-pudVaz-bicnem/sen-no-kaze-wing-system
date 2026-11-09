@@ -125,10 +125,11 @@ begin
   set local session_replication_role = origin;
 
   -- ---------- 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261104160000） ----------
-  -- お客様が組織を直接指定しても、営業担当組織は決まらない（決める条件と合わせて 20261104160000 で入れる）
+  -- お客様が組織を直接指定しても、営業担当組織は決まらない（決める条件と合わせて 20261104160000 で入れる。
+  -- 20261104160000 からは、組織を直接指定する入力そのものを入力の誤り（P0001）として断る）
   v_out := pg_temp.cs_run_as('authenticated', u_cust, format($q$ select public.set_quote_request_preferences(%L, jsonb_build_object('preferred_organization_id', %L))::text $q$, r_1, o_d));
   perform pg_temp.cs_expect_eq('25-1 お客様は、ご依頼の希望から営業担当組織を決められない', 'ok/(none)',
-    coalesce(nullif(v_out, ''), 'ok') || '/' ||
+    case when v_out = '' or v_out like 'ERROR P0001:%' then 'ok' else v_out end || '/' ||
     coalesce((select w.sales_organization_id::text from public.case_workflows w where w.quote_request_id = r_1), '(none)'));
   select count(*) into v_notifications_before from public.notifications where recipient_id = u_d_mgr;
   v_out := pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_sales_organization(%L, %L)::text', r_1, o_d));

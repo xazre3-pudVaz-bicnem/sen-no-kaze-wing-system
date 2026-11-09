@@ -8,6 +8,7 @@ import { ROLE_RANK, type AppNotification } from '@/lib/domain/types';
 import { parseQuoteLineState } from '@/lib/domain/quote-por';
 import {
   CASE_FILE_TYPES,
+  dealerServesArea,
   GUEST_PLAN_DAYS,
   GUEST_PLAN_TOKEN,
   type GuestPlan,
@@ -392,6 +393,14 @@ export class LocalCaseFlowStore implements CaseFlowStore {
   }
 
   // ---------- 代理店の公開情報 ----------
+  /** 見積依頼の画面で選べる代理店（公開中で、営業担当にできる組織がある。DB の list_selectable_dealer_ids と同じ） */
+  async listSelectableDealerIds(_actor: SessionUser): Promise<string[] | null> {
+    return this.read((db) =>
+      tables(db)
+        .dealerProfiles.filter((p) => p.published && selectableOrganizationOfMember(db, p.dealer_id) !== null)
+        .map((p) => p.dealer_id)
+    );
+  }
   async listPublishedDealerProfiles() {
     return this.read((db) =>
       tables(db)
@@ -474,10 +483,16 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const access = accessOf(db, actor, requestId);
       if (access !== 'customer' && access !== 'admin') throw forbidden('ご依頼の希望を変更できるのは、ご依頼のお客様と本部だけです');
       const t = tables(db);
-      if (input.preferred_dealer_id && !t.dealerProfiles.some((p) => p.dealer_id === input.preferred_dealer_id && p.published)) {
-        throw invalid('指定した代理店は選べません');
+      const request = db.quoteRequests.find((r) => r.id === requestId);
+      if (input.preferred_dealer_id) {
+        const profile = t.dealerProfiles.find((p) => p.dealer_id === input.preferred_dealer_id && p.published);
+        if (!profile) throw invalid('指定した代理店は選べません');
+        // 設置予定地に対応している代理店だけ（見積依頼の画面の候補と同じ。DB の dealer_serves_area）
+        const configuration = request ? db.configurations.find((c) => c.id === request.configuration_id) : undefined;
+        if (!dealerServesArea(profile, configuration?.site_prefecture ?? null, configuration?.site_municipality ?? null)) {
+          throw invalid('指定した代理店は、設置予定地に対応していません');
+        }
       }
-      // 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261104160000 と同じ時に入れる）
       const current = t.preferences.find((p) => p.quote_request_id === requestId);
       const before = current?.preferred_dealer_id ?? null;
       const next: QuoteRequestPreferences = {
@@ -490,7 +505,71 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       };
       if (current) Object.assign(current, next);
       else t.preferences.push(next);
-      if (input.preferred_dealer_id && input.preferred_dealer_id !== before) {
+      // 営業担当組織を決める：お客様本人が、見積依頼の直後（1 時間以内）に初めて希望を保存したときだけ（DB の 20261104160000 と同じ）
+      let assigned = false;
+      const organizationId =
+        input.preferred_dealer_id && access === 'customer' && !current && request && Date.now() - new Date(request.created_at).getTime() <= 60 * 60 * 1000
+          ? selectableOrganizationOfMember(db, input.preferred_dealer_id)
+          : null;
+      if (organizationId) {
+        const workflow = workflowOf(db, requestId, actor.id);
+        // 一度も営業担当組織が決まっていない・受付の前・主担当者も見積の担当もいない・契約も製造依頼も無い案件だけ
+        const untouched =
+          !workflow.sales_organization_id &&
+          !workflow.sales_assigned_at &&
+          !workflow.acknowledged_at &&
+          !workflow.primary_staff_id &&
+          !db.quotes.some((q) => q.quote_request_id === requestId && q.dealer_id) &&
+          !db.contracts.some((c) => c.quote_request_id === requestId) &&
+          !(t.orders ?? []).some((o) => o.quote_request_id === requestId);
+        if (untouched) {
+          const beforeManufacturer = workflow.manufacturing_organization_id ?? null;
+          const auto = workflow.manufacturing_auto !== false || !workflow.manufacturing_organization_id;
+          const manufacturer = auto ? defaultManufacturingOrganization(db, organizationId) : beforeManufacturer;
+          workflow.sales_organization_id = organizationId;
+          workflow.sales_assigned_at = nowIso();
+          workflow.sales_assigned_by = actor.id;
+          workflow.manufacturing_organization_id = manufacturer;
+          workflow.manufacturing_auto = auto;
+          if (manufacturer !== beforeManufacturer) workflow.manufacturing_assigned_at = nowIso();
+          workflow.updated_at = nowIso();
+          db.auditLogs.push({
+            id: randomUUID(),
+            actor_id: actor.id,
+            actor_email: actor.email,
+            action: 'case_sales_organization',
+            entity: 'quote_request',
+            entity_id: requestId,
+            summary: 'お客様が選んだ代理店の組織を営業担当にしました',
+            created_at: nowIso(),
+          });
+          notifyOrganizationManagers(db, organizationId, {
+            kind: 'case_sales_assigned',
+            title: 'お客様から見積のご依頼が届きました',
+            body: 'お客様があなたの組織を選びました。案件の内容を確認し、主担当者を決めてください。',
+            link: `/admin/quotes?request=${requestId}`,
+          });
+          if (manufacturer && manufacturer !== beforeManufacturer) {
+            notifyOrganizationManagers(db, manufacturer, {
+              kind: 'case_manufacturer_assigned',
+              title: '製造担当の案件になりました',
+              body: '案件の仕様と現地確認の内容を確認してください。',
+              link: `/admin/manufacturing?request=${requestId}`,
+            });
+          }
+          notify(db, {
+            recipient_id: null,
+            audience: 'admin',
+            kind: 'case_sales_assigned',
+            title: 'お客様が代理店を選びました',
+            body: '選ばれた代理店を営業担当にしました。必要なら案件の「受付・担当」で変えられます。',
+            link: `/admin/quotes?request=${requestId}`,
+          });
+          assigned = true;
+        }
+      }
+      // 営業担当を決めなかったとき（組織に所属していない代理店・見積依頼の直後でないなど）は、これまでどおり本部へ知らせる
+      if (input.preferred_dealer_id && input.preferred_dealer_id !== before && !assigned) {
         notify(db, {
           recipient_id: null,
           audience: 'admin',

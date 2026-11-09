@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
+import { canSuperviseCases } from '@/lib/data/organizations/store';
 import { caseStageOf } from '@/lib/domain/case-flow';
 import { formatYen } from '@/lib/domain/pricing';
 import { formatDate } from '@/lib/utils';
@@ -14,11 +15,12 @@ export const dynamic = 'force-dynamic';
 
 /**
  * 総代理店の「配下の案件」（2026-10-15 先方確定）。配下の代理店が営業担当の案件の進み具合・仕様・見積の金額を確認する。
- * お客様のお名前・連絡先・設置場所などは表示しない（項目は先方の確認待ち）。営業の操作は代理店側に残す。
+ * 一覧には、お客様のお名前・連絡先・設置場所を出さない（設置場所・現地確認は詳細で、製造・出荷・施工のために出す。2026-11-04 の先方回答 B-3）。
+ * 営業の操作は代理店側に残す。見られるのは本部と、総代理店の組織の管理者だけ（DB と同じ）
  */
 export default async function SupervisedCasesPage() {
   const actor = await requireStaff('/admin/supervision');
-  if (actor.role !== 'admin' && actor.role !== 'master_dealer') notFound();
+  if (!(await canSuperviseCases(actor))) notFound();
   const cases = await (await getCaseFlowStore()).listSupervisedCases(actor);
   const isAdmin = actor.role === 'admin';
 

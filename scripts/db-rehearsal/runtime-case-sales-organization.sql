@@ -307,7 +307,7 @@ begin
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.case_files where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.configuration_site_profiles where configuration_id = %L', c_1)));
-  perform pg_temp.cs_expect_eq('25-40 直属の総代理店の管理者（配下の確認）は、案件の記録を表から読めない（現地確認の写真だけは読める：2026-11-04 B-3）', '0/0/1/0',
+  perform pg_temp.cs_expect_eq('25-40 直属の総代理店の管理者（配下の確認）は、案件の記録を表から読めない（読めるのは施工・製造の記録と現地確認の写真だけ：2026-11-04 B-3）', '0/0/2/0',
     pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_notes where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
     pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_files where quote_request_id = %L', r_1)) || '/' ||

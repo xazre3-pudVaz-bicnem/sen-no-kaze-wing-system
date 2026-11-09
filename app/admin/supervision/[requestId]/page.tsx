@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
+import { canSuperviseCases } from '@/lib/data/organizations/store';
 import {
   HANDOVER_STATUS_LABELS,
   MANUFACTURING_ORDER_STATUS_LABELS,
@@ -61,7 +62,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
 export default async function SupervisedCasePage({ params }: { params: Promise<{ requestId: string }> }) {
   const { requestId } = await params;
   const actor = await requireStaff(`/admin/supervision/${requestId}`);
-  if ((actor.role !== 'admin' && actor.role !== 'master_dealer') || !UUID.test(requestId)) notFound();
+  if (!UUID.test(requestId) || !(await canSuperviseCases(actor))) notFound();
   const detail = await (await getCaseFlowStore()).getSupervisedCase(actor, requestId);
   if (!detail) notFound();
   const { quote, progress, manufacturing_order: order } = detail;
@@ -276,6 +277,21 @@ export default async function SupervisedCasePage({ params }: { params: Promise<{
           </ul>
         ) : (
           <p className="card p-5 text-sm text-muted">施工の記録はまだありません。</p>
+        )}
+        {(detail.progress_files ?? []).length > 0 && (
+          <div className="card p-4" data-testid="supervised-progress-files">
+            <p className="text-xs font-semibold text-muted">施工・製造の写真・資料</p>
+            <ul className="mt-2 grid gap-1.5 text-sm sm:grid-cols-2">
+              {(detail.progress_files ?? []).map((file) => (
+                <li key={file.id}>
+                  <a className="text-navy underline" href={`/api/case-files/${file.id}`} target="_blank" rel="noreferrer">
+                    {file.caption || file.file_name}
+                  </a>
+                  <span className="ml-2 text-xs text-muted">{formatDate(file.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </Section>
     </AdminPage>

@@ -292,6 +292,8 @@ export interface SupervisedCaseDetail {
   units: { seq: number; unit_no: string | null; status: string; produced_on: string | null; inspected_on: string | null; shipped_on: string | null; installed_on: string | null; handed_over_on: string | null; note: string | null }[];
   schedule: { category: string; title: string; planned_start: string | null; planned_end: string | null; actual_start: string | null; actual_end: string | null; status: string; note: string | null }[];
   progress_reports: { kind: string; title: string | null; body: string | null; reported_on: string | null; author_name: string | null }[];
+  /** 施工・製造の記録の資料（写真など。取り出しは資料の RLS で判定する） */
+  progress_files?: { id: string; file_name: string; content_type: string; caption: string | null; created_at: string }[];
   handover_status: string;
   /** 製造・出荷・施工に必要な案件の情報（B-3。DB の更新の前は無い） */
   partner_info?: CasePartnerSiteInfo | null;

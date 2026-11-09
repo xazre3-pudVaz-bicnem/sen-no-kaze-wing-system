@@ -269,11 +269,15 @@ function isHandedOver(db: LocalDb, requestId: string): boolean {
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
-/** 資料を読めるか（DB の case_files_read と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の写真だけ */
+/** 製造担当組織・配下の確認に見せる資料（施工・製造の記録と、現地確認の写真。DB の case_file_readable と同じ。B-3） */
+function partnerVisibleCaseFile(file: CaseFile): boolean {
+  return file.context === 'progress' || (file.context === 'site_survey' && file.content_type.startsWith('image/'));
+}
+
+/** 資料を読めるか（DB の case_file_readable と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の記録と現地確認の写真だけ */
 function canReadCaseFile(db: LocalDb, actor: SessionUser, access: CaseAccess, file: CaseFile): boolean {
   if (access === 'customer') return file.customer_visible;
-  // 製造担当組織は施工・製造の写真と、現地確認の写真（2026-11-04 の先方回答 B-3）。DB の case_files_read と同じ
-  if (access === 'manufacturer') return file.context === 'progress' || file.context === 'site_survey' || isLegacyManufacturer(db, actor, file.quote_request_id);
+  if (access === 'manufacturer') return partnerVisibleCaseFile(file) || isLegacyManufacturer(db, actor, file.quote_request_id);
   return true;
 }
 
@@ -318,7 +322,7 @@ function partnerSiteInfoOf(db: LocalDb, requestId: string): CasePartnerSiteInfo 
         }
       : null,
     survey_files: t.files
-      .filter((f) => f.quote_request_id === requestId && f.context === 'site_survey')
+      .filter((f) => f.quote_request_id === requestId && f.context === 'site_survey' && f.content_type.startsWith('image/'))
       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
       .map((f) => ({ id: f.id, file_name: f.file_name, content_type: f.content_type, caption: f.caption, created_at: f.created_at })),
   };
@@ -804,8 +808,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       };
       const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
       const quote = this.supervisedQuote(db, requestId);
+      // 製造依頼は、取り消し・下書きでないもの（DB の get_supervised_case と同じ。個体もその製造依頼のものだけ）
       const order = (t.orders ?? [])
-        .filter((o) => o.quote_request_id === requestId && o.status !== 'canceled')
+        .filter((o) => o.quote_request_id === requestId && o.status !== 'canceled' && o.status !== 'draft')
         .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
       return {
         request_id: requestId,
@@ -865,7 +870,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
             }
           : null,
         units: (t.units ?? [])
-          .filter((u) => u.quote_request_id === requestId)
+          .filter((u) => Boolean(order) && u.order_id === order!.id)
           .sort((a, b) => a.seq - b.seq)
           .map((u) => ({
             seq: u.seq,
@@ -895,6 +900,10 @@ export class LocalCaseFlowStore implements CaseFlowStore {
           .filter((r) => r.quote_request_id === requestId)
           .sort((a, b) => (b.reported_on ?? '').localeCompare(a.reported_on ?? ''))
           .map((r) => ({ kind: r.kind, title: r.title ?? null, body: r.body ?? null, reported_on: r.reported_on ?? null, author_name: r.author_name ?? null })),
+        progress_files: t.files
+          .filter((f) => f.quote_request_id === requestId && f.context === 'progress')
+          .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+          .map((f) => ({ id: f.id, file_name: f.file_name, content_type: f.content_type, caption: f.caption, created_at: f.created_at })),
         handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
         partner_info: partnerSiteInfoOf(db, requestId),
       };
@@ -2191,8 +2200,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const file = tables(db).files.find((f) => f.id === fileId);
       if (!file) return null;
       const access = viewAccessOf(db, actor, file.quote_request_id);
-      const supervisorSurveyPhoto = !access && file.context === 'site_survey' && roleOf(db, actor, file.quote_request_id) === 'supervisor';
-      if (!supervisorSurveyPhoto && (!access || !canReadCaseFile(db, actor, access, file))) return null;
+      // 配下の確認（直属の総代理店の管理者）は、施工・製造の記録と現地確認の写真だけ（DB の case_file_readable と同じ）
+      const supervisorFile = !access && partnerVisibleCaseFile(file) && roleOf(db, actor, file.quote_request_id) === 'supervisor';
+      if (!supervisorFile && (!access || !canReadCaseFile(db, actor, access, file))) return null;
       const abs = path.join(filesDir(), 'case-files', file.storage_path);
       if (!fs.existsSync(abs)) return null;
       return { file: { ...file }, bytes: new Uint8Array(fs.readFileSync(abs)) };

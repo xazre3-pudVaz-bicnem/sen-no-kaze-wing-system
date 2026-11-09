@@ -157,7 +157,8 @@ export default async function BaseMastersPage({
   );
   const editableOrganizations = (organizations ?? [])
     .filter((org) => editableOrgIds.has(org.id))
-    .filter((org) => org.organization_type === 'headquarters' || org.organization_type === 'master_dealer')
+    // 本体マスターを登録できるのは本部の組織だけ（2026-11-04 の先方回答 B-2。DB の can_create_base_master_for_org と同じ）
+    .filter((org) => org.organization_type === 'headquarters')
     .map((org) => ({ id: org.id, name: org.name }));
 
   const query = (sp.q ?? '').trim().toLocaleLowerCase('ja-JP');

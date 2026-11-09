@@ -5,6 +5,8 @@
  * - 代理店・総代理店とも、本部が組織と最初の管理者を登録し、その後の担当者はその組織の管理者が追加する（管理者は複数可）
  * - 役割は「管理者」（admin。従来の owner も管理者）と「担当者」（editor）
  * - 有効な所属は 1 人 1 つ。所属すると利用者の種類は dealer／master_dealer になり、外れると customer に戻る
+ * - 組織を停止すると、メンバーは会員と同じ扱い（所属は残し、再開で戻す）。未使用の招待は取り消す
+ * - 所属している人の利用者の種類は、本部の会員一覧から変えられない（組織の画面で所属を外す）
  */
 
 export type OrganizationType = 'headquarters' | 'master_dealer' | 'dealer';
@@ -17,6 +19,26 @@ export type InvitationState = 'open' | 'accepted' | 'revoked' | 'expired' | 'org
 export const INVITATION_DAYS = 7;
 /** 招待の鍵（64 桁の 16 進数）。DB にはハッシュだけを残す */
 export const INVITATION_TOKEN = /^[0-9a-f]{64}$/;
+/**
+ * 招待のリンク（/invite/鍵）を開いたら、鍵をこの Cookie に移して /invite へ進める。
+ * 鍵をログインの next・ブラウザーの履歴に残さない。/invite にだけ送り、JavaScript からは読めない
+ */
+export const INVITATION_COOKIE = 'wing_invitation';
+/** Cookie を持っておく時間（会員登録・ログインの間。招待そのものの期限は INVITATION_DAYS） */
+export const INVITATION_COOKIE_MAX_AGE = 60 * 60 * 24;
+/** 所属している人の利用者の種類を、本部の会員一覧から変えようとしたとき（DB のトリガーと同じ文言） */
+export const ORGANIZATION_ROLE_LOCKED_MESSAGE =
+  '代理店・総代理店に所属している方の権限は変えられません。組織の画面で所属を外してから変えてください（所属を外すと会員に戻ります）';
+/** 本部の会員一覧から総代理店にしようとしたとき。総代理店のアカウントは組織の登録と招待で作る（2026-10-15 先方確定） */
+export const MASTER_DEALER_VIA_ORGANIZATION_MESSAGE =
+  '総代理店のアカウントは、組織（総代理店）を登録して招待で作ります。会員一覧からは総代理店にできません';
+/** 招待の送りすぎの上限（DB の invite_organization_member と同じ。取り消した招待も数える） */
+export const INVITATION_LIMITS = {
+  /** 同じ組織から同じメールアドレスへ、24 時間に（本部も同じ） */
+  perEmail: 3,
+  /** 1 つの組織から、24 時間に（本部は数えない） */
+  perOrganization: 20,
+} as const;
 
 export const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
   headquarters: '本部',

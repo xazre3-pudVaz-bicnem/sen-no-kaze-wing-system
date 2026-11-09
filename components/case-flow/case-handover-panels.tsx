@@ -25,6 +25,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { CaseFileList } from '@/components/case-flow/case-site-panels';
+import { casePanelAccess } from '@/lib/data/case-flow/panel-access';
 import { AfterServiceRequestForm, CaseFileUploadForm, HandoverInspectionForm } from '@/components/case-flow/forms';
 
 const DONE_TEXT: Record<string, string> = {
@@ -62,11 +63,10 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
   if (!detail) return null;
   const requestId = detail.quote.quote_request_id;
   const caseFlow = await getCaseFlowStore();
-  const caseAccess: CaseAccess | null = await caseFlow.getCaseAccess(actor, requestId);
   // 営業担当組織の管理者は、担当と同じものを読み取りだけで見る（編集は自分を主担当者にして行う）
-  const readOnly = (!caseAccess || caseAccess === 'customer') && (await caseFlow.getCaseRole(actor, requestId)) === 'manager';
-  if (!readOnly && (!caseAccess || caseAccess === 'customer')) return null;
-  const access: CaseAccess = readOnly ? 'staff' : (caseAccess as CaseAccess);
+  const panel = await casePanelAccess(caseFlow, actor, requestId);
+  if (!panel) return null;
+  const { access, readOnly } = panel;
   const canOperate = !readOnly && (access === 'admin' || access === 'staff');
   const today = todayJst();
 
@@ -208,7 +208,7 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
 
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">完了確認・是正の写真と書類</h4>
-              <CaseFileList files={[...handoverFiles, ...punchFiles]} actor={actor} quoteId={quoteId} requestId={requestId} back={back} />
+              <CaseFileList files={[...handoverFiles, ...punchFiles]} actor={actor} quoteId={quoteId} requestId={requestId} back={back} readOnly={readOnly} />
               {canOperate && !handedOver && (
                 <details>
                   <summary className="cursor-pointer text-xs">写真・承諾書の写しを登録する</summary>
@@ -334,7 +334,7 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
                       <textarea name="response" rows={2} maxLength={2000} defaultValue={row.response ?? ''} className="input w-full text-xs" placeholder="お客様への回答（お客様にも表示されます）" aria-label="お客様への回答" />
                     </form>
                   )}
-                  <CaseFileList files={afterFiles.filter((file) => file.context_id === row.id)} actor={actor} quoteId={quoteId} requestId={requestId} back={back} />
+                  <CaseFileList files={afterFiles.filter((file) => file.context_id === row.id)} actor={actor} quoteId={quoteId} requestId={requestId} back={back} readOnly={readOnly} />
                   {!readOnly && access !== 'manufacturer' && (
                     <details>
                       <summary className="cursor-pointer text-xs">このアフターに写真を登録する</summary>

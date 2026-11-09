@@ -113,9 +113,11 @@ begin
           '秘密 花子', null, '製造確認用モデル', 1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 1, null, null, 'office'),
          (q_3, 'RT-MF-3', r_3, c_3, u_cust, null, 'issued', now() + interval '30 days',
           '秘密 花子', null, '製造確認用モデル', 1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 1, null, null, 'office');
-  insert into public.quote_items (quote_id, kind, name, unit_price, quantity, amount, sort_order, unit)
-  values (q_1, 'base', '製造確認用モデル 本体', 1000000, 1, 1000000, 1, '式'),
-         (q_1, 'option', '製造確認用 設備', 200000, 2, 400000, 2, '台');
+  insert into public.quote_items (quote_id, kind, name, unit_price, quantity, amount, sort_order, unit, remark)
+  values (q_1, 'base', '製造確認用モデル 本体', 1000000, 1, 1000000, 1, '式', null),
+         (q_1, 'option', '製造確認用 設備', 200000, 2, 400000, 2, '台', null),
+         -- 今回の契約対象外の行（製造担当の仕様には出さない：27-17）
+         (q_1, 'option', '今回は対象外の設備', 50000, 1, 50000, 3, '台', '［今回の契約対象外］ お客様の都合で今回は見送り');
   insert into public.case_workflows (quote_request_id, sales_organization_id, manufacturing_organization_id, manufacturing_auto, primary_staff_id, manufacturer_id, updated_by)
   values (r_1, o_d, o_md, true, u_d_staff, null, u_admin),
          (r_2, null, null, true, null, u_legacy, u_admin),
@@ -158,6 +160,8 @@ begin
   perform pg_temp.mf_expect_eq('27-6 詳細にはお客様の情報・金額・備考を含めない', 'false/false/false/false/false',
     (v_out like '%秘密%')::text || '/' || (v_out like '%"total"%')::text || '/' || (v_out like '%unit_price%')::text || '/' ||
     (v_out like '%amount%')::text || '/' || (v_out like '%mf-customer%')::text);
+  perform pg_temp.mf_expect_eq('27-17 今回の契約対象外の行は、製造担当の仕様に出さない（製造依頼の写しと同じ）', 'false/false',
+    (v_out like '%今回は対象外の設備%')::text || '/' || (v_out like '%契約対象外%')::text);
   perform pg_temp.mf_expect_denied('27-7 別の総代理店は詳細を見られない', '42501',
     pg_temp.mf_run_as('authenticated', u_md2_mgr, format('select public.get_manufacturing_case(%L)::text', r_1)));
   perform pg_temp.mf_expect_denied('27-8 営業担当の代理店の管理者は、この関数では見られない（案件画面で見る）', '42501',

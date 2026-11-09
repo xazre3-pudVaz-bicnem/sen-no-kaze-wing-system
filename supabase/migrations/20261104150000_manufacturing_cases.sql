@@ -6,7 +6,8 @@
 -- 作り：
 -- * list_manufacturing_cases()：自分が製造の担当の案件（本部はすべての製造担当つきの案件）。見積番号・仕様・営業担当・主担当者・
 --   契約の済否・製造依頼と個体の進み具合
--- * get_manufacturing_case(p_request_id)：上に加えて、現在の見積の明細（品名・数量・単位だけ。金額は返さない）
+-- * get_manufacturing_case(p_request_id)：上に加えて、現在の見積の明細（品名・数量・単位だけ。金額は返さない。
+--   今回の契約対象外の行は返さない：製造依頼の写し（send_manufacturing_order）と同じ規則）
 -- * **お客様の氏名・会社名・連絡先・ご自宅の住所・メッセージ、見積の金額・備考、打合せ記録は返さない**
 -- * 詳細には、製造・出荷・施工に必要な案件の情報（案件名・顧客番号・設置場所の住所と条件・用途・現地確認の内容と写真）を足す
 --   （2026-11-04 の先方回答 B-3。配下の確認と同じ case_partner_site_info）
@@ -21,6 +22,9 @@ begin
   end if;
   if to_regprocedure('public.case_partner_site_info(uuid)') is null then
     raise exception 'PRECONDITION: case supervision (20261104140000) must be applied first';
+  end if;
+  if to_regprocedure('public.quote_line_explicit_state(text)') is null then
+    raise exception 'PRECONDITION: quote formal line guard (20261016111000) must be applied first';
   end if;
 end;
 $preflight$;
@@ -79,11 +83,16 @@ begin
   if v_uid is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
   end if;
+  -- 並びは画面と同じ「最終の更新」（案件の受付・担当、見積依頼、製造依頼の新しい方）。本部は全国のため 300 件まで
   return coalesce((
-    select jsonb_agg(public.manufacturing_case_row(x.quote_request_id) order by x.updated_at desc, x.quote_request_id)
+    select jsonb_agg(public.manufacturing_case_row(x.quote_request_id) order by x.activity_at desc, x.quote_request_id)
       from (
-        select w.quote_request_id, w.updated_at
+        select w.quote_request_id,
+               greatest(w.updated_at, r.updated_at,
+                        coalesce((select max(o.updated_at) from public.manufacturing_orders o where o.quote_request_id = w.quote_request_id),
+                                 w.updated_at)) as activity_at
           from public.case_workflows w
+          join public.quote_requests r on r.id = w.quote_request_id
          where case
                  when v_admin then w.manufacturing_organization_id is not null or w.manufacturer_id is not null
                  -- 所属している組織・自分あての案件に絞ってから、書き込みの判定と同じ規則で確かめる
@@ -93,6 +102,8 @@ begin
                        or (w.manufacturing_organization_id is null and w.manufacturer_id = v_uid))
                       and public.case_access(w.quote_request_id) = 'manufacturer'
                end
+         order by 2 desc, 1
+         limit case when v_admin then 300 end
       ) x
   ), '[]'::jsonb);
 end;
@@ -127,7 +138,9 @@ begin
     'spec_items', coalesce((
       select jsonb_agg(jsonb_build_object('kind', qi.kind, 'name', qi.name, 'quantity', qi.quantity, 'unit', qi.unit)
                        order by qi.sort_order, qi.id)
-        from public.quote_items qi where qi.quote_id = v_quote
+        from public.quote_items qi
+       where qi.quote_id = v_quote
+         and public.quote_line_explicit_state(qi.remark) is distinct from 'excluded'
     ), '[]'::jsonb),
     -- 製造・出荷・施工に必要な案件の情報（B-3。お客様の氏名・連絡先などは含めない）
     'partner_info', public.case_partner_site_info(p_request_id)

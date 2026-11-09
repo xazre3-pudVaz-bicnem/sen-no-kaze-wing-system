@@ -67,8 +67,9 @@ describe('案件の営業担当組織：DB の取り決め（migration 202611041
   });
 
   it('見積は営業担当組織の管理者も読める（直属の総代理店には、顧客情報を含む見積を開かない）', () => {
-    expect(migration).toContain('or (quote_request_id is not null and public.is_case_sales_manager(quote_request_id))');
-    expect(migration).toContain('or (q.quote_request_id is not null and public.is_case_sales_manager(q.quote_request_id))');
+    // quotes.quote_request_id は NOT NULL のため、NULL の確かめは要らない
+    expect(migration).toContain('  or public.is_case_sales_manager(quote_request_id)\n);');
+    expect(migration).toContain('         or public.is_case_sales_manager(q.quote_request_id)\n');
     const quotesPolicy = sqlOnly.slice(sqlOnly.indexOf('create policy quotes_select'), sqlOnly.indexOf(');', sqlOnly.indexOf('create policy quotes_select')));
     const itemsPolicy = sqlOnly.slice(sqlOnly.indexOf('create policy quote_items_select'), sqlOnly.indexOf(');\n\n', sqlOnly.indexOf('create policy quote_items_select')));
     expect(quotesPolicy).toContain('is_case_sales_manager');
@@ -88,6 +89,55 @@ describe('案件の営業担当組織：DB の取り決め（migration 202611041
     expect(migration).toContain("message = 'FORBIDDEN: 製造担当を変えられるのは本部だけです'");
     expect(migration).toContain("message = 'VALIDATION: 製造担当は総代理店から選んでください'");
     expect(migration).toContain('製造依頼を送った後は製造担当を変えられません');
+  });
+
+  it('お客様はこの migration では営業担当組織を決められない（ご依頼の希望の関数は作り直さず、組織の列も足さない）', () => {
+    expect(sqlOnly).not.toContain('function public.set_quote_request_preferences');
+    expect(sqlOnly).not.toContain('preferred_organization_id');
+  });
+
+  it('所属を外れたメンバーが主担当者の案件は、主担当者と見積の担当を外し、管理者へ知らせる（組織の停止では外さない）', () => {
+    const fn = sectionOf('create function public.release_cases_of_departed_member()', 'create trigger organization_memberships_release_cases');
+    expect(fn).toContain("if old.status = 'active' and new.status is distinct from 'active' then");
+    expect(fn).toContain('w.sales_organization_id = new.organization_id');
+    expect(fn).toContain('w.primary_staff_id = new.profile_id');
+    expect(fn).toContain('perform public.apply_case_main_staff(v_request, null, auth.uid());');
+    expect(fn).toContain("'case_primary_released'");
+    expect(migration).toContain('after update of status on public.organization_memberships');
+    expect(migration).toContain('revoke all on function public.release_cases_of_departed_member() from public, anon, authenticated, service_role;');
+  });
+
+  it('製造依頼を送った後は、製造担当が変わる営業担当組織の変更をしない。これまでの案件に製造担当組織は付けない', () => {
+    const sales = sectionOf('create function public.set_case_sales_organization', 'create function public.set_case_manufacturing_organization');
+    expect(sales.indexOf("o.status not in ('draft', 'canceled')")).toBeGreaterThan(sales.indexOf('v_mfg := case'));
+    expect(sales.indexOf("o.status not in ('draft', 'canceled')")).toBeLessThan(sales.indexOf('update public.case_workflows cw'));
+    const manufacturing = sectionOf('create function public.set_case_manufacturing_organization', '-- ---------- 主担当者');
+    expect(manufacturing).toContain('if w.sales_organization_id is null then');
+  });
+
+  it('製造担当の初期値は有効な総代理店だけ（停止中の総代理店は未定にする）', () => {
+    const fn = sectionOf('create function public.default_manufacturing_organization', '-- 組織の有効な管理者へ通知する');
+    expect(fn).toContain("m.organization_type = 'master_dealer'");
+    expect(fn).toContain("m.status = 'active'");
+  });
+
+  it('主担当者を決めるときは、案件の受付・担当の行をロックしてから判定する', () => {
+    const fn = sectionOf('create or replace function public.assign_case_primary_staff', '-- ---------- 受付');
+    const lock = fn.indexOf('select * into w from public.case_workflows cw where cw.quote_request_id = p_request_id for update;');
+    expect(lock).toBeGreaterThan(0);
+    expect(lock).toBeLessThan(fn.indexOf('public.is_case_sales_manager(p_request_id)'));
+    expect(fn).toContain("raise exception 'LOCKED: 案件の営業担当組織が決まりました。");
+  });
+
+  it('一覧の関数は、管理者として見られる案件をまとめて 1 回だけ求める（行ごとに判定の関数を呼ばない）', () => {
+    const list = sectionOf('CREATE OR REPLACE FUNCTION public.list_dealer_quote_request_meta()', '$function$;');
+    expect(list).toContain('r.id in (select public.my_sales_managed_request_ids())');
+    for (const name of ['list_accessible_customers', 'get_accessible_customer_detail']) {
+      const fn = sectionOf(`CREATE OR REPLACE FUNCTION public.${name}(`, '$function$;');
+      expect(fn).toContain('v_managed := array(select public.my_sales_managed_request_ids());');
+      expect(fn).not.toContain('is_case_sales_manager');
+    }
+    expect(migration).toContain('revoke all on function public.my_sales_managed_request_ids() from public, anon, authenticated, service_role;');
   });
 
   it('受付の判定は、担当でない人の NULL で拒否をすり抜けない', () => {
@@ -142,9 +192,17 @@ describe('案件の営業担当組織：ローカル検証モードの関係の�
     expect(organizationManagers(db, 'stopped')).toEqual([]);
   });
 
-  it('製造担当の初期値は、代理店なら直属の総代理店、総代理店なら自身', () => {
+  it('製造担当の初期値は、代理店なら直属の総代理店、総代理店なら自身（停止中の総代理店は未定）', () => {
     expect(defaultManufacturingOrganization(db, 'd')).toBe('md');
     expect(defaultManufacturingOrganization(db, 'md')).toBe('md');
     expect(defaultManufacturingOrganization(db, null)).toBeNull();
+    const stoppedParent = {
+      ...db,
+      organizations: {
+        ...db.organizations!,
+        organizations: [org('md', 'master_dealer', null, 'inactive'), org('d', 'dealer', 'md')],
+      },
+    } as LocalDb;
+    expect(defaultManufacturingOrganization(stoppedParent, 'd')).toBeNull();
   });
 });

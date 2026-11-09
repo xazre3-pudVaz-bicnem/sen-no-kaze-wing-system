@@ -167,8 +167,6 @@ export interface PreferredSlot {
 export interface QuoteRequestPreferences {
   quote_request_id: string;
   preferred_dealer_id: string | null;
-  /** お客様が選んだ代理店（組織）。営業担当組織が未定なら、その組織を営業担当にする */
-  preferred_organization_id?: string | null;
   meeting_method: MeetingMethod | null;
   preferred_slots: PreferredSlot[];
   note: string | null;
@@ -177,7 +175,6 @@ export interface QuoteRequestPreferences {
 
 export interface QuoteRequestPreferencesInput {
   preferred_dealer_id: string | null;
-  preferred_organization_id?: string | null;
   meeting_method: MeetingMethod | null;
   preferred_slots: PreferredSlot[];
   note: string | null;
@@ -225,6 +222,7 @@ export interface CaseWorkflow {
   /** 営業担当組織（本部・総代理店・代理店）。NULL は本部が受付中（相談）または従来の案件（20261104130000） */
   sales_organization_id?: string | null;
   sales_assigned_at?: string | null;
+  sales_assigned_by?: string | null;
   /** 製造担当組織（総代理店）。manufacturing_auto なら営業担当組織から自動で決める */
   manufacturing_organization_id?: string | null;
   manufacturing_auto?: boolean;
@@ -294,6 +292,8 @@ export interface SupervisedCaseDetail {
   units: { seq: number; unit_no: string | null; status: string; produced_on: string | null; inspected_on: string | null; shipped_on: string | null; installed_on: string | null; handed_over_on: string | null; note: string | null }[];
   schedule: { category: string; title: string; planned_start: string | null; planned_end: string | null; actual_start: string | null; actual_end: string | null; status: string; note: string | null }[];
   progress_reports: { kind: string; title: string | null; body: string | null; reported_on: string | null; author_name: string | null }[];
+  /** 施工・製造の記録の資料（写真など。取り出しは資料の RLS で判定する） */
+  progress_files?: { id: string; file_name: string; content_type: string; caption: string | null; created_at: string }[];
   handover_status: string;
   /** 製造・出荷・施工に必要な案件の情報（B-3。DB の更新の前は無い） */
   partner_info?: CasePartnerSiteInfo | null;

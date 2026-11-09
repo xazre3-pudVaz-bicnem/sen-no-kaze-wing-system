@@ -31,6 +31,24 @@ export interface LocalMembership {
   updated_at: string;
 }
 
+/**
+ * 所属から決まる利用者の種類（DB のトリガー enforce_profile_role_matches_organization と同じ決まり）。
+ * 代理店・総代理店に有効な所属があれば組織の種類（組織が停止中なら customer）、所属が無ければ null（決まりなし）
+ */
+export function organizationRoleCodeFor(
+  tables: LocalOrganizationTables | undefined,
+  profileId: string
+): 'dealer' | 'master_dealer' | 'customer' | null {
+  for (const membership of tables?.memberships ?? []) {
+    if (membership.profile_id !== profileId || membership.status !== 'active') continue;
+    const org = tables?.organizations.find((o) => o.id === membership.organization_id);
+    if (!org || org.organization_type === 'headquarters') continue;
+    if (org.status !== 'active') return 'customer';
+    return org.organization_type === 'master_dealer' ? 'master_dealer' : 'dealer';
+  }
+  return null;
+}
+
 export interface LocalInvitation {
   id: string;
   organization_id: string;

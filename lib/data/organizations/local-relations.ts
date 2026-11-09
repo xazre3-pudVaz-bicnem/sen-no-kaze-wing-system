@@ -50,14 +50,15 @@ export function isCaseSupervisor(db: LocalDb, requestId: string | null | undefin
   return isActiveOrganizationManager(db, sales.parent_organization_id, profileId);
 }
 
-/** 営業担当組織から決まる製造担当（代理店なら直属の総代理店、総代理店なら自身、本部なら未定） */
+/** 営業担当組織から決まる製造担当（代理店なら直属の総代理店、総代理店なら自身、本部なら未定）。停止中の総代理店は製造担当にしない */
 export function defaultManufacturingOrganization(db: LocalDb, salesOrganizationId: string | null | undefined): string | null {
   if (!salesOrganizationId) return null;
-  const org = db.organizations?.organizations.find((o) => o.id === salesOrganizationId);
+  const orgs = db.organizations?.organizations ?? [];
+  const org = orgs.find((o) => o.id === salesOrganizationId);
   if (!org) return null;
-  if (org.organization_type === 'dealer') return org.parent_organization_id;
-  if (org.organization_type === 'master_dealer') return org.id;
-  return null;
+  const candidate = org.organization_type === 'dealer' ? org.parent_organization_id : org.organization_type === 'master_dealer' ? org.id : null;
+  const manufacturer = candidate ? orgs.find((o) => o.id === candidate) : undefined;
+  return manufacturer && manufacturer.organization_type === 'master_dealer' && manufacturer.status === 'active' ? manufacturer.id : null;
 }
 
 /**

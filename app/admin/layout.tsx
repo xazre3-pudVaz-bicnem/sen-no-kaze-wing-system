@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { requireStaff, requireUser } from '@/lib/auth/session';
+import { canSuperviseCases } from '@/lib/data/organizations/store';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { ProductRegistrationFinalRefinements } from '@/components/admin/product-registration-final-refinements';
 import { ProductRegistrationStep2Refinements } from '@/components/admin/product-registration-step2-refinements';
@@ -18,6 +19,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ? await requireUser('/admin/base-migration')
     : await requireStaff();
   const migrationOnly = migrationRoute && user.role === 'customer';
+  // 配下の案件のメニューは、総代理店の組織の管理者だけ（DB と同じ）。ほかの利用者は組織を調べない
+  const canSupervise = user.role === 'master_dealer' && !migrationOnly ? await canSuperviseCases(user) : false;
   return (
     <AdminShell
       email={user.email}
@@ -25,6 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       fullName={user.full_name}
       companyName={user.company_name}
       migrationOnly={migrationOnly}
+      canSupervise={canSupervise}
     >
       <ProductRegistrationFinalRefinements />
       <ProductRegistrationStep2Refinements />

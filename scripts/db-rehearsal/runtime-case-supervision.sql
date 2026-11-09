@@ -56,6 +56,9 @@ declare
   mo_1 constant uuid := '47000000-0000-4000-8000-000000000001';
   f_survey constant uuid := '48000000-0000-4000-8000-000000000001';
   f_doc constant uuid := '48000000-0000-4000-8000-000000000002';
+  f_survey_pdf constant uuid := '48000000-0000-4000-8000-000000000003';
+  f_progress constant uuid := '48000000-0000-4000-8000-000000000004';
+  mo_0 constant uuid := '47000000-0000-4000-8000-000000000000';
   v_out text;
   v_info jsonb;
 begin
@@ -115,6 +118,11 @@ begin
   values (mo_1, r_1, k_1, q_1, o_md2, 'received', 1, u_d_staff, now(), now(), '{"quote_no": "RT-SV-1", "items": []}'::jsonb);
   insert into public.manufacturing_units (order_id, quote_request_id, seq, status)
   values (mo_1, r_1, 1, 'in_production');
+  -- 取り消した前の製造依頼とその個体（配下の確認の詳細には出さない：26-16）
+  insert into public.manufacturing_orders (id, quote_request_id, contract_id, quote_id, manufacturing_organization_id, status, unit_count, created_by, created_at, canceled_at)
+  values (mo_0, r_1, k_1, q_1, o_md2, 'canceled', 1, u_d_staff, now() - interval '1 day', now() - interval '1 day');
+  insert into public.manufacturing_units (order_id, quote_request_id, seq, status)
+  values (mo_0, r_1, 1, 'in_production');
   insert into public.case_schedule_items (quote_request_id, category, title, status, created_by)
   values (r_1, 'manufacturing', '製造', 'in_progress', u_d_staff);
   insert into public.case_progress_reports (quote_request_id, kind, title, body, reported_on, created_by, author_name)
@@ -127,7 +135,10 @@ begin
           '{"zoning": "第一種住居地域"}'::jsonb, '北側の境界から 2m', now(), u_d_staff);
   insert into public.case_files (id, quote_request_id, context, storage_path, file_name, content_type, size_bytes, caption, customer_visible, uploaded_by)
   values (f_survey, r_1, 'site_survey', 'cases/' || r_1 || '/' || f_survey || '.jpg', 'survey.jpg', 'image/jpeg', 100, '搬入経路の写真', false, u_d_staff),
-         (f_doc, r_1, 'document', 'cases/' || r_1 || '/' || f_doc || '.pdf', 'customer.pdf', 'application/pdf', 100, 'お客様が送った秘密の資料', true, u_cust);
+         (f_doc, r_1, 'document', 'cases/' || r_1 || '/' || f_doc || '.pdf', 'customer.pdf', 'application/pdf', 100, 'お客様が送った秘密の資料', true, u_cust),
+         -- 現地確認の資料でも画像でないもの（総代理店には見せない：26-15）と、施工の写真（配下の確認も読める：26-15）
+         (f_survey_pdf, r_1, 'site_survey', 'cases/' || r_1 || '/' || f_survey_pdf || '.pdf', 'survey.pdf', 'application/pdf', 100, '現地確認の秘密の資料', false, u_d_staff),
+         (f_progress, r_1, 'progress', 'cases/' || r_1 || '/' || f_progress || '.jpg', 'progress.jpg', 'image/jpeg', 100, '基礎の写真', false, u_d_staff);
   insert into public.quote_request_preferences (quote_request_id, meeting_method, note)
   values (r_1, 'online', '打合せの秘密の希望');
   insert into public.case_notes (quote_request_id, kind, body, created_by, author_name)
@@ -208,6 +219,22 @@ begin
   perform pg_temp.sv_expect_denied('26-12f 内部の部品（case_partner_site_info）は利用者から直接呼べない', '42501',
     pg_temp.sv_run_as('authenticated', u_md_mgr, format('select public.case_partner_site_info(%L)::text', r_1)));
 
+  -- ---------- 資料：現地確認は写真だけ、施工・製造の記録は配下の確認も読める（2026-11-09 の独立レビューへの対応） ----------
+  v_out := pg_temp.sv_run_as('authenticated', u_md_mgr, format('select public.get_supervised_case(%L)::text', r_1));
+  perform pg_temp.sv_expect_eq('26-15 配下の確認と製造担当組織は、施工の写真を読め、現地確認の画像でない資料は読めない。詳細の資料の一覧もそのとおり',
+    '1/0/1/0/1/1/基礎の写真',
+    pg_temp.sv_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_files where id = %L', f_progress)) || '/' ||
+    pg_temp.sv_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_files where id = %L', f_survey_pdf)) || '/' ||
+    pg_temp.sv_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.case_files where id = %L', f_progress)) || '/' ||
+    pg_temp.sv_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.case_files where id = %L', f_survey_pdf)) || '/' ||
+    jsonb_array_length(v_out::jsonb #> '{partner_info,survey_files}')::text || '/' ||
+    jsonb_array_length(v_out::jsonb -> 'progress_files')::text || '/' || (v_out::jsonb #>> '{progress_files,0,caption}'));
+  perform pg_temp.sv_expect_eq('26-16 詳細の個体は、今の製造依頼のものだけ（取り消した製造依頼の個体は出さない）', '1/2',
+    jsonb_array_length(v_out::jsonb -> 'units')::text || '/' ||
+    (select count(*)::text from public.manufacturing_units u where u.quote_request_id = r_1));
+  perform pg_temp.sv_expect_eq('26-16b 案件の担当（主担当者）は、現地確認の画像でない資料も読める', '1',
+    pg_temp.sv_run_as('authenticated', u_d_staff, format('select count(*)::text from public.case_files where id = %L', f_survey_pdf)));
+
   -- ---------- 営業担当が別の総代理店の配下に移ると、前の総代理店は見られない ----------
   update public.case_workflows set sales_organization_id = o_d2 where quote_request_id = r_1;
   perform pg_temp.sv_expect_eq('26-13 営業担当が別の総代理店の配下へ移ると、前の総代理店の一覧から消え、新しい総代理店の一覧に出る', '0/1',
@@ -215,6 +242,15 @@ begin
     pg_temp.sv_run_as('authenticated', u_md2_mgr, $q$ select jsonb_array_length(public.list_supervised_cases())::text $q$));
   perform pg_temp.sv_expect_denied('26-14 前の総代理店は詳細も見られない', '42501',
     pg_temp.sv_run_as('authenticated', u_md_mgr, format('select public.get_supervised_case(%L)::text', r_1)));
+
+  -- 下書きの製造依頼は、製造の担当へまだ届いていないため出さない（進み具合の「なし」とそろえる）
+  set local session_replication_role = replica;
+  update public.manufacturing_orders set status = 'draft', sent_at = null, received_at = null where id = mo_1;
+  set local session_replication_role = origin;
+  v_out := pg_temp.sv_run_as('authenticated', u_admin, format('select public.get_supervised_case(%L)::text', r_1));
+  perform pg_temp.sv_expect_eq('26-17 下書きの製造依頼とその個体は詳細に出さない（進み具合は「なし」）', 'null/0/none',
+    coalesce(v_out::jsonb ->> 'manufacturing_order', 'null') || '/' || jsonb_array_length(v_out::jsonb -> 'units')::text || '/' ||
+    (v_out::jsonb #>> '{progress,manufacturing_status}'));
 end;
 $test$;
 

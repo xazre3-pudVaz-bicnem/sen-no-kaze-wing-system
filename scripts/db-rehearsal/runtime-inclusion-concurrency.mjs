@@ -120,6 +120,43 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
       [ids.source],
     );
     record('Both categories persist after retry', 2, final.rows[0].n);
+
+    // Category change racing an inclusion save must not leave a self-inclusive product.
+    await beginAsAdmin(first);
+    await first.query(saveSql, [ids.source, [ids.toilet, ids.wash], [ids.wash]]);
+    await beginAsAdmin(second);
+    const categoryWriterPid = Number((await second.query('select pg_backend_pid() as pid')).rows[0].pid);
+    let categorySettled = false;
+    const categoryUpdate = second.query(
+      'update public.options set category_id=$1::uuid where id=$2::uuid returning category_id',
+      [ids.wash, ids.source],
+    ).then(
+      (value) => ({ ok: true, value }),
+      (error) => ({ ok: false, error }),
+    ).finally(() => { categorySettled = true; });
+    let categoryWaited = false;
+    for (let i = 0; i < 35 && !categorySettled; i += 1) {
+      const observed = await setup.query(
+        'select exists(select 1 from pg_locks where pid=$1 and not granted) as waiting',
+        [categoryWriterPid],
+      );
+      if (observed.rows[0].waiting) { categoryWaited = true; break; }
+      await wait(20);
+    }
+    record('Category update waits for inclusion save', true, categoryWaited && !categorySettled);
+    await first.query('commit');
+    const categoryResult = await categoryUpdate;
+    await second.query(categoryResult.ok ? 'commit' : 'rollback');
+    record('Category update cannot create self-inclusion after concurrent save', true,
+      !categoryResult.ok && /VALIDATION:/.test(categoryResult.error?.message ?? ''));
+    const invariant = await setup.query(
+      'select o.category_id, array_agg(rel.included_category_id) as included_ids from public.options o join public.option_included_categories rel on rel.option_id=o.id where o.id=$1::uuid group by o.category_id',
+      [ids.source],
+    );
+    record('Concurrent update preserves original product category', ids.ub,
+      invariant.rows[0]?.category_id ?? 'missing product');
+    record('Concurrent update preserves non-self-inclusion', true,
+      !(invariant.rows[0]?.included_ids ?? []).includes(ids.ub));
     for (const test of results) {
       console.log((test.ok ? 'PASS ' : 'FAIL ') + test.step + ' [expected=' + test.expected + ', actual=' + test.actual + ']');
     }

@@ -47,15 +47,6 @@ jobs:
         with:
           version: 2.120.0
 
-      # TEMPORARY: let the Supabase CLI itself generate the migration filename on disposable CI.
-      # The generated empty file is NOT committed or applied to production.
-      - name: Generate inclusion migration filename with Supabase CLI
-        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'review/equipment-inclusion-db-rpc-sql-proposal-20261110' }}
-        run: |
-          supabase migration new --help > /dev/null
-          supabase migration new option_included_categories
-          find supabase/migrations -maxdepth 1 -name '*_option_included_categories.sql' -print
-
       # supabase/migrations を古い順に 1 本ずつ適用する。1 本でも失敗すればここで止まる
       - name: Apply all migrations to a local Supabase database
         run: supabase db start
@@ -82,9 +73,9 @@ jobs:
       - name: Runtime security tests
         run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime-check.json
 
-      # Temporary PR-only verification: SQL proposal is NOT a migration and must never reach production.
-      - name: Trial equipment inclusion RPC proposal on disposable Supabase
-        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'review/equipment-inclusion-db-rpc-sql-proposal-20261110' }}
+      # New inclusion migration: test auth, RLS and compare-and-replace RPC on disposable local DB.
+      # The runner refuses non-local DB connections and rolls back test data.
+      - name: Runtime security tests for equipment inclusion RPC
         env:
           EQUIPMENT_INCLUSION_REVIEW_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: node scripts/db-rehearsal/try-inclusion-proposal.mjs

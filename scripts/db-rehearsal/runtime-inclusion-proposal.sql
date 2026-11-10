@@ -154,7 +154,7 @@ begin
 end;
 $tests$;
 
-select pg_catalog.coalesce(pg_catalog.jsonb_agg(
+select coalesce(pg_catalog.jsonb_agg(
   pg_catalog.jsonb_build_object(
     'step', step, 'expected', expected, 'actual', actual, 'ok', ok
   ) order by step

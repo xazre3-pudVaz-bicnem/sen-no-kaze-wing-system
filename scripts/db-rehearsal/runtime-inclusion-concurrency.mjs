@@ -34,6 +34,7 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
   const first = new pg.Client({ connectionString, statement_timeout: 10000 });
   const second = new pg.Client({ connectionString, statement_timeout: 10000 });
   const connected = [];
+  let fixturesCreated = false;
   const results = [];
   const record = (step, expected, actual) => {
     const value = String(actual);
@@ -68,6 +69,7 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
       [ids.source, ids.ub],
     );
     await setup.query('commit');
+    fixturesCreated = true;
 
     await beginAsAdmin(first);
     const a = await first.query(saveSql, [ids.source, [], [ids.toilet]]);
@@ -128,7 +130,7 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
   } finally {
     await first.query('rollback').catch(() => {});
     await second.query('rollback').catch(() => {});
-    if (connected.includes(setup)) {
+    if (fixturesCreated && connected.includes(setup)) {
       await setup.query('rollback').catch(() => {});
       try {
         await setup.query('begin');

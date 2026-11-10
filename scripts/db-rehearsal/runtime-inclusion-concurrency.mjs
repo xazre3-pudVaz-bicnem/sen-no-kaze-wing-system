@@ -46,6 +46,16 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
       await client.connect();
       connected.push(client);
     }
+    // Resolve the canonical categories supplied by migrations, never seed duplicate codes.
+    const categories = await setup.query(
+      "select code,id from public.option_categories where code = any($1::text[]) and status='published'",
+      [['ub', 'toilet', 'washbasin']],
+    );
+    const byCode = new Map(categories.rows.map((r) => [r.code, r.id]));
+    if (byCode.size !== 3) throw new Error('REFUSED: canonical ub/toilet/washbasin categories missing');
+    ids.ub = byCode.get('ub');
+    ids.toilet = byCode.get('toilet');
+    ids.wash = byCode.get('washbasin');
     // The CI runner starts with a fresh database. Never run against existing fixtures.
     const existing = await setup.query('select count(*)::int as n from public.options where id = $1::uuid', [ids.source]);
     if (existing.rows[0].n !== 0) throw new Error('REFUSED: race fixture already exists');
@@ -59,10 +69,6 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
     await setup.query(
       "insert into public.profiles (id,email,full_name,role_code) values ($1::uuid,'inclusion-race@runtime.invalid','設備包含同時保存','admin')",
       [ids.admin],
-    );
-    await setup.query(
-      "insert into public.option_categories (id,code,name,group_code,group_name,status) values ($1::uuid,'runtime-inclusion-race-ub','浴室','equipment','設備機器','published'), ($2::uuid,'runtime-inclusion-race-toilet','トイレ','equipment','設備機器','published'), ($3::uuid,'runtime-inclusion-race-wash','洗面','equipment','設備機器','published')",
-      [ids.ub, ids.toilet, ids.wash],
     );
     await setup.query(
       "insert into public.options (id,category_id,code,name,status,product_no) values ($1::uuid,$2::uuid,'runtime-inclusion-race-source','同時保存の3点ユニット','published','PRD-999991')",
@@ -178,7 +184,6 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
           [ids.source],
         );
         await setup.query('delete from public.options where id=$1::uuid', [ids.source]);
-        await setup.query('delete from public.option_categories where id=any($1::uuid[])', [[ids.ub, ids.toilet, ids.wash]]);
         await setup.query('delete from public.profiles where id=$1::uuid', [ids.admin]);
         await setup.query('delete from auth.users where id=$1::uuid', [ids.admin]);
         await setup.query('commit');

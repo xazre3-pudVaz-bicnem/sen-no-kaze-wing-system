@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
+import { runtimeInclusionConcurrentSave } from './runtime-inclusion-concurrency.mjs';
 
 const dbUrl = process.env.EQUIPMENT_INCLUSION_REVIEW_DB_URL;
 if (!dbUrl) throw new Error('EQUIPMENT_INCLUSION_REVIEW_DB_URL is required (disposable DB only)');
@@ -37,6 +38,8 @@ try {
     throw new Error('One or more inclusion runtime checks failed');
   }
   console.log('Passed ' + checks.length + ' inclusion RPC/schema checks on disposable local Supabase');
+  const concurrency = await runtimeInclusionConcurrentSave(dbUrl);
+  console.log('Passed ' + concurrency.length + ' two-session concurrency checks on disposable local Supabase');
 } catch (error) {
   await client.query('rollback').catch(() => {});
   console.error(error);

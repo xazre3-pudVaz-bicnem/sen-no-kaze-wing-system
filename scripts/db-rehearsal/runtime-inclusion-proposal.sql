@@ -170,6 +170,52 @@ begin
   select category_id::text into v_actual from public.options where id = v_pub;
   perform pg_temp.expect_inclusion('failed category update leaves original category', v_ub::text, v_actual);
 
+  -- High-risk invalid inputs should reject before any data or audit changes.
+  perform pg_temp.expect_inclusion(
+    'null next category array rejected', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[%L::uuid,%L::uuid], null::uuid[])::text',
+      v_pub, v_toilet, v_wash
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'null element rejected', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[%L::uuid,%L::uuid], array[null::uuid])::text',
+      v_pub, v_toilet, v_wash
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'duplicate category rejected', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[%L::uuid,%L::uuid], array[%L::uuid,%L::uuid])::text',
+      v_pub, v_toilet, v_wash, v_toilet, v_toilet
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'unknown category UUID rejected', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[%L::uuid,%L::uuid], array[%L::uuid])::text',
+      v_pub, v_toilet, v_wash, '00000000-0000-4000-8000-00000000f799'
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'service_role cannot call inclusion RPC', 'ERROR 42501',
+    pg_temp.run_as_inclusion('service_role', null, v_call)
+  );
+  perform pg_temp.expect_inclusion(
+    'unchanged set accepted', v_toilet::text,
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[%L::uuid,%L::uuid], array[%L::uuid,%L::uuid])::text',
+      v_pub, v_toilet, v_wash, v_toilet, v_wash
+    ))
+  );
+  select count(*)::text into v_actual
+    from public.audit_logs
+   where entity_id in (v_pub, v_draft)
+     and action = 'option.included_categories.save';
+  perform pg_temp.expect_inclusion('unchanged save did not add audit', '2', v_actual);
+
   -- Prevent destructive deletion of a product/category while inclusion links exist.
   -- Test in nested exception subtransactions: no parent row may be deleted.
   begin

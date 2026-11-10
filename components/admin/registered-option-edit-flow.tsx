@@ -726,6 +726,11 @@ export function RegisteredOptionEditFlow({
               <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
             )}
           </section>
+          <RegisteredProductConflictFields
+            conflicts={conflicts}
+            candidates={conflictCandidates}
+            optionCategoryCode={selectedCategoryCode}
+          />
 
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-pricing">
             <ProductSectionHeading
@@ -802,11 +807,6 @@ export function RegisteredOptionEditFlow({
             </section>
             </div>
           </section>
-          <RegisteredProductConflictFields
-            conflicts={conflicts}
-            candidates={conflictCandidates}
-            optionCategoryCode={selectedCategoryCode}
-          />
         </form>
         <section className="space-y-3" data-testid="registered-product-financial-tools" aria-label="価格単位と本部基準原価">
           <p className="px-1 text-xs leading-5 text-muted">

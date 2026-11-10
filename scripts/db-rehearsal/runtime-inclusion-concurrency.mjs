@@ -156,7 +156,7 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
     record('Concurrent update preserves original product category', ids.ub,
       invariant.rows[0]?.category_id ?? 'missing product');
     record('Concurrent update preserves non-self-inclusion', true,
-      !(invariant.rows[0]?.included_ids ?? []).includes(ids.ub));
+      !(invariant.rows[0]?.included_ids ?? []).includes(invariant.rows[0]?.category_id));
     for (const test of results) {
       console.log((test.ok ? 'PASS ' : 'FAIL ') + test.step + ' [expected=' + test.expected + ', actual=' + test.actual + ']');
     }

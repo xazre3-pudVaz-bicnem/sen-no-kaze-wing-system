@@ -73,9 +73,10 @@ export function ManufacturerDocumentModal({
           event.clientY > rect.bottom
         ) onClose();
       }}
-      className="fixed inset-0 m-auto flex h-[88vh] w-[min(96vw,90rem)] max-h-none max-w-none flex-col overflow-hidden rounded-2xl border border-line bg-white p-0 text-ink shadow-2xl backdrop:bg-black/55"
+      className="fixed inset-0 m-auto h-[88vh] w-[min(96vw,90rem)] max-h-none max-w-none flex-col overflow-hidden rounded-2xl border border-line bg-white p-0 text-ink shadow-2xl backdrop:bg-black/55"
       data-testid="manufacturer-document-modal"
     >
+      <div className="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div className="min-w-0">
             <p className="text-xs font-semibold text-brown">メーカー資料</p>
@@ -147,6 +148,7 @@ export function ManufacturerDocumentModal({
             />
           </div>
         )}
+      </div>
     </dialog>,
     document.body
   );

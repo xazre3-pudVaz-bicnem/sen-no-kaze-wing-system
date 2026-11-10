@@ -71,8 +71,14 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(manufacturerDocumentModal).toContain('<iframe');
     expect(manufacturerDocumentModal).toContain('loading="lazy"');
     expect(manufacturerDocumentModal).toContain('別タブで開く');
-    expect(manufacturerDocumentModal).toContain("event.key === 'Escape'");
-    expect(manufacturerDocumentModal).toContain('event.target === event.currentTarget');
+    expect(manufacturerDocumentModal).toContain('<dialog');
+    expect(manufacturerDocumentModal).toContain('dialog.showModal()');
+    expect(manufacturerDocumentModal).toContain('onCancel={(event) => {');
+    expect(manufacturerDocumentModal).toContain('backdrop:bg-black/55');
+    expect(manufacturerDocumentModal).toContain('event.target !== event.currentTarget');
+    expect(manufacturerDocumentModal).toContain('previouslyFocused?.focus()');
+    expect(manufacturerDocumentModal).not.toContain('z-[120]');
+    expect(manufacturerDocumentModal).not.toContain("window.addEventListener('keydown'");
     expect(manufacturerDocumentModal).toContain('aria-label="メーカー資料を閉じる"');
   });
 

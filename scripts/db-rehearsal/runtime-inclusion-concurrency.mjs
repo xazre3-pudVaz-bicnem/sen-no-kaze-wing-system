@@ -35,6 +35,7 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
   const second = new pg.Client({ connectionString, statement_timeout: 10000 });
   const connected = [];
   let fixturesCreated = false;
+  const insertedCategoryIds = [];
   const results = [];
   const record = (step, expected, actual) => {
     const value = String(actual);
@@ -46,22 +47,27 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
       await client.connect();
       connected.push(client);
     }
-    // Resolve the canonical categories supplied by migrations, never seed duplicate codes.
-    const categories = await setup.query(
-      "select code,id from public.option_categories where code = any($1::text[]) and status='published'",
-      [['ub', 'toilet', 'washbasin']],
-    );
-    const byCode = new Map(categories.rows.map((r) => [r.code, r.id]));
-    if (byCode.size !== 3) throw new Error('REFUSED: canonical ub/toilet/washbasin categories missing');
-    ids.ub = byCode.get('ub');
-    ids.toilet = byCode.get('toilet');
-    ids.wash = byCode.get('washbasin');
-    // The CI runner starts with a fresh database. Never run against existing fixtures.
+    // Only a disposable DB can be used; never overwrite existing fixture products.
     const existing = await setup.query('select count(*)::int as n from public.options where id = $1::uuid', [ids.source]);
     if (existing.rows[0].n !== 0) throw new Error('REFUSED: race fixture already exists');
 
     await setup.query('begin');
     await setup.query("set local session_replication_role = 'replica'");
+    // Some local migration baselines have no catalog records; seed only missing codes.
+    const seeded = await setup.query(
+      "insert into public.option_categories(id,code,name,group_code,group_name,status) values ($1::uuid,'ub','検証浴室','equipment','設備機器','published'), ($2::uuid,'toilet','検証トイレ','equipment','設備機器','published'), ($3::uuid,'washbasin','検証洗面','equipment','設備機器','published') on conflict (code) do nothing returning id",
+      [ids.ub, ids.toilet, ids.wash],
+    );
+    insertedCategoryIds.push(...seeded.rows.map((row) => row.id));
+    const categories = await setup.query(
+      "select code,id from public.option_categories where code = any($1::text[]) and status='published'",
+      [['ub', 'toilet', 'washbasin']],
+    );
+    const byCode = new Map(categories.rows.map((row) => [row.code, row.id]));
+    if (byCode.size !== 3) throw new Error('REFUSED: canonical ub/toilet/washbasin categories missing or unpublished');
+    ids.ub = byCode.get('ub');
+    ids.toilet = byCode.get('toilet');
+    ids.wash = byCode.get('washbasin');
     await setup.query(
       "insert into auth.users (id,email,raw_user_meta_data) values ($1::uuid,'inclusion-race@runtime.invalid','{}'::jsonb)",
       [ids.admin],
@@ -173,6 +179,7 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
   } finally {
     await first.query('rollback').catch(() => {});
     await second.query('rollback').catch(() => {});
+    if (connected.includes(setup)) await setup.query('rollback').catch(() => {});
     if (fixturesCreated && connected.includes(setup)) {
       await setup.query('rollback').catch(() => {});
       try {
@@ -184,6 +191,9 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
           [ids.source],
         );
         await setup.query('delete from public.options where id=$1::uuid', [ids.source]);
+        if (insertedCategoryIds.length > 0) {
+          await setup.query('delete from public.option_categories where id = any($1::uuid[])', [insertedCategoryIds]);
+        }
         await setup.query('delete from public.profiles where id=$1::uuid', [ids.admin]);
         await setup.query('delete from auth.users where id=$1::uuid', [ids.admin]);
         await setup.query('commit');

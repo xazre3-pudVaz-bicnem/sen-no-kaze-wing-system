@@ -2,7 +2,7 @@
 
 ## 現状
 
-このブランチの `proposed-schema-and-rpc.sql` は**SQL草案**であり、正式migrationではない。Supabase CLI / Docker / PostgreSQLを利用できる検証環境がないため、SQLをまだ実際のDBへ適用・実行していない。GitHub Actionsの通常CIが通っても、その事実を実DB検証済みと見なさない。
+**新規migration** `supabase/migrations/20261110024245_option_included_categories.sql` は、GitHub Actions上のSupabase CLI `migration new` で生成したファイル名を採用。先行SQL草案は使い捨てローカルSupabaseへ適用して、14件の専用runtime検査が成功した。正式migrationに移した後もCIで再検証する。実DBの確認はCIの使い捨てDBのみであり、**本番未適用**。独立レビューも未完了。
 
 GitHubのmain、関連Open PR、mainとの差分、検証HEAD、Supabaseのmigration履歴とschemaを**適用直前にも再確認**すること。今回は本番DBのread-only確認以外は実施しない。
 
@@ -20,7 +20,7 @@ GitHubのmain、関連Open PR、mainとの差分、検証HEAD、Supabaseのmigra
 
 ## 使い捨てSupabase DB試験（本番では絶対に実行しない）
 
-1. Supabase CLIで新規migrationを発行して草案を移植する（`supabase migration new <name>`）。正式なtimestampはCLIが作成したものを採用する。**既存migrationの改変は禁止**。
+1. Supabase CLIで生成した新規migration `20261110024245_option_included_categories.sql` を適用する。既存migrationの改変は禁止。
 2. 新しい空のローカルSupabase DBへ全migrationを順番に適用。途中で失敗したら停止。
 3. 各ロールで`has_table_privilege`・`has_function_privilege`を検証：anonはRPC不可、authenticatedはRPCが見えるが権限なしユーザーは拒否、service_roleには直書き・RPC EXECUTEを許さない。
 4. 登録権限を持つ別々のセッションを準備し、3点ユニットバスにトイレ・洗面のcategory IDを保存→再取得→監査確認する。価格情報は変わらない。
@@ -33,11 +33,11 @@ GitHubのmain、関連Open PR、mainとの差分、検証HEAD、Supabaseのmigra
 
 ## 実装順と停止条件
 
-- このPRは**独立レビュー依頼用の草案**。本番DBは変更しない。
+- このPRは**独立レビュー待ちの新規migration実装**。本番DBは変更しない。
 - 未確定のカテゴリー範囲・権限変更#502・FK削除挙動を、推測で採用しない。
-- `supabase/migrations/`に新規ファイルを作るのはCLIが利用できてから。保存RPCの本番利用はさらに本番適用の事前承認後。
+- 新規migrationファイルはCLI命名で作成済み。保存RPCの本番利用は独立レビュー・マージ・本番適用の事前承認後。
 - 商品登録STEP1/STEP2の保存接続、シミュレーター、見積のDB正式計算は別PR。金額・Revision・Snapshotの独立レビューを必須とする。
 
 ## 現時点のレビュー判定
 
-**マージ不可（独立レビュー、CLIからのmigration生成、ローカルDB runtime検証が未完了）。** SQLの内容についてレビューが終わっていないことを隠してマージしない。
+**マージ不可（独立レビューとカテゴリー範囲の業務確定が未完了）。** 正式migrationのCI・runtimeを改めて確認し、SQLの設計審査と同時編集試験が完了するまではマージしない。

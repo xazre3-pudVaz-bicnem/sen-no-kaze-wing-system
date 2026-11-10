@@ -30,6 +30,7 @@ export function RegisteredProductConflictFields({ conflicts, candidates, optionC
     optionCategoryCode === 'ub' && candidates.some((candidate) => candidate.categoryCode === 'toilet') ? 'toilet' : ''
   );
   const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(conflicts.length > 0);
   const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const existingById = new Map(conflicts.map((conflict) => [conflict.conflicts_with_option_id, conflict]));
   const visibleCategories = new Map(candidates.map((candidate) => [candidate.categoryCode, candidate.categoryName]));
@@ -52,7 +53,8 @@ export function RegisteredProductConflictFields({ conflicts, candidates, optionC
       {candidates.length > 0 && (
         <details
           className="card p-4 sm:p-5"
-          defaultOpen={chosen.length > 0}
+          open={expanded}
+          onToggle={(event) => setExpanded(event.currentTarget.open)}
           data-testid="registered-product-conflicts"
         >
           <summary className="cursor-pointer text-sm" data-testid="registered-product-conflicts-summary">

@@ -53,6 +53,18 @@ describe('設備包含DB/RPC migration（静的ガード：runtimeの代用で�
     expect(sql).toContain('revoke all on function public.guard_option_inclusion_category_change()');
   });
 
+  it('カテゴリー正本のcode/status変更をDBで保護し、保存時も対象行をロックする', () => {
+    expect(sql).toContain('create function public.guard_option_inclusion_category_master_update()');
+    expect(sql).toMatch(/before update of code, status on public\.option_categories/i);
+    expect(sql).toContain('rel.included_category_id = old.id');
+    expect(sql).toContain('o.category_id = old.id');
+    expect(sql).toContain('new.code is distinct from old.code or new.status is distinct from old.status');
+    expect(sql).toContain('revoke all on function public.guard_option_inclusion_category_master_update()');
+    expect(sql).toContain('option_categories_inclusion_master_update_guard');
+    expect(sql).toMatch(/where c\.id = any\(v_next \|\| array\[v_option_category_id\]\)[\s\S]*?order by c\.id\s+for share/i);
+    expect(sql).toContain('v_option_category_status');
+  });
+
   it('包含元はub、包含先はtoiletとwashbasinのみ（個別設定）', () => {
     expect(sql).toContain("v_option_category_code is distinct from 'ub'");
     expect(sql).toContain("c.code not in ('toilet', 'washbasin')");

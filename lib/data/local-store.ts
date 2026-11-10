@@ -2010,7 +2010,7 @@ export class LocalStore implements DataStore {
         throw new StoreError('LOCKED', '見積Revisionの系譜を確認できません');
       }
       if (quote.pricing_model === 'v2.5' && (quote.revision < 2 || !quote.parent_quote_id ||
-          !quote.standard_estimate_revision_id || !quote.calc_rule_version_id || !quote.tax_rule_version_id)) {
+          !quote.standard_estimate_revision_id)) {
         throw new StoreError('LOCKED', 'v2.5正式見積の固定Revisionを確認できません');
       }
       if (request.quote_id !== quote.id) throw new StoreError('LOCKED', 'この見積は案件の現在の版ではありません');

@@ -41,11 +41,13 @@ set local session_replication_role = replica;
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-4000-8000-00000000f701', 'inclusion-admin@runtime.invalid', '{}'::jsonb),
-  ('00000000-0000-4000-8000-00000000f702', 'inclusion-dealer@runtime.invalid', '{}'::jsonb);
+  ('00000000-0000-4000-8000-00000000f702', 'inclusion-dealer@runtime.invalid', '{}'::jsonb),
+  ('00000000-0000-4000-8000-00000000f703', 'inclusion-master@runtime.invalid', '{}'::jsonb);
 
 insert into public.profiles (id, email, full_name, role_code) values
   ('00000000-0000-4000-8000-00000000f701', 'inclusion-admin@runtime.invalid', '設備包含テスト管理者', 'admin'),
-  ('00000000-0000-4000-8000-00000000f702', 'inclusion-dealer@runtime.invalid', '設備包含テスト代理店', 'dealer');
+  ('00000000-0000-4000-8000-00000000f702', 'inclusion-dealer@runtime.invalid', '設備包含テスト代理店', 'dealer'),
+  ('00000000-0000-4000-8000-00000000f703', 'inclusion-master@runtime.invalid', '設備包含テスト総代理店', 'master_dealer');
 
 insert into public.option_categories (id, code, name, group_code, group_name, status) values
   ('00000000-0000-4000-8000-00000000f710', 'runtime-inclusion-ub', 'テスト浴室', 'equipment', '設備機器', 'published'),
@@ -63,6 +65,7 @@ do $tests$
 declare
   v_admin constant uuid := '00000000-0000-4000-8000-00000000f701';
   v_dealer constant uuid := '00000000-0000-4000-8000-00000000f702';
+  v_master constant uuid := '00000000-0000-4000-8000-00000000f703';
   v_pub constant uuid := '00000000-0000-4000-8000-00000000f720';
   v_draft constant uuid := '00000000-0000-4000-8000-00000000f721';
   v_ub constant uuid := '00000000-0000-4000-8000-00000000f710';
@@ -83,6 +86,10 @@ begin
   perform pg_temp.expect_inclusion(
     'dealer RPC forbidden', 'ERROR 42501',
     pg_temp.run_as_inclusion('authenticated', v_dealer, v_call)
+  );
+  perform pg_temp.expect_inclusion(
+    'master_dealer RPC forbidden despite legacy can_edit_catalog rank2', 'ERROR 42501',
+    pg_temp.run_as_inclusion('authenticated', v_master, v_call)
   );
   perform pg_temp.expect_inclusion(
     'admin stores categories', v_toilet::text,
@@ -146,6 +153,23 @@ begin
       'select count(*)::text from public.option_included_categories where option_id = %L::uuid', v_draft
     ))
   );
+  perform pg_temp.expect_inclusion(
+    'master_dealer cannot read draft source inclusion', '0',
+    pg_temp.run_as_inclusion('authenticated', v_master, pg_catalog.format(
+      'select count(*)::text from public.option_included_categories where option_id = %L::uuid', v_draft
+    ))
+  );
+  -- Options category cannot be changed to a category that the product includes.
+  begin
+    update public.options set category_id = v_toilet where id = v_pub;
+    v_actual := 'UPDATED';
+  exception when others then
+    v_actual := sqlstate;
+  end;
+  perform pg_temp.expect_inclusion('invariant blocks category update to included category', 'P0001', v_actual);
+  select category_id::text into v_actual from public.options where id = v_pub;
+  perform pg_temp.expect_inclusion('failed category update leaves original category', v_ub::text, v_actual);
+
   -- Prevent destructive deletion of a product/category while inclusion links exist.
   -- Test in nested exception subtransactions: no parent row may be deleted.
   begin

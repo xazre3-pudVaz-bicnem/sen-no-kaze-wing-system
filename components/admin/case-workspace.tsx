@@ -750,15 +750,6 @@ export async function CaseWorkspace({
                 >
                   見積書PDF
                 </a>
-                <a
-                  href={`/api/quotes/${quote.id}/pdf?regenerate=1`}
-                  target="_blank"
-                  rel="noopener"
-                  className="btn-secondary btn-sm"
-                  title="レイアウト変更後に PDF を作り直す（金額は変わりません）"
-                >
-                  PDF再生成
-                </a>
               </div>
             </div>
 

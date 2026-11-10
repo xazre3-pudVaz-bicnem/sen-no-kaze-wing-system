@@ -49,17 +49,14 @@ insert into public.profiles (id, email, full_name, role_code) values
   ('00000000-0000-4000-8000-00000000f702', 'inclusion-dealer@runtime.invalid', '設備包含テスト代理店', 'dealer'),
   ('00000000-0000-4000-8000-00000000f703', 'inclusion-master@runtime.invalid', '設備包含テスト総代理店', 'master_dealer');
 
+-- Use the canonical category codes from the local migration seed; do not duplicate ub/toilet/washbasin codes.
 insert into public.option_categories (id, code, name, group_code, group_name, status) values
-  ('00000000-0000-4000-8000-00000000f710', 'ub', 'テスト浴室', 'equipment', '設備機器', 'published'),
-  ('00000000-0000-4000-8000-00000000f711', 'toilet', 'テストトイレ', 'equipment', '設備機器', 'published'),
-  ('00000000-0000-4000-8000-00000000f712', 'washbasin', 'テスト洗面', 'equipment', '設備機器', 'published'),
-  ('00000000-0000-4000-8000-00000000f713', 'runtime-inclusion-draft', '非公開設備', 'equipment', '設備機器', 'draft'),
-  ('00000000-0000-4000-8000-00000000f714', 'kitchen', 'テストキッチン（包含対象外）', 'equipment', '設備機器', 'published');
+  ('00000000-0000-4000-8000-00000000f713', 'runtime-inclusion-draft', '非公開設備', 'equipment', '設備機器', 'draft');
 
 insert into public.options (id, category_id, code, name, status, product_no) values
-  ('00000000-0000-4000-8000-00000000f720', '00000000-0000-4000-8000-00000000f710', 'runtime-inclusion-product', '検証3点ユニット', 'published', 'PRD-999981'),
-  ('00000000-0000-4000-8000-00000000f721', '00000000-0000-4000-8000-00000000f710', 'runtime-inclusion-hidden-product', '検証シャワートイレユニット', 'draft', 'PRD-999982'),
-  ('00000000-0000-4000-8000-00000000f722', '00000000-0000-4000-8000-00000000f711', 'runtime-inclusion-non-ub', '検証UB以外の商品', 'draft', 'PRD-999983');
+  ('00000000-0000-4000-8000-00000000f720', (select id from public.option_categories where code='ub'), 'runtime-inclusion-product', '検証3点ユニット', 'published', 'PRD-999981'),
+  ('00000000-0000-4000-8000-00000000f721', (select id from public.option_categories where code='ub'), 'runtime-inclusion-hidden-product', '検証シャワートイレユニット', 'draft', 'PRD-999982'),
+  ('00000000-0000-4000-8000-00000000f722', (select id from public.option_categories where code='toilet'), 'runtime-inclusion-non-ub', '検証UB以外の商品', 'draft', 'PRD-999983');
 
 set local session_replication_role = origin;
 
@@ -71,14 +68,18 @@ declare
   v_pub constant uuid := '00000000-0000-4000-8000-00000000f720';
   v_draft constant uuid := '00000000-0000-4000-8000-00000000f721';
   v_non_ub constant uuid := '00000000-0000-4000-8000-00000000f722';
-  v_ub constant uuid := '00000000-0000-4000-8000-00000000f710';
-  v_toilet constant uuid := '00000000-0000-4000-8000-00000000f711';
-  v_wash constant uuid := '00000000-0000-4000-8000-00000000f712';
+  v_ub uuid;
+  v_toilet uuid;
+  v_wash uuid;
   v_draft_category constant uuid := '00000000-0000-4000-8000-00000000f713';
-  v_kitchen constant uuid := '00000000-0000-4000-8000-00000000f714';
+  v_kitchen uuid;
   v_call text;
   v_actual text;
 begin
+  select id into strict v_ub from public.option_categories where code = 'ub';
+  select id into strict v_toilet from public.option_categories where code = 'toilet';
+  select id into strict v_wash from public.option_categories where code = 'washbasin';
+  select id into strict v_kitchen from public.option_categories where code = 'kitchen';
   v_call := pg_catalog.format(
     'select public.set_option_included_categories(%L::uuid, array[]::uuid[], array[%L::uuid,%L::uuid])::text',
     v_pub, v_toilet, v_wash
@@ -272,7 +273,7 @@ begin
   perform pg_temp.expect_inclusion(
     'unused published UB deletes through safe-delete RPC', 'ok',
     pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
-      $select 'ok' from (select public.delete_unused_published_option(%L::uuid)) deleted$,
+      'select ''ok'' from (select public.delete_unused_published_option(%L::uuid)) deleted',
       v_pub
     ))
   );
@@ -285,7 +286,7 @@ begin
   perform pg_temp.expect_inclusion(
     'unused draft UB deletes through normal DELETE', 'ok',
     pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
-      $with deleted as (delete from public.options where id = %L::uuid returning id) select case when count(*)=1 then 'ok' else 'missing' end from deleted$,
+      'with deleted as (delete from public.options where id = %L::uuid returning id) select case when count(*)=1 then ''ok'' else ''missing'' end from deleted',
       v_draft
     ))
   );

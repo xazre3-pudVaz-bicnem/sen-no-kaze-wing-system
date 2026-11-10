@@ -169,6 +169,112 @@ export async function runtimeInclusionConcurrentSave(connectionString) {
       invariant.rows[0]?.category_id ?? 'missing product');
     record('Concurrent update preserves non-self-inclusion', true,
       !(invariant.rows[0]?.included_ids ?? []).includes(invariant.rows[0]?.category_id));
+
+    // Category-first race: target code edit wins its row lock before the
+    // inclusion RPC tries FOR SHARE. The RPC must wait and re-validate code.
+    await beginAsAdmin(second);
+    const changedToiletCode = await second.query(
+      "update public.option_categories set code='runtime-toilet-renamed' where id=$1::uuid returning code",
+      [ids.toilet],
+    );
+    record('Unreferenced target code update starts normally', 'runtime-toilet-renamed',
+      changedToiletCode.rows[0]?.code);
+    await beginAsAdmin(first);
+    const categoryFirstSavePid = Number((await first.query('select pg_backend_pid() as pid')).rows[0].pid);
+    let saveSettled = false;
+    const waitingSave = first.query(saveSql, [ids.source, [ids.wash], [ids.toilet, ids.wash]])
+      .then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }))
+      .finally(() => { saveSettled = true; });
+    let saveWaited = false;
+    for (let i = 0; i < 35 && !saveSettled; i += 1) {
+      const observed = await setup.query(
+        'select exists(select 1 from pg_locks where pid=$1 and not granted) as waiting',
+        [categoryFirstSavePid],
+      );
+      if (observed.rows[0].waiting) { saveWaited = true; break; }
+      await wait(20);
+    }
+    record('Save waits for in-flight category code change', true, saveWaited && !saveSettled);
+    await second.query('commit');
+    const codeChangeSave = await waitingSave;
+    await first.query(codeChangeSave.ok ? 'commit' : 'rollback');
+    record('Save rejects renamed target after category update commits', true,
+      !codeChangeSave.ok && /VALIDATION:/.test(codeChangeSave.error?.message ?? ''));
+    const rejectedSaveLinks = await setup.query(
+      'select included_category_id from public.option_included_categories where option_id=$1::uuid',
+      [ids.source],
+    );
+    record('Failed target-race save keeps original washbasin-only relation', ids.wash,
+      rejectedSaveLinks.rows.length === 1 ? rejectedSaveLinks.rows[0].included_category_id : 'unexpected rows');
+    await setup.query("update public.option_categories set code='toilet' where id=$1::uuid", [ids.toilet]);
+
+    // Save-first race: the RPC's FOR SHARE on target rows must make a
+    // concurrent category status update wait; after commit the trigger refuses.
+    await beginAsAdmin(first);
+    await first.query(saveSql, [ids.source, [ids.wash], [ids.wash, ids.toilet]]);
+    await beginAsAdmin(second);
+    const categoryStatusPid = Number((await second.query('select pg_backend_pid() as pid')).rows[0].pid);
+    let statusSettled = false;
+    const waitingStatus = second.query(
+      "update public.option_categories set status='draft' where id=$1::uuid returning status",
+      [ids.toilet],
+    ).then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }))
+      .finally(() => { statusSettled = true; });
+    let statusWaited = false;
+    for (let i = 0; i < 35 && !statusSettled; i += 1) {
+      const observed = await setup.query(
+        'select exists(select 1 from pg_locks where pid=$1 and not granted) as waiting',
+        [categoryStatusPid],
+      );
+      if (observed.rows[0].waiting) { statusWaited = true; break; }
+      await wait(20);
+    }
+    record('Category status update waits for in-flight inclusion save', true,
+      statusWaited && !statusSettled);
+    await first.query('commit');
+    const categoryStatusUpdate = await waitingStatus;
+    await second.query(categoryStatusUpdate.ok ? 'commit' : 'rollback');
+    record('Referenced category cannot become draft after save commits', true,
+      !categoryStatusUpdate.ok && /VALIDATION:/.test(categoryStatusUpdate.error?.message ?? ''));
+    const targetStatus = await setup.query(
+      'select status from public.option_categories where id=$1::uuid', [ids.toilet],
+    );
+    record('Concurrent category state remains published', 'published', targetStatus.rows[0]?.status);
+
+    // Source category has the same protection, including no-op inclusion saves.
+    await beginAsAdmin(first);
+    const noChange = await first.query(saveSql,
+      [ids.source, [ids.wash, ids.toilet], [ids.wash, ids.toilet]]);
+    record('Unchanged inclusion save is allowed during source guard check', 2,
+      noChange.rows[0].categories.length);
+    await beginAsAdmin(second);
+    const sourceCategoryPid = Number((await second.query('select pg_backend_pid() as pid')).rows[0].pid);
+    let sourceSettled = false;
+    const waitingSource = second.query(
+      "update public.option_categories set code='runtime-renamed-ub' where id=$1::uuid returning code",
+      [ids.ub],
+    ).then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }))
+      .finally(() => { sourceSettled = true; });
+    let sourceWaited = false;
+    for (let i = 0; i < 35 && !sourceSettled; i += 1) {
+      const observed = await setup.query(
+        'select exists(select 1 from pg_locks where pid=$1 and not granted) as waiting',
+        [sourceCategoryPid],
+      );
+      if (observed.rows[0].waiting) { sourceWaited = true; break; }
+      await wait(20);
+    }
+    record('UB source rename waits for inclusion transaction', true,
+      sourceWaited && !sourceSettled);
+    await first.query('commit');
+    const sourceResult = await waitingSource;
+    await second.query(sourceResult.ok ? 'commit' : 'rollback');
+    record('Referenced UB category cannot be renamed', true,
+      !sourceResult.ok && /VALIDATION:/.test(sourceResult.error?.message ?? ''));
+    const sourceCode = await setup.query(
+      'select code from public.option_categories where id=$1::uuid', [ids.ub],
+    );
+    record('Concurrent UB source category code stays unchanged', 'ub', sourceCode.rows[0]?.code);
     for (const test of results) {
       console.log((test.ok ? 'PASS ' : 'FAIL ') + test.step + ' [expected=' + test.expected + ', actual=' + test.actual + ']');
     }

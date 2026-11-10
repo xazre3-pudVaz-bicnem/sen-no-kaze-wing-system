@@ -15,9 +15,9 @@ describe('設備包含DB/RPC migration（静的ガード：runtimeの代用で�
     expect(sql).toContain('requires independent review');
   });
 
-  it('複合主キー・FK制限・RLSを宣言する', () => {
+  it('複合主キー・商品削除時CASCADE・カテゴリー削除時RESTRICT・RLSを宣言する', () => {
     expect(sql).toContain('option_included_categories_pkey primary key (option_id, included_category_id)');
-    expect(sql).toMatch(/option_id uuid not null references public\.options \(id\) on delete restrict/i);
+    expect(sql).toMatch(/option_id uuid not null references public\.options \(id\) on delete cascade/i);
     expect(sql).toMatch(/included_category_id uuid not null references public\.option_categories \(id\) on delete restrict/i);
     expect(sql).toMatch(/alter table public\.option_included_categories enable row level security/i);
     expect(sql).toMatch(/create policy option_included_categories_read[\s\S]*?for select to anon, authenticated/i);
@@ -48,9 +48,16 @@ describe('設備包含DB/RPC migration（静的ガード：runtimeの代用で�
   it('商品カテゴリーの後続変更でも自己包含のDB不変条件を守る', () => {
     expect(sql).toContain('create function public.guard_option_inclusion_category_change()');
     expect(sql).toContain('before update of category_id on public.options');
-    expect(sql).toContain('rel.included_category_id = new.category_id');
+    expect(sql).toContain('where rel.option_id = new.id');
     expect(sql).toContain('options_inclusion_category_change_guard');
     expect(sql).toContain('revoke all on function public.guard_option_inclusion_category_change()');
+  });
+
+  it('包含元はub、包含先はtoiletとwashbasinのみ（個別設定）', () => {
+    expect(sql).toContain("v_option_category_code is distinct from 'ub'");
+    expect(sql).toContain("c.code not in ('toilet', 'washbasin')");
+    expect(sql).toContain('unnest(v_next)');
+    expect(sql).not.toContain("group_code <> 'equipment'");
   });
 
   it('旧見積・Published・Snapshot・商品間排他にはDMLを実行しない', () => {

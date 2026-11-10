@@ -1,5 +1,5 @@
 /**
- * REVIEW-ONLY: run the proposed inclusion SQL against disposable local Supabase.
+ * REVIEW-ONLY: test the CLI-generated equipment inclusion migration on disposable local Supabase.
  * This script rejects ALL non-local connections before sending any query.
  * It is not a production migration, and never calls Supabase production APIs.
  */
@@ -20,16 +20,11 @@ if (u.protocol !== 'postgresql:' ||
 const client = new pg.Client({ connectionString: dbUrl, statement_timeout: 10000, query_timeout: 15000 });
 await client.connect();
 try {
+  // Migrations must already have been applied by the local Supabase CLI workflow.
   const exists = await client.query("select to_regclass('public.option_included_categories') as inclusion_table");
-  if (exists.rows[0].inclusion_table !== null) {
-    throw new Error('REFUSED: inclusion table already exists; not a disposable baseline');
+  if (exists.rows[0].inclusion_table === null) {
+    throw new Error('REFUSED: equipment inclusion migration is not applied on disposable local DB');
   }
-  const proposal = fs.readFileSync(
-    path.join(process.cwd(), 'docs/equipment-inclusion/proposed-schema-and-rpc.sql'),
-    'utf8',
-  );
-  // This commits only to the disposable local database created by the CI job.
-  await client.query(proposal);
   const assertions = fs.readFileSync(
     path.join(process.cwd(), 'scripts/db-rehearsal/runtime-inclusion-proposal.sql'),
     'utf8',

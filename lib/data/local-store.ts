@@ -2001,6 +2001,18 @@ export class LocalStore implements DataStore {
       if (!request) throw new StoreError('NOT_FOUND', 'データが見つかりません');
       if (!quote.user_id) throw new StoreError('LOCKED', 'お客様アカウントのある案件だけ電子契約を送信できます');
       if (quote.status !== 'accepted') throw new StoreError('LOCKED', 'お客様が承諾した見積だけ契約書を送信できます');
+      if (quote.quote_kind !== 'formal') throw new StoreError('LOCKED', '正式見積として発行・承諾された見積だけ契約できます');
+      if (request.user_id !== quote.user_id) throw new StoreError('LOCKED', '見積と案件の顧客が一致しません');
+      if (quote.revision < 1 || (quote.revision === 1 && quote.parent_quote_id !== null) ||
+          (quote.revision > 1 && (!quote.parent_quote_id || !db.quotes.some((parent) =>
+            parent.id === quote.parent_quote_id && parent.quote_request_id === quote.quote_request_id &&
+            parent.revision === quote.revision - 1)))) {
+        throw new StoreError('LOCKED', '見積Revisionの系譜を確認できません');
+      }
+      if (quote.pricing_model === 'v2.5' && (quote.revision < 2 || !quote.parent_quote_id ||
+          !quote.standard_estimate_revision_id || !quote.calc_rule_version_id || !quote.tax_rule_version_id)) {
+        throw new StoreError('LOCKED', 'v2.5正式見積の固定Revisionを確認できません');
+      }
       if (request.quote_id !== quote.id) throw new StoreError('LOCKED', 'この見積は案件の現在の版ではありません');
       if (db.contracts.some((c) => c.quote_request_id === request.id && ['sending', 'sent', 'signed'].includes(c.status))) {
         throw new StoreError('LOCKED', 'この案件には送信中または締結済みの契約があります');

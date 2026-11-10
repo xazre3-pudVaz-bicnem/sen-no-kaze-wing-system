@@ -89,6 +89,9 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(page).not.toContain('allOptions={options}');
     expect(flow).toContain('<RegisteredProductConflictFields');
     expect(fields).toContain('data-testid="registered-product-conflicts"');
+    expect(fields).toContain('data-testid="registered-product-conflicts-summary"');
+    expect(fields).toContain('defaultOpen={chosen.length > 0}');
+    expect(fields).toContain('設定なし（必要なときだけ開く）');
     expect(fields).toContain('data-testid="registered-product-conflicts-selected"');
     expect(fields).toContain('data-testid="registered-product-conflicts-candidates"');
     expect(fields).toContain('name="conflicts"');
@@ -99,6 +102,15 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain("label: '同時に選択できない商品'");
     expect(flow).toContain('saveOptionAction(initialState, review.formData)');
     expect(fields).toContain('既に選択中の単体設備を自動で外す機能ではありません');
+  });
+
+  it('組合せ制限を「5. お客様選択」直後、「6. 価格・対象モデル」前に表示する', () => {
+    const choices = flow.indexOf('data-testid="registered-option-current-choices"');
+    const conflict = flow.indexOf('<RegisteredProductConflictFields');
+    const pricing = flow.indexOf('data-testid="registered-product-pricing"');
+    expect(choices).toBeGreaterThan(-1);
+    expect(conflict).toBeGreaterThan(choices);
+    expect(conflict).toBeLessThan(pricing);
   });
 
   it('確認前はブラウザ内のFormDataだけに保持し、反映ボタンで既存保存Actionを呼ぶ', () => {

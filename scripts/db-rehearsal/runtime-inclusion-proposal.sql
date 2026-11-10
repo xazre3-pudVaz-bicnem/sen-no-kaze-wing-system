@@ -50,14 +50,16 @@ insert into public.profiles (id, email, full_name, role_code) values
   ('00000000-0000-4000-8000-00000000f703', 'inclusion-master@runtime.invalid', '設備包含テスト総代理店', 'master_dealer');
 
 insert into public.option_categories (id, code, name, group_code, group_name, status) values
-  ('00000000-0000-4000-8000-00000000f710', 'runtime-inclusion-ub', 'テスト浴室', 'equipment', '設備機器', 'published'),
-  ('00000000-0000-4000-8000-00000000f711', 'runtime-inclusion-toilet', 'テストトイレ', 'equipment', '設備機器', 'published'),
-  ('00000000-0000-4000-8000-00000000f712', 'runtime-inclusion-wash', 'テスト洗面', 'equipment', '設備機器', 'published'),
-  ('00000000-0000-4000-8000-00000000f713', 'runtime-inclusion-draft', '非公開設備', 'equipment', '設備機器', 'draft');
+  ('00000000-0000-4000-8000-00000000f710', 'ub', 'テスト浴室', 'equipment', '設備機器', 'published'),
+  ('00000000-0000-4000-8000-00000000f711', 'toilet', 'テストトイレ', 'equipment', '設備機器', 'published'),
+  ('00000000-0000-4000-8000-00000000f712', 'washbasin', 'テスト洗面', 'equipment', '設備機器', 'published'),
+  ('00000000-0000-4000-8000-00000000f713', 'runtime-inclusion-draft', '非公開設備', 'equipment', '設備機器', 'draft'),
+  ('00000000-0000-4000-8000-00000000f714', 'kitchen', 'テストキッチン（包含対象外）', 'equipment', '設備機器', 'published');
 
 insert into public.options (id, category_id, code, name, status, product_no) values
   ('00000000-0000-4000-8000-00000000f720', '00000000-0000-4000-8000-00000000f710', 'runtime-inclusion-product', '検証3点ユニット', 'published', 'PRD-999981'),
-  ('00000000-0000-4000-8000-00000000f721', '00000000-0000-4000-8000-00000000f710', 'runtime-inclusion-hidden-product', '検証非公開ユニット', 'draft', 'PRD-999982');
+  ('00000000-0000-4000-8000-00000000f721', '00000000-0000-4000-8000-00000000f710', 'runtime-inclusion-hidden-product', '検証シャワートイレユニット', 'draft', 'PRD-999982'),
+  ('00000000-0000-4000-8000-00000000f722', '00000000-0000-4000-8000-00000000f711', 'runtime-inclusion-non-ub', '検証UB以外の商品', 'draft', 'PRD-999983');
 
 set local session_replication_role = origin;
 
@@ -68,10 +70,12 @@ declare
   v_master constant uuid := '00000000-0000-4000-8000-00000000f703';
   v_pub constant uuid := '00000000-0000-4000-8000-00000000f720';
   v_draft constant uuid := '00000000-0000-4000-8000-00000000f721';
+  v_non_ub constant uuid := '00000000-0000-4000-8000-00000000f722';
   v_ub constant uuid := '00000000-0000-4000-8000-00000000f710';
   v_toilet constant uuid := '00000000-0000-4000-8000-00000000f711';
   v_wash constant uuid := '00000000-0000-4000-8000-00000000f712';
   v_draft_category constant uuid := '00000000-0000-4000-8000-00000000f713';
+  v_kitchen constant uuid := '00000000-0000-4000-8000-00000000f714';
   v_call text;
   v_actual text;
 begin
@@ -141,7 +145,7 @@ begin
   );
 
   perform pg_temp.expect_inclusion(
-    'admin can save draft source', v_toilet::text,
+    'shower toilet unit selects only toilet', v_toilet::text,
     pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
       'select public.set_option_included_categories(%L::uuid, array[]::uuid[], array[%L::uuid])::text',
       v_draft, v_toilet
@@ -216,15 +220,40 @@ begin
      and action = 'option.included_categories.save';
   perform pg_temp.expect_inclusion('unchanged save did not add audit', '2', v_actual);
 
-  -- Prevent destructive deletion of a product/category while inclusion links exist.
+  -- Guarded deletion behavior is tested after audit and all input tests.
+  -- Prevent destructive deletion of an included *category* (never cascade to other product data).
   -- Test in nested exception subtransactions: no parent row may be deleted.
+  perform pg_temp.expect_inclusion(
+    'non-ub product cannot store included fixtures', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[]::uuid[], array[%L::uuid])::text',
+      v_non_ub, v_toilet
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'kitchen cannot be an included category', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[%L::uuid,%L::uuid], array[%L::uuid])::text',
+      v_pub, v_toilet, v_wash, v_kitchen
+    ))
+  );
+  select count(*)::text into v_actual
+    from public.option_included_categories where option_id = v_pub;
+  perform pg_temp.expect_inclusion('3-point UB retains own two included categories', '2', v_actual);
+  select count(*)::text into v_actual
+    from public.option_included_categories where option_id = v_draft;
+  perform pg_temp.expect_inclusion('shower toilet unit has toilet but no washbasin', '1', v_actual);
+
+  -- Any product category change while relations exist is prohibited, including
+  -- a move to unrelated 'kitchen' (not just direct self-inclusion).
   begin
-    delete from public.options where id = v_pub;
-    v_actual := 'DELETED';
+    update public.options set category_id = v_kitchen where id = v_draft;
+    v_actual := 'UPDATED';
   exception when others then
     v_actual := sqlstate;
   end;
-  perform pg_temp.expect_inclusion('FK blocks deleting included source product', '23503', v_actual);
+  perform pg_temp.expect_inclusion('non-self category change blocked while links exist', 'P0001', v_actual);
+
   begin
     delete from public.option_categories where id = v_wash;
     v_actual := 'DELETED';
@@ -238,6 +267,32 @@ begin
    where entity_id in (v_pub, v_draft)
      and action = 'option.included_categories.save';
   perform pg_temp.expect_inclusion('audit records only successful changes', '2', v_actual);
+  -- Published option uses the existing guarded safe-delete RPC. Its links may
+  -- cascade only after BEFORE DELETE guard succeeds in the same transaction.
+  perform pg_temp.expect_inclusion(
+    'unused published UB deletes through safe-delete RPC', 'ok',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      $select 'ok' from (select public.delete_unused_published_option(%L::uuid)) deleted$,
+      v_pub
+    ))
+  );
+  select count(*)::text into v_actual from public.options where id = v_pub;
+  perform pg_temp.expect_inclusion('published source removed', '0', v_actual);
+  select count(*)::text into v_actual from public.option_included_categories where option_id = v_pub;
+  perform pg_temp.expect_inclusion('published inclusion links cascaded atomically', '0', v_actual);
+
+  -- Draft option uses the existing direct-delete path (RLS + BEFORE DELETE guard).
+  perform pg_temp.expect_inclusion(
+    'unused draft UB deletes through normal DELETE', 'ok',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      $with deleted as (delete from public.options where id = %L::uuid returning id) select case when count(*)=1 then 'ok' else 'missing' end from deleted$,
+      v_draft
+    ))
+  );
+  select count(*)::text into v_actual from public.options where id = v_draft;
+  perform pg_temp.expect_inclusion('draft source removed', '0', v_actual);
+  select count(*)::text into v_actual from public.option_included_categories where option_id = v_draft;
+  perform pg_temp.expect_inclusion('draft inclusion links cascaded atomically', '0', v_actual);
 end;
 $tests$;
 

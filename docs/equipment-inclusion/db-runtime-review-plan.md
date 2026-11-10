@@ -1,43 +1,46 @@
-# 設備包含DB／RPC：独立レビュー・ローカル実DB試験条件
+# 設備包含DB／RPC｜確定仕様・検証・独立再レビュー
 
-## 現状
+## 適用対象と本番境界
 
-**新規migration** `supabase/migrations/20261110024245_option_included_categories.sql` は、GitHub Actions上のSupabase CLI `migration new` で生成したファイル名を採用。先行SQL草案は使い捨てローカルSupabaseへ適用して、14件の専用runtime検査が成功した。正式migrationに移した後もCIで再検証する。実DBの確認はCIの使い捨てDBのみであり、**本番未適用**。独立レビューも未完了。
+PR #628 の新規migrationは `supabase/migrations/20261110024245_option_included_categories.sql`。ファイル名はSupabase CLIで生成したもの。**Draft PR・未マージ・本番DB未適用**。既存の適用済みmigrationは編集しない。main・open PR・Supabase本番状態・CIの確認はレビュー開始時とマージ直前にliveで再実施する。
 
-GitHubのmain、関連Open PR、mainとの差分、検証HEAD、Supabaseのmigration履歴とschemaを**適用直前にも再確認**すること。今回は本番DBのread-only確認以外は実施しない。
+## 2026-11-10確定の業務仕様
 
-## 独立レビューで確認する順序
+- **包含元の商品カテゴリーは `option_categories.code='ub'` だけ**（浴室）。
+- **包含先は `toilet`（トイレ）・`washbasin`（洗面）だけ**。その他の設備グループ、キッチン、照明などは対象外。
+- 3点ユニットバスとシャワートイレユニットの**商品ごと**に、実際に含む設備だけを選んで保存する。0件・トイレのみ・洗面のみ・両方を区別。全UB商品へ自動付与しない。
+- **商品削除は従来の安全削除条件を満たした場合のみ**。既存 `options_delete_reference_guard`／`assert_option_unreferenced()` が使用中商品を拒否する。削除が成立した場合、`option_id ON DELETE CASCADE` により、その商品の包含関係も**同一トランザクション**で削除。
+- 包含先の`included_category_id`は `ON DELETE RESTRICT` とし、参照中のカテゴリー自体を誤って削除しない。
+- 商品`category_id`の変更時、包含設定が1件でも残っていればDBトリガーで変更を拒否する。まず本部が包含設定をクリアする必要がある。
+- Published Revision・Quote・発行済Snapshotは不変。live商品マスターの包含設定をもって過去の正式金額を再計算しない。
 
-1. **権限・RLS**：`auth.uid()`／`can_edit_catalog()`／`SECURITY DEFINER` owner／`search_path=''`／`PUBLIC,anon,authenticated,service_role`のEXECUTEとテーブル直接write。特に#502が取り込まれた場合の編集権限差。
-2. **保存原子性**：同じ商品を`FOR UPDATE`し、期待集合比較→削除→挿入→監査まで単一トランザクション。不一致・無効カテゴリー・監査エラー・ロックタイムアウト時のロールバック。
-3. **商品削除とFK**：`ON DELETE RESTRICT`がdraft削除・published safe-deleteと整合すること。旧リンクを明示クリアせず商品が削除されないか。
-4. **カテゴリー**：候補の初期案`group_code='equipment'`は未承認。現行設備カテゴリーは浴室／キッチン／洗面／トイレ／給湯／空調。照明等を含める業務判断は未確定で、このPRでは確定しない。
-5. **金額・履歴**：包含設定を変えても既存`standard_estimate_revisions`・`quote_items`・`configuration_snapshots`等に更新が走らないこと。新規Draftへの反映／確定見積は別工程。
-6. **既存排他2件**：移行・削除しないこと。別室追加の運用と衝突するため、後続で明示検討。
-7. **直接SELECT公開**：Draft商品や未公開カテゴリーの包含関係がanonへ漏れないこと。商品マスター編集者には編集画面から見えること。
-8. **監査**：保存者、前後カテゴリー配列、対象商品が残り、無変更は監査行を増やさず、失敗時には監査を残さないこと。
-9. **transaction / deadlock**：カテゴリー変更と商品変更、同一商品への並行保存でlock順・2秒timeoutが妥当か。
+## SQL設計
 
-## 使い捨てSupabase DB試験（本番では絶対に実行しない）
+- `option_included_categories(option_id, included_category_id, created_at)`、複合PK、両側FK。保存開始前の段階で空テーブル（既存排他2件は維持）。
+- `set_option_included_categories(option_id, expected_ids, next_ids)` は本部rank3＋`can_edit_catalog()`のみ許可。サービス・匿名・総代理店からは使用不可。正当性チェック→商品行 `FOR UPDATE`→旧集合比較→入替→監査を原子的に実行。
+- `next_ids` は新規指定分も既存保持分も `toilet`／`washbasin` のpublishedカテゴリー以外は拒否。変更対象の商品のカテゴリは `ub` であること。変更先は商品ごとに明示指定し、初期defaultや自動推論は作らない。
+- `guard_option_inclusion_category_change()` はカテゴリー変更の入口で確認し、包含関係が残る間は更新しない。
+- SELECT RLS: Published商品とPublished対象カテゴリーの情報のみ非ログインへ許可。本部rank3はDraft包含設定も読める。総代理店rank2はDraftを読めない。
+- `SECURITY DEFINER` のowner / search_path / EXECUTEを明示し、内部トリガー関数のPUBLIC EXECUTEを剥奪する。
 
-1. Supabase CLIで生成した新規migration `20261110024245_option_included_categories.sql` を適用する。既存migrationの改変は禁止。
-2. 新しい空のローカルSupabase DBへ全migrationを順番に適用。途中で失敗したら停止。
-3. 各ロールで`has_table_privilege`・`has_function_privilege`を検証：anonはRPC不可、authenticatedはRPCが見えるが権限なしユーザーは拒否、service_roleには直書き・RPC EXECUTEを許さない。
-4. 登録権限を持つ別々のセッションを準備し、3点ユニットバスにトイレ・洗面のcategory IDを保存→再取得→監査確認する。価格情報は変わらない。
-5. 異常系：存在しないoption ID、UUID配列NULL、重複ID、自己カテゴリー、未公開カテゴリー、候補外カテゴリー、旧集合不一致を拒否。すべてデータ・監査に変更なし。
-6. 競合系：2セッションが同じ商品を更新し、後続の旧集合書込みだけが拒否されること。ロック待ち時のrollback・lock_timeout・deadlockの有無を確認。
-7. 既存のDraft／Published商品削除経路について、FKの`RESTRICT`による意図的停止を確認。想定外の削除／自動CASCADEは不可。
-8. 匿名ユーザーにDraft商品内包設備・Draftカテゴリーの情報が漏れないことを確認する。
-9. `standard_estimate_revisions`、`quote_items`、`configuration_snapshots`、既存`option_conflicts`2件の件数・内容のbefore/afterが不変であることを確認。
-10. runtimeセキュリティテスト、database advisors、migration history、schema postflightを確認。独立レビュー後に初めてマージ可否を判断する。
+## 使い捨てDBで検証すること（本番変更は禁止）
 
-## 実装順と停止条件
+1. `supabase/migrations` の全SQLを使い捨てローカルSupabaseに順番適用し、既存履歴との互換とPostflightを確認。
+2. 初期データが空の場合だけ `ub`、`toilet`、`washbasin`、`kitchen` を検証用に生成。元から存在するときは既存IDを使い、商品ごとに期待した関連を登録。検証データはROLLBACK／専用cleanup。
+3. 3点UBにトイレ・洗面、シャワートイレユニットにトイレだけを登録し、個別保存／無変更時監査／登録されない洗面を確認。
+4. 商品が `ub` 以外、包含先が `kitchen`、存在しないUUID・重複・NULL・Draft対象・自己カテゴリーの場合は保存拒否。
+5. anon／dealer／master_dealer／service_roleのRPC拒否、admin(rank3)保存、Draftの非公開、SQLの直接write権限制限。
+6. 未使用Draftの通常商品DELETE、未使用Publishedの `delete_unused_published_option()` を**正規入口**で実行。従来の安全削除ガードに失敗する商品の削除・包含関係削除がともに拒否されること。条件を満たす商品の削除時には関連が同じtransactionで消えること。
+7. 包含中のカテゴリー自体は削除できないこと（FK `RESTRICT`）。商品カテゴリーの `ub` から別カテゴリへの変更は包含が残る限り禁止し、合法的なクリア→変更では成功すること。
+8. 同一商品の2セッション競合で後続の古い保存が失敗すること、カテゴリー変更との競合でDB整合性が破れないこと、監査は成功時のみ増えること。
+9. SQL差分に既存 `option_conflicts`、Quote、見積Revision、SnapshotへのDMLがないことを確認。既存商品削除ガード自体を変更しない。
+10. ローカルruntime security / ACL・RLSのテスト結果、CI Verify、DB Rehearsal、advisors、未検証事項をまとめ、別担当の独立再レビューを実施。
 
-- このPRは**独立レビュー待ちの新規migration実装**。本番DBは変更しない。
-- 未確定のカテゴリー範囲・権限変更#502・FK削除挙動を、推測で採用しない。
-- 新規migrationファイルはCLI命名で作成済み。保存RPCの本番利用は独立レビュー・マージ・本番適用の事前承認後。
-- 商品登録STEP1/STEP2の保存接続、シミュレーター、見積のDB正式計算は別PR。金額・Revision・Snapshotの独立レビューを必須とする。
+## 工程管理と停止条件
 
-## 現時点のレビュー判定
+- PR #502、#535、#563、#616、#618など他PRのmigrationを飛び越えて本番へ適用しない。pending順序・DB preflight／dry-run・バックアップ/PITR・本番postflightは業者さん担当。
+- STEP1/STEP2保存接続、シミュレーターの別室設置／重複選択、正式金額とRevision pin／Snapshotの再現は**別PR**。
+- レビューがHighを残している場合はDraftで保持。使い捨てDB試験成功だけでマージ可とはしない。
+- 本番DBへのDDL/DML・migration適用、マージ、未承認の他機能修正は行わない。
 
-**マージ不可（独立レビューとカテゴリー範囲の業務確定が未完了）。** 正式migrationのCI・runtimeを改めて確認し、SQLの設計審査と同時編集試験が完了するまではマージしない。
+**現在の判定：独立再レビューと修正後CI確認までマージ不可。**

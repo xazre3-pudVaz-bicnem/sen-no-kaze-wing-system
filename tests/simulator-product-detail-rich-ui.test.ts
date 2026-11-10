@@ -75,6 +75,7 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(manufacturerDocumentModal).toContain('dialog.showModal()');
     expect(manufacturerDocumentModal).toContain('onCancel={(event) => {');
     expect(manufacturerDocumentModal).toContain('backdrop:bg-black/55');
+    expect(manufacturerDocumentModal).toContain('className="flex h-full min-h-0 flex-col"');
     expect(manufacturerDocumentModal).toContain('event.target !== event.currentTarget');
     expect(manufacturerDocumentModal).toContain('previouslyFocused?.focus()');
     expect(manufacturerDocumentModal).not.toContain('z-[120]');

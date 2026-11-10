@@ -4,15 +4,15 @@ import { describe, expect, it } from 'vitest';
 
 // 静的チェックだけ。DBの実行時検証・RLS検証・独立レビューを代替しない。
 const sql = fs.readFileSync(
-  path.join(process.cwd(), 'docs/equipment-inclusion/proposed-schema-and-rpc.sql'),
+  path.join(process.cwd(), 'supabase/migrations/20261110024245_option_included_categories.sql'),
   'utf8',
 );
 const executable = sql.replace(/--[^\n]*/g, '');
 
-describe('設備包含DB/RPC SQL草案（未適用・静的ガード）', () => {
-  it('実行不可の草案であることを示し、正式migrationディレクトリには置かない', () => {
-    expect(sql).toContain('REVIEW PROPOSAL ONLY');
-    expect(sql).toContain('NOT A MIGRATION');
+describe('設備包含DB/RPC migration（静的ガード：runtimeの代用ではない）', () => {
+  it('Supabase CLIで生成された新規migrationが正式な格納先にあり、本番未適用であることを区別する', () => {
+    expect(sql).toContain('NEW MIGRATION');
+    expect(sql).toContain('requires independent review');
   });
 
   it('複合主キー・FK制限・RLSを宣言する', () => {

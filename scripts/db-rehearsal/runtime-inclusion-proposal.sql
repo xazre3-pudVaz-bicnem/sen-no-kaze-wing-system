@@ -49,7 +49,14 @@ insert into public.profiles (id, email, full_name, role_code) values
   ('00000000-0000-4000-8000-00000000f702', 'inclusion-dealer@runtime.invalid', '設備包含テスト代理店', 'dealer'),
   ('00000000-0000-4000-8000-00000000f703', 'inclusion-master@runtime.invalid', '設備包含テスト総代理店', 'master_dealer');
 
--- Use the canonical category codes from the local migration seed; do not duplicate ub/toilet/washbasin codes.
+-- Local migration baseline can have no catalog seed rows. Insert only missing canonical codes.
+-- This entire SQL test is rolled back and does not alter production or main seed data.
+insert into public.option_categories (id, code, name, group_code, group_name, status) values
+  ('00000000-0000-4000-8000-00000000f710', 'ub', '検証浴室', 'equipment', '設備機器', 'published'),
+  ('00000000-0000-4000-8000-00000000f711', 'toilet', '検証トイレ', 'equipment', '設備機器', 'published'),
+  ('00000000-0000-4000-8000-00000000f712', 'washbasin', '検証洗面', 'equipment', '設備機器', 'published'),
+  ('00000000-0000-4000-8000-00000000f714', 'kitchen', '検証キッチン', 'equipment', '設備機器', 'published')
+on conflict (code) do nothing;
 insert into public.option_categories (id, code, name, group_code, group_name, status) values
   ('00000000-0000-4000-8000-00000000f713', 'runtime-inclusion-draft', '非公開設備', 'equipment', '設備機器', 'draft');
 

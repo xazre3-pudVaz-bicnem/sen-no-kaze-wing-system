@@ -90,7 +90,8 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('<RegisteredProductConflictFields');
     expect(fields).toContain('data-testid="registered-product-conflicts"');
     expect(fields).toContain('data-testid="registered-product-conflicts-summary"');
-    expect(fields).toContain('defaultOpen={chosen.length > 0}');
+    expect(fields).toContain('open={expanded}');
+    expect(fields).toContain('onToggle={(event) => setExpanded(event.currentTarget.open)}');
     expect(fields).toContain('設定なし（必要なときだけ開く）');
     expect(fields).toContain('data-testid="registered-product-conflicts-selected"');
     expect(fields).toContain('data-testid="registered-product-conflicts-candidates"');

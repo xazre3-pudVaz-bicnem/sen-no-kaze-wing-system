@@ -275,6 +275,22 @@ begin
    where entity_id in (v_pub, v_draft)
      and action = 'option.included_categories.save';
   perform pg_temp.expect_inclusion('audit records only successful changes', '2', v_actual);
+  -- Product's existing deletion guard MUST run before cascading the relation.
+  -- A referenced product cannot be removed even if its only new links are inclusion rows.
+  insert into public.option_conflicts(option_id, conflicts_with_option_id, message)
+  values (v_pub, v_non_ub, 'delete guard rehearsal');
+  perform pg_temp.expect_inclusion(
+    'published product used by existing conflict cannot be deleted', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.delete_unused_published_option(%L::uuid)::text', v_pub
+    ))
+  );
+  select (select count(*) from public.options where id=v_pub)::text || '/' ||
+         (select count(*) from public.option_included_categories where option_id=v_pub)::text
+    into v_actual;
+  perform pg_temp.expect_inclusion('rejected published delete keeps product and both inclusion links', '1/2', v_actual);
+  delete from public.option_conflicts where option_id=v_pub and conflicts_with_option_id=v_non_ub;
+
   -- Published option uses the existing guarded safe-delete RPC. Its links may
   -- cascade only after BEFORE DELETE guard succeeds in the same transaction.
   perform pg_temp.expect_inclusion(

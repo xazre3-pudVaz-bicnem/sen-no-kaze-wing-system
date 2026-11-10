@@ -73,6 +73,13 @@ jobs:
       - name: Runtime security tests
         run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime-check.json
 
+      # Temporary PR-only verification: SQL proposal is NOT a migration and must never reach production.
+      - name: Trial equipment inclusion RPC proposal on disposable Supabase
+        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'review/equipment-inclusion-db-rpc-sql-proposal-20261110' }}
+        env:
+          EQUIPMENT_INCLUSION_REVIEW_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: node scripts/db-rehearsal/try-inclusion-proposal.mjs
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -101,6 +101,47 @@ before update of category_id on public.options
 for each row
 execute function public.guard_option_inclusion_category_change();
 
+-- A category's ID remains stable even when its code/status changes. Prevent code
+-- or publication changes from reinterpreting any linked UB source or included target.
+-- Category UPDATE takes a category-row lock before this trigger; the save RPC
+-- takes FOR SHARE on every relevant category before checking their values.
+-- Never lock product rows here: product-save has an option-row -> category-row order.
+create function public.guard_option_inclusion_category_master_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $category_master_guard$
+begin
+  if (new.code is distinct from old.code or new.status is distinct from old.status)
+     and (
+       exists (
+         select 1 from public.option_included_categories rel
+          where rel.included_category_id = old.id
+       )
+       or exists (
+         select 1
+           from public.option_included_categories rel
+           join public.options o on o.id = rel.option_id
+          where o.category_id = old.id
+       )
+     ) then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 設備包含で参照中のカテゴリーはコード・公開状態を変更できません。包含設定を先に解除してください';
+  end if;
+  return new;
+end;
+$category_master_guard$;
+
+alter function public.guard_option_inclusion_category_master_update() owner to postgres;
+revoke all on function public.guard_option_inclusion_category_master_update()
+  from public, anon, authenticated, service_role;
+
+create trigger option_categories_inclusion_master_update_guard
+before update of code, status on public.option_categories
+for each row
+execute function public.guard_option_inclusion_category_master_update();
+
 -- Compare-and-replace with the old set supplied by the UI.
 -- The option row is the per-product mutex; both read and write happen after FOR UPDATE.
 -- Each invocation is a single PostgreSQL transaction and rolls back on any error.
@@ -118,6 +159,7 @@ as $function$
 declare
   v_option_category_id uuid;
   v_option_category_code text;
+  v_option_category_status text;
   v_current uuid[] := '{}'::uuid[];
   v_expected uuid[] := '{}'::uuid[];
   v_next uuid[] := '{}'::uuid[];
@@ -143,22 +185,14 @@ begin
     raise exception using errcode = 'P0001', message = 'VALIDATION: 設備カテゴリーの重複・空欄は指定できません';
   end if;
 
-  select o.category_id, c.code
-    into v_option_category_id, v_option_category_code
+  select o.category_id
+    into v_option_category_id
     from public.options o
-    join public.option_categories c on c.id = o.category_id
    where o.id = p_option_id
    for update of o;
   if not found then
     raise exception using errcode = 'P0002', message = 'NOT_FOUND: 商品が見つかりません';
   end if;
-  -- Only products classified as unit bathrooms can declare included fixtures.
-  -- Both three-piece bath units and shower/toilet units use the same ub source category.
-  if v_option_category_code is distinct from 'ub' then
-    raise exception using errcode = 'P0001',
-      message = 'VALIDATION: 設備包含は浴室（ub）カテゴリーの商品にだけ設定できます';
-  end if;
-
   select coalesce(array_agg(x.id order by x.id), '{}'::uuid[])
     into v_expected from unnest(p_expected_category_ids) as x(id);
   select coalesce(array_agg(x.id order by x.id), '{}'::uuid[])
@@ -171,6 +205,26 @@ begin
   if v_current is distinct from v_expected then
     raise exception using errcode = 'P0001',
       message = 'CONFLICT: この商品の包含設備設定は別の操作で更新されました。再読み込みしてください';
+  end if;
+  -- The option row is already locked. Lock the source and all proposed target
+  -- category rows in deterministic UUID order. FOR SHARE conflicts with UPDATE
+  -- code/status row locks; FK KEY SHARE alone would NOT protect mutable fields.
+  -- Re-read the source code/status AFTER acquiring the locks to avoid TOCTOU.
+  perform c.id
+    from public.option_categories c
+   where c.id = any(v_next || array[v_option_category_id])
+   order by c.id
+   for share;
+  select c.code, c.status
+    into v_option_category_code, v_option_category_status
+    from public.option_categories c
+   where c.id = v_option_category_id;
+  -- Only published UB source categories can declare included fixtures.
+  -- Three-piece bath units and shower/toilet units each choose their own subset.
+  if v_option_category_code is distinct from 'ub'
+     or v_option_category_status is distinct from 'published' then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 設備包含は公開済み浴室（ub）カテゴリーの商品だけに設定できます';
   end if;
   if v_option_category_id = any(v_next) then
     raise exception using errcode = 'P0001', message = 'VALIDATION: 商品自身のカテゴリーは包含できません';
@@ -245,6 +299,19 @@ begin
         and tr.tgenabled <> 'D'
   ) then
     raise exception 'POSTFLIGHT: category-change invariant trigger is missing or disabled';
+  end if;
+  if not exists (
+    select 1 from pg_catalog.pg_trigger tr
+      where tr.tgrelid = 'public.option_categories'::regclass
+        and tr.tgname = 'option_categories_inclusion_master_update_guard'
+        and tr.tgenabled <> 'D'
+  ) then
+    raise exception 'POSTFLIGHT: category master code/status guard is missing or disabled';
+  end if;
+  if has_function_privilege('authenticated', 'public.guard_option_inclusion_category_master_update()', 'EXECUTE')
+     or has_function_privilege('anon', 'public.guard_option_inclusion_category_master_update()', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.guard_option_inclusion_category_master_update()', 'EXECUTE') then
+    raise exception 'POSTFLIGHT: category master guard must not be directly executable';
   end if;
   if has_function_privilege('authenticated', 'public.guard_option_inclusion_category_change()', 'EXECUTE')
      or has_function_privilege('anon', 'public.guard_option_inclusion_category_change()', 'EXECUTE')

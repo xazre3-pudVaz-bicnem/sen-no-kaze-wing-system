@@ -1,0 +1,211 @@
+-- REVIEW PROPOSAL ONLY. NOT A MIGRATION. DO NOT RUN ON PRODUCTION.
+-- Move through "supabase migration new ..." only after independent review and scope approval.
+-- Contains NO DML for existing options / option_conflicts / standard estimates / quotes / snapshots.
+-- Target category boundary below is PROPOSED (group_code = 'equipment'), not yet approved.
+
+begin;
+
+do $inclusion_preflight$
+begin
+  if to_regclass('public.options') is null
+     or to_regclass('public.option_categories') is null
+     or to_regclass('public.audit_logs') is null
+     or to_regprocedure('public.can_edit_catalog()') is null
+     or to_regprocedure('public.write_audit(text,text,uuid,text,jsonb,jsonb)') is null then
+    raise exception 'PREFLIGHT: catalog/audit foundation is missing';
+  end if;
+  if to_regclass('public.option_included_categories') is not null
+     or to_regprocedure('public.set_option_included_categories(uuid,uuid[],uuid[])') is not null then
+    raise exception 'PREFLIGHT: inclusion objects already exist; do not overwrite';
+  end if;
+end;
+$inclusion_preflight$;
+
+create table public.option_included_categories (
+  option_id uuid not null references public.options (id) on delete restrict,
+  included_category_id uuid not null references public.option_categories (id) on delete restrict,
+  created_at timestamptz not null default now(),
+  constraint option_included_categories_pkey primary key (option_id, included_category_id)
+);
+create index option_included_categories_category_idx
+  on public.option_included_categories (included_category_id);
+
+comment on table public.option_included_categories is
+  '商品に一体で含まれる設備カテゴリー。価格・設置位置・部屋・数量を表さない。既存Revision/Snapshotを再評価しない。';
+comment on column public.option_included_categories.included_category_id is
+  '包含対象の設備カテゴリーID。商品ID単位のoption_conflictsとは異なる。';
+
+alter table public.option_included_categories owner to postgres;
+alter table public.option_included_categories enable row level security;
+
+-- Direct writes are always prohibited. Future application writes only through checked RPC.
+revoke all on table public.option_included_categories
+  from public, anon, authenticated, service_role;
+grant select on table public.option_included_categories
+  to anon, authenticated, service_role;
+
+-- Published catalog inclusion is public. Other relations require existing catalog-edit authority.
+-- The target category must also be published for non-editors.
+create policy option_included_categories_read
+on public.option_included_categories
+for select to anon, authenticated
+using (
+  public.can_edit_catalog()
+  or (
+    exists (
+      select 1
+        from public.options o
+       where o.id = option_id
+         and o.status = 'published'
+    )
+    and exists (
+      select 1
+        from public.option_categories c
+       where c.id = included_category_id
+         and c.status = 'published'
+    )
+  )
+);
+
+-- Compare-and-replace with the old set supplied by the UI.
+-- The option row is the per-product mutex; both read and write happen after FOR UPDATE.
+-- Each invocation is a single PostgreSQL transaction and rolls back on any error.
+create function public.set_option_included_categories(
+  p_option_id uuid,
+  p_expected_category_ids uuid[],
+  p_next_category_ids uuid[]
+)
+returns uuid[]
+language plpgsql
+security definer
+set search_path = ''
+set lock_timeout = '2s'
+as $function$
+declare
+  v_option_category_id uuid;
+  v_option_category_code text;
+  v_current uuid[] := '{}'::uuid[];
+  v_expected uuid[] := '{}'::uuid[];
+  v_next uuid[] := '{}'::uuid[];
+begin
+  -- Check auth/authorization BEFORE product existence or state to avoid information leaks.
+  if auth.uid() is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
+  end if;
+  if not public.can_edit_catalog() then
+    raise exception using errcode = '42501', message = 'FORBIDDEN: 商品台帳の編集権限がありません';
+  end if;
+  if p_option_id is null or p_expected_category_ids is null or p_next_category_ids is null then
+    raise exception using errcode = 'P0001', message = 'VALIDATION: 商品と設備カテゴリーを指定してください';
+  end if;
+
+  -- Never silently normalize malformed or duplicated user input.
+  if exists (
+       select 1 from unnest(p_expected_category_ids || p_next_category_ids) as x(id) where x.id is null
+     )
+     or (select count(*) <> count(distinct x.id) from unnest(p_expected_category_ids) as x(id))
+     or (select count(*) <> count(distinct x.id) from unnest(p_next_category_ids) as x(id)) then
+    raise exception using errcode = 'P0001', message = 'VALIDATION: 設備カテゴリーの重複・空欄は指定できません';
+  end if;
+
+  select o.category_id, c.code
+    into v_option_category_id, v_option_category_code
+    from public.options o
+    join public.option_categories c on c.id = o.category_id
+   where o.id = p_option_id
+   for update of o;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'NOT_FOUND: 商品が見つかりません';
+  end if;
+  -- Legacy fire-spec and agency-owned free products are not equipment inclusion sources.
+  if v_option_category_code in ('fireproof', 'free-product') then
+    raise exception using errcode = 'P0001', message = 'VALIDATION: このカテゴリーの商品には設備包含を設定できません';
+  end if;
+
+  select coalesce(array_agg(x.id order by x.id), '{}'::uuid[])
+    into v_expected from unnest(p_expected_category_ids) as x(id);
+  select coalesce(array_agg(x.id order by x.id), '{}'::uuid[])
+    into v_next from unnest(p_next_category_ids) as x(id);
+  select coalesce(array_agg(rel.included_category_id order by rel.included_category_id), '{}'::uuid[])
+    into v_current
+    from public.option_included_categories rel
+   where rel.option_id = p_option_id;
+
+  if v_current is distinct from v_expected then
+    raise exception using errcode = 'P0001',
+      message = 'CONFLICT: この商品の包含設備設定は別の操作で更新されました。再読み込みしてください';
+  end if;
+  if v_option_category_id = any(v_next) then
+    raise exception using errcode = 'P0001', message = 'VALIDATION: 商品自身のカテゴリーは包含できません';
+  end if;
+
+  -- Proposed scope (NOT YET APPROVED): active equipment-group categories only.
+  -- Existing out-of-scope relations may be carried forward unchanged, not added anew.
+  if exists (
+    select 1
+      from unnest(v_next) as x(id)
+      left join public.option_categories c on c.id = x.id
+     where (c.id is null or c.status <> 'published' or c.group_code <> 'equipment')
+       and not (x.id = any(v_current))
+  ) then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 新たに包含できるのは登録済みの設備カテゴリーだけです';
+  end if;
+
+  if v_current = v_next then
+    return v_current;
+  end if;
+
+  delete from public.option_included_categories rel
+   where rel.option_id = p_option_id;
+  insert into public.option_included_categories (option_id, included_category_id)
+  select p_option_id, x.id from unnest(v_next) as x(id);
+
+  perform public.write_audit(
+    'option.included_categories.save', 'options', p_option_id,
+    '商品の設備包含カテゴリーを更新',
+    pg_catalog.jsonb_build_object('included_category_ids', pg_catalog.to_jsonb(v_current)),
+    pg_catalog.jsonb_build_object('included_category_ids', pg_catalog.to_jsonb(v_next))
+  );
+  return v_next;
+end;
+$function$;
+
+alter function public.set_option_included_categories(uuid,uuid[],uuid[]) owner to postgres;
+revoke all on function public.set_option_included_categories(uuid,uuid[],uuid[])
+  from public, anon, authenticated, service_role;
+grant execute on function public.set_option_included_categories(uuid,uuid[],uuid[])
+  to authenticated;
+
+do $inclusion_postflight$
+begin
+  if not exists (
+      select 1
+        from pg_catalog.pg_class t
+        join pg_catalog.pg_namespace n on n.oid = t.relnamespace
+       where n.nspname = 'public'
+         and t.relname = 'option_included_categories'
+         and t.relrowsecurity
+  ) then
+    raise exception 'POSTFLIGHT: inclusion RLS is disabled';
+  end if;
+  if has_table_privilege('anon', 'public.option_included_categories', 'INSERT')
+     or has_table_privilege('anon', 'public.option_included_categories', 'UPDATE')
+     or has_table_privilege('anon', 'public.option_included_categories', 'DELETE')
+     or has_table_privilege('authenticated', 'public.option_included_categories', 'INSERT')
+     or has_table_privilege('authenticated', 'public.option_included_categories', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.option_included_categories', 'DELETE')
+     or has_table_privilege('service_role', 'public.option_included_categories', 'INSERT')
+     or has_table_privilege('service_role', 'public.option_included_categories', 'UPDATE')
+     or has_table_privilege('service_role', 'public.option_included_categories', 'DELETE') then
+    raise exception 'POSTFLIGHT: direct writes remain accessible';
+  end if;
+  if has_function_privilege('anon', 'public.set_option_included_categories(uuid,uuid[],uuid[])', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.set_option_included_categories(uuid,uuid[],uuid[])', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.set_option_included_categories(uuid,uuid[],uuid[])', 'EXECUTE') then
+    raise exception 'POSTFLIGHT: RPC EXECUTE privileges are incorrect';
+  end if;
+end;
+$inclusion_postflight$;
+
+commit;

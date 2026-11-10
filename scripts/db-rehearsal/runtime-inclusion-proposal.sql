@@ -63,7 +63,8 @@ insert into public.option_categories (id, code, name, group_code, group_name, st
 insert into public.options (id, category_id, code, name, status, product_no) values
   ('00000000-0000-4000-8000-00000000f720', (select id from public.option_categories where code='ub'), 'runtime-inclusion-product', '検証3点ユニット', 'published', 'PRD-999981'),
   ('00000000-0000-4000-8000-00000000f721', (select id from public.option_categories where code='ub'), 'runtime-inclusion-hidden-product', '検証シャワートイレユニット', 'draft', 'PRD-999982'),
-  ('00000000-0000-4000-8000-00000000f722', (select id from public.option_categories where code='toilet'), 'runtime-inclusion-non-ub', '検証UB以外の商品', 'draft', 'PRD-999983');
+  ('00000000-0000-4000-8000-00000000f722', (select id from public.option_categories where code='toilet'), 'runtime-inclusion-non-ub', '検証UB以外の商品', 'draft', 'PRD-999983'),
+  ('00000000-0000-4000-8000-00000000f723', (select id from public.option_categories where code='ub'), 'runtime-inclusion-clear-first', '包含解除後カテゴリー変更', 'draft', 'PRD-999984');
 
 set local session_replication_role = origin;
 
@@ -75,6 +76,7 @@ declare
   v_pub constant uuid := '00000000-0000-4000-8000-00000000f720';
   v_draft constant uuid := '00000000-0000-4000-8000-00000000f721';
   v_non_ub constant uuid := '00000000-0000-4000-8000-00000000f722';
+  v_clear constant uuid := '00000000-0000-4000-8000-00000000f723';
   v_ub uuid;
   v_toilet uuid;
   v_wash uuid;
@@ -181,6 +183,55 @@ begin
   perform pg_temp.expect_inclusion('invariant blocks category update to included category', 'P0001', v_actual);
   select category_id::text into v_actual from public.options where id = v_pub;
   perform pg_temp.expect_inclusion('failed category update leaves original category', v_ub::text, v_actual);
+
+  -- The category's ID is still referenced even if its code/status changes.
+  -- Product-category guard alone cannot protect these operations.
+  perform pg_temp.expect_inclusion(
+    'referenced UB source code cannot change', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set code=%L where id=%L::uuid returning code',
+      'runtime-illegal-ub', v_ub
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'referenced UB source publication cannot change', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set status=%L where id=%L::uuid returning status',
+      'draft', v_ub
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'referenced toilet target code cannot change', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set code=%L where id=%L::uuid returning code',
+      'runtime-illegal-toilet', v_toilet
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'referenced toilet target publication cannot change', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set status=%L where id=%L::uuid returning status',
+      'draft', v_toilet
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'referenced washbasin publication cannot change', 'VALIDATION:',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set status=%L where id=%L::uuid returning status',
+      'draft', v_wash
+    ))
+  );
+  select code || '/' || status into v_actual from public.option_categories where id=v_toilet;
+  perform pg_temp.expect_inclusion('rejected category changes leave canonical toilet unchanged', 'toilet/published', v_actual);
+  -- An unrelated category remains freely editable.
+  perform pg_temp.expect_inclusion(
+    'unreferenced kitchen code changes normally', 'runtime-inclusion-kitchen-test',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set code=%L where id=%L::uuid returning code',
+      'runtime-inclusion-kitchen-test', v_kitchen
+    ))
+  );
+  update public.option_categories set code='kitchen' where id=v_kitchen;
 
   -- High-risk invalid inputs should reject before any data or audit changes.
   perform pg_temp.expect_inclusion(
@@ -317,6 +368,48 @@ begin
   perform pg_temp.expect_inclusion('draft source removed', '0', v_actual);
   select count(*)::text into v_actual from public.option_included_categories where option_id = v_draft;
   perform pg_temp.expect_inclusion('draft inclusion links cascaded atomically', '0', v_actual);
+  -- The normal edit path remains usable after an explicit inclusion clear.
+  perform pg_temp.expect_inclusion(
+    'clear fixture saves toilet before clearing', v_toilet::text,
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[]::uuid[], array[%L::uuid])::text',
+      v_clear, v_toilet
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'explicit inclusion clear succeeds', '{}',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'select public.set_option_included_categories(%L::uuid, array[%L::uuid], array[]::uuid[])::text',
+      v_clear, v_toilet
+    ))
+  );
+  perform pg_temp.expect_inclusion(
+    'after clear product category may change', v_kitchen::text,
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.options set category_id=%L::uuid where id=%L::uuid returning category_id::text',
+      v_kitchen, v_clear
+    ))
+  );
+  select count(*)::text into v_actual from public.option_included_categories where option_id=v_clear;
+  perform pg_temp.expect_inclusion('legal category change leaves no inclusion relation', '0', v_actual);
+
+  -- Source and target code/status changes become legal only once all references are gone.
+  perform pg_temp.expect_inclusion(
+    'unreferenced UB source code change permitted', 'runtime-cleared-ub',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set code=%L where id=%L::uuid returning code',
+      'runtime-cleared-ub', v_ub
+    ))
+  );
+  update public.option_categories set code='ub' where id=v_ub;
+  perform pg_temp.expect_inclusion(
+    'unreferenced toilet target may be unpublished', 'draft',
+    pg_temp.run_as_inclusion('authenticated', v_admin, pg_catalog.format(
+      'update public.option_categories set status=%L where id=%L::uuid returning status',
+      'draft', v_toilet
+    ))
+  );
+  update public.option_categories set status='published' where id=v_toilet;
 end;
 $tests$;
 

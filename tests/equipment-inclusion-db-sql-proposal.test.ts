@@ -39,6 +39,20 @@ describe('設備包含DB/RPC migration（静的ガード：runtimeの代用で�
     expect(sql).toMatch(/perform public\.write_audit\(/i);
   });
 
+  it('設備包含の変更と非公開関係の閲覧は本部rank3以上に限定する', () => {
+    expect(sql).toContain('public.current_role_rank() >= 3');
+    expect(sql).toContain('public.current_role_rank() < 3');
+    expect(sql).toContain('not public.can_edit_catalog()');
+  });
+
+  it('商品カテゴリーの後続変更でも自己包含のDB不変条件を守る', () => {
+    expect(sql).toContain('create function public.guard_option_inclusion_category_change()');
+    expect(sql).toContain('before update of category_id on public.options');
+    expect(sql).toContain('rel.included_category_id = new.category_id');
+    expect(sql).toContain('options_inclusion_category_change_guard');
+    expect(sql).toContain('revoke all on function public.guard_option_inclusion_category_change()');
+  });
+
   it('旧見積・Published・Snapshot・商品間排他にはDMLを実行しない', () => {
     const destructive = /\b(?:insert\s+into|update|delete\s+from)\s+public\.(?:option_conflicts|standard_estimate_\w+|quote_\w+|quotes|configuration_snapshots)\b/i;
     expect(executable).not.toMatch(destructive);

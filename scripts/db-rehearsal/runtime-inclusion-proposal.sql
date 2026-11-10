@@ -146,6 +146,23 @@ begin
       'select count(*)::text from public.option_included_categories where option_id = %L::uuid', v_draft
     ))
   );
+  -- Prevent destructive deletion of a product/category while inclusion links exist.
+  -- Test in nested exception subtransactions: no parent row may be deleted.
+  begin
+    delete from public.options where id = v_pub;
+    v_actual := 'DELETED';
+  exception when others then
+    v_actual := sqlstate;
+  end;
+  perform pg_temp.expect_inclusion('FK blocks deleting included source product', '23503', v_actual);
+  begin
+    delete from public.option_categories where id = v_wash;
+    v_actual := 'DELETED';
+  exception when others then
+    v_actual := sqlstate;
+  end;
+  perform pg_temp.expect_inclusion('FK blocks deleting included category', '23503', v_actual);
+
   select count(*)::text into v_actual
     from public.audit_logs
    where entity_id in (v_pub, v_draft)

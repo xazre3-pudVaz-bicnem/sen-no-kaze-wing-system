@@ -82,6 +82,25 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('同じ商品を重複登録していないか確認してください');
   });
 
+  it('登録済み商品の同時選択制限をSTEP1で編集しSTEP2で確認する', () => {
+    const fields = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/registered-product-conflict-fields.tsx'), 'utf8');
+    expect(page).toContain('conflictCandidates={catalogEditor ? options');
+    expect(page).toContain("row.status === 'published'");
+    expect(page).not.toContain('allOptions={options}');
+    expect(flow).toContain('<RegisteredProductConflictFields');
+    expect(fields).toContain('data-testid="registered-product-conflicts"');
+    expect(fields).toContain('data-testid="registered-product-conflicts-selected"');
+    expect(fields).toContain('data-testid="registered-product-conflicts-candidates"');
+    expect(fields).toContain('name="conflicts"');
+    expect(fields).toContain('name={`conflicts_message_${id}`}');
+    expect(fields).toContain('setSelectedIds');
+    expect(fields).toContain("conflicts.filter((conflict) => !candidateById.has(conflict.conflicts_with_option_id))");
+    expect(flow).toContain("review.formData.getAll('conflicts')");
+    expect(flow).toContain("label: '同時に選択できない商品'");
+    expect(flow).toContain('saveOptionAction(initialState, review.formData)');
+    expect(fields).toContain('既に選択中の単体設備を自動で外す機能ではありません');
+  });
+
   it('確認前はブラウザ内のFormDataだけに保持し、反映ボタンで既存保存Actionを呼ぶ', () => {
     expect(flow).toContain("const data = new FormData(form)");
     expect(flow).toContain("setScreen('review')");

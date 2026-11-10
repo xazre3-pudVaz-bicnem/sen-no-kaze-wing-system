@@ -50,7 +50,8 @@ create policy option_included_categories_read
 on public.option_included_categories
 for select to anon, authenticated
 using (
-  public.can_edit_catalog()
+  -- HQ-only draft/admin visibility. can_edit_catalog() alone currently allows master_dealer.
+  (auth.uid() is not null and public.can_edit_catalog() and public.current_role_rank() >= 3)
   or (
     exists (
       select 1
@@ -66,6 +67,38 @@ using (
     )
   )
 );
+
+-- Product category change must not turn a previously valid inclusion into self-inclusion.
+-- The row being updated already holds the product row lock: inclusion RPC locks it first as well.
+-- Definer sees all included rows regardless of caller RLS. The function is trigger-only.
+create function public.guard_option_inclusion_category_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $inclusion_category_guard$
+begin
+  if new.category_id is distinct from old.category_id
+     and exists (
+       select 1 from public.option_included_categories rel
+        where rel.option_id = new.id
+          and rel.included_category_id = new.category_id
+     ) then
+    raise exception using errcode = 'P0001',
+      message = 'VALIDATION: 商品自身のカテゴリーを包含するため、カテゴリーを変更できません。包含設定を先に見直してください';
+  end if;
+  return new;
+end;
+$inclusion_category_guard$;
+
+alter function public.guard_option_inclusion_category_change() owner to postgres;
+revoke all on function public.guard_option_inclusion_category_change()
+  from public, anon, authenticated, service_role;
+
+create trigger options_inclusion_category_change_guard
+before update of category_id on public.options
+for each row
+execute function public.guard_option_inclusion_category_change();
 
 -- Compare-and-replace with the old set supplied by the UI.
 -- The option row is the per-product mutex; both read and write happen after FOR UPDATE.
@@ -92,8 +125,9 @@ begin
   if auth.uid() is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
   end if;
-  if not public.can_edit_catalog() then
-    raise exception using errcode = '42501', message = 'FORBIDDEN: 商品台帳の編集権限がありません';
+  -- Defense-in-depth: rank 2 master_dealer is denied even before #502 is applied.
+  if not public.can_edit_catalog() or public.current_role_rank() < 3 then
+    raise exception using errcode = '42501', message = 'FORBIDDEN: 設備包含設定は本部管理者だけ編集できます';
   end if;
   if p_option_id is null or p_expected_category_ids is null or p_next_category_ids is null then
     raise exception using errcode = 'P0001', message = 'VALIDATION: 商品と設備カテゴリーを指定してください';
@@ -199,6 +233,19 @@ begin
      or has_table_privilege('service_role', 'public.option_included_categories', 'UPDATE')
      or has_table_privilege('service_role', 'public.option_included_categories', 'DELETE') then
     raise exception 'POSTFLIGHT: direct writes remain accessible';
+  end if;
+  if not exists (
+    select 1 from pg_catalog.pg_trigger tr
+      where tr.tgrelid = 'public.options'::regclass
+        and tr.tgname = 'options_inclusion_category_change_guard'
+        and tr.tgenabled <> 'D'
+  ) then
+    raise exception 'POSTFLIGHT: category-change invariant trigger is missing or disabled';
+  end if;
+  if has_function_privilege('authenticated', 'public.guard_option_inclusion_category_change()', 'EXECUTE')
+     or has_function_privilege('anon', 'public.guard_option_inclusion_category_change()', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.guard_option_inclusion_category_change()', 'EXECUTE') then
+    raise exception 'POSTFLIGHT: internal guard function must not be callable';
   end if;
   if has_function_privilege('anon', 'public.set_option_included_categories(uuid,uuid[],uuid[])', 'EXECUTE')
      or has_function_privilege('service_role', 'public.set_option_included_categories(uuid,uuid[],uuid[])', 'EXECUTE')

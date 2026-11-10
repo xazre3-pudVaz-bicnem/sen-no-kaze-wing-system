@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Checkbox, Input, Select } from '@/components/ui';
-import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import type { OptionConflict } from '@/lib/domain/types';
 
 export type ProductConflictCandidate = {
@@ -31,6 +30,7 @@ export function RegisteredProductConflictFields({ conflicts, candidates, optionC
     optionCategoryCode === 'ub' && candidates.some((candidate) => candidate.categoryCode === 'toilet') ? 'toilet' : ''
   );
   const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(conflicts.length > 0);
   const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const existingById = new Map(conflicts.map((conflict) => [conflict.conflicts_with_option_id, conflict]));
   const visibleCategories = new Map(candidates.map((candidate) => [candidate.categoryCode, candidate.categoryName]));
@@ -51,12 +51,26 @@ export function RegisteredProductConflictFields({ conflicts, candidates, optionC
         </span>
       ))}
       {candidates.length > 0 && (
-        <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-conflicts">
-          <ProductSectionHeading
-            label="組合せ制限・設備の重複防止"
-            description="この商品と同時に選べない商品を指定します。トイレや洗面器を含む一体型商品などに設定します。"
-          />
-          <p className="text-xs leading-5 text-muted">
+        <details
+          className="card p-4 sm:p-5"
+          open={expanded}
+          onToggle={(event) => setExpanded(event.currentTarget.open)}
+          data-testid="registered-product-conflicts"
+        >
+          <summary className="cursor-pointer text-sm" data-testid="registered-product-conflicts-summary">
+            <span className="font-semibold">組合せ制限・設備の重複防止</span>
+            <span className="ml-2 text-xs text-muted">設定中 {chosen.length}件</span>
+            <span className="mt-1 block text-xs text-muted">
+              {chosen.length > 0
+                ? chosen.map((id) => candidateById.get(id)?.name).filter(Boolean).join('、')
+                : '設定なし（必要なときだけ開く）'}
+            </span>
+          </summary>
+          <div className="mt-4 space-y-4">
+            <p className="text-xs leading-5 text-muted">
+              この商品と同時に選べない商品を指定します。トイレや洗面器を含む一体型商品などの、個別の例外条件に使用します。
+            </p>
+            <p className="text-xs leading-5 text-muted">
             設定すると同時選択を制限します。既に選択中の単体設備を自動で外す機能ではありません。
             標準構成からの変更操作にも影響します。別室に追加する設備まで禁止しないよう、実際の用途を確認してください。
           </p>
@@ -114,7 +128,8 @@ export function RegisteredProductConflictFields({ conflicts, candidates, optionC
               </div>
             )) : <p className="p-3 text-xs text-muted">該当する商品はありません。</p>}
           </div>
-        </section>
+          </div>
+        </details>
       )}
     </>
   );

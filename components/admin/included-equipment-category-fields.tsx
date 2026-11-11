@@ -17,7 +17,7 @@ interface Props {
   disabled?: boolean;
 }
 
-/** Form-free input: inclusion is saved by its own RPC, not saveOptionAction. */
+/** Form-free input: inclusion is saved by its own RPC, not by the product information action. */
 export function IncludedEquipmentCategoryFields({
   includedCategoryIds, candidates, ownCategoryId, onSelectionChange, disabled = false,
 }: Props) {

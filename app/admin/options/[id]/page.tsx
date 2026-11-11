@@ -13,6 +13,8 @@ import { Alert } from '@/components/ui';
 import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
+import { IncludedEquipmentCategoryEditor } from '@/components/admin/included-equipment-category-editor';
+import { readOptionIncludedCategories } from '@/lib/data/option-included-categories';
 import { OptionHqStandardCostCard } from '@/components/admin/option-hq-standard-cost-card';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager } from '@/components/admin/option-variant-manager';
@@ -65,6 +67,14 @@ export default async function EditOptionPage({
     store.listWindowTypes(),
   ]);
   const category = categories.find((row) => row.id === option.category_id);
+  const canManageInclusion = actor.role === 'admin' && category?.code === 'ub' && category.status === 'published';
+  const inclusionRead = canManageInclusion ? await readOptionIncludedCategories(id) : null;
+  const inclusionCandidates = categories
+    .filter((row) => row.status === 'published' && (row.code === 'toilet' || row.code === 'washbasin'))
+    .map(({ id: categoryId, code, name }) => ({ id: categoryId, code, name }));
+  const inclusionInconsistent = canManageInclusion && inclusionRead?.ok &&
+    inclusionRead.ids.some((categoryId) => !inclusionCandidates.some((candidate) => candidate.id === categoryId));
+  const inclusionReady = !canManageInclusion || (inclusionRead?.ok === true && !inclusionInconsistent);
   // 商品標準原価・原価差額の欄：原価の Version の仕組みがある間は、本部商品の原価は本部だけ（v2.5 PR-A3）。
   // 出さない担当者には、クライアントへ渡す商品・選択肢からも金額を外す（サーバーの判定は元の値で行う）。
   // 本部商品の外（旧フリー商品）の金額は従来どおり
@@ -172,6 +182,14 @@ export default async function EditOptionPage({
               </>
             }
           />
+            {canManageInclusion && (inclusionReady && inclusionRead?.ok ? (
+              <IncludedEquipmentCategoryEditor
+                key={option.id + '-published'} optionId={id} ownCategoryId={option.category_id}
+                candidates={inclusionCandidates} savedCategoryIds={inclusionRead.ids} mode="published"
+              />
+            ) : (
+              <Alert tone="danger">設備包含の保存内容を確認できません。再読み込みし、管理者に確認してください。変更はできません。</Alert>
+            ))}
             {catalogEditor && <PublishedOptionDeleteControl optionId={id} />}
           </>
         ) : (
@@ -315,6 +333,19 @@ export default async function EditOptionPage({
                 </div>
               )}
 
+              {canManageInclusion && (
+                <div style={{ order: 45 }}>
+                  {inclusionReady && inclusionRead?.ok ? (
+                    <IncludedEquipmentCategoryEditor
+                      key={option.id + '-draft'} optionId={id} ownCategoryId={option.category_id}
+                      candidates={inclusionCandidates} savedCategoryIds={inclusionRead.ids} mode="draft"
+                    />
+                  ) : (
+                    <Alert tone="danger">設備包含の保存内容を確認できません。STEP 2への登録確認は停止します。再読み込み・管理者確認が必要です。</Alert>
+                  )}
+                </div>
+              )}
+
               {hqCostAccess.available && hqCostAccess.canView && hqCostProduct && (
                 <div style={{ order: 55 }} data-testid="option-registration-hq-cost">
                   <OptionHqStandardCostCard
@@ -454,6 +485,18 @@ export default async function EditOptionPage({
               </section>
             )}
 
+            {canManageInclusion && (
+              <section className="card p-4 sm:p-5" data-testid="included-equipment-step2-saved">
+                <h3 className="font-semibold">管理者確認：この商品に含まれる設備（DB保存済み）</h3>
+                {inclusionReady && inclusionRead?.ok ? (
+                  <p className="mt-2 text-sm">
+                    含まれる設備：{inclusionCandidates.filter((candidate) => inclusionRead.ids.includes(candidate.id)).map((candidate) => candidate.name).join('・') || 'なし'}
+                  </p>
+                ) : <Alert tone="danger">設備包含設定を確認できないため、公開できません。STEP 1で状態を確認してください。</Alert>}
+                <p className="mt-2 text-xs text-muted">商品情報の表示確認とは別の管理者向け設定です。部屋・数量・価格控除には反映されません。</p>
+              </section>
+            )}
+
             <ProductPriceUnitRouteSummary priceLabel={priceLabel} />
 
             <section className="card space-y-4 p-4 sm:p-5" aria-label="商品登録" data-testid="step2-publish-panel">
@@ -461,7 +504,7 @@ export default async function EditOptionPage({
                 <h3 className="font-semibold">登録状態</h3>
                 <p className="mt-1 text-sm text-muted">現在は下書きです。上の登録内容とお客様表示に問題がなければ登録してください。</p>
               </div>
-              {canEditThisOption && category && (
+              {canEditThisOption && category && inclusionReady && (
                 <form action={publishOptionAction} className="space-y-3">
                   <input type="hidden" name="id" value={option.id} />
                   {returnTo && <input type="hidden" name="return_to" value={returnTo} />}

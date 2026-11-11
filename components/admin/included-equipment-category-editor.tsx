@@ -102,6 +102,7 @@ export function IncludedEquipmentCategoryEditor({
         <p className="text-muted">
           商品情報と設備包含設定は別々に保存されます。設備包含は商品ごとの事実だけを記録し、見積金額・部屋・数量は変更しません。
         </p>
+        {savedIds.length > 0 && <p className="text-muted">商品カテゴリーを浴室以外へ変更する場合は、先にここで包含設備をすべて解除・保存してからカテゴリーを変更してください。</p>}
         {unexpectedIds.length > 0 && <Alert tone="danger">候補外の既存関係があるため保存できません。管理者へ確認してください。</Alert>}
         {error && <Alert tone="danger">{error}</Alert>}
         {success && !dirty && <Alert tone="success">設備包含設定をDBに保存しました。</Alert>}

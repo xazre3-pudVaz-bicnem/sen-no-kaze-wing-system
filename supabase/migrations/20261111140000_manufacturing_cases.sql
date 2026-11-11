@@ -18,10 +18,10 @@ begin;
 do $preflight$
 begin
   if to_regprocedure('public.case_access(uuid)') is null or to_regprocedure('public.is_case_legacy_manufacturer(uuid)') is null then
-    raise exception 'PRECONDITION: case sales organization (20261104130000) must be applied first';
+    raise exception 'PRECONDITION: case sales organization (20261111120000) must be applied first';
   end if;
   if to_regprocedure('public.case_partner_site_info(uuid)') is null then
-    raise exception 'PRECONDITION: case supervision (20261104140000) must be applied first';
+    raise exception 'PRECONDITION: case supervision (20261111130000) must be applied first';
   end if;
   if to_regprocedure('public.quote_line_explicit_state(text)') is null then
     raise exception 'PRECONDITION: quote formal line guard (20261016111000) must be applied first';

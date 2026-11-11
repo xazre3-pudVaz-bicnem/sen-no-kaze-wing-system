@@ -331,7 +331,7 @@ export interface CasePartnerSiteInfo {
 }
 
 /**
- * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261104150000）。
+ * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261111140000）。
  * 製造担当（製造担当組織のメンバー・これまでの案件で本部が選んだ総代理店の利用者）と本部が使う。お客様の情報・見積の金額は含めない
  * （製造・出荷・施工に必要な設置場所・現地確認は、詳細の partner_info に含める。2026-11-04 の先方回答 B-3）。
  */

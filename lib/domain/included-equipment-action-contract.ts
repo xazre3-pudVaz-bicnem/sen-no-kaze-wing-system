@@ -33,6 +33,23 @@ export function validateIncludedCategoryContract(input: {
   return validated.ok ? { ok: true, ids: validated.categoryIds } : { ok: false, code: 'INVALID' };
 }
 
+/**
+ * A refreshed server snapshot must not silently overwrite unsaved selections.
+ * The browser remains fail-closed while a save is in flight or its result is uncertain.
+ */
+export function decideIncludedCategoryRefresh(input: {
+  previousServerIds: readonly string[];
+  nextServerIds: readonly string[];
+  savedIds: readonly string[];
+  selectedIds: readonly string[];
+  saving: boolean;
+  reloadRequired: boolean;
+}): 'unchanged' | 'synchronize' | 'reload' {
+  if (sameCategoryIdSet(input.previousServerIds, input.nextServerIds)) return 'unchanged';
+  if (input.saving || input.reloadRequired || !sameCategoryIdSet(input.savedIds, input.selectedIds)) return 'reload';
+  return 'synchronize';
+}
+
 export function includedCategoryRpcError(error: { code?: string; message?: string }): 'CONFLICT' | 'TIMEOUT' | 'FORBIDDEN' | 'FAILED' {
   if (error.message?.startsWith('CONFLICT:')) return 'CONFLICT';
   if (error.code === '55P03' || error.message?.includes('lock timeout')) return 'TIMEOUT';

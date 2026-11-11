@@ -94,6 +94,9 @@ describe('設備包含のUI／Action接続の安全境界', () => {
     expect(page).toContain('included-equipment-step2-saved');
     expect(page).toContain('canEditThisOption && category && inclusionReady');
     expect(publish).toContain('await readOptionIncludedCategories(option.id)');
+    expect(page).toContain('name="included_categories_expected_ids"');
+    expect(publish).toContain('included_categories_expected_ids');
+    expect(publish).toContain('sameCategoryIdSet(expectedIds, inclusion.ids)');
   });
 
   it('Draftの未保存状態は既存商品情報と独立して管理し、登録済みは差分確認を要求', () => {

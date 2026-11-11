@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ExternalLink, X } from 'lucide-react';
 import type { OptionVariantChoice, OptionVariantGroup } from '@/lib/domain/types';
@@ -27,43 +27,56 @@ export function ManufacturerDocumentModal({
   onVariantChange,
   onClose,
 }: Props) {
-  useEffect(() => {
-    if (!open) return;
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
+  // The product picker is already a native modal. A second native modal must
+  // enter the browser top layer; a portal with z-index remains behind it.
+  useEffect(() => {
+    if (!open || !url) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
+    if (!dialog.open) dialog.showModal();
+    closeButtonRef.current?.focus();
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      if (dialog.open) dialog.close();
       document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
     };
-  }, [onClose, open]);
+  }, [open, url]);
 
   if (!open || !url) return null;
 
   const hasSelectableVariants = groups.length > 0;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 p-3 sm:p-6"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+    <dialog
+      ref={dialogRef}
+      aria-modal="true"
+      aria-label={`${productName} メーカー資料`}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
       }}
-      data-testid="manufacturer-document-modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top ||
+          event.clientY > rect.bottom
+        ) onClose();
+      }}
+      className="fixed inset-0 m-auto h-[88vh] w-[min(96vw,90rem)] max-h-none max-w-none flex-col overflow-hidden rounded-2xl border border-line bg-white p-0 text-ink shadow-2xl backdrop:bg-black/55"
+      data-testid="manufacturer-document-modal"
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${productName} メーカー資料`}
-        className="flex h-[88vh] w-[min(96vw,90rem)] flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl"
-        onMouseDown={(event) => event.stopPropagation()}
-        data-testid="manufacturer-document-modal"
-      >
+      <div className="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div className="min-w-0">
             <p className="text-xs font-semibold text-brown">メーカー資料</p>
@@ -80,6 +93,7 @@ export function ManufacturerDocumentModal({
               <span className="hidden sm:inline">別タブで開く</span>
             </a>
             <button
+              ref={closeButtonRef}
               type="button"
               onClick={onClose}
               className="inline-flex size-9 items-center justify-center rounded-full border border-line bg-white text-ink transition hover:bg-sand"
@@ -134,8 +148,8 @@ export function ManufacturerDocumentModal({
             />
           </div>
         )}
-      </section>
-    </div>,
+      </div>
+    </dialog>,
     document.body
   );
 }

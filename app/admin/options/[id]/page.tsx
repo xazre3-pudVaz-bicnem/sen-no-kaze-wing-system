@@ -138,6 +138,14 @@ export default async function EditOptionPage({
             models={models}
             dependencies={deps}
             conflicts={confs}
+            conflictCandidates={catalogEditor ? options
+              .filter((row) => row.id !== id && (row.status === 'published' || confs.some((conflict) => conflict.conflicts_with_option_id === row.id)))
+              .map((row) => ({
+                id: row.id,
+                name: row.name,
+                categoryCode: categories.find((category) => category.id === row.category_id)?.code ?? '',
+                categoryName: categories.find((category) => category.id === row.category_id)?.name ?? '未分類',
+              })) : []}
             variantGroups={variants.groups}
             variantChoices={clientChoices}
             returnTo={returnTo}

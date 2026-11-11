@@ -334,7 +334,7 @@ export function RegisteredOptionEditFlow({
     setPending(false);
     setState(result);
     if (result.ok) {
-      router.refresh();
+      router.push(`/admin/ledger?updated_option=${encodeURIComponent(option.id)}`);
     }
   };
 
@@ -460,7 +460,7 @@ export function RegisteredOptionEditFlow({
           <section className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="変更反映">
             <div>
               <h3 className="font-semibold">変更を反映</h3>
-              <p className="mt-1 text-xs text-muted">このボタンを押した時点で、確認した変更を登録済み商品へ反映します。</p>
+              <p className="mt-1 text-xs text-muted">このボタンで編集を完了します。反映に成功すると商品台帳一覧へ戻ります。価格単位・本部基準原価の個別保存とは別の操作です。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="secondary" onClick={() => { setScreen('edit'); setState(initialState); }}>編集に戻る</Button>

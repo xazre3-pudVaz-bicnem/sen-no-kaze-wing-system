@@ -507,6 +507,9 @@ export default async function EditOptionPage({
               {canEditThisOption && category && inclusionReady && (
                 <form action={publishOptionAction} className="space-y-3">
                   <input type="hidden" name="id" value={option.id} />
+                  {canManageInclusion && inclusionRead?.ok && (
+                    <input type="hidden" name="included_categories_expected_ids" value={JSON.stringify(inclusionRead.ids)} />
+                  )}
                   {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
                   {needsZeroPriceConfirmation && (
                     <div className="max-w-xl rounded-xl border border-[#d9a441] bg-[#fff8e8] p-3 text-sm">

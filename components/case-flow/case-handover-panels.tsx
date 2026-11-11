@@ -25,6 +25,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { CaseFileList } from '@/components/case-flow/case-site-panels';
+import { casePanelAccess } from '@/lib/data/case-flow/panel-access';
 import { AfterServiceRequestForm, CaseFileUploadForm, HandoverInspectionForm } from '@/components/case-flow/forms';
 
 const DONE_TEXT: Record<string, string> = {
@@ -54,6 +55,7 @@ const todayJst = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo'
 /**
  * 案件画面の「引渡し・アフター」タブ：完成確認・是正・工事完了承諾書・引渡し（フェーズ14）と、アフター（フェーズ15）。
  * 本部・担当代理店・製造の担当（総代理店）に表示する。総代理店が見られるアフターは、回されたもの（製造起因）だけ。
+ * 営業担当組織の管理者には読み取りだけで表示する（20261111140000）。
  */
 export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: string; actor: SessionUser; flash?: { done?: string; error?: string } }) {
   const store = await getStore();
@@ -61,9 +63,11 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
   if (!detail) return null;
   const requestId = detail.quote.quote_request_id;
   const caseFlow = await getCaseFlowStore();
-  const access: CaseAccess | null = await caseFlow.getCaseAccess(actor, requestId);
-  if (!access || access === 'customer') return null;
-  const canOperate = access === 'admin' || access === 'staff';
+  // 営業担当組織の管理者は、担当と同じものを読み取りだけで見る（編集は自分を主担当者にして行う）
+  const panel = await casePanelAccess(caseFlow, actor, requestId);
+  if (!panel) return null;
+  const { access, readOnly } = panel;
+  const canOperate = !readOnly && (access === 'admin' || access === 'staff');
   const today = todayJst();
 
   const [handover, punchItems, afterService, files, progress, order] = await Promise.all([
@@ -159,7 +163,7 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
                       </div>
                       {!handedOver && (
                         <div className="flex gap-1">
-                          {canSetPunchItemStatus(access, item.status, 'fixed') && (
+                          {!readOnly && canSetPunchItemStatus(access, item.status, 'fixed') && (
                             <form action={setPunchItemStatusAction}>
                               <input type="hidden" name="quote_id" value={quoteId} />
                               <input type="hidden" name="request_id" value={requestId} />
@@ -204,7 +208,7 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
 
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">完了確認・是正の写真と書類</h4>
-              <CaseFileList files={[...handoverFiles, ...punchFiles]} actor={actor} quoteId={quoteId} requestId={requestId} back={back} />
+              <CaseFileList files={[...handoverFiles, ...punchFiles]} actor={actor} quoteId={quoteId} requestId={requestId} back={back} readOnly={readOnly} />
               {canOperate && !handedOver && (
                 <details>
                   <summary className="cursor-pointer text-xs">写真・承諾書の写しを登録する</summary>
@@ -308,7 +312,7 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
                   <p className="font-semibold">{row.title}</p>
                   {row.body && <p className="whitespace-pre-wrap text-ink-soft">{row.body}</p>}
                   {row.response && <p className="whitespace-pre-wrap rounded bg-[#f7f8f8] p-2 text-xs">お客様への回答：{row.response}</p>}
-                  {canUpdateAfterService(access, row, row.status) && (
+                  {!readOnly && canUpdateAfterService(access, row, row.status) && (
                     <form action={updateAfterServiceRequestAction} className="space-y-2">
                       <input type="hidden" name="quote_id" value={quoteId} />
                       <input type="hidden" name="request_id" value={requestId} />
@@ -330,8 +334,8 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
                       <textarea name="response" rows={2} maxLength={2000} defaultValue={row.response ?? ''} className="input w-full text-xs" placeholder="お客様への回答（お客様にも表示されます）" aria-label="お客様への回答" />
                     </form>
                   )}
-                  <CaseFileList files={afterFiles.filter((file) => file.context_id === row.id)} actor={actor} quoteId={quoteId} requestId={requestId} back={back} />
-                  {access !== 'manufacturer' && (
+                  <CaseFileList files={afterFiles.filter((file) => file.context_id === row.id)} actor={actor} quoteId={quoteId} requestId={requestId} back={back} readOnly={readOnly} />
+                  {!readOnly && access !== 'manufacturer' && (
                     <details>
                       <summary className="cursor-pointer text-xs">このアフターに写真を登録する</summary>
                       <div className="mt-2">

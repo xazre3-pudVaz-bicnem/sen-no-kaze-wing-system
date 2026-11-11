@@ -62,12 +62,15 @@ export function CaseFileList({
   quoteId,
   requestId,
   back,
+  readOnly = false,
 }: {
   files: CaseFile[];
   actor: SessionUser;
   quoteId: string | null;
   requestId: string;
   back: string;
+  /** 読み取りだけの表示（営業担当組織の管理者など）。自分が登録した資料でも削除を出さない */
+  readOnly?: boolean;
 }) {
   if (files.length === 0) return <p className="text-xs text-muted">まだ登録されていません。</p>;
   return (
@@ -86,7 +89,7 @@ export function CaseFileList({
             {CASE_FILE_CONTEXT_LABELS[file.context]}・{formatDate(file.created_at)}
             {file.customer_visible ? '・お客様に表示' : ''}
           </p>
-          {(file.uploaded_by === actor.id || actor.role === 'admin') && (
+          {!readOnly && (file.uploaded_by === actor.id || actor.role === 'admin') && (
             <form action={deleteCaseFileAction} className="mt-1">
               <input type="hidden" name="file_id" value={file.id} />
               <input type="hidden" name="quote_id" value={quoteId ?? ''} />

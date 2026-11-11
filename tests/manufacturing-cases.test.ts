@@ -1,0 +1,103 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = process.cwd();
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261111140000_manufacturing_cases.sql'), 'utf8');
+const sqlOnly = migration
+  .split('\n')
+  .map((line) => line.replace(/--.*$/, ''))
+  .join('\n');
+const functionBody = (name: string) => {
+  const start = sqlOnly.indexOf(`create function public.${name}(`);
+  return sqlOnly.slice(start, sqlOnly.indexOf('\n$$;', start));
+};
+const actions = fs.readFileSync(path.join(root, 'lib/actions/case-flow.ts'), 'utf8');
+const productionPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-production-panels.tsx'), 'utf8');
+const handoverPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-handover-panels.tsx'), 'utf8');
+
+describe('製造担当の案件：DB の取り決め（migration 20261111140000）', () => {
+  it('お客様の情報・見積の金額と備考・営業の記録を返さない（設置場所・現地確認は B-3 の専用の関数だけ）', () => {
+    for (const name of ['manufacturing_case_row', 'list_manufacturing_cases', 'get_manufacturing_case']) {
+      const body = functionBody(name);
+      expect(body.length).toBeGreaterThan(200);
+      for (const field of [
+        'customer_name',
+        'customer_company',
+        'customer_note',
+        'dealer_note',
+        'adjustment_reason',
+        'unit_price',
+        'amount',
+        'total',
+        'subtotal',
+        'site_address',
+        'configuration_site_profiles',
+        'site_surveys',
+        'case_notes',
+        'case_files',
+        'quote_request_preferences',
+        'email',
+        'phone',
+      ]) {
+        expect(body, `${name} に ${field} が含まれている`).not.toContain(field);
+      }
+      expect(body).not.toMatch(/'notes'|\.notes\b/);
+    }
+    // 製造・出荷・施工に必要な案件の情報（2026-11-04 の先方回答 B-3）は、配下の確認と同じ関数で足す
+    expect(functionBody('get_manufacturing_case')).toContain("'partner_info', public.case_partner_site_info(p_request_id)");
+    expect(migration).toContain("if to_regprocedure('public.case_partner_site_info(uuid)') is null then");
+  });
+
+  it('詳細は本部と製造の担当（case_access の manufacturer）だけ。一覧は所属している製造担当組織か自分あての案件に絞ってから同じ規則で確かめる', () => {
+    const detail = functionBody('get_manufacturing_case');
+    expect(detail).toContain("v_access not in ('admin', 'manufacturer')");
+    expect(detail).toContain("errcode = '42501'");
+    const list = functionBody('list_manufacturing_cases');
+    expect(list).toContain("om.profile_id = v_uid and om.status = 'active'");
+    expect(list).toContain('w.manufacturing_organization_id is null and w.manufacturer_id = v_uid');
+    expect(list).toContain("public.case_access(w.quote_request_id) = 'manufacturer'");
+    // 並びは画面と同じ最終の更新。本部は 300 件まで
+    expect(list).toContain('order by x.activity_at desc, x.quote_request_id');
+    expect(list).toContain('limit case when v_admin then 300 end');
+  });
+
+  it('仕様の明細に、今回の契約対象外の行を出さない（製造依頼の写しと同じ規則）', () => {
+    expect(functionBody('get_manufacturing_case')).toContain("and public.quote_line_explicit_state(qi.remark) is distinct from 'excluded'");
+    expect(migration).toContain("if to_regprocedure('public.quote_line_explicit_state(text)') is null then");
+  });
+
+  it('1 件分の行を作る関数は内部用。画面から呼べるのはログインした利用者だけ', () => {
+    expect(migration).toContain('revoke all on function public.manufacturing_case_row(uuid) from public, anon, authenticated, service_role;');
+    expect(migration).not.toMatch(/grant execute on function public\.manufacturing_case_row/);
+    expect(migration).toContain('grant execute on function public.list_manufacturing_cases() to authenticated;');
+    expect(migration).toContain('grant execute on function public.get_manufacturing_case(uuid) to authenticated;');
+    expect(sqlOnly).not.toMatch(/create policy|alter policy|drop policy/);
+  });
+});
+
+describe('製造担当の画面と、営業担当組織の管理者の読み取り専用表示', () => {
+  it('製造の操作の戻り先は、案件画面・製造担当の画面（/admin/manufacturing/[案件]）・製造の一覧だけ', () => {
+    expect(actions).toContain('function productionBack(formData: FormData, query: string)');
+    expect(actions).toContain('/^\\/admin\\/manufacturing\\/[0-9a-f-]{36}$/i.test(back)');
+    expect(actions).not.toContain('productionBack(quoteId,');
+  });
+
+  it('製造・施工と引渡しのタブは、営業担当組織の管理者に読み取りだけで出す（書き込みのフォーム・資料の削除は出さない）', () => {
+    // 読み取りだけの判定は 1 か所（casePanelAccess）にまとめる
+    const panelAccess = fs.readFileSync(path.join(root, 'lib/data/case-flow/panel-access.ts'), 'utf8');
+    expect(panelAccess).toContain("if ((await caseFlow.getCaseRole(actor, requestId)) === 'manager') return { access: 'staff', readOnly: true };");
+    for (const source of [productionPanels, handoverPanels]) {
+      expect(source).toContain('const panel = await casePanelAccess(caseFlow, actor, requestId);');
+      expect(source).not.toContain('getCaseRole(');
+      expect(source).toContain("const canOperate = !readOnly && (access === 'admin' || access === 'staff');");
+      expect(source).toContain('back={back} readOnly={readOnly} />');
+    }
+    const fileList = fs.readFileSync(path.join(root, 'components/case-flow/case-site-panels.tsx'), 'utf8');
+    expect(fileList).toContain("{!readOnly && (file.uploaded_by === actor.id || actor.role === 'admin') && (");
+    expect(productionPanels).toContain('!readOnly && canChangeOrderStatus(access, order.status, step.to)');
+    expect(productionPanels).toContain("const editable = !readOnly && (access !== 'manufacturer'");
+    expect(handoverPanels).toContain("!readOnly && canSetPunchItemStatus(access, item.status, 'fixed')");
+    expect(handoverPanels).toContain('!readOnly && canUpdateAfterService(access, row, row.status)');
+  });
+});

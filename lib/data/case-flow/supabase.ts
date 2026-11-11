@@ -13,6 +13,8 @@ import type {
   CaseOrganizations,
   CaseRole,
   SupervisedCaseDetail,
+  ManufacturingCaseDetail,
+  ManufacturingCaseSummary,
   SupervisedCaseSummary,
   CaseAppointment,
   CaseAppointmentInput,
@@ -222,6 +224,25 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
       fail(error);
     }
     return (data as SupervisedCaseDetail | null) ?? null;
+  }
+  async listManufacturingCases(_actor: SessionUser): Promise<ManufacturingCaseSummary[]> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('list_manufacturing_cases');
+    if (error) {
+      if (missing(error, 'list_manufacturing_cases')) return [];
+      fail(error);
+    }
+    return (data as ManufacturingCaseSummary[] | null) ?? [];
+  }
+  async getManufacturingCase(_actor: SessionUser, requestId: string): Promise<ManufacturingCaseDetail | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_manufacturing_case', { p_request_id: requestId });
+    if (error) {
+      // 製造の担当でない案件・migration 未適用は「見られない」として扱う（画面は 404）
+      if (missing(error, 'get_manufacturing_case') || error.code === '42501' || error.code === 'P0002') return null;
+      fail(error);
+    }
+    return (data as ManufacturingCaseDetail | null) ?? null;
   }
   async getCaseProgress(_actor: SessionUser, requestId: string): Promise<CaseProgress | null> {
     const db = await this.db();

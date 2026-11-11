@@ -75,7 +75,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
     setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
     return () => {
       saveHandlersRef.current.delete(handler);
-      setHasSaveHandler(saveHandlersRef.current.size > 0);
+      setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
     };
   }, []);
 

@@ -260,6 +260,7 @@ export default async function EditOptionPage({
             {step === 'info' && canEditThisOption ? (
               <OptionRegistrationPreviewButton
                 href={stepHref('preview')}
+                blocked={!inclusionReady}
                 className="block min-h-24 rounded-xl border border-line bg-white px-3 py-3 text-left transition hover:border-brown hover:bg-ivory/30"
               >
                 <span className="text-xs font-semibold text-brown">STEP 2</span>
@@ -406,7 +407,7 @@ export default async function EditOptionPage({
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted">STEP 2では、シミュレーターと同じ商品詳細画面で最終表示を確認します。</p>
-                  <OptionRegistrationPreviewButton href={stepHref('preview')} className="btn-primary shrink-0">
+                  <OptionRegistrationPreviewButton href={stepHref('preview')} blocked={!inclusionReady} className="btn-primary shrink-0">
                     STEP 2 登録内容確認へ
                   </OptionRegistrationPreviewButton>
                 </div>

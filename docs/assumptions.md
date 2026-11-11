@@ -211,6 +211,7 @@
   - SECURITY DEFINER の RPC の中でも、呼んだ利用者で判定する
 - **列を足すとき**：旧価格の列を持つ表に列を足す migration では、anon・authenticated へ列の `grant select` と `legacy-price-columns.json` の更新を一緒に行う（リハーサル・CI の静的検査が、DB の列・JSON・列の権限の不一致を止める）
 - 本番 DB への適用は、v2.5 の migration と一緒に承認をいただいてから。アプリのコードは適用前の DB でも動く（列名で読む・金額はサーバーで読む）ので、アプリを先に出してから DB に適用できる
+- **アプリの保存は upsert を使わない（2026-11-09 本番の不具合の修正）**：金額の列を持つ表（商品・選択肢・本体モデル）を PostgREST の upsert（`INSERT … ON CONFLICT DO UPDATE SET 列 = EXCLUDED.列`）で書くと、PostgreSQL は EXCLUDED の列にも元の表の読み取りの権限を求めるため、金額の列を読めないログインした利用者は本部でも 42501（`permission denied for table options`）になる（行があるかどうかに関係なく、文を実行する前に止まる）。11/04 に C1b を本番に適用してから、既存の商品の保存（STEP1 の 2 回目以降の保存・自動保存）・STEP2 の公開・選択肢の追加と編集・本体モデルの編集が、この理由で止まっていた。アプリの保存（`SupabaseStore` の保存）は、既存の行を UPDATE（金額の列も書ける）、更新する行が無ければ同じ ID で INSERT にした。金額の列の読み取りの制限・本部だけが金額を変えられる決まりは変えない（実 DB の検査 LPG-32〜34）
 
 ## シミュレーターの v2.5 の売価（2026-10-29・v2.5 PR-C1）
 

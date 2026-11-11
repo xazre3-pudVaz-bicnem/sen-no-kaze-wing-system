@@ -73,6 +73,13 @@ jobs:
       - name: Runtime security tests
         run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime-check.json
 
+      # New inclusion migration: test auth, RLS and compare-and-replace RPC on disposable local DB.
+      # The runner refuses non-local DB connections and rolls back test data.
+      - name: Runtime security tests for equipment inclusion RPC
+        env:
+          EQUIPMENT_INCLUSION_REVIEW_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: node scripts/db-rehearsal/try-inclusion-proposal.mjs
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4

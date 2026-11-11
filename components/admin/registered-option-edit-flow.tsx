@@ -8,6 +8,7 @@ import { OptionCustomerPreview } from '@/components/admin/option-customer-previe
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
 import { productSizeMeta, productRegistrationGuidance, ProductCategoryGuidance } from '@/components/admin/product-category-guidance';
 import { ProductSectionHeading } from '@/components/admin/product-section-heading';
+import { RegisteredProductConflictFields, type ProductConflictCandidate } from '@/components/admin/registered-product-conflict-fields';
 import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
 import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -47,6 +48,7 @@ type Props = {
   models: BaseModel[];
   dependencies: OptionDependency[];
   conflicts: OptionConflict[];
+  conflictCandidates: ProductConflictCandidate[];
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   returnTo?: string;
@@ -143,6 +145,7 @@ export function RegisteredOptionEditFlow({
   models,
   dependencies,
   conflicts,
+  conflictCandidates,
   variantGroups,
   variantChoices,
   returnTo,
@@ -200,6 +203,7 @@ export function RegisteredOptionEditFlow({
   );
 
   const categoryMap = useMemo(() => new Map(categories.map((row) => [row.id, row])), [categories]);
+  const conflictCandidateById = useMemo(() => new Map(conflictCandidates.map((row) => [row.id, row])), [conflictCandidates]);
   const modelMap = useMemo(() => new Map(models.map((row) => [row.id, row])), [models]);
   // フリー商品は従来どおり「商品価格」。それ以外は千の風の調達想定の原価（v2.5 PR-A3）
   const isFreeProduct = categoryMap.get(option.category_id)?.code === FREE_PRODUCT_CATEGORY_CODE;
@@ -284,6 +288,11 @@ export function RegisteredOptionEditFlow({
   const diffs = useMemo<DiffItem[]>(() => {
     if (!review) return [];
     const next = review.option;
+    const describeConflict = (id: string, message: string | null) => {
+      const candidate = conflictCandidateById.get(id);
+      const name = candidate ? `${candidate.categoryName}：${candidate.name}` : id;
+      return message ? `${name}（${message}）` : name;
+    };
     const rows: DiffItem[] = [
       { key: 'name', label: '商品名', before: option.name, after: next.name },
       { key: 'category', label: 'カテゴリー', before: categoryMap.get(option.category_id)?.name ?? '—', after: categoryMap.get(next.category_id)?.name ?? '—' },
@@ -308,10 +317,23 @@ export function RegisteredOptionEditFlow({
       { key: 'highlight', label: 'メーカー記載の特徴', before: option.highlight ?? '—', after: next.highlight ?? '—', kind: 'long' },
       { key: 'description', label: '商品説明', before: option.description ?? '—', after: next.description ?? '—', kind: 'long' },
     ];
+    const beforeConflicts = conflicts
+      .map((conflict) => describeConflict(conflict.conflicts_with_option_id, conflict.message))
+      .sort((left, right) => left.localeCompare(right, 'ja'));
+    const afterConflicts = [...new Set(review.formData.getAll('conflicts').map(String))]
+      .map((id) => describeConflict(id, nullable(review.formData.get(`conflicts_message_${id}`))))
+      .sort((left, right) => left.localeCompare(right, 'ja'));
+    rows.push({
+      key: 'conflicts',
+      label: '同時に選択できない商品',
+      before: beforeConflicts.join('\n') || 'なし',
+      after: afterConflicts.join('\n') || 'なし',
+      kind: 'long',
+    });
     const imageChanged = Boolean(review.formData.get('image_file') instanceof File && (review.formData.get('image_file') as File).size > 0) || (option.image_url ?? '') !== (nullable(review.formData.get('image_url')) ?? '');
     if (imageChanged) rows.push({ key: 'image', label: 'メイン画像', before: option.image_url ?? '', after: review.imagePreviewUrl ?? '', kind: 'image' });
     return rows.filter((row) => row.kind === 'image' || row.before !== row.after);
-  }, [categoryMap, modelMap, option, review, priceLabel, showCostFields, windowTypeLabel]);
+  }, [categoryMap, modelMap, option, review, priceLabel, showCostFields, windowTypeLabel, conflicts, conflictCandidateById]);
 
   const zeroPriceNeedsServerContract = Boolean(review && introducesUnconfirmedZeroPrice(option, review.option));
   // サーバーの入力チェックで止まった項目（STEP 2 には項目ごとの欄が無いので、まとめて出す）
@@ -487,12 +509,7 @@ export function RegisteredOptionEditFlow({
               <input type="hidden" name={`requires_message_${dep.requires_option_id}`} value={dep.message ?? ''} />
             </span>
           ))}
-          {conflicts.map((conflict) => (
-            <span key={conflict.conflicts_with_option_id} className="hidden">
-              <input type="hidden" name="conflicts" value={conflict.conflicts_with_option_id} />
-              <input type="hidden" name={`conflicts_message_${conflict.conflicts_with_option_id}`} value={conflict.message ?? ''} />
-            </span>
-          ))}
+          {/* The conflict editor renders checked relations and preserves unavailable ones. */}
 
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-identify">
             <ProductSectionHeading
@@ -736,6 +753,11 @@ export function RegisteredOptionEditFlow({
               <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
             )}
           </section>
+          <RegisteredProductConflictFields
+            conflicts={conflicts}
+            candidates={conflictCandidates}
+            optionCategoryCode={selectedCategoryCode}
+          />
 
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-pricing">
             <ProductSectionHeading
@@ -812,9 +834,6 @@ export function RegisteredOptionEditFlow({
             </section>
             </div>
           </section>
-
-
-
         </form>
         <section className="space-y-3" data-testid="registered-product-financial-tools" aria-label="価格単位と本部基準原価">
           <p className="px-1 text-xs leading-5 text-muted">

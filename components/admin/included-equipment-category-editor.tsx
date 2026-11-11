@@ -32,6 +32,7 @@ export function IncludedEquipmentCategoryEditor({
   const savedRef = useRef(savedCategoryIds);
   const selectedRef = useRef(savedCategoryIds);
   const inFlightRef = useRef(false);
+  const refreshConflictRef = useRef(false);
   const previousServerIdsRef = useRef(savedCategoryIds);
   const candidateIds = candidates.map((row) => row.id);
   const unexpectedIds = savedIds.filter((id) => !candidateIds.includes(id));
@@ -50,7 +51,7 @@ export function IncludedEquipmentCategoryEditor({
   };
 
   const save = useCallback(async (): Promise<boolean> => {
-    if (inFlightRef.current || reloadRequired) return false;
+    if (inFlightRef.current || reloadRequired || refreshConflictRef.current) return false;
     const expected = savedRef.current;
     const next = selectedRef.current;
     if (sameCategoryIdSet(expected, next)) return true;
@@ -62,6 +63,11 @@ export function IncludedEquipmentCategoryEditor({
       const result = await saveIncludedCategoriesAction({
         optionId, expectedCategoryIds: [...expected], nextCategoryIds: [...next],
       });
+      if (refreshConflictRef.current) {
+        setError('保存中に別の更新を検出しました。保存結果を再読み込みして確認してください。');
+        setReloadRequired(true);
+        return false;
+      }
       if (!result.ok) {
         setError(result.error);
         if (result.code === 'CONFLICT' || result.code === 'TIMEOUT' || result.code === 'FAILED') setReloadRequired(true);
@@ -99,6 +105,7 @@ export function IncludedEquipmentCategoryEditor({
     if (decision === 'unchanged') return;
     previousServerIdsRef.current = [...savedCategoryIds];
     if (decision === 'reload') {
+      refreshConflictRef.current = true;
       setReloadRequired(true);
       setSuccess(false);
       setError('設備包含設定が別の操作で更新されました。編集中の選択は保持しています。再読み込みして確認してください。');
@@ -135,7 +142,7 @@ export function IncludedEquipmentCategoryEditor({
         {savedIds.length > 0 && <p className="text-muted">商品カテゴリーを浴室以外へ変更する場合は、先にここで包含設備をすべて解除・保存してからカテゴリーを変更してください。</p>}
         {unexpectedIds.length > 0 && <Alert tone="danger">候補外の既存関係があるため保存できません。管理者へ確認してください。</Alert>}
         {error && <Alert tone="danger">{error}</Alert>}
-        {success && !dirty && <Alert tone="success">設備包含設定をDBに保存しました。</Alert>}
+        {success && !dirty && !reloadRequired && <Alert tone="success">設備包含設定をDBに保存しました。</Alert>}
         {reloadRequired && <p className="font-semibold text-danger">現在の保存状態を確認するまで再送信できません。ページを再読み込みしてください。</p>}
         <p className="font-semibold" aria-live="polite">
           {pending ? '設備包含設定を保存中…' : reloadRequired ? '設備包含設定：保存結果の確認が必要' : dirty ? '設備包含設定：未保存' : '設備包含設定：保存済み'}

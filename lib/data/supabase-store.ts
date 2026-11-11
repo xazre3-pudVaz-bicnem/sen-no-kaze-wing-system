@@ -88,6 +88,7 @@ import {
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import {
   getLegacyPriceScope,
+  hasLegacyPriceColumns,
   legacyTableColumns,
   withLegacyBreakdownPrices,
   withLegacyChoicePrices,
@@ -97,6 +98,7 @@ import {
   withLegacyTemplatePrices,
   withLegacyTemplateSectionPrices,
   type LegacyPriceScope,
+  type LegacyPriceWriteTable,
 } from './legacy-prices';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 import {
@@ -1093,7 +1095,7 @@ export class SupabaseStore implements DataStore {
   async listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]> {
     const db = await this.db();
     // 一覧に出す見積は DB の list_dealer_quote_request_meta が決める（主担当者の案件と、営業担当組織の管理者なら自社の全案件。
-    // 20261104130000）。関数が無い古い DB では、これまでどおり見積の担当で絞る
+    // 20261111120000）。関数が無い古い DB では、これまでどおり見積の担当で絞る
     const { data: requestMeta, error: requestMetaError } = await db.rpc('list_dealer_quote_request_meta');
     if (requestMetaError && !isMissingFunction(requestMetaError)) mapPgError(requestMetaError);
     const requestMetaRows = requestMetaError ? [] : requestMeta ?? [];
@@ -1348,27 +1350,64 @@ export class SupabaseStore implements DataStore {
   }
 
   // ---------- 管理 ----------
+  /** 金額の列（原価）の無い表の保存。明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する */
   private async upsert<T>(table: string, input: { id?: string | null } & Record<string, unknown>): Promise<T> {
+    // 金額の列を持つ表は saveLegacyPriceRow で保存する（upsert では 42501 になる。下のコメント）
+    if (hasLegacyPriceColumns(table)) throw new Error(`${table} は金額の列を持つため、upsert では保存しません`);
     const db = await this.db();
     const { id, ...rest } = input;
-    // 明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する。
     const q = id ? db.from(table).upsert({ id, ...rest }, { onConflict: 'id' }) : db.from(table).insert(rest);
-    if (table === 'options' || table === 'option_variant_choices' || table === 'base_models') {
-      // 旧価格の列は読み返せない（v2.5 PR-C1b）。金額のほかの列を返し、金額はサーバーで足す
-      const { data, error } = await q.select(legacyTableColumns(table)).single();
-      if (error) mapPgError(error);
-      const row = data as unknown as T & { id: string };
-      const scope = await this.legacyPriceScope();
-      if (table === 'options') return (await withLegacyOptionPrices([row], scope))[0] as T;
-      if (table === 'option_variant_choices') return (await withLegacyChoicePrices([row], scope))[0] as T;
-      return (await withLegacyModelPrices([row], scope))[0] as T;
-    }
     const { data, error } = await q.select('*').single();
     if (error) mapPgError(error);
     return data as T;
   }
+
+  /**
+   * 金額の列（原価）を持つ表（商品・選択肢・本体モデル）の保存（v2.5 PR-C1b）。
+   * upsert（INSERT … ON CONFLICT DO UPDATE）は、SET の EXCLUDED の列にも元の表の読み取りの権限を求める（PostgreSQL の決まり）ため、
+   * 読めない金額の列を書くと本部でも 42501 になる（2026-11-09 本番の商品の自動保存）。既存の行は UPDATE、新しい行は INSERT で書く。
+   * - existing：ID があれば、その行を更新するだけ（行が無い・更新する権限が無くて見えないときは止める。削除された行を作り直さない）
+   * - existingOrNew：ID の行が無ければ、その ID で足す（ID を先に決めて作る新しい選択肢）。同時に同じ ID で足されていたら更新し直す
+   * 返す列は金額のほかの列だけで、金額はサーバーで足す
+   */
+  private async saveLegacyPriceRow<T>(
+    table: LegacyPriceWriteTable,
+    input: { id?: string | null } & Record<string, unknown>,
+    idMeans: 'existing' | 'existingOrNew'
+  ): Promise<T> {
+    const db = await this.db();
+    const { id, ...rest } = input;
+    const columns = legacyTableColumns(table);
+    const updateById = async (rowId: string) => {
+      const updated = await db.from(table).update(rest).eq('id', rowId).select(columns).maybeSingle();
+      if (updated.error) mapPgError(updated.error);
+      return updated.data as unknown as (T & { id: string }) | null;
+    };
+    let row: (T & { id: string }) | null = id ? await updateById(id) : null;
+    if (!row && id && idMeans === 'existing') {
+      throw new StoreError('NOT_FOUND', '保存できませんでした。削除されたか、更新する権限がありません。画面を再読み込みしてから、もう一度お試しください。');
+    }
+    if (!row) {
+      const inserted = await db.from(table).insert(id ? { id, ...rest } : rest).select(columns).single();
+      if (!inserted.error) {
+        row = inserted.data as unknown as T & { id: string };
+      } else if (id && inserted.error.code === '23505') {
+        // 同じ ID の行が先にできていた（同時の保存）か、更新する権限の無い行がある。更新し直して、だめなら権限の誤りにする
+        row = await updateById(id);
+        if (!row) throw new StoreError('FORBIDDEN', '権限がありません');
+      } else {
+        mapPgError(inserted.error);
+      }
+    }
+    const saved = row as T & { id: string };
+    const scope = await this.legacyPriceScope();
+    if (table === 'options') return (await withLegacyOptionPrices([saved], scope))[0] as T;
+    if (table === 'option_variant_choices') return (await withLegacyChoicePrices([saved], scope))[0] as T;
+    return (await withLegacyModelPrices([saved], scope))[0] as T;
+  }
   async upsertModel(input: ModelInput) {
-    return this.upsert<BaseModel>('base_models', input);
+    // 本体モデルの ID は既存の行だけ（新しい本体モデルは ID なしで足す）
+    return this.saveLegacyPriceRow<BaseModel>('base_models', input, 'existing');
   }
   async listCategories() {
     const db = await this.db();
@@ -1423,7 +1462,12 @@ export class SupabaseStore implements DataStore {
     return this.upsert<OptionVariantGroup>('option_variant_groups', input as unknown as Record<string, unknown> & { id?: string | null });
   }
   async upsertVariantChoice(input: OptionVariantChoice) {
-    return this.upsert<OptionVariantChoice>('option_variant_choices', input as unknown as Record<string, unknown> & { id?: string | null });
+    // 新しい選択肢も ID を先に決めて渡す（原価の記録に使う）ため、ID の行が無ければその ID で足す
+    return this.saveLegacyPriceRow<OptionVariantChoice>(
+      'option_variant_choices',
+      input as unknown as Record<string, unknown> & { id?: string | null },
+      'existingOrNew'
+    );
   }
   async applyCatalogImport(batch: CatalogImportBatch): Promise<void> {
     const db = await this.db();
@@ -1460,7 +1504,8 @@ export class SupabaseStore implements DataStore {
     // 販売停止・廃番・シミュレーター表示は setProductLifecycle・setProductDiscontinued だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
     const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, discontinued_at: _discontinuedAt, ...rest } = input as OptionInput &
       Pick<ProductOption, 'simulator_visible' | 'archived_at' | 'discontinued_at'>;
-    return this.upsert<ProductOption>('options', rest);
+    // 商品の ID は既存の行だけ（新しい商品は ID なしで足す）。削除された商品を自動保存などで作り直さない
+    return this.saveLegacyPriceRow<ProductOption>('options', rest, 'existing');
   }
   async deleteOption(id: string) {
     const db = await this.db();

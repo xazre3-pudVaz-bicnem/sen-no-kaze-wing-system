@@ -73,7 +73,9 @@ const sections: NavSection[] = [
   },
 ];
 
-const utilityLinks: NavUtilityLink[] = [];
+const utilityLinks: NavUtilityLink[] = [
+  { href: '/admin/contacts', label: '問い合わせ受付', need: 'admin' },
+];
 
 function isAllowed(item: { need?: Access }, role: RoleCode) {
   return item.need === 'admin' ? role === 'admin' : true;

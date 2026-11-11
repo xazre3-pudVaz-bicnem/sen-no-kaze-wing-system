@@ -41,6 +41,6 @@ describe('商品公開・編集完了後の商品台帳への移動', () => {
     expect(ledgerClient).toContain('setPage(Math.floor(index / pageSize) + 1)');
     expect(ledgerClient).toContain('optionMatchesLedgerFilters');
     expect(ledgerClient).toContain('compareOptions(a, b, sort, categoryMap)');
-    expect(ledgerClient).toContain('initiallySelectedId={selected}');
+    expect(ledgerPage).toContain('initiallySelectedId={selected}');
   });
 });

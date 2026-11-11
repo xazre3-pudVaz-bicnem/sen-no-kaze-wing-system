@@ -79,7 +79,8 @@ describe('商品に含まれる設備：Server Actionの権限・競合・RPC境
   it('空集合も合法。ユーザーセッションRPCで更新して結果を照合', async () => {
     const result = await saveIncludedCategoriesAction(input([], []));
     expect(result).toEqual({ ok: true, savedIds: [] });
-    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('set_option_included_categories', {
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith('set_option_included_categories', {
       p_option_id: optionId,
       p_expected_category_ids: [],
       p_next_category_ids: [],

@@ -166,6 +166,9 @@ describe('設備包含のrouter.refresh後のクライアント状態調停', ()
     expect(editor).toContain('previousServerIdsRef.current = [...savedCategoryIds]');
     expect(editor).toContain("if (decision === 'reload')");
     expect(editor).toContain('setReloadRequired(true)');
+    expect(editor).toContain('refreshConflictRef.current = true');
+    expect(editor).toContain('if (refreshConflictRef.current) {');
+    expect(editor).toContain('success && !dirty && !reloadRequired');
     expect(editor).toContain('savedRef.current = [...savedCategoryIds]');
     expect(editor).toContain('selectedRef.current = [...savedCategoryIds]');
     expect(editor).toContain('setSavedIds([...savedCategoryIds])');

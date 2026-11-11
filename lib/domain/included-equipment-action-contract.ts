@@ -7,7 +7,10 @@ export type IncludedCategoryContractResult =
   | { ok: false; code: 'INVALID' | 'CONFLICT' | 'INCONSISTENT' };
 
 export function sameCategoryIdSet(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && [...a].sort().every((id, i) => id === [...b].sort()[i]);
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((id, i) => id === sortedB[i]);
 }
 
 /** Server-read current / allowed are authoritative. Browser-provided expected is never replaced. */

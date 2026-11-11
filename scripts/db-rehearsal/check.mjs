@@ -96,7 +96,7 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
-    // A-2 ⑥：経費の手動指定（20261104113000）
+    // A-2 ⑥：経費の手動指定（20261111103000）
     runtime = mergeRuntime(runtime, await runtimeV25ExpenseManual(client));
     printRuntime(runtime);
   }

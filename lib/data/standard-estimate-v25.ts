@@ -14,7 +14,7 @@ import {
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
- * 経費の手動の額（A-2 ⑥）の DB の更新（20261104113000）があると分かったか。列は消えないので、一度分かったら
+ * 経費の手動の額（A-2 ⑥）の DB の更新（20261111103000）があると分かったか。列は消えないので、一度分かったら
  * 読み込みのたびに確かめない（切り替えの間だけ、見積の列の有無を 1 回確かめる）
  */
 let expenseManualColumnSeen = false;
@@ -52,7 +52,7 @@ export type StandardEstimateV25Data = {
   savedLineAmounts: Record<string, number | null>;
   preview: V25Preview | null;
   slotOptionIds: string[];
-  /** 区分の経費を手動の額にできる（A-2 ⑥。DB の更新 20261104113000 の後だけ） */
+  /** 区分の経費を手動の額にできる（A-2 ⑥。DB の更新 20261111103000 の後だけ） */
   expenseManualAvailable: boolean;
   rules: { calcCode: string | null; taxCode: string | null; taxRate: string | null };
 };

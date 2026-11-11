@@ -10,7 +10,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  */
 export async function runtimeV25ExpenseManual(client) {
   if ((await client.query("select to_regprocedure('public.standard_estimate_v25_expense_settings(uuid)') is not null as ok")).rows[0].ok !== true) {
-    return { ok: true, results: [{ step: '経費の手動指定（20261104113000 が無い DB のため省略）', expected: 'skipped', actual: 'skipped', ok: true }] };
+    return { ok: true, results: [{ step: '経費の手動指定（20261111103000 が無い DB のため省略）', expected: 'skipped', actual: 'skipped', ok: true }] };
   }
   const sql = fs.readFileSync(path.join(HERE, 'runtime-v25-expense-manual.sql'), 'utf8').split('\r').join('');
   try {

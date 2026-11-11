@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').split('\r').join('');
-const FILE = 'supabase/migrations/20261104113000_v25_expense_manual.sql';
+const FILE = 'supabase/migrations/20261111103000_v25_expense_manual.sql';
 const migration = read(FILE);
 const sqlOnly = migration
   .split('\n')
@@ -20,13 +20,13 @@ function patchCounts(): Record<string, number> {
   return counts;
 }
 
-describe('A-2 ⑥ 経費の手動指定の migration（20261104113000）', () => {
-  it('v2.5 の一式（〜20261102130000）の後、A-3（20261104110000）の後・代理店（20261104120000〜）の前に入る番号', () => {
+describe('A-2 ⑥ 経費の手動指定の migration（20261111103000）', () => {
+  it('v2.5 の一式（〜20261102130000）の後、A-3（20261111100000）の後・代理店（20261111110000〜）の前に入る番号', () => {
     const names = fs.readdirSync(path.join(root, 'supabase/migrations')).filter((name) => name.endsWith('.sql')).sort();
-    const index = names.indexOf('20261104113000_v25_expense_manual.sql');
+    const index = names.indexOf('20261111103000_v25_expense_manual.sql');
     expect(index).toBeGreaterThan(names.indexOf('20261102130000_v25_standard_quote_drafts.sql'));
     expect(index).toBeGreaterThan(names.indexOf('20261104100000_unused_draft_variant_safe_delete.sql'));
-    expect(names.filter((name) => name.startsWith('20261104113000'))).toHaveLength(1);
+    expect(names.filter((name) => name.startsWith('20261111103000'))).toHaveLength(1);
   });
 
   it('前提の確認：v2.5 と標準見積から作る見積の関数があり、⑥ の列・関数がまだ無いこと', () => {

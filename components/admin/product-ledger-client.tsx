@@ -38,6 +38,8 @@ type Props = {
   configurationUsageCounts: Record<string, number> | null;
   hqStandardCosts: Record<string, number> | null;
   initiallySelectedId?: string;
+  /** 公開・編集完了後に戻ってきた商品（詳細のモバイルオーバーレイは自動表示しない） */
+  recentlyChangedId?: string;
   /** 商品標準原価（options.price）を出す。原価の Version の仕組みがある間は本部だけ（v2.5 PR-A3） */
   showCost?: boolean;
   /** 窓タイプのマスター（v2.5 PR-S2）。窓タイプを使うカテゴリー（サッシ）の商品に名前を出す */
@@ -198,7 +200,7 @@ function matchesLifecycle(option: ProductOption, lifecycle: '' | ProductLedgerSt
   return !lifecycle || productLedgerState(option) === lifecycle;
 }
 
-export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discontinueEnabled = false, canRestoreDiscontinued = false, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId, showCost = true, windowTypes = [] }: Props) {
+export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discontinueEnabled = false, canRestoreDiscontinued = false, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId, recentlyChangedId, showCost = true, windowTypes = [] }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupCode, setGroupCode] = useState('');
@@ -212,6 +214,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
   const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null);
   const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer');
   const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
+  const completionFocusHandled = useRef(false);
 
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
@@ -250,6 +253,15 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
         .sort((a, b) => compareOptions(a, b, sort, categoryMap)),
     [attentionOnly, categoryId, categoryMap, groupCode, lifecycle, options, query, selectedGroupCategoryIds, sort]
   );
+
+  /* eslint-disable react-hooks/set-state-in-effect -- 初回の完了商品が50件より後にあっても一覧に表示する */
+  useEffect(() => {
+    if (completionFocusHandled.current || !recentlyChangedId) return;
+    completionFocusHandled.current = true;
+    const index = filtered.findIndex((option) => option.id === recentlyChangedId);
+    if (index >= 0) setPage(Math.floor(index / pageSize) + 1);
+  }, [filtered, pageSize, recentlyChangedId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   /* eslint-disable react-hooks/set-state-in-effect -- フィルター外選択の解除と商品切替時のローカルプレビュー初期化に限定 */
   useEffect(() => setSelectedId((id) => selectedOptionAfterFilter(id, filtered.map((o) => o.id))), [filtered]);
@@ -337,6 +349,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
           <div>
             <h2 className="text-lg font-semibold">商品一覧</h2>
             <p className="mt-1 text-xs text-muted">販売停止・廃番の商品も履歴として残し、一覧から選択・確認・編集できます。</p>
+            {recentlyChangedId && <p className="mt-1 text-xs font-semibold text-brown">今回の登録・更新対象の商品を枠線で強調しています。</p>}
           </div>
           <p className="text-xs font-medium text-muted">
             {filtered.length ? filtered.length + '件中 ' + firstShown + '〜' + lastShown + '件を表示' : '0件'}
@@ -435,7 +448,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
                   {pageOptions.map((o) => {
                     const itemCategory = categoryMap.get(o.category_id);
                     const manufacturerModel = [o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash;
-                    return <tr key={o.id} tabIndex={0} aria-selected={selectedId === o.id} onClick={() => openDetail(o.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(o.id); } }} className={(selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25') + ' cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brown/50'} data-testid={'ledger-option-' + o.code}>
+                    return <tr key={o.id} tabIndex={0} aria-selected={selectedId === o.id} onClick={() => openDetail(o.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(o.id); } }} className={(selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25') + (recentlyChangedId === o.id ? ' ring-2 ring-inset ring-brown/60' : '') + ' cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brown/50'} data-testid={'ledger-option-' + o.code} data-recently-changed={recentlyChangedId === o.id ? 'true' : undefined}>
                       <td className="px-2.5 py-1.5"><div className="flex w-full min-w-0 items-center gap-2.5 text-left"><span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.62rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}</span><span className="min-w-0 flex-1"><span className="block line-clamp-2 text-[0.92rem] font-semibold leading-tight text-ink">{o.name}</span><span className="mt-0.5 block truncate text-xs leading-tight text-muted">{manufacturerModel}</span></span></div></td>
                       <td className="px-2.5 py-1.5 text-xs font-medium text-ink-soft">{itemCategory?.name ?? dash}</td>
                       {showCost && <td className="px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>}
@@ -451,7 +464,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
             <div className="space-y-2 p-3 md:hidden">
               {pageOptions.map((o) => {
                 const itemCategory = categoryMap.get(o.category_id);
-                return <article key={o.id} className="relative overflow-visible rounded-xl border border-line bg-white" data-testid={'ledger-mobile-option-' + o.code}>
+                return <article key={o.id} className={'relative overflow-visible rounded-xl border bg-white ' + (recentlyChangedId === o.id ? 'border-brown ring-2 ring-brown/30' : 'border-line')} data-testid={'ledger-mobile-option-' + o.code} data-recently-changed={recentlyChangedId === o.id ? 'true' : undefined}>
                   <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
                   <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
                   <div className="pointer-events-none relative z-20 flex gap-2.5 p-2.5">
@@ -469,7 +482,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
               {pageOptions.map((o) => {
                 const itemCategory = categoryMap.get(o.category_id);
                 const targetModel = o.base_model_id ? modelMap.get(o.base_model_id)?.name ?? '特定モデル' : '全モデル';
-                return <article key={o.id} className={'group relative overflow-visible rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line')} data-testid={'ledger-option-' + o.code}>
+                return <article key={o.id} className={'group relative overflow-visible rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line') + (recentlyChangedId === o.id ? ' ring-2 ring-brown/50' : '')} data-testid={'ledger-option-' + o.code} data-recently-changed={recentlyChangedId === o.id ? 'true' : undefined}>
                   <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
                   <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
                   <div className="pointer-events-none relative z-20 flex min-h-[6.25rem] gap-2.5 p-2.5"><span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}</span><div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3><p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{showCost ? productPrice(o) : ''}</p><p className="text-[0.68rem] text-muted">{targetModel}</p></div></div></div>

@@ -218,11 +218,13 @@ export function OptionRegistrationPreviewButton({
   className,
   children,
   ariaCurrent,
+  blocked = false,
 }: {
   href: string;
   className?: string;
   children: ReactNode;
   ariaCurrent?: 'step';
+  blocked?: boolean;
 }) {
   const router = useRouter();
   const { saveIfDirty, saving } = useOptionRegistrationSave();
@@ -232,8 +234,9 @@ export function OptionRegistrationPreviewButton({
       type="button"
       className={className}
       aria-current={ariaCurrent}
-      disabled={saving}
+      disabled={saving || blocked}
       onClick={() => {
+        if (blocked) return;
         const form = document.getElementById('option-main-form');
         if (form instanceof HTMLFormElement && !form.reportValidity()) return;
         void saveIfDirty().then((ok) => {

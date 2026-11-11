@@ -81,8 +81,8 @@ export default async function OrganizationDetailPage({
             メンバー
           </h2>
           <p className="text-xs text-muted">
-            <Badge tone="navy">管理者</Badge> は担当者の招待・役割の変更・所属の解除ができます。
-            管理者・<Badge className="ml-1">担当者</Badge> とも、自分が担当する案件を扱います。
+            <Badge tone="navy">管理者</Badge> は自社の全案件を確認して主担当者を決め、担当者の招待・役割の変更・所属の解除ができます。
+            <Badge className="ml-1">担当者</Badge> は、自分が主担当者の案件を扱います。
           </p>
         </div>
         <Table minWidth="44rem">

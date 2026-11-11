@@ -6,6 +6,8 @@ import type {
   AfterServiceRequestInput,
   AfterServiceUpdateInput,
   CaseAccess,
+  CaseOrganizations,
+  CaseRole,
   CaseAppointment,
   CaseAppointmentInput,
   CaseFile,
@@ -52,6 +54,8 @@ export type BoardAppointment = CaseAppointment & { case_label: string; quote_id:
 export type BoardManufacturingOrder = ManufacturingOrder & {
   case_label: string;
   case_quote_id: string | null;
+  /** 案件の主担当者（DB は主担当者を製造の担当より先に「担当」と判定するため、画面の操作の出し分けに使う） */
+  primary_staff_id: string | null;
   units_total: number;
   units_shipped: number;
   units_installed: number;
@@ -97,6 +101,14 @@ export interface CaseFlowStore {
   acknowledgeCase(actor: SessionUser, requestId: string): Promise<void>;
   assignCasePrimaryStaff(actor: SessionUser, requestId: string, staffId: string | null): Promise<void>;
   setCaseManufacturer(actor: SessionUser, requestId: string, manufacturerId: string | null): Promise<void>;
+  /** 読み取りの関わり方（DB の case_role）。営業担当組織の管理者は manager、直属の総代理店の管理者は supervisor */
+  getCaseRole(actor: SessionUser, requestId: string): Promise<CaseRole | null>;
+  /** 案件の営業担当組織・製造担当組織・主担当者（と主担当者の候補）。お客様には返さない */
+  getCaseOrganizations(actor: SessionUser, requestId: string): Promise<CaseOrganizations | null>;
+  /** 営業担当組織を決める・変える（本部だけ）。NULL で本部の受付に戻す */
+  setCaseSalesOrganization(actor: SessionUser, requestId: string, organizationId: string | null): Promise<void>;
+  /** 製造担当組織を変える（本部だけ）。NULL で営業担当組織からの自動に戻す */
+  setCaseManufacturingOrganization(actor: SessionUser, requestId: string, organizationId: string | null): Promise<void>;
   /** お客様にも見せてよい進み具合 */
   getCaseProgress(actor: SessionUser, requestId: string): Promise<CaseProgress | null>;
 

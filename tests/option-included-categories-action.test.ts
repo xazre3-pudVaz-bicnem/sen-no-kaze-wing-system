@@ -116,7 +116,7 @@ describe('商品に含まれる設備：Server Actionの権限・競合・RPC境
     [[own], '自己カテゴリー'],
     [[toilet, toilet], '重複'],
     [['not-a-uuid'], '不正UUID'],
-  ])('%s（%s）は入力検証で拒否', async (nextCategoryIds) => {
+  ])('%s（%s）は入力検証で拒否', async (nextCategoryIds, _label) => {
     const result = await saveIncludedCategoriesAction(input([], nextCategoryIds));
     expect(result).toMatchObject({ ok: false, code: 'VALIDATION' });
     expect(mocks.rpc).not.toHaveBeenCalled();

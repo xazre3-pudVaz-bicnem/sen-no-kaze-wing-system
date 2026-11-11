@@ -42,7 +42,10 @@ import {
   type UnitUpdateInput,
   type CaseAccess,
   type CaseOrganizations,
+  type CasePartnerSiteInfo,
   type CaseRole,
+  type SupervisedCaseDetail,
+  type SupervisedCaseSummary,
   type CaseAppointment,
   type CaseAppointmentInput,
   type CaseFile,
@@ -192,6 +195,30 @@ function notifyOrganizationManagers(db: LocalDb, organizationId: string, n: { ki
   }
 }
 
+/** お客様にも見せる進み具合（DB の get_case_progress と同じ。判定は呼び出し側で行う） */
+function progressOf(db: LocalDb, requestId: string): CaseProgress {
+  const t = tables(db);
+  const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
+  const survey = t.siteSurveys.find((s) => s.quote_request_id === requestId);
+  const primary = workflow?.primary_staff_id ? db.profiles.find((p) => p.id === workflow.primary_staff_id) : null;
+  const order = (t.orders ?? []).find((o) => o.quote_request_id === requestId && o.status !== 'canceled');
+  const units = order ? (t.units ?? []).filter((u) => u.order_id === order.id) : [];
+  return {
+    acknowledged_at: workflow?.acknowledged_at ?? null,
+    primary_staff_name: primary?.full_name ?? null,
+    site_survey_status: survey?.status ?? 'none',
+    site_survey_completed_at: survey?.completed_at ?? null,
+    // 製造：状態と棟数・出荷済み・設置済みの数だけ（DB の get_case_progress と同じ）
+    manufacturing_status: !order || order.status === 'draft' ? 'none' : (order.status as Exclude<ManufacturingOrderStatus, 'draft' | 'canceled'>),
+    unit_count: order?.unit_count ?? null,
+    units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
+    units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
+    // 契約は締結済みかどうかだけ（契約の中身は本部とお客様だけ）。DB の get_case_progress と同じ
+    contract_signed: db.contracts.some((c) => c.quote_request_id === requestId && c.status === 'signed'),
+    handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
+  };
+}
+
 /**
  * 所属を外れたメンバーが主担当者の、その組織の案件は、主担当者と見積の担当を外し、組織の管理者へ 1 回だけ知らせる
  * （DB のトリガー release_cases_of_departed_member と同じ）。所属を外した後に呼ぶ。外した件数を返す
@@ -242,11 +269,63 @@ function isHandedOver(db: LocalDb, requestId: string): boolean {
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
-/** 資料を読めるか（DB の case_files_read と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の写真だけ */
+/** 製造担当組織・配下の確認に見せる資料（施工・製造の記録と、現地確認の写真。DB の case_file_readable と同じ。B-3） */
+function partnerVisibleCaseFile(file: CaseFile): boolean {
+  return file.context === 'progress' || (file.context === 'site_survey' && file.content_type.startsWith('image/'));
+}
+
+/** 資料を読めるか（DB の case_file_readable と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の記録と現地確認の写真だけ */
 function canReadCaseFile(db: LocalDb, actor: SessionUser, access: CaseAccess, file: CaseFile): boolean {
   if (access === 'customer') return file.customer_visible;
-  if (access === 'manufacturer') return file.context === 'progress' || isLegacyManufacturer(db, actor, file.quote_request_id);
+  if (access === 'manufacturer') return partnerVisibleCaseFile(file) || isLegacyManufacturer(db, actor, file.quote_request_id);
   return true;
+}
+
+/**
+ * 総代理店（配下の確認・製造の担当）に見せる、製造・出荷・施工に必要な案件の情報（DB の case_partner_site_info と同じ。B-3）。
+ * お客様の氏名・会社名・連絡先・ご自宅の住所・メッセージ、打合せの希望、土地なしの場合の希望地域・予算・メモ、打合せ記録、
+ * 契約書、お客様が送った資料は含めない
+ */
+function partnerSiteInfoOf(db: LocalDb, requestId: string): CasePartnerSiteInfo | null {
+  const request = db.quoteRequests.find((r) => r.id === requestId);
+  if (!request) return null;
+  const t = tables(db);
+  const quote = request.quote_id ? db.quotes.find((q) => q.id === request.quote_id) : undefined;
+  const customer = request.user_id ? db.profiles.find((p) => p.id === request.user_id) : undefined;
+  const profile = request.configuration_id ? (t.siteProfiles ?? []).find((p) => p.configuration_id === request.configuration_id) : undefined;
+  const survey = t.siteSurveys.find((s) => s.quote_request_id === requestId);
+  const contactSite = (request.contact?.site_address ?? '').trim();
+  return {
+    case_name: (request.case_name ?? '').trim() || null,
+    customer_no: quote?.customer_no ?? customer?.customer_no ?? null,
+    site_address: contactSite || (profile?.site_address ?? '').trim() || null,
+    land: profile
+      ? {
+          land_status: profile.land_status,
+          area_sqm: profile.area_sqm,
+          land_category: profile.land_category,
+          road_access: profile.road_access,
+          electricity: profile.electricity,
+          water: profile.water,
+          drainage: profile.drainage,
+          intended_use: profile.intended_use,
+        }
+      : null,
+    survey: survey
+      ? {
+          status: survey.status,
+          surveyed_on: survey.surveyed_on,
+          land: { ...survey.land },
+          legal: { ...survey.legal },
+          survey_notes: survey.survey_notes,
+          completed_at: survey.completed_at,
+        }
+      : null,
+    survey_files: t.files
+      .filter((f) => f.quote_request_id === requestId && f.context === 'site_survey' && f.content_type.startsWith('image/'))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+      .map((f) => ({ id: f.id, file_name: f.file_name, content_type: f.content_type, caption: f.caption, created_at: f.created_at })),
+  };
 }
 
 /** プランの土地の情報への関わり方（DB の configuration_site_profile_access と同じ） */
@@ -663,30 +742,179 @@ export class LocalCaseFlowStore implements CaseFlowStore {
     });
   }
 
+  // ---------- 総代理店の配下の確認（DB の list_supervised_cases／get_supervised_case と同じ。顧客情報を含まない） ----------
+  private supervisedRequestIds(db: LocalDb, actor: SessionUser): string[] {
+    const orgs = db.organizations?.organizations ?? [];
+    return tables(db)
+      .workflows.filter((w) => {
+        const sales = w.sales_organization_id ? orgs.find((o) => o.id === w.sales_organization_id) : undefined;
+        if (!sales || sales.organization_type !== 'dealer' || !sales.parent_organization_id) return false;
+        return rank(actor) >= 3 || isCaseSupervisor(db, w.quote_request_id, actor.id);
+      })
+      .map((w) => w.quote_request_id);
+  }
+  private supervisedQuote(db: LocalDb, requestId: string) {
+    const request = db.quoteRequests.find((r) => r.id === requestId);
+    return request?.quote_id ? db.quotes.find((q) => q.id === request.quote_id) ?? null : null;
+  }
+  async listSupervisedCases(actor: SessionUser): Promise<SupervisedCaseSummary[]> {
+    return this.read((db) => {
+      const orgs = db.organizations?.organizations ?? [];
+      const orgRef = (id: string | null | undefined) => {
+        const org = id ? orgs.find((o) => o.id === id) : undefined;
+        return org ? { id: org.id, name: org.name } : null;
+      };
+      return this.supervisedRequestIds(db, actor)
+        .map((requestId): SupervisedCaseSummary => {
+          const workflow = tables(db).workflows.find((w) => w.quote_request_id === requestId)!;
+          const sales = orgs.find((o) => o.id === workflow.sales_organization_id)!;
+          const quote = this.supervisedQuote(db, requestId);
+          const request = db.quoteRequests.find((r) => r.id === requestId);
+          return {
+            request_id: requestId,
+            sales_organization: { id: sales.id, name: sales.name },
+            supervisor_organization: orgRef(sales.parent_organization_id)!,
+            manufacturing_organization: orgRef(workflow.manufacturing_organization_id),
+            primary_staff_name: workflow.primary_staff_id ? db.profiles.find((p) => p.id === workflow.primary_staff_id)?.full_name ?? null : null,
+            quote: quote
+              ? {
+                  id: quote.id,
+                  quote_no: quote.quote_no,
+                  revision: quote.revision ?? 1,
+                  status: quote.status,
+                  base_model_name: quote.base_model_name,
+                  spec_code: quote.spec_code ?? null,
+                  finish_level: quote.finish_level ?? null,
+                  total: quote.total,
+                  issued_at: quote.issued_at ?? null,
+                }
+              : null,
+            progress: progressOf(db, requestId),
+            activity_at: [workflow.updated_at, request?.updated_at ?? ''].sort().at(-1) ?? workflow.updated_at,
+          };
+        })
+        .sort((a, b) => b.activity_at.localeCompare(a.activity_at));
+    });
+  }
+  async getSupervisedCase(actor: SessionUser, requestId: string): Promise<SupervisedCaseDetail | null> {
+    return this.read((db) => {
+      if (rank(actor) < 3 && !isCaseSupervisor(db, requestId, actor.id)) return null;
+      if (!db.quoteRequests.some((r) => r.id === requestId)) return null;
+      const t = tables(db);
+      const orgs = db.organizations?.organizations ?? [];
+      const orgRef = (id: string | null | undefined) => {
+        const org = id ? orgs.find((o) => o.id === id) : undefined;
+        return org ? { id: org.id, name: org.name } : null;
+      };
+      const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
+      const quote = this.supervisedQuote(db, requestId);
+      // 製造依頼は、取り消し・下書きでないもの（DB の get_supervised_case と同じ。個体もその製造依頼のものだけ）
+      const order = (t.orders ?? [])
+        .filter((o) => o.quote_request_id === requestId && o.status !== 'canceled' && o.status !== 'draft')
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      return {
+        request_id: requestId,
+        sales_organization: orgRef(workflow?.sales_organization_id),
+        manufacturing_organization: orgRef(workflow?.manufacturing_organization_id),
+        primary_staff_name: workflow?.primary_staff_id ? db.profiles.find((p) => p.id === workflow.primary_staff_id)?.full_name ?? null : null,
+        // 見積はお客様の氏名・会社名・備考を除いた金額だけ
+        quote: quote
+          ? {
+              id: quote.id,
+              quote_no: quote.quote_no,
+              revision: quote.revision ?? 1,
+              status: quote.status,
+              issued_at: quote.issued_at ?? null,
+              valid_until: quote.valid_until ?? null,
+              base_model_name: quote.base_model_name,
+              spec_code: quote.spec_code ?? null,
+              finish_level: quote.finish_level ?? null,
+              base_price: quote.base_price,
+              base_expense: quote.base_expense ?? 0,
+              option_subtotal: quote.option_subtotal,
+              option_expense: quote.option_expense ?? 0,
+              installation_subtotal: quote.installation_subtotal,
+              adjustment: quote.adjustment ?? 0,
+              subtotal: quote.subtotal,
+              tax_rate: quote.tax_rate,
+              tax: quote.tax,
+              total: quote.total,
+            }
+          : null,
+        items: quote
+          ? db.quoteItems
+              .filter((i) => i.quote_id === quote.id)
+              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+              .map((i) => ({
+                kind: i.kind,
+                name: i.name,
+                description: i.description ?? null,
+                quantity: i.quantity,
+                unit: i.unit ?? null,
+                unit_price: i.unit_price,
+                amount: i.amount,
+                remark: i.remark ?? null,
+              }))
+          : [],
+        progress: progressOf(db, requestId),
+        manufacturing_order: order
+          ? {
+              status: order.status,
+              unit_count: order.unit_count,
+              requested_delivery_on: order.requested_delivery_on ?? null,
+              order_no: order.order_no ?? null,
+              sent_at: order.sent_at ?? null,
+              received_at: order.received_at ?? null,
+              completed_at: order.completed_at ?? null,
+              spec_snapshot: (order.spec_snapshot as Record<string, unknown> | null) ?? null,
+            }
+          : null,
+        units: (t.units ?? [])
+          .filter((u) => Boolean(order) && u.order_id === order!.id)
+          .sort((a, b) => a.seq - b.seq)
+          .map((u) => ({
+            seq: u.seq,
+            unit_no: u.unit_no ?? null,
+            status: u.status,
+            produced_on: u.produced_on ?? null,
+            inspected_on: u.inspected_on ?? null,
+            shipped_on: u.shipped_on ?? null,
+            installed_on: u.installed_on ?? null,
+            handed_over_on: u.handed_over_on ?? null,
+            note: u.note ?? null,
+          })),
+        schedule: (t.scheduleItems ?? [])
+          .filter((s) => s.quote_request_id === requestId)
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((s) => ({
+            category: s.category,
+            title: s.title,
+            planned_start: s.planned_start ?? null,
+            planned_end: s.planned_end ?? null,
+            actual_start: s.actual_start ?? null,
+            actual_end: s.actual_end ?? null,
+            status: s.status,
+            note: s.note ?? null,
+          })),
+        progress_reports: (t.progressReports ?? [])
+          .filter((r) => r.quote_request_id === requestId)
+          .sort((a, b) => (b.reported_on ?? '').localeCompare(a.reported_on ?? ''))
+          .map((r) => ({ kind: r.kind, title: r.title ?? null, body: r.body ?? null, reported_on: r.reported_on ?? null, author_name: r.author_name ?? null })),
+        progress_files: t.files
+          .filter((f) => f.quote_request_id === requestId && f.context === 'progress')
+          .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+          .map((f) => ({ id: f.id, file_name: f.file_name, content_type: f.content_type, caption: f.caption, created_at: f.created_at })),
+        handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
+        partner_info: partnerSiteInfoOf(db, requestId),
+      };
+    });
+  }
+
   async getCaseProgress(actor: SessionUser, requestId: string): Promise<CaseProgress | null> {
     return this.read((db) => {
       // DB の get_case_progress と同じく、読み取りの判定（直属の総代理店の管理者を含む）で返す
       if (!roleOf(db, actor, requestId)) return null;
-      const t = tables(db);
-      const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
-      const survey = t.siteSurveys.find((s) => s.quote_request_id === requestId);
-      const primary = workflow?.primary_staff_id ? db.profiles.find((p) => p.id === workflow.primary_staff_id) : null;
-      const order = (t.orders ?? []).find((o) => o.quote_request_id === requestId && o.status !== 'canceled');
-      const units = order ? (t.units ?? []).filter((u) => u.order_id === order.id) : [];
-      return {
-        acknowledged_at: workflow?.acknowledged_at ?? null,
-        primary_staff_name: primary?.full_name ?? null,
-        site_survey_status: survey?.status ?? 'none',
-        site_survey_completed_at: survey?.completed_at ?? null,
-        // 製造：状態と棟数・出荷済み・設置済みの数だけ（DB の get_case_progress と同じ）
-        manufacturing_status: !order || order.status === 'draft' ? 'none' : (order.status as Exclude<ManufacturingOrderStatus, 'draft' | 'canceled'>),
-        unit_count: order?.unit_count ?? null,
-        units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
-        units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
-        // 契約は締結済みかどうかだけ（契約の中身は本部とお客様だけ）。DB の get_case_progress と同じ
-        contract_signed: db.contracts.some((c) => c.quote_request_id === requestId && c.status === 'signed'),
-        handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
-      };
+      return progressOf(db, requestId);
     });
   }
 
@@ -1972,7 +2200,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const file = tables(db).files.find((f) => f.id === fileId);
       if (!file) return null;
       const access = viewAccessOf(db, actor, file.quote_request_id);
-      if (!access || !canReadCaseFile(db, actor, access, file)) return null;
+      // 配下の確認（直属の総代理店の管理者）は、施工・製造の記録と現地確認の写真だけ（DB の case_file_readable と同じ）
+      const supervisorFile = !access && partnerVisibleCaseFile(file) && roleOf(db, actor, file.quote_request_id) === 'supervisor';
+      if (!supervisorFile && (!access || !canReadCaseFile(db, actor, access, file))) return null;
       const abs = path.join(filesDir(), 'case-files', file.storage_path);
       if (!fs.existsSync(abs)) return null;
       return { file: { ...file }, bytes: new Uint8Array(fs.readFileSync(abs)) };

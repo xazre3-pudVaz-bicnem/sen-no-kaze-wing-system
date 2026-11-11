@@ -93,6 +93,8 @@ describe('設備包含のUI／Action接続の安全境界', () => {
     expect(page).toContain('readOptionIncludedCategories(id)');
     expect(page).toContain('included-equipment-step2-saved');
     expect(page).toContain('canEditThisOption && category && inclusionReady');
+    expect(page).toContain('blocked={!inclusionReady}');
+    expect(source('components/admin/option-registration-save-boundary.tsx')).toContain('disabled={saving || blocked}');
     expect(publish).toContain('await readOptionIncludedCategories(option.id)');
     expect(page).toContain('name="included_categories_expected_ids"');
     expect(publish).toContain('included_categories_expected_ids');

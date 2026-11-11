@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// メーカー公式商品ページの任意 URL（PR #535・20261105100000）の実行時検査（1 本の接続で流して rollback する）
+// メーカー公式商品ページの任意 URL（PR #535・20261111160000）の実行時検査（1 本の接続で流して rollback する）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export async function runtimeManufacturerProductUrl(client) {

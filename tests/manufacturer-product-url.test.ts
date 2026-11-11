@@ -80,7 +80,7 @@ describe('メーカー公式商品ページの任意リンク', () => {
   });
 
   it('migrationはNULL可で、画像/PDF・金額・権限の構造を変更しない', () => {
-    const sql = source('supabase/migrations/20261105100000_manufacturer_product_url.sql');
+    const sql = source('supabase/migrations/20261111160000_manufacturer_product_url.sql');
     expect(sql).toContain('add column manufacturer_product_url text;');
     expect(sql).toContain('manufacturer_product_url is null');
     expect(sql).toContain('options_manufacturer_product_url_https_check');
@@ -89,14 +89,14 @@ describe('メーカー公式商品ページの任意リンク', () => {
 
   it('migrationは代理店・総代理店の拡張の後ろの番号で、旧番号のファイルを残さない（2026-11-04 の先方回答 C-4）', () => {
     const files = readdirSync('supabase/migrations');
-    expect(files).toContain('20261105100000_manufacturer_product_url.sql');
+    expect(files).toContain('20261111160000_manufacturer_product_url.sql');
     expect(files).not.toContain('20261020140000_manufacturer_product_url.sql');
-    const later = files.filter((file) => file.endsWith('.sql') && file < '20261105100000_manufacturer_product_url.sql' && file.includes('manufacturer_product_url'));
+    const later = files.filter((file) => file.endsWith('.sql') && file < '20261111160000_manufacturer_product_url.sql' && file.includes('manufacturer_product_url'));
     expect(later).toEqual([]);
   });
 
   it('DBでもhttps・認証情報なし・空白なし・1000文字以内に限り、列ごとの読み取り許可と読む列の一覧に足す（v2.5 PR-C1b）', () => {
-    const sql = source('supabase/migrations/20261105100000_manufacturer_product_url.sql');
+    const sql = source('supabase/migrations/20261111160000_manufacturer_product_url.sql');
     // DB とアプリは同じ正規表現（ASCII の範囲だけで書き、PostgreSQL と JavaScript の解釈を分けない）
     expect(sql).toContain(`manufacturer_product_url ~* '${MANUFACTURER_PRODUCT_URL_PATTERN_SOURCE}'`);
     expect(MANUFACTURER_PRODUCT_URL_PATTERN.flags).toBe('i');
@@ -113,7 +113,7 @@ describe('メーカー公式商品ページの任意リンク', () => {
 
   it('アプリが保存する値は DB の検査を通り、アプリが拒む値は DB でも通らない（保存の前の %エンコードの後で比べる）', () => {
     // migration に書いた正規表現は ASCII の範囲だけなので、そのまま JavaScript の正規表現として DB と同じに読める
-    const sql = source('supabase/migrations/20261105100000_manufacturer_product_url.sql');
+    const sql = source('supabase/migrations/20261111160000_manufacturer_product_url.sql');
     const sqlPattern = sql.match(/manufacturer_product_url ~\* '([^']+)'/)?.[1];
     expect(sqlPattern).toBe(MANUFACTURER_PRODUCT_URL_PATTERN_SOURCE);
     const pattern = new RegExp(sqlPattern!, 'i');

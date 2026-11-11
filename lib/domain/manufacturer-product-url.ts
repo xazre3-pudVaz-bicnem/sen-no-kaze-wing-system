@@ -1,5 +1,5 @@
 /**
- * メーカー公式商品ページURL（PR #535）。DB の options_manufacturer_product_url_https_check（20261105100000）と同じ決まり：
+ * メーカー公式商品ページURL（PR #535）。DB の options_manufacturer_product_url_https_check（20261111160000）と同じ決まり：
  * https・ホスト（英数字・ハイフン・ドット）・任意のポート・その後ろは空白と制御文字を含まない ASCII の印字可能文字だけ・1000 文字以内
  * （スキームの大文字小文字は問わない。認証情報（user@host）はホストに @ を使えないので通らない）。
  * DB（PostgreSQL の正規表現）と JavaScript で解釈が分かれないよう、文字は ASCII の範囲で指定する（Unicode の空白などを使わない）。

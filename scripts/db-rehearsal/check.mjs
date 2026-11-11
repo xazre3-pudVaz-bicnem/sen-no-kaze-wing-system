@@ -25,6 +25,7 @@ import { runtimeOrganizationAccounts } from './runtime-organization-accounts.mjs
 import { runtimeCaseSalesOrganization } from './runtime-case-sales-organization.mjs';
 import { runtimeCaseSupervision } from './runtime-case-supervision.mjs';
 import { runtimeManufacturingCases } from './runtime-manufacturing-cases.mjs';
+import { runtimeCustomerDealerOrganization } from './runtime-customer-dealer-organization.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
 import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
@@ -103,6 +104,7 @@ try {
     runtime = mergeRuntime(runtime, await runtimeCaseSalesOrganization(client, { connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeCaseSupervision(client));
     runtime = mergeRuntime(runtime, await runtimeManufacturingCases(client));
+    runtime = mergeRuntime(runtime, await runtimeCustomerDealerOrganization(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

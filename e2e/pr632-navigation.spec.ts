@@ -56,14 +56,16 @@ test.describe('PR #632: 商品登録と編集の完了後の遷移（ローカ�
     await page.getByRole('button', { name: /検索/ }).click();
     await page.getByRole('searchbox', { name: '商品を検索' }).fill(name);
     await expect(changed).toBeVisible();
-    await page.getByRole('button', { name: '商品名の並び替え' }).click();
+    await page.locator('[data-ledger-sort-menu] summary[aria-label="商品の並び替え"]').click();
     await page.getByRole('button', { name: '商品名 昇順' }).click();
     await expect(changed).toBeVisible();
     await changed.click();
     await expect(page.getByTestId('ledger-product-detail-pane')).toBeVisible();
     await page.getByRole('button', { name: '商品詳細を閉じる' }).click();
     await page.getByRole('searchbox', { name: '商品を検索' }).fill('');
-    await page.getByRole('navigation', { name: '商品分類' }).getByRole('button', { name: /すべて/ }).click();
+    const categoryNav = page.getByRole('navigation', { name: '商品分類' });
+    await categoryNav.getByRole('button').nth(1).click();
+    await categoryNav.getByRole('button', { name: /すべて/ }).click();
     await expect(page.getByText('商品一覧', { exact: true })).toBeVisible();
   });
 

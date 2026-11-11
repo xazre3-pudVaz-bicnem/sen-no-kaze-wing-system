@@ -19,7 +19,7 @@
 --   顧客情報の項目が先方の確認で決まるまで見せない（これまでの案件で本部が個人として選んだ製造の担当は従来どおり）
 -- * 営業担当組織が無い案件（これまでの案件）は、従来どおり見積の担当（dealer_id）で判定する
 -- * 営業担当組織を決める・変えるのは本部（set_case_sales_organization）。お客様が見積依頼で選んだ代理店を営業担当にする仕組みは
---   20261104160000 で、決める条件（依頼の直後の 1 回だけ・公開中の紹介ページ・設置予定地）と合わせて入れる
+--   20261111150000 で、決める条件（依頼の直後の 1 回だけ・公開中の紹介ページ・設置予定地）と合わせて入れる
 --   （2026-11-09 の独立レビューを受けて、決める条件と合わせて入れるよう分けた）
 -- * 組織の所属を外れたメンバーが主担当者の案件は、主担当者と見積の担当を外す（別の組織に入り直しても前の案件を見られない）
 
@@ -31,7 +31,7 @@ do $preflight$
 begin
   if to_regprocedure('public.is_organization_manager(uuid)') is null
      or to_regclass('public.organization_invitations') is null then
-    raise exception 'PRECONDITION: organization accounts (20261104120000) must be applied first';
+    raise exception 'PRECONDITION: organization accounts (20261111110000) must be applied first';
   end if;
   if to_regprocedure('public.case_access(uuid)') is null
      or to_regclass('public.case_workflows') is null

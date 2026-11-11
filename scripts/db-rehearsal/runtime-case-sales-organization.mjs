@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
-// 案件の営業担当組織・主担当者・製造担当組織（20261104130000）の実行時検査。
+// 案件の営業担当組織・主担当者・製造担当組織（20261111120000）の実行時検査。
 // 1 本の接続で流す検査（runtime-case-sales-organization.sql）と、2 本の接続で
 // 「本部が営業担当組織を変えている最中に、前の組織の管理者が主担当者を決めても、前の組織の担当者が主担当者にならない」ことを確かめる。
 const HERE = path.dirname(fileURLToPath(import.meta.url));

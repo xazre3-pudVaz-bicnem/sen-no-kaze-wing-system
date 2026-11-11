@@ -91,7 +91,7 @@ function rank(actor: SessionUser) {
   return ROLE_RANK[actor.role] ?? 0;
 }
 
-/** DB の case_access() と同じ（書き込みの判定。20261104130000 で組織の案件に対応） */
+/** DB の case_access() と同じ（書き込みの判定。20261111120000 で組織の案件に対応） */
 function accessOf(db: LocalDb, actor: SessionUser, requestId: string): CaseAccess | null {
   const request = db.quoteRequests.find((r) => r.id === requestId);
   if (!request) return null;
@@ -476,7 +476,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       if (input.preferred_dealer_id && !t.dealerProfiles.some((p) => p.dealer_id === input.preferred_dealer_id && p.published)) {
         throw invalid('指定した代理店は選べません');
       }
-      // 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261104160000 と同じ時に入れる）
+      // 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261111150000 と同じ時に入れる）
       const current = t.preferences.find((p) => p.quote_request_id === requestId);
       const before = current?.preferred_dealer_id ?? null;
       const next: QuoteRequestPreferences = {
@@ -618,7 +618,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       }
     });
   }
-  // ---------- 営業担当組織・製造担当組織（20261104130000） ----------
+  // ---------- 営業担当組織・製造担当組織（20261111120000） ----------
   async getCaseRole(actor: SessionUser, requestId: string): Promise<CaseRole | null> {
     return this.read((db) => roleOf(db, actor, requestId));
   }

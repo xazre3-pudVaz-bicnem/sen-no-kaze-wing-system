@@ -10,7 +10,7 @@ import { INITIAL_QUOTE_LINES } from '@/lib/seed/quote-initial-lines';
 /** A-3（2026-11-04 先方回答）：別途工事の 9 品目は商品台帳から削除し、代理店の見積編集の初期明細（9 種類の工事）にする */
 
 const NAMES = ['運送費', '設計監理及び確認申請費', '梱包養生', '現場設置工事', '電気設備工事', '給排水給湯設備工事', '基礎工事（設置後工事）', '廃材処分費', '別途現場諸費用'];
-const migration = fs.readFileSync(path.resolve(process.cwd(), 'supabase/migrations/20261104110000_remove_sitework_catalog.sql'), 'utf8');
+const migration = fs.readFileSync(path.resolve(process.cwd(), 'supabase/migrations/20261111100000_remove_sitework_catalog.sql'), 'utf8');
 
 describe('初期明細（9 種類の工事）', () => {
   it('初期値は削除した 9 品目の名前・並び順のまま（単位は式）', () => {

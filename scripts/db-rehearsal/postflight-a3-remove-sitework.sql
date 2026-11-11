@@ -1,10 +1,10 @@
--- A-3（20261104110000）の適用の後の確認（読み取りだけ。件数と権限だけを返し、お客様の情報は返さない）。
+-- A-3（20261111100000）の適用の後の確認（読み取りだけ。件数と権限だけを返し、お客様の情報は返さない）。
 -- 期待（2026-11-09 の適用前の照合と同じ本番なら）：9 品目・カテゴリーが無い、写しに カテゴリー 1・商品 9・標準構成 3 モデル・プラン 18・
 -- 明細 400・写し 33・設置場所 1・見積依頼 10・希望 0・見積 10・見積の明細 473・PDF の記録 11、残す見積依頼 1・下書き 1・通知 23、初期明細 9
 -- 使い方：npx supabase db query --linked --read-only --output-format json -f scripts/db-rehearsal/postflight-a3-remove-sitework.sql
 select pg_catalog.jsonb_build_object(
   'checked_at', now(),
-  'migration_applied', exists (select 1 from supabase_migrations.schema_migrations m where m.version = '20261104110000'),
+  'migration_applied', exists (select 1 from supabase_migrations.schema_migrations m where m.version = '20261111100000'),
   'sitework_category', (select count(*) from public.option_categories c where c.code = 'sitework'),
   'sitework_products', (select count(*) from public.options o where o.code in ('sw-transport', 'sw-design-permit', 'sw-packing', 'sw-site-install', 'sw-electric',
                                                                             'sw-plumbing', 'sw-foundation', 'sw-disposal', 'sw-site-expense')),

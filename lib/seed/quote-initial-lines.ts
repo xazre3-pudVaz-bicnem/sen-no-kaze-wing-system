@@ -2,7 +2,7 @@ import type { QuoteInitialLine } from '@/lib/domain/types';
 
 /**
  * 見積の編集で「別途工事」に最初から並べる 9 種類の工事（ローカル検証モードの初期データ専用）。
- * Supabase は migration 20261104110000 で同じ 9 件を入れる（2026-11-04 先方回答 A-3：別途工事の 9 品目は商品台帳から削除し、
+ * Supabase は migration 20261111100000 で同じ 9 件を入れる（2026-11-04 先方回答 A-3：別途工事の 9 品目は商品台帳から削除し、
  * 代理店の Excel 風の見積編集の初期明細にする）。名前と並びは、削除した 9 品目のまま
  */
 export const INITIAL_QUOTE_LINES: QuoteInitialLine[] = [

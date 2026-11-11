@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
  * A-3（2026-11-04 先方回答）の削除の migration の作り。実際の削除・止める条件・写しからの戻し方は
  * 実 DB の検査（scripts/db-rehearsal/runtime-a3-remove-sitework.sql）で確かめる
  */
-const sql = fs.readFileSync(path.resolve(process.cwd(), 'supabase/migrations/20261104110000_remove_sitework_catalog.sql'), 'utf8');
+const sql = fs.readFileSync(path.resolve(process.cwd(), 'supabase/migrations/20261111100000_remove_sitework_catalog.sql'), 'utf8');
 const fn = sql.slice(sql.indexOf('create function public.remove_sitework_catalog'), sql.indexOf('$remove$;'));
 
 describe('別途工事 9 品目の削除の migration', () => {

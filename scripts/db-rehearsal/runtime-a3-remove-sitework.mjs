@@ -10,7 +10,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  */
 export async function runtimeA3RemoveSitework(client) {
   if ((await client.query("select to_regprocedure('public.remove_sitework_catalog(jsonb)') is not null as ok")).rows[0].ok !== true) {
-    return { ok: true, results: [{ step: '別途工事 9 品目の削除（20261104110000 が無い DB のため省略）', expected: 'skipped', actual: 'skipped', ok: true }] };
+    return { ok: true, results: [{ step: '別途工事 9 品目の削除（20261111100000 が無い DB のため省略）', expected: 'skipped', actual: 'skipped', ok: true }] };
   }
   const sql = fs.readFileSync(path.join(HERE, 'runtime-a3-remove-sitework.sql'), 'utf8').split('\r').join('');
   try {

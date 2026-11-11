@@ -1418,7 +1418,7 @@ export class SupabaseStore implements DataStore {
       .order('sort_order')
       .order('name');
     if (error) {
-      // 初期明細の表（20261104110000）が無い DB では、初期明細を並べない
+      // 初期明細の表（20261111100000）が無い DB では、初期明細を並べない
       if (isMissingRelation(error)) return [];
       mapPgError(error);
     }

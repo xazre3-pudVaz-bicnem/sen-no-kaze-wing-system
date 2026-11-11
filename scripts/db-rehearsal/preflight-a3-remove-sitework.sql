@@ -1,4 +1,4 @@
--- A-3（20261104110000）の適用の直前の照合（読み取りだけ。件数・照合値・状態ごとの件数・見積番号だけを返し、お客様の情報は返さない）。
+-- A-3（20261111100000）の適用の直前の照合（読み取りだけ。件数・照合値・状態ごとの件数・見積番号だけを返し、お客様の情報は返さない）。
 -- remove_sitework_catalog と同じ集合・同じ止める条件を数える。stop_reasons が空で、matches_migration_expected が true のときだけ適用する。
 -- 使い方：npx supabase db query --linked --read-only --output-format json -f scripts/db-rehearsal/preflight-a3-remove-sitework.sql
 with cat as (
@@ -29,7 +29,7 @@ with cat as (
       'by_status', (select coalesce(pg_catalog.jsonb_object_agg(s.status, s.n), '{}'::jsonb)
                       from (select q.status::text as status, count(*) as n from public.quotes q where q.id in (select id from qt) group by 1) s))) as v
 ), expected as (
-  -- migration（20261104110000）の照合値と同じ
+  -- migration（20261111100000）の照合値と同じ
   select pg_catalog.jsonb_build_object(
     'configurations', pg_catalog.jsonb_build_object('count', 18, 'md5', '052ab4ee62f1a393d616a2e759c200c5',
       'by_status', pg_catalog.jsonb_build_object('closed', 3, 'draft', 8, 'quote_requested', 6, 'quoted', 1)),
@@ -105,7 +105,7 @@ with cat as (
 )
 select pg_catalog.jsonb_build_object(
   'checked_at', now(),
-  'migration_applied', exists (select 1 from supabase_migrations.schema_migrations m where m.version = '20261104110000'),
+  'migration_applied', exists (select 1 from supabase_migrations.schema_migrations m where m.version = '20261111100000'),
   'category', (select count(*) from cat),
   'products', (select coalesce(pg_catalog.jsonb_agg(sw.code order by sw.code), '[]'::jsonb) from sw),
   'targets', (select v from actual),

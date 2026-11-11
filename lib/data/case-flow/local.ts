@@ -505,7 +505,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       };
       if (current) Object.assign(current, next);
       else t.preferences.push(next);
-      // 営業担当組織を決める：お客様本人が、見積依頼の直後（1 時間以内）に初めて希望を保存したときだけ（DB の 20261104160000 と同じ）
+      // 営業担当組織を決める：お客様本人が、見積依頼の直後（1 時間以内）に初めて希望を保存したときだけ（DB の 20261111150000 と同じ）
       let assigned = false;
       const organizationId =
         input.preferred_dealer_id && access === 'customer' && !current && request && Date.now() - new Date(request.created_at).getTime() <= 60 * 60 * 1000

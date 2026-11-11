@@ -121,7 +121,7 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
     const db = await this.db();
     const { data, error } = await db.rpc('list_selectable_dealer_ids');
     if (error) {
-      // DB の更新（20261104160000）の前は、公開中の代理店をそのまま候補にする
+      // DB の更新（20261111150000）の前は、公開中の代理店をそのまま候補にする
       if (missing(error, 'list_selectable_dealer_ids')) return null;
       fail(error);
     }

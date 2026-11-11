@@ -2,7 +2,7 @@
 --
 -- 見積依頼の「相談したい代理店」は、公開中の紹介ページ（dealer_profiles。代理店の利用者ごと）から選ぶ。
 -- 選んだ代理店が組織（1 代理店＝1 組織）の有効なメンバーで、その組織が有効・管理者がいれば、その組織を営業担当にする
--- （20261104130000 の規則：製造担当は直属の総代理店に自動で決まる）。
+-- （20261111120000 の規則：製造担当は直属の総代理店に自動で決まる）。
 --
 -- 営業担当組織を決める条件（2026-11-09 の独立レビューを受けて、決める場面を絞った）：
 -- * お客様本人が、見積依頼の直後に初めて希望を保存したときだけ（依頼から 1 時間以内・希望の行がまだ無い。
@@ -23,7 +23,7 @@ begin
      or to_regprocedure('public.default_manufacturing_organization(uuid)') is null
      or to_regprocedure('public.write_case_audit(uuid, text, text, jsonb, jsonb)') is null
      or to_regprocedure('public.notify_organization_managers(uuid, text, text, text, text)') is null then
-    raise exception 'PRECONDITION: case sales organization (20261104130000) must be applied first';
+    raise exception 'PRECONDITION: case sales organization (20261111120000) must be applied first';
   end if;
 end;
 $preflight$;

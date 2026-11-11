@@ -124,9 +124,9 @@ begin
     (q_legacy, 'RT-CS-L', r_legacy, c_legacy, u_cust2, u_legacy, 'issued', now() + interval '30 days', 'お客様2', '組織検査用モデル', 1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 1, null);
   set local session_replication_role = origin;
 
-  -- ---------- 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261104160000） ----------
-  -- お客様が組織を直接指定しても、営業担当組織は決まらない（決める条件と合わせて 20261104160000 で入れる。
-  -- 20261104160000 からは、組織を直接指定する入力そのものを入力の誤り（P0001）として断る）
+  -- ---------- 営業担当組織は本部が決める（お客様が見積依頼で選んだ代理店を営業担当にする仕組みは 20261111150000） ----------
+  -- お客様が組織を直接指定しても、営業担当組織は決まらない（決める条件と合わせて 20261111150000 で入れる。
+  -- 20261111150000 からは、組織を直接指定する入力そのものを入力の誤り（P0001）として断る）
   v_out := pg_temp.cs_run_as('authenticated', u_cust, format($q$ select public.set_quote_request_preferences(%L, jsonb_build_object('preferred_organization_id', %L))::text $q$, r_1, o_d));
   perform pg_temp.cs_expect_eq('25-1 お客様は、ご依頼の希望から営業担当組織を決められない', 'ok/(none)',
     case when v_out = '' or v_out like 'ERROR P0001:%' then 'ok' else v_out end || '/' ||

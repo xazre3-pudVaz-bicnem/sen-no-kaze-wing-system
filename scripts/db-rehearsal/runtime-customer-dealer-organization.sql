@@ -1,4 +1,4 @@
--- お客様が代理店を選ぶ（20261104160000）の実行時検査。使い捨て DB 専用。最後に rollback する。
+-- お客様が代理店を選ぶ（20261111150000）の実行時検査。使い捨て DB 専用。最後に rollback する。
 begin;
 
 create temp table _cd_result (seq serial, step text, expected text, actual text, ok boolean) on commit drop;

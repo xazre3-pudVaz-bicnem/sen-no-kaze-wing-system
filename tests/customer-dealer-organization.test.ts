@@ -5,7 +5,7 @@ import type { LocalDb } from '@/lib/data/local-db';
 import { selectableOrganizationOfMember } from '@/lib/data/organizations/local-relations';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261104160000_customer_selects_dealer_organization.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261111150000_customer_selects_dealer_organization.sql'), 'utf8');
 const sqlOnly = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/, ''))
@@ -15,7 +15,7 @@ const functionBody = (name: string) => {
   return sqlOnly.slice(start, sqlOnly.indexOf('\n$$;', start));
 };
 
-describe('お客様が代理店を選ぶ：DB の取り決め（migration 20261104160000）', () => {
+describe('お客様が代理店を選ぶ：DB の取り決め（migration 20261111150000）', () => {
   it('紹介ページの代理店が所属する、有効で管理者がいる代理店・総代理店だけを営業担当の候補にする', () => {
     const selectable = functionBody('selectable_dealer_organization');
     expect(selectable).toContain('where m.profile_id = p_dealer_id');

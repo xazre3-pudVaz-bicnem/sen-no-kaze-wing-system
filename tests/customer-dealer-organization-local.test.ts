@@ -10,7 +10,7 @@ import type { SessionUser } from '@/lib/data/store';
 import type { DealerProfile } from '@/lib/domain/case-flow';
 import type { RoleCode } from '@/lib/domain/types';
 
-// お客様が代理店を選ぶ（20261104160000）：ローカル検証モードも DB と同じ条件で営業担当組織を決める
+// お客様が代理店を選ぶ（20261111150000）：ローカル検証モードも DB と同じ条件で営業担当組織を決める
 // （見積依頼の直後に初めて希望を保存したときだけ・設置予定地に対応している代理店だけ）
 
 describe.sequential('お客様が代理店を選ぶ：ローカル検証モード（DB と同じ条件）', () => {

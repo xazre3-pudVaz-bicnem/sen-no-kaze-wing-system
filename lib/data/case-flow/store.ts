@@ -91,7 +91,7 @@ export interface CaseFlowStore {
   /** 公開中の代理店（未ログインでも読める） */
   listPublishedDealerProfiles(): Promise<DealerProfile[]>;
   /**
-   * 見積依頼の画面で選べる代理店の ID（公開中で、営業担当にできる組織（有効・管理者あり）の有効なメンバー。20261104160000）。
+   * 見積依頼の画面で選べる代理店の ID（公開中で、営業担当にできる組織（有効・管理者あり）の有効なメンバー。20261111150000）。
    * DB の更新の前は null（公開中の代理店をそのまま候補にする）
    */
   listSelectableDealerIds(actor: SessionUser): Promise<string[] | null>;

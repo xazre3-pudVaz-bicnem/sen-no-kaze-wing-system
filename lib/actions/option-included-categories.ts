@@ -46,7 +46,7 @@ export async function saveIncludedCategoriesAction(input: SaveIncludedCategoryIn
     }
     const allowed = categories.filter((row) => row.status === 'published' &&
       (row.code === 'toilet' || row.code === 'washbasin'));
-    if (allowed.length !== 2 || new Set(allowed.map((row) => row.code)).size !== 2) {
+    if (new Set(allowed.map((row) => row.code)).size !== allowed.length) {
       return { ok: false, code: 'FAILED', error: '設備カテゴリーの候補を確定できません。管理者に確認してください。' };
     }
 

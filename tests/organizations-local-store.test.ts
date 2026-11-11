@@ -9,7 +9,7 @@ import type { SessionUser } from '@/lib/data/store';
 import { MASTER_DEALER_VIA_ORGANIZATION_MESSAGE, ORGANIZATION_ROLE_LOCKED_MESSAGE } from '@/lib/domain/organizations';
 import type { RoleCode } from '@/lib/domain/types';
 
-// 2026-11-09 の独立レビュー（#502）への対応：ローカル検証モードも DB（20261104120000）と同じ決まりにする。
+// 2026-11-09 の独立レビュー（#502）への対応：ローカル検証モードも DB（20261111110000）と同じ決まりにする。
 // 組織の停止・再開、停止中の総代理店の配下の再開、招待の送りすぎの上限、所属と利用者の種類
 
 describe.sequential('組織とアカウント：ローカル検証モード（DB と同じ決まり）', () => {

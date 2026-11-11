@@ -1268,28 +1268,35 @@ export function ContactStatusForm({
   if (!classificationReady) {
     const next = status === 'new' ? 'handled' : 'new';
     return (
-      <form action={action}>
+      <form action={action} className="space-y-2">
         <input type="hidden" name="id" value={id} />
         <input type="hidden" name="status" value={next} />
-        <button type="submit" disabled={pending} className="text-xs underline underline-offset-4 hover:text-ink disabled:opacity-50">
+        <button type="submit" disabled={pending}
+          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-semibold text-ink hover:bg-sand disabled:opacity-50">
           {next === 'handled' ? '対応済みにする' : '未対応に戻す'}
         </button>
-        {state.error && <span role="alert" className="ml-2 text-xs text-danger">{state.error}</span>}
+        {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}
       </form>
     );
   }
   return (
-    <form action={action} className="flex flex-wrap items-center gap-2">
+    <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={id} />
-      <label htmlFor={`contact-status-${id}`} className="text-xs font-semibold">対応状況</label>
-      <select id={`contact-status-${id}`} key={status} name="status" defaultValue={status}
-        className="rounded-md border border-line bg-white px-2 py-1 text-xs">
-        <option value="new">未対応</option>
-        <option value="in_progress">対応中</option>
-        <option value="handled">対応済み</option>
-      </select>
-      <button type="submit" disabled={pending} className="text-xs font-semibold underline underline-offset-4 disabled:opacity-50">変更</button>
+      <label htmlFor={'contact-status-' + id} className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+        対応状況
+        <select id={'contact-status-' + id} key={status} name="status" defaultValue={status}
+          className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink">
+          <option value="new">未対応</option>
+          <option value="in_progress">対応中</option>
+          <option value="handled">対応済み</option>
+        </select>
+      </label>
+      <button type="submit" disabled={pending}
+        className="rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+        {pending ? '保存中…' : '変更を保存'}
+      </button>
       {state.error && <span role="alert" className="text-xs text-danger">{state.error}</span>}
+      {state.ok && state.message && <span role="status" className="text-xs text-forest">{state.message}</span>}
     </form>
   );
 }
@@ -1298,22 +1305,20 @@ export function ContactClassificationForm({
   id, classification,
 }: { id: string; classification: 'normal' | 'sales' | 'spam' }) {
   const [state, action, pending] = useActionState(updateContactClassificationAction, initial);
+  const buttonClass = 'rounded-md border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-sand disabled:opacity-50';
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="id" value={id} />
-      <p className="text-xs font-semibold">問い合わせの分類</p>
-      <div className="flex flex-wrap gap-3">
+      <p className="text-xs font-semibold text-ink-soft">問い合わせの分類</p>
+      <div className="flex flex-wrap gap-2">
         {classification !== 'normal' && (
-          <button type="submit" name="classification" value="normal" disabled={pending}
-            className="text-xs underline underline-offset-4 disabled:opacity-50">通常に戻す</button>
+          <button type="submit" name="classification" value="normal" disabled={pending} className={buttonClass}>通常に戻す</button>
         )}
         {classification !== 'sales' && (
-          <button type="submit" name="classification" value="sales" disabled={pending}
-            className="text-xs underline underline-offset-4 disabled:opacity-50">営業に分類</button>
+          <button type="submit" name="classification" value="sales" disabled={pending} className={buttonClass}>営業に分類</button>
         )}
         {classification !== 'spam' && (
-          <button type="submit" name="classification" value="spam" disabled={pending}
-            className="text-xs underline underline-offset-4 disabled:opacity-50">迷惑に分類</button>
+          <button type="submit" name="classification" value="spam" disabled={pending} className={buttonClass}>迷惑に分類</button>
         )}
       </div>
       {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}

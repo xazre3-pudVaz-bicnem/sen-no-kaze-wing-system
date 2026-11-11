@@ -16,8 +16,10 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(labelsFor(role)).toEqual(['案件管理', '顧客管理', '商品台帳']);
   });
 
-  it('問い合わせは上部補助導線に出さない', () => {
-    expect(getAdminUtilityLinks('admin')).toEqual([]);
+  it('本部だけが問い合わせ受付を上部補助導線から開ける', () => {
+    expect(getAdminUtilityLinks('admin')).toEqual([
+      { href: '/admin/contacts', label: '問い合わせ受付', need: 'admin' },
+    ]);
     expect(getAdminUtilityLinks('master_dealer')).toEqual([]);
     expect(getAdminUtilityLinks('dealer')).toEqual([]);
   });

@@ -39,7 +39,7 @@ export function IncludedEquipmentCategoryEditor({
     candidates.filter((row) => ids.includes(row.id)).map((row) => row.name).join('・') || 'なし';
 
   const updateSelection = (ids: string[]) => {
-    if (pending || reloadRequired || unexpectedIds.length > 0) return;
+    if (pending || inFlightRef.current || reloadRequired || unexpectedIds.length > 0) return;
     selectedRef.current = ids;
     setSelectedIds(ids);
     setError(null);
@@ -108,7 +108,7 @@ export function IncludedEquipmentCategoryEditor({
         {success && !dirty && <Alert tone="success">設備包含設定をDBに保存しました。</Alert>}
         {reloadRequired && <p className="font-semibold text-danger">現在の保存状態を確認するまで再送信できません。ページを再読み込みしてください。</p>}
         <p className="font-semibold" aria-live="polite">
-          {pending ? '設備包含設定を保存中…' : dirty ? '設備包含設定：未保存' : '設備包含設定：保存済み'}
+          {pending ? '設備包含設定を保存中…' : reloadRequired ? '設備包含設定：保存結果の確認が必要' : dirty ? '設備包含設定：未保存' : '設備包含設定：保存済み'}
         </p>
         {mode === 'draft' ? (
           <div className="flex justify-end">

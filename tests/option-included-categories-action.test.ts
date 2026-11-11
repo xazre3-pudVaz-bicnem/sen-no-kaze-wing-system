@@ -54,7 +54,7 @@ describe('商品に含まれる設備：Server Actionの権限・競合・RPC境
     [{ role: 'dealer' }, '代理店'],
     [{ role: 'master_dealer' }, '総代理店'],
     [{ role: 'customer' }, '顧客'],
-  ])('%s（%s）はActionでも書込み拒否', async (actor) => {
+  ])('%s（%s）はActionでも書込み拒否', async (actor, _roleLabel) => {
     mocks.getSessionUser.mockResolvedValue(actor);
     const result = await saveIncludedCategoriesAction(input([], [toilet]));
     expect(result).toMatchObject({ ok: false, code: 'FORBIDDEN' });

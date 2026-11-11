@@ -12,7 +12,7 @@
 --   お客様が送った資料、土地なしの場合の希望地域・予算・お客様のメモは返さない**。
 --   見積からも customer_name／customer_company／お客様向けの備考（notes）／社内の備考（dealer_note）は返さない
 -- * 詳細には、製造・出荷・施工に必要な情報（case_partner_site_info：案件名・顧客番号・設置場所の住所・設置場所の条件・用途・
---   現地確認の内容と写真）を足す（B-3）。製造の担当の画面（次の migration 20261104150000 の get_manufacturing_case）も同じ関数を使う
+--   現地確認の内容と写真）を足す（B-3）。製造の担当の画面（次の migration 20261111140000 の get_manufacturing_case）も同じ関数を使う
 -- * 現地確認の写真（case_files の site_survey のうち画像）は、配下の確認と製造の担当からも読める。現地確認でも画像でない資料は見せない。
 --   配下の確認は、施工・製造の記録（progress）も読める（ファイルの取り出しは RLS で判定する）
 -- * 製造は、取り消していない・下書きでない製造依頼と、その個体だけを返す（進み具合の数とそろえる）
@@ -23,7 +23,7 @@ begin;
 do $preflight$
 begin
   if to_regprocedure('public.is_case_supervisor(uuid)') is null or to_regprocedure('public.case_role(uuid)') is null then
-    raise exception 'PRECONDITION: case sales organization (20261104130000) must be applied first';
+    raise exception 'PRECONDITION: case sales organization (20261111120000) must be applied first';
   end if;
 end;
 $preflight$;
@@ -102,7 +102,7 @@ using (public.case_file_readable(quote_request_id, context, content_type, custom
 
 -- ---------- 進み具合（内部用。権限は呼び出し側で確かめる） ----------
 -- 配下の案件の一覧で、行ごとに get_case_progress（読み取りの判定をやり直す）を呼ばないよう、中身だけを分ける。
--- get_case_progress は読み取りの判定（case_role）の後にこれを返す（返す項目は 20261104130000 と同じ）
+-- get_case_progress は読み取りの判定（case_role）の後にこれを返す（返す項目は 20261111120000 と同じ）
 create function public.case_progress_summary(p_request_id uuid)
 returns jsonb
 language plpgsql

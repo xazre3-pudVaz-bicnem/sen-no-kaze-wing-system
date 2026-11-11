@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { caseStageOf, type CaseProgress } from '@/lib/domain/case-flow';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261104140000_case_supervision.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261111130000_case_supervision.sql'), 'utf8');
 const sqlOnly = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/, ''))
@@ -14,7 +14,7 @@ const functionBody = (name: string) => {
   return sqlOnly.slice(start, sqlOnly.indexOf('\n$$;', start));
 };
 
-describe('総代理店の配下の確認：DB の取り決め（migration 20261104140000）', () => {
+describe('総代理店の配下の確認：DB の取り決め（migration 20261111130000）', () => {
   it('一覧・詳細の本体は、お客様の氏名・会社名・連絡先・設置場所・備考・営業の記録を直接返さない（設置場所・現地確認は B-3 の専用の関数だけ）', () => {
     // 詳細の施工・製造の記録の資料（progress）の一覧は、資料の表から context = 'progress' だけを返す（下の試験）
     const progressFiles = "from public.case_files f where f.quote_request_id = p_request_id and f.context = 'progress'";

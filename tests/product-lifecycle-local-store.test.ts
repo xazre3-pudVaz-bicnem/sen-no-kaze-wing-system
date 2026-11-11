@@ -306,6 +306,6 @@ describe('商品の状態の変更：Server Action と Supabase の保存（静�
     const start = supabaseStore.indexOf('async upsertOption(input: OptionInput)');
     const body = supabaseStore.slice(start, supabaseStore.indexOf('\n  }\n', start));
     expect(body).toContain('simulator_visible: _simulatorVisible, archived_at: _archivedAt, discontinued_at: _discontinuedAt, ...rest');
-    expect(body).toContain("return this.upsert<ProductOption>('options', rest);");
+    expect(body).toContain("return this.saveLegacyPriceRow<ProductOption>('options', rest, 'existing');");
   });
 });

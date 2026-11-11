@@ -200,7 +200,7 @@ export async function CaseWorkspace({
   const isAdmin = actor.role === 'admin';
   const canViewAllQuotes = isAdmin;
   const canEditBase = canEditCatalog(actor.role);
-  // 営業担当組織の管理者は、自社の案件を見られる（編集は主担当者と本部だけ。20261104130000）
+  // 営業担当組織の管理者は、自社の案件を見られる（編集は主担当者と本部だけ。20261111120000）
   const isSalesManagerView =
     !canViewAllQuotes &&
     quote.dealer_id !== actor.id &&

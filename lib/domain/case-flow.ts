@@ -219,7 +219,7 @@ export interface CaseWorkflow {
   primary_assigned_at: string | null;
   manufacturer_id: string | null;
   manufacturer_assigned_at: string | null;
-  /** 営業担当組織（本部・総代理店・代理店）。NULL は本部が受付中（相談）または従来の案件（20261104130000） */
+  /** 営業担当組織（本部・総代理店・代理店）。NULL は本部が受付中（相談）または従来の案件（20261111120000） */
   sales_organization_id?: string | null;
   sales_assigned_at?: string | null;
   sales_assigned_by?: string | null;
@@ -231,7 +231,7 @@ export interface CaseWorkflow {
 }
 
 /**
- * 総代理店の配下の確認（DB の list_supervised_cases／get_supervised_case。20261104140000）。
+ * 総代理店の配下の確認（DB の list_supervised_cases／get_supervised_case。20261111130000）。
  * お客様の氏名・会社名・連絡先・ご自宅の住所・メッセージ、日程の希望、打合せ記録、見積の備考は含めない。
  * 詳細には、製造・出荷・施工に必要な案件の情報（partner_info。2026-11-04 の先方回答 B-3）を含める
  */
@@ -331,7 +331,7 @@ export interface CasePartnerSiteInfo {
 }
 
 /**
- * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261104150000）。
+ * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261111140000）。
  * 製造担当（製造担当組織のメンバー・これまでの案件で本部が選んだ総代理店の利用者）と本部が使う。お客様の情報・見積の金額は含めない
  * （製造・出荷・施工に必要な設置場所・現地確認は、詳細の partner_info に含める。2026-11-04 の先方回答 B-3）。
  */
@@ -705,7 +705,7 @@ export interface ManufacturingOrder {
   contract_id: string;
   quote_id: string;
   manufacturer_id: string | null;
-  /** 製造担当組織（組織の案件。20261104130000） */
+  /** 製造担当組織（組織の案件。20261111120000） */
   manufacturing_organization_id?: string | null;
   status: ManufacturingOrderStatus;
   unit_count: number;

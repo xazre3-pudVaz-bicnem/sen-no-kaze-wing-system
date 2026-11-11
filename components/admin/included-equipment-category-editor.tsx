@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { saveIncludedCategoriesAction } from '@/lib/actions/option-included-categories';
 import { IncludedEquipmentCategoryFields } from '@/components/admin/included-equipment-category-fields';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
-import { sameCategoryIdSet } from '@/lib/domain/included-equipment-action-contract';
+import { decideIncludedCategoryRefresh, sameCategoryIdSet } from '@/lib/domain/included-equipment-action-contract';
 import type { IncludedEquipmentCategoryCandidate } from '@/lib/domain/included-equipment-category-input';
 import { Alert, Button, Spinner } from '@/components/ui';
 
@@ -32,6 +32,7 @@ export function IncludedEquipmentCategoryEditor({
   const savedRef = useRef(savedCategoryIds);
   const selectedRef = useRef(savedCategoryIds);
   const inFlightRef = useRef(false);
+  const previousServerIdsRef = useRef(savedCategoryIds);
   const candidateIds = candidates.map((row) => row.id);
   const unexpectedIds = savedIds.filter((id) => !candidateIds.includes(id));
   const dirty = !sameCategoryIdSet(savedIds, selectedIds);
@@ -83,6 +84,35 @@ export function IncludedEquipmentCategoryEditor({
       if (mode === 'draft') markIndependentDirty();
     }
   }, [optionId, mode, markIndependentDirty, reloadRequired]);
+
+  // App Router refresh preserves client state. Reconcile a newly read DB snapshot explicitly.
+  // An external change during an edit/save requires a reload; never discard the draft.
+  useEffect(() => {
+    const decision = decideIncludedCategoryRefresh({
+      previousServerIds: previousServerIdsRef.current,
+      nextServerIds: savedCategoryIds,
+      savedIds: savedRef.current,
+      selectedIds: selectedRef.current,
+      saving: inFlightRef.current,
+      reloadRequired,
+    });
+    if (decision === 'unchanged') return;
+    previousServerIdsRef.current = [...savedCategoryIds];
+    if (decision === 'reload') {
+      setReloadRequired(true);
+      setSuccess(false);
+      setError('設備包含設定が別の操作で更新されました。編集中の選択は保持しています。再読み込みして確認してください。');
+    } else {
+      savedRef.current = [...savedCategoryIds];
+      selectedRef.current = [...savedCategoryIds];
+      setSavedIds([...savedCategoryIds]);
+      setSelectedIds([...savedCategoryIds]);
+      setSuccess(false);
+      setError(null);
+      setReviewing(false);
+    }
+    if (mode === 'draft') markIndependentDirty();
+  }, [savedCategoryIds, mode, markIndependentDirty, reloadRequired]);
 
   useEffect(() => {
     if (mode !== 'draft') return;

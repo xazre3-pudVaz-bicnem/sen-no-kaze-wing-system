@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  includedCategoryRpcError, sameCategoryIdSet, validateIncludedCategoryContract,
+  decideIncludedCategoryRefresh, includedCategoryRpcError, sameCategoryIdSet, validateIncludedCategoryContract,
 } from '@/lib/domain/included-equipment-action-contract';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -112,5 +112,63 @@ describe('設備包含のUI／Action接続の安全境界', () => {
     expect(editor).toContain("result.code === 'CONFLICT'");
     expect(fields).not.toContain('<form');
     expect(editor).not.toContain('<form');
+  });
+});
+
+describe('設備包含のrouter.refresh後のクライアント状態調停', () => {
+  const make = (overrides: Partial<Parameters<typeof decideIncludedCategoryRefresh>[0]> = {}) => ({
+    previousServerIds: [] as string[],
+    nextServerIds: [toilet] as string[],
+    savedIds: [] as string[],
+    selectedIds: [] as string[],
+    saving: false,
+    reloadRequired: false,
+    ...overrides,
+  });
+
+  it('未編集のときDB側更新を画面の保存済集合へ同期する', () => {
+    expect(decideIncludedCategoryRefresh(make())).toBe('synchronize');
+    expect(decideIncludedCategoryRefresh(make({
+      previousServerIds: [toilet],
+      nextServerIds: [wash],
+      savedIds: [toilet],
+      selectedIds: [toilet],
+    }))).toBe('synchronize');
+  });
+
+  it('自分の保存結果がrouter.refreshで到着したら競合扱いしない', () => {
+    expect(decideIncludedCategoryRefresh(make({
+      savedIds: [toilet],
+      selectedIds: [toilet],
+    }))).toBe('synchronize');
+  });
+
+  it('未保存の編集中に外部更新が届いたら選択を失わず再読込を要求する', () => {
+    expect(decideIncludedCategoryRefresh(make({ selectedIds: [wash] }))).toBe('reload');
+    expect(decideIncludedCategoryRefresh(make({ selectedIds: [toilet] }))).toBe('reload');
+  });
+
+  it('保存中または保存結果不明の外部更新は同期・再試行しない', () => {
+    expect(decideIncludedCategoryRefresh(make({ saving: true }))).toBe('reload');
+    expect(decideIncludedCategoryRefresh(make({ reloadRequired: true }))).toBe('reload');
+  });
+
+  it('集合の順番だけが変わったrefreshでは不要な初期化をしない', () => {
+    expect(decideIncludedCategoryRefresh(make({
+      previousServerIds: [toilet, wash],
+      nextServerIds: [wash, toilet],
+    }))).toBe('unchanged');
+  });
+
+  it('実UIで保存中と未保存を判定し、同期時のみrefとstateを置き換える', () => {
+    const editor = source('components/admin/included-equipment-category-editor.tsx');
+    expect(editor).toContain('decideIncludedCategoryRefresh({');
+    expect(editor).toContain('previousServerIdsRef.current = [...savedCategoryIds]');
+    expect(editor).toContain("if (decision === 'reload')");
+    expect(editor).toContain('setReloadRequired(true)');
+    expect(editor).toContain('savedRef.current = [...savedCategoryIds]');
+    expect(editor).toContain('selectedRef.current = [...savedCategoryIds]');
+    expect(editor).toContain('setSavedIds([...savedCategoryIds])');
+    expect(editor).toContain('setSelectedIds([...savedCategoryIds])');
   });
 });

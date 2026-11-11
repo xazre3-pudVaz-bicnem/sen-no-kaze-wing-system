@@ -54,21 +54,23 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [hasSaveHandler, setHasSaveHandler] = useState(false);
-  const [, setIndependentVersion] = useState(0);
+  const [extraDirty, setExtraDirty] = useState(false);
 
   const hasIndependentDirty = useCallback(() => [...independentHandlersRef.current].some((item) => item.isDirty()), []);
   const hasAnyDirty = useCallback(() => dirtyRef.current || hasIndependentDirty(), [hasIndependentDirty]);
   // Re-render the shared save indicator without clearing the product form's own dirty bit.
-  const markIndependentDirty = useCallback(() => setIndependentVersion((n) => n + 1), []);
+  const markIndependentDirty = useCallback(() => setExtraDirty(hasIndependentDirty()), [hasIndependentDirty]);
   const registerIndependentSaveHandler = useCallback((handler: SaveHandler, isDirty: () => boolean) => {
     const item = { handler, isDirty };
     independentHandlersRef.current.add(item);
     setHasSaveHandler(true);
+    setExtraDirty(hasIndependentDirty());
     return () => {
       independentHandlersRef.current.delete(item);
       setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
+      setExtraDirty(hasIndependentDirty());
     };
-  }, []);
+  }, [hasIndependentDirty]);
 
   const registerSaveHandler = useCallback((handler: SaveHandler) => {
     saveHandlersRef.current.add(handler);
@@ -118,7 +120,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
         if (ok && dirtyEpochRef.current === savingEpochRef.current) {
           dirtyRef.current = false;
           setDirty(false);
-          setIndependentVersion((n) => n + 1);
+          markIndependentDirty();
         }
         return ok && dirtyEpochRef.current === savingEpochRef.current;
       })
@@ -129,7 +131,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
       });
     savePromiseRef.current = promise;
     return promise;
-  }, [hasAnyDirty]);
+  }, [hasAnyDirty, markIndependentDirty]);
 
   const handleSubmitCapture = useCallback(
     (event: FormEvent<HTMLDivElement>) => {
@@ -181,7 +183,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
     [router, saveIfDirty, hasAnyDirty]
   );
 
-  const pendingChanges = dirty || hasIndependentDirty();
+  const pendingChanges = dirty || extraDirty;
 
   return (
     <OptionRegistrationSaveContext.Provider

@@ -23,8 +23,8 @@ async function createDraft(page: Page, returnTo?: string) {
 async function preparePublish(page: Page) {
   await page.locator('#product-main-media input[name="image_url"]').fill('/images/equipment/aircon.png');
   await page.getByTestId('option-price').fill('120000');
-  // Midway saving keeps the user on STEP 1.
-  await page.getByRole('button', { name: '下書きを作成してSTEP 1を続ける' }).click();
+  // Initial draft creation already stayed on STEP 1; later STEP 1 edits
+  // are auto-saved by the existing SaveBoundary before entering STEP 2.
   await expect(page).toHaveURL(/step=info/);
   await expect(page.getByTestId('option-registration-info')).toBeVisible();
   await page.getByRole('button', { name: /登録内容確認/ }).first().click();

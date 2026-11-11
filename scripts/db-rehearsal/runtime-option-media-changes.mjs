@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// 登録済み商品の追加画像・メーカー資料PDFの一括反映（PR #563・20261105110000）の実行時検査（1 本の接続で流して rollback する）
+// 登録済み商品の追加画像・メーカー資料PDFの一括反映（PR #563・20261111170000）の実行時検査（1 本の接続で流して rollback する）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export async function runtimeOptionMediaChanges(client) {

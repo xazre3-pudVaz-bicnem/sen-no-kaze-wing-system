@@ -20,7 +20,7 @@ import { AUDIT_ACTION_LABELS, type OptionImage } from '@/lib/domain/types';
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
-const migration = read('supabase/migrations/20261105110000_option_media_changes.sql');
+const migration = read('supabase/migrations/20261111170000_option_media_changes.sql');
 const actions = read('lib/actions/option-media.ts');
 const flow = read('components/admin/registered-option-edit-flow.tsx');
 
@@ -216,7 +216,7 @@ describe.sequential('追加画像・メーカー資料の一括反映：ロー�
   });
 });
 
-describe('DB の apply_option_media_changes（20261105110000）', () => {
+describe('DB の apply_option_media_changes（20261111170000）', () => {
   it('SECURITY DEFINER・search_path は空・ログインした利用者だけが実行できる', () => {
     expect(migration).toContain('create function public.apply_option_media_changes(p_option_id uuid, p_expected jsonb, p_changes jsonb)');
     expect(migration).toContain('security definer\nset search_path = \'\'');

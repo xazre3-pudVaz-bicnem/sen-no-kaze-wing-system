@@ -3,7 +3,7 @@ import type { OptionImage, ProductOption } from '@/lib/domain/types';
 /**
  * 登録済み商品の追加画像・メーカー資料PDFの変更（PR #563 の正式保存。2026-11-04 の先方回答 C-4）。
  * STEP 1 の編集案はブラウザに持ち、STEP 2 の「この変更を反映」で、新しいファイルを Storage の商品のフォルダーへ置いてから、
- * DB の apply_option_media_changes（20261105110000）で 1 回にまとめて反映する。決まりは DB と同じにする
+ * DB の apply_option_media_changes（20261111170000）で 1 回にまとめて反映する。決まりは DB と同じにする
  */
 
 /** 追加画像は 1 商品 30 枚まで（DB と同じ） */

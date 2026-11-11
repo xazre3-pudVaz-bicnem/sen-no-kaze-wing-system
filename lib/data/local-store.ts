@@ -2379,7 +2379,7 @@ export class LocalStore implements DataStore {
     expected: OptionMediaExpected,
     changes: OptionMediaChanges
   ): Promise<OptionMediaChangeResult> {
-    // DB の apply_option_media_changes（20261105110000）と同じ判定。途中で止まったら保存しない（mutate は例外のとき書き込まない）
+    // DB の apply_option_media_changes（20261111170000）と同じ判定。途中で止まったら保存しない（mutate は例外のとき書き込まない）
     return this.mutate((db) => {
       const option = db.options.find((row) => row.id === optionId);
       if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません');

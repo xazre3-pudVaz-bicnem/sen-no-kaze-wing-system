@@ -20,6 +20,8 @@ type SaveHandler = () => Promise<boolean>;
 
 type OptionRegistrationSaveContextValue = {
   registerSaveHandler: (handler: SaveHandler) => () => void;
+  registerIndependentSaveHandler: (handler: SaveHandler, isDirty: () => boolean) => () => void;
+  markIndependentDirty: () => void;
   markDirty: () => void;
   markClean: () => void;
   saveIfDirty: () => Promise<boolean>;
@@ -28,6 +30,8 @@ type OptionRegistrationSaveContextValue = {
 
 const OptionRegistrationSaveContext = createContext<OptionRegistrationSaveContextValue>({
   registerSaveHandler: () => () => undefined,
+  registerIndependentSaveHandler: () => () => undefined,
+  markIndependentDirty: () => undefined,
   markDirty: () => undefined,
   markClean: () => undefined,
   saveIfDirty: async () => true,
@@ -41,16 +45,32 @@ export function useOptionRegistrationSave() {
 export function OptionRegistrationSaveBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();
   const saveHandlersRef = useRef(new Set<SaveHandler>());
+  const independentHandlersRef = useRef(new Set<{ handler: SaveHandler; isDirty: () => boolean }>());
   const dirtyRef = useRef(false);
   const bypassFormRef = useRef<HTMLFormElement | null>(null);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [hasSaveHandler, setHasSaveHandler] = useState(false);
+  const [independentVersion, setIndependentVersion] = useState(0);
+
+  const hasIndependentDirty = () => [...independentHandlersRef.current].some((item) => item.isDirty());
+  const hasAnyDirty = () => dirtyRef.current || hasIndependentDirty();
+  // Re-render the shared save indicator without clearing the product form's own dirty bit.
+  const markIndependentDirty = useCallback(() => setIndependentVersion((n) => n + 1), []);
+  const registerIndependentSaveHandler = useCallback((handler: SaveHandler, isDirty: () => boolean) => {
+    const item = { handler, isDirty };
+    independentHandlersRef.current.add(item);
+    setHasSaveHandler(true);
+    return () => {
+      independentHandlersRef.current.delete(item);
+      setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
+    };
+  }, []);
 
   const registerSaveHandler = useCallback((handler: SaveHandler) => {
     saveHandlersRef.current.add(handler);
-    setHasSaveHandler(saveHandlersRef.current.size > 0);
+    setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
     return () => {
       saveHandlersRef.current.delete(handler);
       setHasSaveHandler(saveHandlersRef.current.size > 0);
@@ -68,9 +88,10 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
   }, []);
 
   const saveIfDirty = useCallback(async () => {
-    if (!dirtyRef.current) return true;
-    const handlers = [...saveHandlersRef.current];
-    if (handlers.length === 0) return false;
+    if (!hasAnyDirty()) return true;
+    const handlers = dirtyRef.current ? [...saveHandlersRef.current] : [];
+    const independentHandlers = [...independentHandlersRef.current].filter((item) => item.isDirty());
+    if (dirtyRef.current && handlers.length === 0) return false;
     if (savePromiseRef.current) return savePromiseRef.current;
 
     setSaving(true);
@@ -79,12 +100,19 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
         const ok = await handler();
         if (!ok) return false;
       }
+      // Product details and inclusion are separate DB operations, never an all-or-nothing transaction.
+      for (const item of independentHandlers) {
+        if (!item.isDirty()) continue;
+        const ok = await item.handler();
+        if (!ok) return false;
+      }
       return true;
     })()
       .then((ok) => {
         if (ok) {
           dirtyRef.current = false;
           setDirty(false);
+          setIndependentVersion((n) => n + 1);
         }
         return ok;
       })
@@ -105,7 +133,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
         bypassFormRef.current = null;
         return;
       }
-      if (!dirtyRef.current) return;
+      if (!hasAnyDirty()) return;
 
       event.preventDefault();
       const submitter = (event.nativeEvent as SubmitEvent).submitter;
@@ -124,7 +152,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
 
   const handleClickCapture = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!dirtyRef.current || event.defaultPrevented || event.button !== 0) return;
+      if (!hasAnyDirty() || event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -146,9 +174,12 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
     [router, saveIfDirty]
   );
 
+  const pendingChanges = dirty || hasIndependentDirty();
+  void independentVersion;
+
   return (
     <OptionRegistrationSaveContext.Provider
-      value={{ registerSaveHandler, markDirty, markClean, saveIfDirty, saving }}
+      value={{ registerSaveHandler, registerIndependentSaveHandler, markIndependentDirty, markDirty, markClean, saveIfDirty, saving }}
     >
       <OptionRegistrationUiEnhancer scrollAfterCreate />
       <OptionRegistrationFinalUiEnhancer />
@@ -159,14 +190,14 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
           className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold shadow-sm ${
             saving
               ? 'border-line bg-white text-ink-soft'
-              : dirty
+              : pendingChanges
                 ? 'border-[#d9a441] bg-[#fff8e8] text-[#7c5a18]'
                 : 'border-[#b7d1c2] bg-[#f0f7f3] text-[#245a48]'
           }`}
           aria-live="polite"
         >
           {saving && <Spinner />}
-          {saving ? '保存中…' : dirty ? '未保存の変更があります' : '✓ 保存済み'}
+          {saving ? '保存中…' : pendingChanges ? '未保存の変更があります' : '✓ 保存済み'}
         </div>
       )}
       <div onClickCapture={handleClickCapture} onSubmitCapture={handleSubmitCapture}>{children}</div>

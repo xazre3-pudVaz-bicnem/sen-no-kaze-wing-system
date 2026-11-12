@@ -674,11 +674,14 @@ export function UserRoleForm({ profile, isSelf }: { profile: Profile; isSelf: bo
         className="min-w-[9rem] py-1 text-xs"
         data-testid={`role-select-${profile.email}`}
       >
-        {(Object.keys(ROLE_LABELS) as RoleCode[]).map((r) => (
-          <option key={r} value={r}>
-            {ROLE_LABELS[r]}
-          </option>
-        ))}
+        {/* 総代理店のアカウントは組織（総代理店）の登録と招待で作る。今の利用者の種類が総代理店のときだけ並べる */}
+        {(Object.keys(ROLE_LABELS) as RoleCode[])
+          .filter((r) => r !== 'master_dealer' || profile.role_code === 'master_dealer')
+          .map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
       </Select>
       <Button type="submit" variant="secondary" size="sm" disabled={pending || isSelf} title={isSelf ? '自分自身の権限は変更できません' : undefined}>
         {pending ? '…' : '変更'}

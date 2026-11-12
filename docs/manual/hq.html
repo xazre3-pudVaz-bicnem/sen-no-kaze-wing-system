@@ -431,7 +431,7 @@
               </tr>
               <tr>
                 <td><strong>総代理店</strong></td>
-                <td>商品台帳への商品登録と価格の編集。本体・カテゴリー・商品・画像・プレビュー</td>
+                <td>商品台帳の閲覧（商品の登録・価格の編集は本部だけ。2026-11-04 から）。組織の役割（営業担当・製造担当・配下の確認）での案件の扱い</td>
                 <td>総代理店</td>
               </tr>
               <tr>
@@ -586,7 +586,7 @@
 
       <section id="catalog">
         <h2>価格・商品の登録</h2>
-        <p class="lede">総代理店以上の操作です。<code class="path">/admin/models</code>（ベースコンテナ）、<code class="path">/admin/categories</code>（オプションカテゴリー）、<code class="path">/admin/options</code>（オプション）で編集します。</p>
+        <p class="lede">本部の操作です（総代理店・代理店は閲覧だけ）。<code class="path">/admin/models</code>（ベースコンテナ）、<code class="path">/admin/categories</code>（オプションカテゴリー）、<code class="path">/admin/options</code>（オプション）で編集します。</p>
 
         <h3>商品の価格を変える</h3>
         <ol class="steps">
@@ -635,13 +635,14 @@
         <ol class="steps">
           <li><div><b>対象の方に会員登録してもらう</b><small>まず <code class="path">/register</code> から通常のお客様として登録していただきます。</small></div></li>
           <li><div><b>一覧からその方の行を探す</b><small>メールアドレスで見つけられます。</small></div></li>
-          <li><div><b>権限を選んで「変更」を押す</b><small>代理店・工務店／総代理店／管理者から選びます。</small></div></li>
+          <li><div><b>権限を選んで「変更」を押す</b><small>代理店・工務店／管理者から選びます。総代理店のアカウントは、「組織・代理店」で総代理店を登録して招待します。</small></div></li>
           <li><div><b>再ログインしてもらう</b><small>次回ログイン時から管理画面に入れるようになります。</small></div></li>
         </ol>
 
         <div class="callout caution">
           <span class="tag">Caution</span>
           <p>自分自身の権限は変更できません（管理者が誤って自分を降格し、誰も入れなくなるのを防ぐためです）。管理者を減らすときは、別の管理者から操作してください。</p>
+          <p>代理店・総代理店の組織に所属している方の権限は、ここでは変えられません。組織の画面で所属を外すと会員に戻り、その後は変えられます。組織を停止すると、メンバーは会員と同じ扱いになり、再開すると戻ります。</p>
         </div>
       </section>
 

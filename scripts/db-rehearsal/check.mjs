@@ -21,6 +21,7 @@ import { runtimeV25InitialCostImport } from './runtime-v25-initial-cost-import.m
 import { runtimePricingV25 } from './runtime-pricing-v25.mjs';
 import { runtimeStandardEstimateV25 } from './runtime-standard-estimate-v25.mjs';
 import { runtimeSimulatorV25Pricing } from './runtime-simulator-v25-pricing.mjs';
+import { runtimeOrganizationAccounts } from './runtime-organization-accounts.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
 import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
@@ -95,6 +96,7 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
+    runtime = mergeRuntime(runtime, await runtimeOrganizationAccounts(client, { connectionString: url }));
     printRuntime(runtime);
   }
   const out = arg('--out');

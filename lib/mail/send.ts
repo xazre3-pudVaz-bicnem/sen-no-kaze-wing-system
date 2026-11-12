@@ -40,6 +40,22 @@ async function sendOne(to: string[], subject: string, text: string): Promise<voi
 }
 
 /**
+ * まだアカウントの無い人へ、メールアドレス宛てに 1 通送る（組織への招待など）。
+ * ローカル検証モード・メール未設定では送らず 'skipped' を返す（画面に出したリンクを手で渡せるようにする）。
+ * 失敗しても例外にせず 'failed' を返す（招待そのものは発行済みのため）。
+ */
+export async function sendDirectEmail(to: string, subject: string, text: string): Promise<'sent' | 'skipped' | 'failed'> {
+  if (isLocalMode() || !mailConfigured()) return 'skipped';
+  try {
+    await sendOne([to], subject, text);
+    return 'sent';
+  } catch (error) {
+    console.error('[wing] direct email failed', { message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
+    return 'failed';
+  }
+}
+
+/**
  * 未送信の通知をまとめて処理する。
  * ローカル検証モードでは送信しない（E2E で外部通信を発生させないため）。
  */

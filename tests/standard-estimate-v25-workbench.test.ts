@@ -23,7 +23,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -187,7 +187,7 @@ const preview: V25Preview = {
   ],
 };
 
-const render = (readOnly: boolean) =>
+const render = (readOnly: boolean, view?: { initial?: V25EditorState; candidates?: V25WorkbenchCandidate[] }) =>
   renderToStaticMarkup(
     createElement(StandardEstimateV25Workbench, {
       resetKey: '00000000-0000-4000-8000-000000000001:3',
@@ -195,8 +195,8 @@ const render = (readOnly: boolean) =>
       lockVersion: 3,
       readOnly,
       baseLines,
-      candidates,
-      initial,
+      candidates: view?.candidates ?? candidates,
+      initial: view?.initial ?? initial,
       costs,
       rule,
       taxRule,
@@ -206,6 +206,53 @@ const render = (readOnly: boolean) =>
   );
 
 describe('Excel 風の画面（描画）', () => {
+
+  it('選択肢が4種類でも表には短い要約だけを出し、ドロップダウンを縦に並べない', () => {
+    const groups = [
+      { id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] },
+      { id: 'g2', name: '色', choices: [{ id: 'white', name: '白' }] },
+      { id: 'g3', name: '仕上げ', choices: [{ id: 'matte', name: 'マット' }] },
+      { id: 'g4', name: '方向', choices: [{ id: 'left', name: '左' }] },
+    ];
+    const choices = { g1: 'c2', g2: 'white', g3: 'matte', g4: 'left' };
+    const updated = candidates.map((candidate) => candidate.id === 'p1' ? { ...candidate, variantGroups: groups } : candidate);
+    expect(v25VariantSummary(updated[0], choices)).toBe('サイズ：大 ／ 色：白 ／ 仕上げ：マット ／ 方向：左');
+    expect(v25VariantSummary(updated[0], { g1: 'c2' })).toContain('色：未選択');
+    expect(v25VariantSummary(updated[0], { g1: 'does-not-exist' })).toContain('選択肢を確認');
+    const html = render(false, {
+      candidates: updated,
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, variant_choices: choices, slot_code: 'living', slot_label: 'リビング', selectable_option_ids: ['p2'] }
+          : slot),
+      },
+    });
+    expect(html).toContain('data-testid="v25-wb-variant-summary"');
+    expect(html).toContain('仕様を変更');
+    expect(html).toContain('サイズ：大 ／ 色：白');
+    expect(html).not.toContain('data-testid="v25-wb-variant-choice"');
+    expect(html).not.toContain('data-testid="v25-wb-variant-editor"');
+    expect(html).toContain('リビング');
+    expect(html).toContain('2件');
+    expect(html).toContain('data-testid="v25-wb-slot-position-toggle"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-position-editor"');
+  });
+
+  it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {
+    const html = render(true, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビング' } : slot),
+      },
+    });
+    expect(html).toContain('仕様を確認');
+    expect(html).toContain('位置・選べる商品を設定');
+    expect(html).not.toContain('data-testid="v25-wb-variant-confirm"');
+    expect(html).not.toContain('data-testid="v25-wb-position-confirm"');
+    expect(html).not.toContain('data-testid="v25-wb-save"');
+  });
   it('本体・内外装・オプション・別途を 1 つの表に並べ、試算の金額と状態を出す', () => {
     const html = render(false);
     expect(html).toContain('data-testid="v25-workbench-grid"');

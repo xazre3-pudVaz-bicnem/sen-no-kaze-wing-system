@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { Package } from 'lucide-react';
 import {
   publishStandardEstimateV25RevisionAction,
   refreshStandardEstimateV25CostsAction,
@@ -554,6 +555,16 @@ function WorkbenchBody({
                             <div className="flex min-w-0 items-center gap-1">
                               <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(" ／ ")}>{candidate?.name ?? "（商品が見つかりません）"}</span>
                               {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
+                              {!readOnly && (
+                                <button type="button"
+                                  className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"
+                                  title="商品台帳から選ぶ"
+                                  aria-label={`${candidate?.name ?? '商品'}を商品台帳から選び直す`}
+                                  data-testid="v25-wb-slot-product-picker-icon"
+                                  onClick={() => { setPicker({ section: code, targetKey: slot.key }); setPickerCategory(''); setPickerQuery(''); }}>
+                                  <Package className="size-3.5" aria-hidden="true" />
+                                </button>
+                              )}
                               {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(" ／ ")}</span>}
                             </div>
                           </td>

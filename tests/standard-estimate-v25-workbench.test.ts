@@ -262,9 +262,26 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('payload: buildV25SavePayload(state)');
   });
 
+  it('商品名右端に商品台帳アイコンを配置し、既存の選び直し画面を使用する', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const iconCount = (html.match(/data-testid="v25-wb-slot-product-picker-icon"/g) ?? []).length;
+    const slotCount = (html.match(/data-testid="v25-wb-slot"/g) ?? []).length;
+    expect(slotCount).toBeGreaterThan(0);
+    expect(iconCount).toBe(slotCount);
+    expect(html).toContain('title="商品台帳から選ぶ"');
+    expect(html).toContain('aria-label="検査商品1を商品台帳から選び直す"');
+    expect(source).toContain("import { Package } from 'lucide-react'");
+    expect(source).toContain('<Package className="size-3.5" aria-hidden="true" />');
+    expect(source).toContain("setPicker({ section: code, targetKey: slot.key }); setPickerCategory(''); setPickerQuery('');");
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).toContain('商品台帳から選択');
+  });
+
   it('公開中の版では右端の変更メニューを表示しない', () => {
     const html = render(true);
     expect(html).not.toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-product-picker-icon"');
     expect(html).not.toContain('data-testid="v25-wb-line-menu"');
     expect(html).toContain('data-testid="v25-wb-slot-price-cell"');
     expect(html).toContain('data-testid="v25-wb-line-price-cell"');

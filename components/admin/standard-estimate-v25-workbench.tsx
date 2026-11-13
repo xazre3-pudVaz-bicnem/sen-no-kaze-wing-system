@@ -700,28 +700,32 @@ function WorkbenchBody({
           </tbody>
           <tfoot className="bg-slate-50 text-xs">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={columnCount - 2} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
               <td className="px-1 py-0.5.5 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
               <td />
-            </tr>
-            <tr>
-              <td colSpan={columnCount - 2} className="px-1 py-0.5 text-right text-muted">調整額</td>
-              <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
               <td />
             </tr>
             <tr>
-              <td colSpan={columnCount - 2} className="px-1 py-0.5 text-right text-muted">消費税</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">調整額</td>
+              <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
+              <td />
+              <td />
+            </tr>
+            <tr>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">消費税</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
+              <td />
               <td />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={columnCount - 2} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="px-1 py-0.5.5 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
               <td className="px-1 py-0.5.5 text-[0.68rem] text-muted">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
+              <td />
             </tr>
           </tfoot>
         </table>

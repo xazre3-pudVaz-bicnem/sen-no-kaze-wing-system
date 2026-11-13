@@ -540,41 +540,26 @@ function WorkbenchBody({
                         <Fragment key={slot.key}>
                         <tr className="border-b border-slate-200 align-middle" data-testid="v25-wb-slot">
                           <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
-                          <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">
-                            <span className="block truncate">{candidate?.categoryName ?? ''}</span>
-                            {(slotCode || (positionAllowed && !readOnly)) && (
-                              <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[0.68rem]">
-                                <span className="max-w-[5rem] truncate text-sky-900" data-testid="v25-wb-slot-position" title={slot.slot_label.trim() || 'カテゴリー単位'}>
-                                  {slotCode ? (slot.slot_label.trim() || '位置名未入力') : 'カテゴリー'}
-                                </span>
-                                {slotCode && <span className="shrink-0 text-muted">{slot.selectable_option_ids.length + 1}件</span>}
-                                <button type="button" className="shrink-0 text-navy underline" aria-label="位置・選べる商品を設定"
-                                  data-testid="v25-wb-slot-position-toggle" onClick={() => openPosition(slot)}>
-                                  {readOnly ? '確認' : '設定'}
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0.5">
-                            <div className="flex items-start gap-1">
-                              <span className="flex-1 pt-0.5 font-medium text-ink">
-                                {candidate?.name ?? '（商品が見つかりません）'}
-                                {candidate?.unavailable ? (
-                                  <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge>
-                                ) : (
-                                  candidate?.retired && <Badge tone="warn">販売停止</Badge>
-                                )}
-                              </span>
-                              {!readOnly && (
-                                <button type="button" className="text-[0.7rem] text-navy underline" aria-label={`${candidate?.name ?? '商品'}を選び直す`}
-                                  onClick={() => { setPicker({ section: code, targetKey: slot.key }); setPickerCategory(''); setPickerQuery(''); }}>
-                                  変更
+                                                    <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">
+                            <div className="flex min-w-0 items-center gap-1">
+                              <span className="min-w-0 flex-1 truncate" title={candidate?.categoryName ?? ""}>{candidate?.categoryName ?? ""}</span>
+                              {(slotCode || (positionAllowed && !readOnly)) && (
+                                <button type="button" className="max-w-[4rem] shrink-0 truncate text-[10px] text-navy underline" title={slot.slot_label.trim() || "位置・選べる商品を設定"}
+                                  aria-label="位置・選べる商品を設定" data-testid="v25-wb-slot-position-toggle" onClick={() => openPosition(slot)}>
+                                  <span data-testid="v25-wb-slot-position">{slotCode ? (slot.slot_label.trim() || "位置") : "位置"}</span>
+                                  {slotCode && <span> {slot.selectable_option_ids.length + 1}件</span>}
                                 </button>
                               )}
                             </div>
-                            {candidate && (candidate.manufacturer || candidate.modelNo || candidate.windowTypeLabel) && (
-                              <p className="text-[0.68rem] text-muted">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</p>
-                            )}
+                          </td>
+                                                    <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0.5">
+                            <div className="flex min-w-0 items-center gap-1">
+                              <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(" ／ ")}>{candidate?.name ?? "（商品が見つかりません）"}</span>
+                              {candidate?.unavailable ? <Badge tone="danger">選択不可</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
+                              {!readOnly && <button type="button" className="shrink-0 text-[10px] text-navy underline" aria-label={`${candidate?.name ?? "商品"}を選び直す`}
+                                onClick={() => { setPicker({ section: code, targetKey: slot.key }); setPickerCategory(""); setPickerQuery(""); }}>変更</button>}
+                              {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(" ／ ")}</span>}
+                            </div>
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5">
                             <div className="flex min-w-0 items-center gap-2">

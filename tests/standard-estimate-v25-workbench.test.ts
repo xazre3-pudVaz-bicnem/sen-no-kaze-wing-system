@@ -242,6 +242,9 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('data-testid="v25-wb-slot-menu"');
     expect(html).toContain('data-testid="v25-wb-line-menu"');
     expect(html).toContain('data-testid="v25-wb-slot-status"');
+    expect(html).toContain('原価未設定');
+    expect(html).toContain('原価更新あり');
+    expect(source).toContain('title={V25_COST_STATUS_LABEL[status]}');
     expect(html).toContain('data-testid="v25-wb-line-status"');
     expect(html).toContain('商品台帳から選択');
     expect(html).toContain('金額を入力する');

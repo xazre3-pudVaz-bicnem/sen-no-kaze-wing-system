@@ -43,6 +43,7 @@ import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
+const COST_COMPACT_LABEL: Record<V25CostStatus, string> = { current: '原価最新', stale: '原価更新あり', missing: '原価未設定' };
 const RATE_LABEL = { sales_fee_rate: '販売費率', expense_rate: '経費率', markup_rate: '掛率' } as const;
 
 let rowSeq = 0;
@@ -590,7 +591,7 @@ function WorkbenchBody({
                             )}
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5" data-testid="v25-wb-slot-status">
-                            {status && <Badge tone={COST_TONE[status]}>{V25_COST_STATUS_LABEL[status]}</Badge>}
+                            {status && <Badge tone={COST_TONE[status]} title={V25_COST_STATUS_LABEL[status]}>{COST_COMPACT_LABEL[status]}</Badge>}
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5">
                             <div className="flex min-w-0 items-center gap-2">

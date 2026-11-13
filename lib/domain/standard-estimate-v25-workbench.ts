@@ -11,7 +11,7 @@
  * 原価はこの画面（本部だけ）でだけ扱う。
  */
 import { calculatePricingV25, type PricingCalculationRule, type PricingInput, type PricingLineInput, type PricingResult, type PricingTaxRule } from './pricing-v25';
-import type { V25EditorState, V25ProductCandidate, V25SlotRow } from './standard-estimate-v25-view';
+import { V25_EXPENSE_MAX, V25_EXPENSE_SECTIONS, type V25EditorState, type V25ExpenseSection, type V25ProductCandidate, type V25SlotRow } from './standard-estimate-v25-view';
 import type { StandardLineSectionCode } from './standard-estimate-view';
 
 /** 商品台帳の商品（その仕様で選べる商品）。画面の商品選択に使う */
@@ -216,6 +216,8 @@ export interface V25WorkbenchCalculation {
   unpriced: string[];
   /** 画面の行の key → 計算結果の明細の key */
   lineKeyOf: Record<string, string>;
+  /** 経費の手動の額が正しくない区分（率で試算した） */
+  invalidExpenses: V25ExpenseSection[];
 }
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
@@ -236,6 +238,7 @@ export function calculateV25Workbench(
   const incomplete: V25WorkbenchCalculation['incomplete'] = [];
   const unpriced: string[] = [];
   const lineKeyOf: Record<string, string> = {};
+  const invalidExpenses: V25ExpenseSection[] = [];
   const manualLine = (key: string, rowKey: string, quantity: string, unitPrice: string): PricingLineInput | null => {
     if (!NON_NEGATIVE_INTEGER.test(unitPrice.trim())) {
       unpriced.push(rowKey);
@@ -284,6 +287,17 @@ export function calculateV25Workbench(
     }
     sections.push({ code, lines });
   }
+  // 区分の経費の手動の額（A-2 ⑥。DB の standard_estimate_v25_calc_input と同じく、経費を掛ける区分だけ渡す）。
+  // 額が正しくない区分は、直すまで率で試算する（保存の前の確認で止める）
+  for (const section of sections) {
+    const setting = (V25_EXPENSE_SECTIONS as readonly string[]).includes(section.code) ? state.expenses?.[section.code as V25ExpenseSection] : undefined;
+    if (!setting || setting.method !== 'fixed' || !rule.expense_target_sections.includes(section.code)) continue;
+    if (!NON_NEGATIVE_INTEGER.test(setting.amount.trim()) || Number(setting.amount.trim()) > V25_EXPENSE_MAX) {
+      invalidExpenses.push(section.code as V25ExpenseSection);
+      continue;
+    }
+    section.expense_amount = Number(setting.amount.trim());
+  }
   const input: PricingInput = {
     rates: {
       sales_fee_rate: state.sales_fee_rate.trim(),
@@ -294,10 +308,10 @@ export function calculateV25Workbench(
     sections,
   };
   try {
-    return { result: calculatePricingV25(rule, taxRule, input), error: null, incomplete, unpriced, lineKeyOf };
+    return { result: calculatePricingV25(rule, taxRule, input), error: null, incomplete, unpriced, lineKeyOf, invalidExpenses };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { result: null, error: message.replace(/^VALIDATION:\s*/, ''), incomplete, unpriced, lineKeyOf };
+    return { result: null, error: message.replace(/^VALIDATION:\s*/, ''), incomplete, unpriced, lineKeyOf, invalidExpenses };
   }
 }
 

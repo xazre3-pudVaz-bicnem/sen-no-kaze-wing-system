@@ -5,7 +5,14 @@ import { createQuoteRevisionV25Action, fetchQuoteV25UnitsAction, type QuoteV25Ac
 import type { QuoteV25EditContext, QuoteV25RevisionLine } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
-import { computeQuoteV25Totals, quoteV25RowAmount, type QuoteV25Row, type QuoteV25Section } from '@/lib/domain/quote-v25';
+import {
+  computeQuoteV25Totals,
+  quoteV25ExpenseLines,
+  quoteV25RowAmount,
+  type QuoteV25ExpenseSettings,
+  type QuoteV25Row,
+  type QuoteV25Section,
+} from '@/lib/domain/quote-v25';
 import {
   findUnresolvedLines,
   isPorMarkedLine,
@@ -16,6 +23,8 @@ import {
   type QuoteLineState,
   type QuotePorSelectionState,
 } from '@/lib/domain/quote-por';
+import { V25_EXPENSE_MAX, V25_EXPENSE_SECTIONS, type V25ExpenseSection } from '@/lib/domain/standard-estimate-v25-view';
+import { STANDARD_QUOTE_EXPENSE_LABEL } from '@/lib/domain/standard-quote-view';
 import type { OptionVariantChoice, OptionVariantGroup, Quote, QuoteItem } from '@/lib/domain/types';
 import { Alert, Badge, Button, Input, Select, Textarea } from '@/components/ui';
 import { QuotePorReview, type QuotePorReviewPatch, type QuotePorReviewRow } from './quote-por-review';
@@ -94,6 +103,9 @@ const SECTIONS: { code: QuoteV25Section; label: string }[] = [
   { code: 'sitework', label: '別途工事' },
 ];
 const EXPENSE_KINDS = new Set(['base_expense', 'interior_exterior_expense', 'option_expense']);
+/** 経費を掛けられる区分（経費の行の品名は見積の経費の行と同じ STANDARD_QUOTE_EXPENSE_LABEL） */
+type ExpenseSection = V25ExpenseSection;
+type ExpenseInput = { method: 'rate' | 'fixed'; amount: string };
 const QUANTITY = /^\d+(\.\d{1,4})?$/;
 const PRICE = /^\d{1,9}$/;
 /** 別途見積の行に入れる売価（1 円以上。0 円にするときは「0円確定」） */
@@ -177,6 +189,30 @@ export function QuoteV25RevisionForm({
   const [pickerQuery, setPickerQuery] = useState('');
   const [unitsError, setUnitsError] = useState<string | null>(null);
   const requested = useRef(new Set<string>());
+  // 区分の経費の決め方（A-2 ⑥）：前の版の決め方から始める。DB の更新の前（決め方を返さない）は率だけ
+  const expenseManual = context.money.expenses !== undefined;
+  const [expenseInputs, setExpenseInputs] = useState<Record<ExpenseSection, ExpenseInput>>(() => {
+    const of = (section: ExpenseSection): ExpenseInput => {
+      const setting = context.money.expenses?.[section];
+      return setting?.method === 'fixed' ? { method: 'fixed', amount: String(setting.amount) } : { method: 'rate', amount: '' };
+    };
+    return { base: of('base'), interior_exterior: of('interior_exterior'), option: of('option') };
+  });
+  const expenseAmountOk = (input: ExpenseInput) => PRICE.test(input.amount.trim()) && Number(input.amount.trim()) <= V25_EXPENSE_MAX;
+  // 試算と発行に使う決め方（手動の額が正しくない区分は発行を止め、その区分の経費と合計の試算は出さない）
+  const expenseSettings: QuoteV25ExpenseSettings = Object.fromEntries(
+    V25_EXPENSE_SECTIONS.map((section) => {
+      const input = expenseInputs[section];
+      return [section, input.method === 'fixed' && expenseAmountOk(input) ? { method: 'fixed', amount: Number(input.amount.trim()) } : { method: 'rate' }];
+    })
+  );
+  const expenseBad = (section: QuoteV25Section) =>
+    expenseManual &&
+    section !== 'sitework' &&
+    context.money.expenseSections.includes(section) &&
+    expenseInputs[section].method === 'fixed' &&
+    !expenseAmountOk(expenseInputs[section]);
+  const expenseInvalid = V25_EXPENSE_SECTIONS.some(expenseBad);
 
   const update = (key: string, patch: Partial<Row>) =>
     setRows((current) => current.map((row) => (row.key === key ? ({ ...row, ...patch } as Row) : row)));
@@ -225,7 +261,7 @@ export function QuoteV25RevisionForm({
     const price = PRICE.test(row.price.trim()) ? Number(row.price.trim()) : null;
     return { section: row.section, unitPrice: price, quantity, state: row.state };
   });
-  const totals = computeQuoteV25Totals(moneyRows, context.money, adjustmentValue ?? 0);
+  const totals = computeQuoteV25Totals(moneyRows, context.money, adjustmentValue ?? 0, expenseManual ? expenseSettings : undefined);
 
   // 金額未確定の判定は DB（assert_quote_lines_resolved）と同じ決まり：発行する版の明細の形にして、前の版の明細と照らす
   const issuedLines: (QuoteLineCheckLine & { rowKey: string })[] = rows.map((row) => {
@@ -289,6 +325,7 @@ export function QuoteV25RevisionForm({
     problems.push('「0円確定」の理由を入力してください');
   }
   if (unresolvedKeys.size > 0) problems.push(`金額が未確定の明細が ${unresolvedKeys.size} 行あります。金額を入れるか、「0円確定」「対象外」を選ぶか、行を外してください`);
+  if (expenseInvalid) problems.push('経費の手動の額は 0〜100,000,000 円の整数で入力してください');
   if (adjustmentValue === null) problems.push('調整額は整数円で入力してください');
   else if (adjustmentValue !== quote.adjustment && adjustmentValue !== 0 && !adjustmentReason.trim()) problems.push('調整額を変えるときは理由を入力してください');
   const porUnavailable = porSelectionUnavailableReason(porState);
@@ -322,7 +359,9 @@ export function QuoteV25RevisionForm({
         state: row.state,
         state_reason: row.state ? row.stateReason.trim() || null : null,
       };
-    });
+    })
+    // 前の版から変えた区分の経費の決め方（送らない区分は、サーバーが前の版の決め方を引き継ぐ）
+    .concat(quoteV25ExpenseLines(context.money, expenseSettings));
   const payload = JSON.stringify({
     quote_id: quote.id,
     lines,
@@ -382,6 +421,49 @@ export function QuoteV25RevisionForm({
     );
   }, [picker, pickerQuery, products]);
   const expensePercent = String(Math.round(Number(context.money.expenseRate) * 10000) / 100);
+  const setExpense = (section: ExpenseSection, patch: Partial<ExpenseInput>) =>
+    setExpenseInputs((current) => ({ ...current, [section]: { ...current[section], ...patch } }));
+
+  // 区分の経費の行：率で計算か、金額を手動か（本体諸費用は本体の行と同じく本部・総代理店だけが変えられる）
+  const expenseRow = (section: QuoteV25Section) => {
+    if (!expenseManual || section === 'sitework' || !context.money.expenseSections.includes(section)) return null;
+    const input = expenseInputs[section];
+    const locked = section === 'base' && !canEditBase;
+    return (
+      <tr key={`${section}-expense`} className="border-b border-slate-200 bg-slate-50/70 align-top" data-testid="v25-revision-expense" data-section={section}>
+        <td className="px-2 py-1.5">
+          <span className="font-medium text-ink">{STANDARD_QUOTE_EXPENSE_LABEL[section]}</span>
+          <span className="block text-[0.68rem] text-muted">交通費、労災、安全管理費等</span>
+        </td>
+        <td className="px-2 py-1.5 text-right tabular-nums text-muted">1</td>
+        <td className="px-2 py-1.5 text-muted">式</td>
+        <td className="space-y-1 px-1 py-1">
+          <Select value={input.method} disabled={locked} aria-label={`経費の決め方：${STANDARD_QUOTE_EXPENSE_LABEL[section]}`} className="h-7 text-xs"
+            data-testid="v25-revision-expense-method"
+            onChange={(event) => {
+              const method = event.target.value as ExpenseInput['method'];
+              // 手動にしたときは、今の率の額から始める
+              setExpense(section, method === 'fixed' && input.amount.trim() === '' ? { method, amount: String(totals.expenses[section]) } : { method });
+            }}>
+            <option value="rate">率で計算（{expensePercent}%）</option>
+            <option value="fixed">金額を手動</option>
+          </Select>
+          {input.method === 'fixed' && (
+            <Input value={input.amount} inputMode="numeric" disabled={locked} placeholder="税別の金額" aria-label={`経費の手動の額：${STANDARD_QUOTE_EXPENSE_LABEL[section]}`}
+              className="h-7 text-right text-xs" data-testid="v25-revision-expense-amount"
+              onChange={(event) => setExpense(section, { amount: event.target.value })} />
+          )}
+        </td>
+        <td className="px-2 py-1.5 text-right tabular-nums" data-testid="v25-revision-expense-amount-preview">
+          {expenseBad(section) ? <span className="text-danger">手動の額を入力</span> : formatYen(totals.expenses[section])}
+        </td>
+        <td className="px-2 py-1.5 text-[0.68rem] text-muted">
+          {locked ? '本体（前の版のまま）' : input.method === 'fixed' ? '手動の額（明細を変えても変わりません）' : `区分の小計 × ${expensePercent}%`}
+        </td>
+        <td />
+      </tr>
+    );
+  };
 
   const stateSelect = (row: Extract<Row, { source: 'parent' | 'manual' }>) =>
     !LINE_STATE_KINDS.has(row.source === 'parent' ? row.kind : kindOfSection(row.section)) ? null : (
@@ -405,7 +487,10 @@ export function QuoteV25RevisionForm({
       <input type="hidden" name="payload" value={payload} />
       <Alert tone="info">
         v2.5 の標準見積（第 {context.revisionVersion} 版）で作った見積です。金額はサーバーが計算します：前の版の行は前の版の単価のまま、
-        商品台帳の商品はこの版の売価、自由明細は入力した税別の売価。経費（{expensePercent}%）と消費税は自動で計算し、千円未満の切り捨てはしません。
+        商品台帳の商品はこの版の売価、自由明細は入力した税別の売価。
+        {expenseManual
+          ? `経費は区分ごとに「率で計算（${expensePercent}%）」か「金額を手動」で決めます（前の版の決め方を引き継ぎ、手動の額は明細を変えても変わりません）。消費税は自動で計算し、千円未満の切り捨てはしません。`
+          : `経費（${expensePercent}%）と消費税は自動で計算し、千円未満の切り捨てはしません。`}
         値引きなどは調整額（理由つき）か自由明細で入れてください。
       </Alert>
       {state.error && <Alert tone="danger">{state.error}</Alert>}
@@ -436,7 +521,11 @@ export function QuoteV25RevisionForm({
                         {section.label}
                         <span className="ml-2 font-normal text-muted">
                           小計 {formatYen(totals.lineTotals[section.code])}
-                          {context.money.expenseSections.includes(section.code) ? `・経費 ${formatYen(totals.expenses[section.code])}` : ''}
+                          {context.money.expenseSections.includes(section.code)
+                            ? expenseBad(section.code)
+                              ? '・経費（手動の額を入力してください）'
+                              : `・経費 ${formatYen(totals.expenses[section.code])}${expenseManual && expenseSettings[section.code]?.method === 'fixed' ? '（手動）' : ''}`
+                            : ''}
                         </span>
                       </span>
                       {(section.code !== 'base' || canEditBase) && (
@@ -569,13 +658,14 @@ export function QuoteV25RevisionForm({
                     </tr>
                   );
                 }),
+                expenseRow(section.code),
               ];
             })}
           </tbody>
           <tfoot className="bg-slate-50">
             <tr className="border-t-2 border-slate-300">
               <td colSpan={4} className="px-2 py-1.5 text-right text-muted">税別小計（経費を含む）</td>
-              <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{formatYen(totals.rawSubtotal)}</td>
+              <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{expenseInvalid ? '—' : formatYen(totals.rawSubtotal)}</td>
               <td colSpan={2} />
             </tr>
             <tr>
@@ -591,14 +681,14 @@ export function QuoteV25RevisionForm({
             </tr>
             <tr>
               <td colSpan={4} className="px-2 py-1 text-right text-muted">消費税</td>
-              <td className="px-2 py-1 text-right tabular-nums">{formatYen(totals.tax)}</td>
+              <td className="px-2 py-1 text-right tabular-nums">{expenseInvalid ? '—' : formatYen(totals.tax)}</td>
               <td colSpan={2} />
             </tr>
             <tr className="border-t border-slate-300">
               <td colSpan={4} className="px-2 py-1.5 text-right font-semibold">合計（税込・試算）</td>
-              <td className="px-2 py-1.5 text-right text-sm font-semibold tabular-nums" data-testid="v25-revision-total">{formatYen(totals.total)}</td>
+              <td className="px-2 py-1.5 text-right text-sm font-semibold tabular-nums" data-testid="v25-revision-total">{expenseInvalid ? '—' : formatYen(totals.total)}</td>
               <td colSpan={2} className="px-2 py-1.5 text-[0.68rem] text-muted">
-                前の版 {formatYen(quote.total)}（差 {formatYen(totals.total - quote.total)}）
+                前の版 {formatYen(quote.total)}{expenseInvalid ? '' : `（差 ${formatYen(totals.total - quote.total)}）`}
               </td>
             </tr>
           </tfoot>

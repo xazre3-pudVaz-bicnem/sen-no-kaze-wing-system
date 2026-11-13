@@ -97,6 +97,7 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
                     taxRule={workspace.v25.taxRule}
                     preview={workspace.v25.preview}
                     savedTotal={workspace.revision.hasPor ? null : workspace.revision.total}
+                    expenseManualAvailable={workspace.v25.expenseManualAvailable}
                   />
                 </>
               ) : (

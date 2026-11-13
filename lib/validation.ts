@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PRODUCT_HIGHLIGHT_MAX_LENGTH } from '@/lib/domain/product-highlight';
 import { VIEW_KEYS } from '@/lib/domain/types';
 import { PREFECTURES } from '@/lib/domain/address';
+import { V25_EXPENSE_MAX } from '@/lib/domain/standard-estimate-v25-view';
 import { contactTopics } from '@/data/site-content';
 
 const trimmed = (max: number) => z.string().trim().max(max);
@@ -300,6 +301,16 @@ export const quoteLineStateSchema = z.preprocess(
 );
 /** 0円確定の理由・対象外のメモ（印を足しても備考の 200 文字に収まる長さ） */
 export const quoteLineStateReasonSchema = z.preprocess((v) => (v == null ? '' : v), optional(190));
+
+/**
+ * 本部の見積下書きの、経費を手動にした区分の額（A-2 ⑥。区分 → 0〜100,000,000 円の整数）。
+ * 手動の区分だけを持つので partialRecord（zod 4 の record は列挙したキーをすべて求める）。
+ * どの区分を手動にできるかは DB が版の計算ルールで確かめる
+ */
+export const standardQuoteExpenseAmountsSchema = z.partialRecord(
+  z.enum(['base', 'interior_exterior', 'option', 'sitework']),
+  z.number().int().min(0).max(V25_EXPENSE_MAX)
+);
 
 /** 代理店が入力する別途工事・フリー商品の 1 行 */
 export const dealerRevisionItemSchema = z.object({

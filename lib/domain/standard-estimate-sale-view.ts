@@ -488,7 +488,8 @@ export function saleViewToTemplateBundle(view: StandardEstimateSaleView, modelId
       code,
       label: SECTION_LABEL[code],
       line_subtotal: section?.line_subtotal ?? 0,
-      expense_label: section?.expense_method === 'rate' ? '経費' : null,
+      // 手動の額の区分（A-2 ⑥）も経費の行を出す（率は出さない）
+      expense_label: section?.expense_method === 'rate' || section?.expense_method === 'fixed' ? '経費' : null,
       expense_rate: section?.expense_method === 'rate' ? Number(view.expense_rate) : null,
       expense_amount: section?.expense_amount ?? 0,
       total: section?.total ?? 0,

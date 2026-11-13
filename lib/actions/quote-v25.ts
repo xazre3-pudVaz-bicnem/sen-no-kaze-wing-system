@@ -9,7 +9,8 @@ import { flushNotificationsSafely } from '@/lib/mail/send';
 
 /**
  * v2.5 の見積の第 2 版以降（v2.5 PR-D1）。金額はサーバー（DB の create_quote_revision_v25）が作る。
- * 画面から送るのは行の出どころ（前の版の行・商品台帳の商品・自由明細）・数量・自由明細の売価・状態だけ
+ * 画面から送るのは行の出どころ（前の版の行・商品台帳の商品・自由明細）・数量・自由明細の売価・状態と、
+ * 前の版から変えた区分の経費の決め方（率／手動の額。A-2 ⑥）だけ
  */
 
 export type QuoteV25ActionState = { ok: boolean; error?: string };
@@ -48,11 +49,24 @@ const lineSchema = z.discriminatedUnion('source', [
     state,
     state_reason: reason,
   }),
+  z
+    .object({
+      source: z.literal('expense'),
+      section: z.enum(['base', 'interior_exterior', 'option']),
+      method: z.enum(['rate', 'fixed']),
+      amount: price.nullable().optional(),
+    })
+    .refine((line) => line.method !== 'fixed' || typeof line.amount === 'number'),
 ]);
 
 const payloadSchema = z.object({
   quote_id: uuid,
-  lines: z.array(lineSchema).max(300),
+  // 明細は 300 行まで。経費の決め方（source: expense。区分ごとに 1 つ・3 区分まで）は明細に数えない（DB と同じ）
+  lines: z
+    .array(lineSchema)
+    .max(300 + 3)
+    .refine((lines) => lines.filter((line) => line.source !== 'expense').length <= 300, '明細は 300 行までです')
+    .refine((lines) => lines.filter((line) => line.source === 'expense').length <= 3, '経費の決め方は区分ごとに 1 つです'),
   adjustment: z.number().int().min(-100_000_000).max(100_000_000),
   adjustment_reason: z.string().trim().max(500).nullable(),
   dealer_note: z.string().trim().max(1000).nullable(),
@@ -70,7 +84,7 @@ export async function createQuoteRevisionV25Action(_prev: QuoteV25ActionState, f
     return { ok: false, error: '編集の内容を読み取れませんでした。画面を再読み込みしてください。' };
   }
   const parsed = payloadSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: '入力内容が正しくありません（数量・売価・品名を確かめてください）。' };
+  if (!parsed.success) return { ok: false, error: '入力内容が正しくありません（数量・売価・品名・経費の手動の額を確かめてください）。' };
   const { quote_id, por_keys, por_confirmed, ...rest } = parsed.data;
   // お客様が選んだ別途見積の商品（画面に出した一覧）は、確認欄にチェックがあるときだけ確認として送る（#529 と同じ）
   if (por_keys.length > 0 && !por_confirmed) {

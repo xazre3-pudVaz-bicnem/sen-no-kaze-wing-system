@@ -80,6 +80,8 @@ function generateInput(next) {
   let keySeq = 0;
   const sections = chosen.map((code) => ({
     code,
+    // 区分の経費の手動の額（A-2 ⑥）：ときどき指定する（別途工事・マイナス・null も入れて、DB・TypeScript の扱いが同じことを確かめる）
+    ...(next() < 0.15 ? { expense_amount: next() < 0.1 ? -int(1, 100) : next() < 0.1 ? null : int(0, 500000) } : {}),
     lines: Array.from({ length: int(0, 5) }, () => {
       // 別途工事は manual・por が主（auto はまれに入れて、DB・TypeScript とも拒否することを確かめる）
       const mode = code === 'sitework' ? pick(['manual', 'manual', 'manual', 'por', 'por', next() < 0.2 ? 'auto' : 'manual']) : pick(['auto', 'auto', 'auto', 'manual', 'manual', 'por']);

@@ -7,7 +7,7 @@ import { requireAdmin } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
 import { quoteLineGuardError } from '@/lib/data/quote-line-guard';
 import { applyQuoteLineStateInput, QuoteLineStateInputError } from '@/lib/domain/quote-por';
-import { quoteLineStateReasonSchema, quoteLineStateSchema } from '@/lib/validation';
+import { quoteLineStateReasonSchema, quoteLineStateSchema, standardQuoteExpenseAmountsSchema } from '@/lib/validation';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -25,7 +25,7 @@ export interface StandardQuoteCaseFormState {
 }
 
 const rate = z.union([z.string(), z.number()]).transform((value) => String(value).trim()).pipe(z.string().regex(/^\d+(\.\d{1,4})?$/, '率の形式が正しくありません'));
-const method = z.enum(['rate', 'none']);
+const method = z.enum(['rate', 'none', 'fixed']);
 
 const lineSchema = z.object({
   line_key: z.uuid().nullable(),
@@ -49,7 +49,7 @@ const saveSchema = z.object({
   sales_fee_rate: rate,
   expense_rate: rate,
   markup_rate: rate,
-  expense_methods: z.object({ base: method, interior_exterior: method, option: method, sitework: method }),
+  expense_methods: z.object({ base: method, interior_exterior: method, option: method, sitework: method, amounts: standardQuoteExpenseAmountsSchema.optional() }),
   adjustment: z.number().int(),
   adjustment_reason: z.string().trim().max(500),
   notes: z.string().trim().max(1000),

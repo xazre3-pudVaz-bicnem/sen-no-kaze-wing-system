@@ -11,6 +11,7 @@ import {
   STANDARD_QUOTE_EXPENSE_LABEL,
   STANDARD_QUOTE_SECTIONS,
   previewStandardQuote,
+  toStandardQuoteExpenseMethods,
   toStandardQuoteSaveLines,
   type StandardQuoteEditorState,
   type StandardQuoteLineInput,
@@ -24,8 +25,10 @@ type Props = {
   taxRate: string;
   /** 保存済みの明細のうち、金額が未確定の行の品名（残っていれば発行できない。POR を含む） */
   savedUnresolvedNames: string[];
-  /** v2.5 の標準見積から作った下書き：版の率と経費の計算方法で計算する（変えられない。DB の保存も止める） */
+  /** v2.5 の標準見積から作った下書き：版の率で計算する（変えられない。DB の保存も止める） */
   ratesLocked?: boolean;
+  /** 経費を手動の額にできる（v2.5 の版から作った下書きで、DB の更新 A-2 ⑥ の後だけ） */
+  expenseManualAvailable?: boolean;
   initial: StandardQuoteEditorState;
 };
 
@@ -34,9 +37,21 @@ const pct = (value: string) => `${Math.round(Number(value) * 10000) / 100}%`;
 /** 価格の決め方の選択肢。「0円確定」「対象外」は本体以外の区分だけ（price_mode は manual・売価 0 円） */
 type PriceChoice = PriceMode | QuoteLineState;
 
-export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnresolvedNames, ratesLocked = false, initial }: Props) {
+export function StandardQuoteEditor({
+  draftId,
+  lockVersion,
+  taxRate,
+  savedUnresolvedNames,
+  ratesLocked = false,
+  expenseManualAvailable = false,
+  initial,
+}: Props) {
   const router = useRouter();
   const [state, setState] = useState(initial);
+  // 経費を手動にできる区分：v2.5 の版から作った下書きで、経費を掛ける区分だけ（A-2 ⑥）。
+  // 経費を掛けない区分（計算ルールの対象外・別途工事）は保存済みの方法が「なし」なので、今のまま「なし」で変えられない
+  const manualExpenseSection = (section: StandardSectionCode) =>
+    ratesLocked && expenseManualAvailable && section !== 'sitework' && initial.expense_methods[section] !== 'none';
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -86,7 +101,7 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
         sales_fee_rate: state.sales_fee_rate,
         expense_rate: state.expense_rate,
         markup_rate: state.markup_rate,
-        expense_methods: state.expense_methods,
+        expense_methods: toStandardQuoteExpenseMethods(state),
         adjustment: state.adjustment,
         adjustment_reason: state.adjustment_reason,
         notes: state.notes,
@@ -129,7 +144,9 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
         </label>
         <p className="text-xs text-muted sm:col-span-4" data-testid="standard-quote-rates-note">
           {ratesLocked
-            ? 'v2.5 の標準見積から作った見積は、版の率と経費の計算方法で計算します（変えられません。値引きなどは調整額で入れてください）。'
+            ? expenseManualAvailable
+              ? 'v2.5 の標準見積から作った見積は、版の率で計算します（変えられません）。経費は区分ごとに「率」か「手動」を選べます（手動の額は明細を変えても変わりません。社内の原価側の経費は率で見積もります）。値引きなどは調整額で入れてください。'
+              : 'v2.5 の標準見積から作った見積は、版の率と経費の計算方法で計算します（変えられません。値引きなどは調整額で入れてください）。'
             : '率を変えても元の標準見積には反映しません。'}
           率・内部原価はお客様・代理店には表示しません。
         </p>
@@ -144,14 +161,37 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
               <h3 className="font-semibold">{STANDARD_SECTION_LABEL[section]}</h3>
               <label className="flex items-center gap-2 text-xs text-muted">
                 経費
+                {/* v2.5 の版から作った下書きは、経費を掛ける区分で「率」か「手動」（A-2 ⑥）。経費を掛けない区分・旧来の下書きは今のまま */}
                 <Select
                   value={state.expense_methods[section]}
-                  disabled={ratesLocked}
-                  onChange={(e) => update({ expense_methods: { ...state.expense_methods, [section]: e.target.value as ExpenseMethod } })}
+                  disabled={ratesLocked && !manualExpenseSection(section)}
+                  data-testid="standard-quote-expense-method"
+                  onChange={(e) => {
+                    const next = e.target.value as ExpenseMethod;
+                    const start = next === 'fixed' && state.expense_amounts[section].trim() === '' ? String(preview.sections[section]?.saleExpense ?? 0) : null;
+                    update({
+                      expense_methods: { ...state.expense_methods, [section]: next },
+                      ...(start !== null ? { expense_amounts: { ...state.expense_amounts, [section]: start } } : {}),
+                    });
+                  }}
                 >
                   <option value="rate">率（{pct(state.expense_rate)}）</option>
-                  <option value="none">なし</option>
+                  {manualExpenseSection(section) ? (
+                    <option value="fixed">手動</option>
+                  ) : (
+                    <option value="none">なし</option>
+                  )}
                 </Select>
+                {state.expense_methods[section] === 'fixed' && (
+                  <Input
+                    value={state.expense_amounts[section]}
+                    inputMode="numeric"
+                    className="w-32 text-right"
+                    aria-label={`経費の手動の額：${STANDARD_QUOTE_EXPENSE_LABEL[section]}`}
+                    data-testid="standard-quote-expense-amount"
+                    onChange={(e) => update({ expense_amounts: { ...state.expense_amounts, [section]: e.target.value } })}
+                  />
+                )}
               </label>
             </div>
             <div className="overflow-x-auto">
@@ -261,10 +301,10 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
                   {money && money.saleExpense + money.costExpense !== 0 && (
                     <tr className="border-t border-line bg-[#fbfcfb] text-muted" data-testid="standard-quote-expense">
                       <td className="px-2 py-1">{STANDARD_QUOTE_EXPENSE_LABEL[section]}</td>
-                      <td className="px-2 py-1">明細小計 × 経費率（保存のたびに計算し直します）</td>
+                      <td className="px-2 py-1">{state.expense_methods[section] === 'fixed' ? '手動の額（明細を変えても変わりません。原価は明細小計 × 経費率）' : '明細小計 × 経費率（保存のたびに計算し直します）'}</td>
                       <td className="px-2 py-1 text-right">1</td>
                       <td className="px-2 py-1">式</td>
-                      <td className="px-2 py-1">自動</td>
+                      <td className="px-2 py-1">{state.expense_methods[section] === 'fixed' ? '手動' : '自動'}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{formatYen(money.costExpense)}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{formatYen(money.saleExpense)}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{formatYen(money.saleExpense)}</td>

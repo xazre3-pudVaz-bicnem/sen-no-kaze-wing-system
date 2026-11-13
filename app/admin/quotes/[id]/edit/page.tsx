@@ -15,6 +15,7 @@ import { buildCustomerCategoryMatrix } from '@/lib/domain/customer-category-appl
 import { quoteV25SelectableProducts } from '@/lib/domain/quote-v25';
 import { INTERIOR_EXTERIOR_CATEGORY_CODES } from '@/lib/domain/standard-estimate-pricing';
 import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
+import { initialSiteworkLinesToAdd } from '@/lib/domain/quote-initial-lines';
 
 export default async function AdminQuoteRevisionEditPage({
   params,
@@ -36,7 +37,7 @@ export default async function AdminQuoteRevisionEditPage({
 
   if (!isLegacyWebRevision) notFound();
 
-  const [categories, options, porState, v25Context] = await Promise.all([
+  const [categories, options, porState, v25Context, initialLines] = await Promise.all([
     store.listCategories(),
     store.listOptions(),
     // お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。発行時に DB が確かめる）。
@@ -44,7 +45,11 @@ export default async function AdminQuoteRevisionEditPage({
     store.getQuotePorSelections(quote.id, actor).catch(() => ({ ...EMPTY_POR_SELECTION_STATE, loadError: true })),
     // v2.5 の標準見積から作った見積（v2.5 PR-D1）は、固定した版の v2.5 の決まりで発行する画面にする
     quote.pricing_model === 'v2.5' ? store.getQuoteV25Context(quote.id, actor) : Promise.resolve(null),
+    // 別途工事の初期明細（9 種類の工事。2026-11-04 先方回答 A-3）。読めないときは並べないだけで、画面は落とさない
+    store.listQuoteInitialLines('sitework').catch(() => []),
   ]);
+  // 第 1 版を初めて編集するときだけ、前の版に無い工事を最初から並べる（金額は空。使う行に金額を入れ、要らない行は外す）
+  const initialSiteworkLines = initialSiteworkLinesToAdd(quote.revision, detail.items.map((item) => item.name), initialLines);
 
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
   // 商品の候補（新しく選ぶ）は取扱中の商品だけ。取扱終了の商品は新しい版で選べない（発行時も DB が止める）
@@ -166,6 +171,7 @@ export default async function AdminQuoteRevisionEditPage({
             context={v25Context}
             products={v25Products}
             porState={porState}
+            initialSiteworkLines={initialSiteworkLines}
           />
         ) : quote.pricing_model === 'v2.5' ? (
           <p className="px-4 py-6 text-sm text-danger">
@@ -181,6 +187,7 @@ export default async function AdminQuoteRevisionEditPage({
             specCode={quote.spec_code ?? ''}
             porState={porState}
             optionFlags={options.map((option) => ({ id: option.id, price: option.price, priceOnRequest: option.price_on_request }))}
+            initialSiteworkLines={initialSiteworkLines}
             sheetMode
           />
         )}

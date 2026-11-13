@@ -36,6 +36,7 @@ import { runtimeV25PositionSlots } from './runtime-v25-position-slots.mjs';
 import { runtimeV25FormalQuotes } from './runtime-v25-formal-quotes.mjs';
 import { runtimeV25StandardQuoteDrafts } from './runtime-v25-standard-quote-drafts.mjs';
 import { runtimeCasePlanPositionSlots } from './runtime-case-plan-position-slots.mjs';
+import { runtimeA3RemoveSitework } from './runtime-a3-remove-sitework.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -95,6 +96,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
+    // 別途工事 9 品目の削除と、見積の初期明細（A-3・2026-11-04 の先方回答）
+    runtime = mergeRuntime(runtime, await runtimeA3RemoveSitework(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

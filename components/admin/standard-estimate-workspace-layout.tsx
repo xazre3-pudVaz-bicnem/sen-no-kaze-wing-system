@@ -10,7 +10,7 @@ type StandardEstimateWorkspaceLayoutProps = {
 
 /**
  * 標準見積の編集スペースを優先するレイアウト。
- * 仕様一覧は必要なときだけ開き、編集状態・保存処理には触れない。
+ * 仕様一覧は編集欄の上部に展開し、横幅を奪わない。編集状態・保存処理には触れない。
  */
 export function StandardEstimateWorkspaceLayout({ sidebar, children, selectedName }: StandardEstimateWorkspaceLayoutProps) {
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -34,7 +34,7 @@ export function StandardEstimateWorkspaceLayout({ sidebar, children, selectedNam
           </span>
         )}
       </div>
-      <div className={selectorOpen ? 'grid min-w-0 gap-3 lg:grid-cols-[15rem_minmax(0,1fr)]' : 'min-w-0'}>
+      <div className="min-w-0 space-y-3">
         <div
           id="standard-estimate-selector-panel"
           className={selectorOpen ? 'min-w-0' : 'hidden'}

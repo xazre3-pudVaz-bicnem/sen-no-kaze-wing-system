@@ -63,7 +63,7 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
       <StandardEstimateWorkspaceLayout
         selectedName={selected?.identity}
         sidebar={(
-          <nav aria-label="標準見積の一覧" className="space-y-1 rounded-lg border border-line bg-white p-2" data-testid="standard-estimate-selector">
+          <nav aria-label="標準見積の一覧" className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-white p-2" data-testid="standard-estimate-selector">
           {entries.length === 0 && <p className="px-2 py-4 text-sm text-muted">標準見積がまだありません。「新しい標準見積を作る」で、本体マスターの公開版から作成してください。</p>}
           {entries.map((entry) => (
             <EntryLink key={entry.masterId} entry={entry} active={entry.masterId === selected?.masterId} />
@@ -136,7 +136,7 @@ function EntryLink({ entry, active }: { entry: StandardEstimateWorkspaceEntry; a
     <Link
       href={`/admin/estimate-templates?master=${entry.masterId}`}
       aria-current={active ? 'page' : undefined}
-      className={`block rounded-md px-2 py-1.5 text-xs leading-5 ${active ? 'bg-ink text-white' : 'text-ink hover:bg-sand'}`}
+      className={`min-w-[13rem] max-w-[20rem] flex-1 rounded-md px-2 py-1.5 text-xs leading-5 ${active ? 'bg-ink text-white' : 'text-ink hover:bg-sand'}`}
     >
       <span className="block font-semibold">{entry.identity}</span>
       <span className={active ? 'text-white/80' : 'text-muted'}>

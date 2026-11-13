@@ -467,20 +467,20 @@ function WorkbenchBody({
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
       <div className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[76rem] min-w-[76rem]' : 'w-[70rem] min-w-[70rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[70rem] min-w-[70rem]' : 'w-[64rem] min-w-[64rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="sticky top-0 z-20 bg-slate-200 text-[10px] text-slate-600">
             <tr>
               <th className="sticky left-0 z-30 w-7 border-b border-r border-slate-300 bg-slate-100 px-0.5 py-0.5 text-center font-normal">#</th>
               <th className="sticky left-7 z-30 w-[6.25rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">グループ</th>
               <th className="sticky left-[8rem] z-30 w-[15rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">品名</th>
-              <th className="w-[15rem] border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
               <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">計算</th>
               {showCost && <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
               <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
               <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
-              <th className="w-24 border-b border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
+              <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
+              <th className="w-[9rem] border-b border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
             </tr>
           </thead>
           <tbody>
@@ -494,14 +494,14 @@ function WorkbenchBody({
                     <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
                     <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">{line.section}</td>
                     <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-1 py-0.5"><span className="block truncate" title={line.name}>{line.name}</span></td>
-                    <td className="border-r border-slate-200 px-1 py-0.5 text-muted">本体マスターの明細</td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5">{line.unit ?? ''}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-muted">自動</td>
                     {showCost && <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.sale_unit_price)}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.amount)}</td>
-                    <td className="px-1 py-0.5" />
+                    <td className="border-r border-slate-200 px-1 py-0.5" />
+                    <td className="px-1 py-0.5 text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
                   </tr>
                 );
               })}
@@ -561,17 +561,7 @@ function WorkbenchBody({
                               {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(" ／ ")}</span>}
                             </div>
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0.5">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="min-w-0 flex-1 truncate text-muted" title={v25VariantSummary(candidate, slot.variant_choices)} data-testid="v25-wb-variant-summary">
-                                {v25VariantSummary(candidate, slot.variant_choices)}
-                              </span>
-                              {Boolean(candidate?.variantGroups.length) && (
-                                <button type="button" className="shrink-0 text-[0.7rem] text-navy underline" data-testid="v25-wb-variant-open"
-                                  onClick={() => openVariant(slot)}>{readOnly ? '仕様を確認' : '仕様を変更'}</button>
-                              )}
-                            </div>
-                          </td>
+
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
                             <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setSlot(slot.key, { quantity: event.target.value })} />
@@ -618,6 +608,17 @@ function WorkbenchBody({
                               </button>
                             )}
                           </td>
+                          <td className="border-r border-slate-200 px-1 py-0.5">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate text-muted" title={v25VariantSummary(candidate, slot.variant_choices)} data-testid="v25-wb-variant-summary">
+                                {v25VariantSummary(candidate, slot.variant_choices)}
+                              </span>
+                              {Boolean(candidate?.variantGroups.length) && (
+                                <button type="button" className="shrink-0 text-[0.7rem] text-navy underline" data-testid="v25-wb-variant-open"
+                                  onClick={() => openVariant(slot)}>{readOnly ? '仕様を確認' : '仕様を変更'}</button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                         </Fragment>
                       );
@@ -637,10 +638,7 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { name: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 px-0.5 py-0.5">
-                            <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" placeholder="備考" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
-                              onChange={(event) => setLine(line.key, { remark: event.target.value })} />
-                          </td>
+
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
                             <Input data-v25-excel-col="qty" value={line.quantity} disabled={readOnly} inputMode="decimal" aria-label="明細の数量" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { quantity: event.target.value })} />
@@ -689,6 +687,10 @@ function WorkbenchBody({
                               </button>
                             )}
                           </td>
+                          <td className="border-r border-slate-200 px-0.5 py-0.5">
+                            <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 w-full rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                              onChange={(event) => setLine(line.key, { remark: event.target.value })} />
+                          </td>
                         </tr>
                       );
                     })}
@@ -698,28 +700,32 @@ function WorkbenchBody({
           </tbody>
           <tfoot className="bg-slate-50 text-xs">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={columnCount - 2} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
               <td className="px-1 py-0.5.5 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
               <td />
-            </tr>
-            <tr>
-              <td colSpan={columnCount - 2} className="px-1 py-0.5 text-right text-muted">調整額</td>
-              <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
               <td />
             </tr>
             <tr>
-              <td colSpan={columnCount - 2} className="px-1 py-0.5 text-right text-muted">消費税</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">調整額</td>
+              <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
+              <td />
+              <td />
+            </tr>
+            <tr>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">消費税</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
+              <td />
               <td />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={columnCount - 2} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="px-1 py-0.5.5 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
               <td className="px-1 py-0.5.5 text-[0.68rem] text-muted">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
+              <td />
             </tr>
           </tfoot>
         </table>

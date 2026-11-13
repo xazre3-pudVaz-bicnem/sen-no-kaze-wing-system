@@ -116,7 +116,7 @@ function WorkbenchBody({
     expense_rate: rateToPercent(initial.expense_rate),
     markup_rate: rateToPercent(initial.markup_rate),
   }));
-  const [showCost, setShowCost] = useState(true);
+  const [showCost, setShowCost] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
@@ -555,7 +555,7 @@ function WorkbenchBody({
                                                     <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0.5">
                             <div className="flex min-w-0 items-center gap-1">
                               <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(" ／ ")}>{candidate?.name ?? "（商品が見つかりません）"}</span>
-                              {candidate?.unavailable ? <Badge tone="danger">選択不可</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
+                              {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
                               {!readOnly && <button type="button" className="shrink-0 text-[10px] text-navy underline" aria-label={`${candidate?.name ?? "商品"}を選び直す`}
                                 onClick={() => { setPicker({ section: code, targetKey: slot.key }); setPickerCategory(""); setPickerQuery(""); }}>変更</button>}
                               {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(" ／ ")}</span>}

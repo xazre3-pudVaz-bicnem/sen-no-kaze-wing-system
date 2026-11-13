@@ -221,6 +221,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('data-v25-excel-col="note"');
     expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>状態</th>'));
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[64rem] min-w-[64rem]'");
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 3}');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
     expect(html).toContain('data-testid="v25-wb-publish"');

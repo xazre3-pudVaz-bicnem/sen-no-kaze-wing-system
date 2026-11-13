@@ -466,7 +466,7 @@ function WorkbenchBody({
         <strong>標準見積明細（Excel風）</strong>
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
-      <div className="max-h-[70vh] overflow-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
+      <div className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
         <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[76rem] min-w-[76rem]' : 'w-[70rem] min-w-[70rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="sticky top-0 z-20 bg-slate-200 text-[10px] text-slate-600">
             <tr>

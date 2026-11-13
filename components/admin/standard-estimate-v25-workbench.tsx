@@ -441,20 +441,20 @@ function WorkbenchBody({
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-300 bg-white">
-        <table className="w-full min-w-[68rem] border-collapse text-xs" data-testid="v25-workbench-grid">
-          <thead className="sticky top-0 z-10 bg-slate-100 text-[0.7rem] text-slate-600">
+        <table className={`table-fixed border-collapse text-xs ${showCost ? 'w-[94rem] min-w-[94rem]' : 'w-[86rem] min-w-[86rem]'}`} data-testid="v25-workbench-grid">
+          <thead className="sticky top-0 z-20 bg-slate-100 text-[0.7rem] text-slate-600">
             <tr>
-              <th className="w-10 border-b border-r border-slate-300 px-1 py-1 text-center font-normal">#</th>
-              <th className="w-28 border-b border-r border-slate-300 px-2 py-1 text-left font-medium">グループ</th>
-              <th className="min-w-[14rem] border-b border-r border-slate-300 px-2 py-1 text-left font-medium">品名</th>
-              <th className="min-w-[10rem] border-b border-r border-slate-300 px-2 py-1 text-left font-medium">選択肢・備考</th>
+              <th className="sticky left-0 z-30 w-10 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-center font-normal">#</th>
+              <th className="sticky left-10 z-30 w-32 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">グループ</th>
+              <th className="sticky left-[10.5rem] z-30 w-[17rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
+              <th className="w-[18rem] border-b border-r border-slate-300 px-2 py-1 text-left font-medium">仕様・備考</th>
               <th className="w-20 border-b border-r border-slate-300 px-2 py-1 text-right font-medium">数量</th>
-              <th className="w-14 border-b border-r border-slate-300 px-2 py-1 text-left font-medium">単位</th>
-              <th className="w-24 border-b border-r border-slate-300 px-2 py-1 text-left font-medium">計算</th>
+              <th className="w-16 border-b border-r border-slate-300 px-2 py-1 text-left font-medium">単位</th>
+              <th className="w-28 border-b border-r border-slate-300 px-2 py-1 text-left font-medium">計算</th>
               {showCost && <th className="w-28 border-b border-r border-slate-300 px-2 py-1 text-right font-medium">原価単価</th>}
               <th className="w-28 border-b border-r border-slate-300 px-2 py-1 text-right font-medium">売価単価</th>
               <th className="w-28 border-b border-r border-slate-300 px-2 py-1 text-right font-medium">金額（税別）</th>
-              <th className="w-24 border-b border-slate-300 px-2 py-1 text-left font-medium">状態</th>
+              <th className="w-28 border-b border-slate-300 px-2 py-1 text-left font-medium">状態</th>
             </tr>
           </thead>
           <tbody>
@@ -465,9 +465,9 @@ function WorkbenchBody({
                 rowNumber += 1;
                 return (
                   <tr key={line.id} className="border-b border-slate-200 text-slate-700">
-                    <td className="border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
-                    <td className="border-r border-slate-200 px-2 py-1 text-muted">{line.section}</td>
-                    <td className="border-r border-slate-200 px-2 py-1">{line.name}</td>
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
+                    <td className="sticky left-10 z-10 border-r border-slate-200 bg-white px-2 py-1 text-muted">{line.section}</td>
+                    <td className="sticky left-[10.5rem] z-10 border-r border-slate-200 bg-white px-2 py-1">{line.name}</td>
                     <td className="border-r border-slate-200 px-2 py-1 text-muted">本体マスターの明細</td>
                     <td className="border-r border-slate-200 px-2 py-1 text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 px-2 py-1">{line.unit ?? ''}</td>
@@ -512,9 +512,9 @@ function WorkbenchBody({
                       rowNumber += 1;
                       return (
                         <Fragment key={slot.key}>
-                        <tr className="border-b border-slate-200 align-top" data-testid="v25-wb-slot">
-                          <td className="border-r border-slate-200 bg-slate-50 px-1 pt-1.5 text-center text-slate-400">{rowNumber}</td>
-                          <td className="border-r border-slate-200 px-2 py-1 text-muted">
+                        <tr className="border-b border-slate-200 align-middle" data-testid="v25-wb-slot">
+                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
+                          <td className="sticky left-10 z-10 border-r border-slate-200 bg-white px-2 py-1 text-muted">
                             <span className="block truncate">{candidate?.categoryName ?? ''}</span>
                             {(slotCode || (positionAllowed && !readOnly)) && (
                               <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[0.68rem]">
@@ -529,7 +529,7 @@ function WorkbenchBody({
                               </div>
                             )}
                           </td>
-                          <td className="border-r border-slate-200 bg-amber-50/60 px-2 py-1">
+                          <td className="sticky left-[10.5rem] z-10 border-r border-slate-200 bg-amber-50 px-2 py-1">
                             <div className="flex items-start gap-1">
                               <span className="flex-1 pt-0.5 font-medium text-ink">
                                 {candidate?.name ?? '（商品が見つかりません）'}
@@ -616,13 +616,13 @@ function WorkbenchBody({
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       rowNumber += 1;
                       return (
-                        <tr key={line.key} className="border-b border-slate-200 align-top" data-testid="v25-wb-line">
-                          <td className="border-r border-slate-200 bg-slate-50 px-1 pt-1.5 text-center text-slate-400">{rowNumber}</td>
-                          <td className="border-r border-slate-200 px-1 py-1">
+                        <tr key={line.key} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
+                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
+                          <td className="sticky left-10 z-10 border-r border-slate-200 bg-white px-1 py-1">
                             <Input value={line.group_label} disabled={readOnly} aria-label="グループ" className="h-7 text-xs"
                               onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-1">
+                          <td className="sticky left-[10.5rem] z-10 border-r border-slate-200 bg-white px-1 py-1">
                             <Input value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-7 text-xs"
                               onChange={(event) => setLine(line.key, { name: event.target.value })} />
                           </td>
@@ -849,7 +849,7 @@ function WorkbenchBody({
                                     <li className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[0.7rem]">
                                       <span className="mr-1 text-[0.62rem] font-semibold text-brown">標準</span>
                                       {positionCandidate?.name ?? '（商品が見つかりません）'}
-                                      {positionCandidate?.windowTypeLabel ? `（${candidate.windowTypeLabel}）` : ''}
+                                      {positionCandidate?.windowTypeLabel ? `（${positionCandidate.windowTypeLabel}）` : ''}
                                     </li>
                                     {positionDraft.selectable_option_ids.map((id) => {
                                       const alternative = candidateById.get(id);

@@ -18,7 +18,6 @@ import {
   validateV25EditorState,
   type V25CostStatus,
   type V25EditorState,
-  type V25LinePriceMode,
   type V25LineRow,
   type V25Preview,
   type V25PreviewSlot,

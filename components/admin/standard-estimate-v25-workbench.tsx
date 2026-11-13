@@ -476,7 +476,7 @@ function WorkbenchBody({
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
               {showCost && <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
-              <th className="w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価・方法</th>
+              <th className="w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
               <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
               <th className="w-32 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
               <th className="w-[9rem] border-b border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
@@ -573,7 +573,7 @@ function WorkbenchBody({
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
                             <div className="flex min-w-0 items-center gap-1" data-testid="v25-wb-slot-price-cell">
                               <Select value={slot.price_mode} disabled={readOnly} aria-label="商品売価の計算方法" data-testid="v25-wb-slot-price-mode"
-                                className={`h-6 shrink-0 rounded-sm border-0 bg-amber-50 px-0.5 text-[10px] shadow-none focus-visible:ring-1 ${slot.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
+                                className={`h-6 shrink-0 appearance-auto rounded-sm border-0 bg-amber-50 pl-0.5 pr-1 text-[10px] shadow-none focus-visible:ring-1 ${slot.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
                                 onChange={(event) => setSlot(slot.key, { price_mode: event.target.value as V25SlotPriceMode })}>
                                 {(Object.keys(SLOT_MODE_LABEL) as V25SlotPriceMode[]).map((mode) => (
                                   <option key={mode} value={mode} disabled={mode === 'auto' && code === 'sitework'}>{SLOT_MODE_LABEL[mode]}</option>
@@ -653,7 +653,7 @@ function WorkbenchBody({
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
                             <div className="flex min-w-0 items-center gap-1" data-testid="v25-wb-line-price-cell">
                               <Select value={line.price_mode} disabled={readOnly} aria-label="明細売価の計算方法" data-testid="v25-wb-line-price-mode"
-                                className={`h-6 shrink-0 rounded-sm border-0 bg-amber-50 px-0.5 text-[10px] shadow-none focus-visible:ring-1 ${line.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
+                                className={`h-6 shrink-0 appearance-auto rounded-sm border-0 bg-amber-50 pl-0.5 pr-1 text-[10px] shadow-none focus-visible:ring-1 ${line.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
                                 onChange={(event) => setLine(line.key, { price_mode: event.target.value as V25LinePriceMode })}>
                                 {(Object.keys(LINE_MODE_LABEL) as V25LinePriceMode[]).map((mode) => <option key={mode} value={mode}>{LINE_MODE_LABEL[mode]}</option>)}
                               </Select>
@@ -681,7 +681,7 @@ function WorkbenchBody({
                                 ) : (
                                   <button type="button" className="shrink-0 text-[10px] text-navy underline" aria-label="見直し済みにする"
                                     title="要見直し → 見直し済みにする" onClick={() => setLine(line.key, { review_required: false })}>
-                                    見直し済み
+                                    見直し済みにする
                                   </button>
                                 ))}
                               {!readOnly && (

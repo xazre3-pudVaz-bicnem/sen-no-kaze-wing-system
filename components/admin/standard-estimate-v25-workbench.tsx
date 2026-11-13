@@ -735,7 +735,7 @@ function WorkbenchBody({
                             <div className="flex min-w-0 items-center gap-0.5">
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { name: event.target.value })} />
-                              {!readOnly && line.review_required && code !== 'sitework' && (
+                              {!readOnly && line.review_required && Boolean(line.line_key) && code !== 'sitework' && (
                                 <button type="button" title="旧明細を商品台帳から置き換える"
                                   aria-label={`${line.name || '旧明細'}を商品台帳の商品に置き換える`}
                                   data-testid="v25-wb-legacy-line-replace-icon"
@@ -1131,7 +1131,7 @@ function WorkbenchBody({
             </div>
             <p className="text-xs leading-5 text-muted">
               この操作では元の旧明細を下書きから除外し、商品行を同じ区分へ1件追加します。旧明細の数量・単位・備考・手動単価は自動で引き継ぎません。カテゴリーは旧グループ名から自動判定しません。保存すると旧明細の情報はDraftから除かれます。
-              商品行はその区分の上部へ移動し、商品の標準仕様と現在の原価Versionによって試算します。
+              商品行はその区分の上部へ移動し、v2.5の既存の原価Version固定ルールに従って試算します。
               画面の金額は目安であり、正式金額は下書き保存後にDBで再計算されます。
             </p>
             <label className="flex items-start gap-2 rounded-md bg-slate-50 p-3 text-sm" data-testid="v25-wb-replacement-ack-label">

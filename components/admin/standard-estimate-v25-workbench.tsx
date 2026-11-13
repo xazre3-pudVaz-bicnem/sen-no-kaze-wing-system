@@ -704,6 +704,7 @@ function WorkbenchBody({
                                   )}
                                   {line.review_required && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    title="要見直し → 見直し済みにする"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { review_required: false }); }}>見直し済みにする</button>
                                   )}
                                   <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50"

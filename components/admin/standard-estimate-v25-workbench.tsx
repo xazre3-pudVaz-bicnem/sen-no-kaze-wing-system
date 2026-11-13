@@ -57,6 +57,17 @@ const yen = (value: number | null | undefined) => (value === null || value === u
 
 type Notice = { tone: 'success' | 'danger'; text: string };
 
+/** 表示用要約のみ。variant choice ID と保存 payload は変更しない。 */
+export function v25VariantSummary(candidate: Pick<V25WorkbenchCandidate, 'variantGroups'> | undefined, choices: V25SlotRow['variant_choices']): string {
+  if (!candidate) return '商品を確認';
+  if (candidate.variantGroups.length === 0) return '仕様選択なし';
+  return candidate.variantGroups.map((group) => {
+    const id = choices[group.id];
+    const choice = group.choices.find((item) => item.id === id);
+    return `${group.name}：${choice?.name ?? (id ? '選択肢を確認' : '未選択')}`;
+  }).join(' ／ ');
+}
+
 type WorkbenchProps = {
   revisionId: string;
   lockVersion: number;
@@ -111,6 +122,7 @@ function WorkbenchBody({
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
+  const [variantEditor, setVariantEditor] = useState<{ slotKey: string; choices: V25SlotRow['variant_choices'] } | null>(null);
   const [positionOpen, setPositionOpen] = useState<Set<string>>(() => new Set());
   const [selectableFor, setSelectableFor] = useState<string | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
@@ -159,15 +171,16 @@ function WorkbenchBody({
   ];
 
   useEffect(() => {
-    if (!picker && !selectableFor) return;
+    if (!picker && !selectableFor && !variantEditor) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      setPicker(null);
-      setSelectableFor(null);
+      if (selectableFor) setSelectableFor(null);
+      else if (variantEditor) setVariantEditor(null);
+      else setPicker(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [picker, selectableFor]);
+  }, [picker, selectableFor, variantEditor]);
 
   const setSlot = (key: string, patch: Partial<V25SlotRow>) =>
     setState((current) => ({ ...current, slots: current.slots.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)) }));
@@ -223,6 +236,16 @@ function WorkbenchBody({
     }
     setPicker(null);
   };
+
+  const openVariant = (slot: V25SlotRow) =>
+    setVariantEditor({ slotKey: slot.key, choices: { ...slot.variant_choices } });
+  const applyVariant = () => {
+    if (!variantEditor || readOnly) return;
+    setSlot(variantEditor.slotKey, { variant_choices: { ...variantEditor.choices } });
+    setVariantEditor(null);
+  };
+  const variantSlot = variantEditor ? state.slots.find((slot) => slot.key === variantEditor.slotKey) : null;
+  const variantCandidate = variantSlot ? candidateById.get(variantSlot.option_id) : undefined;
 
   // 位置・用途の選択枠（v2.5 PR-S2）
   const togglePosition = (key: string) =>
@@ -520,15 +543,16 @@ function WorkbenchBody({
                               <p className="text-[0.68rem] text-muted">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</p>
                             )}
                           </td>
-                          <td className="space-y-1 border-r border-slate-200 px-2 py-1">
-                            {(candidate?.variantGroups ?? []).map((group) => (
-                              <Select key={group.id} value={slot.variant_choices[group.id] ?? ''} disabled={readOnly} aria-label={group.name} className="h-7 text-xs"
-                                onChange={(event) => setSlot(slot.key, { variant_choices: { ...slot.variant_choices, [group.id]: event.target.value } })}>
-                                <option value="">{group.name}を選ぶ</option>
-                                {group.choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
-                              </Select>
-                            ))}
-                            {candidate && candidate.variantGroups.length === 0 && <span className="text-muted">—</span>}
+                          <td className="border-r border-slate-200 px-2 py-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate text-muted" title={v25VariantSummary(candidate, slot.variant_choices)} data-testid="v25-wb-variant-summary">
+                                {v25VariantSummary(candidate, slot.variant_choices)}
+                              </span>
+                              {Boolean(candidate?.variantGroups.length) && (
+                                <button type="button" className="shrink-0 text-[0.7rem] text-navy underline" data-testid="v25-wb-variant-open"
+                                  onClick={() => openVariant(slot)}>{readOnly ? '仕様を確認' : '仕様を変更'}</button>
+                              )}
+                            </div>
                           </td>
                           <td className="border-r border-slate-200 px-1 py-1">
                             <Input value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-7 text-right text-xs"
@@ -819,6 +843,42 @@ function WorkbenchBody({
             >
               公開する
             </ConfirmActionButton>
+          </div>
+        </div>
+      )}
+
+      {variantEditor && variantSlot && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setVariantEditor(null)}>
+          <div role="dialog" aria-modal="true" aria-label="商品の仕様を変更" data-testid="v25-wb-variant-editor"
+            className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <div>
+                <p className="font-semibold">{variantCandidate?.name ?? '商品'}：仕様の選択</p>
+                <p className="text-xs text-muted">確定しても下書きは保存されません。保存は表の下のボタンから行います。</p>
+              </div>
+              <button type="button" className="text-sm text-muted underline" onClick={() => setVariantEditor(null)}>閉じる</button>
+            </div>
+            <div className="space-y-3 overflow-y-auto px-4 py-3">
+              {(variantCandidate?.variantGroups ?? []).map((group) => (
+                <label key={group.id} className="block space-y-1 text-xs">
+                  <span className="font-medium">{group.name}</span>
+                  <Select value={variantEditor.choices[group.id] ?? ''} disabled={readOnly}
+                    aria-label={group.name} data-testid="v25-wb-variant-choice" className="h-9 w-full text-xs"
+                    onChange={(event) => setVariantEditor((current) => current ? {
+                      ...current, choices: { ...current.choices, [group.id]: event.target.value },
+                    } : null)}>
+                    <option value="">{group.name}を選ぶ（未選択）</option>
+                    {group.choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+                  </Select>
+                </label>
+              ))}
+              {variantCandidate?.unavailable && <Alert tone="danger">この商品は現在の仕様で選べません。商品を変更または削除してください。</Alert>}
+              {variantCandidate?.retired && <Alert tone="warn">販売停止の商品です。</Alert>}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+              <Button type="button" variant="secondary" onClick={() => setVariantEditor(null)}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
+              {!readOnly && <Button type="button" data-testid="v25-wb-variant-confirm" onClick={applyVariant}>確定</Button>}
+            </div>
           </div>
         </div>
       )}

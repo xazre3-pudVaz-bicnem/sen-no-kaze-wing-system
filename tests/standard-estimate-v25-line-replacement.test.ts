@@ -69,7 +69,7 @@ describe('旧明細1行の安全な商品置換案（UI stateのみ、DB操作�
     expect(calc.error).toBeNull();
     const lines = calc.result?.sections.find((section) => section.code === 'interior_exterior')?.lines ?? [];
     expect(lines.map((line) => line.key)).toEqual(['slot:replacement-1', 'line:legacy-2']);
-    expect(lines[0].quantity).toBeUndefined(); // quantity is input-only; result amount is recalculated
+    expect(lines[0].amount).toBeGreaterThan(0); // 新しい商品・数量による試算
     expect(calc.result?.sections.find((section) => section.code === 'interior_exterior')?.subtotal).not.toBeNull();
   });
 

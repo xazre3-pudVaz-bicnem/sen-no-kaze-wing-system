@@ -465,6 +465,37 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
   }
   const { store, option } = context;
 
+  // 本部の浴室商品の設備包含はSTEP 2でDB保存済みの関係を確認する。
+  // 読み取れない場合は画面制御だけでなく公開Actionでも止める（空集合は合法）。
+  if (actor.role === 'admin') {
+    const category = (await store.listCategories()).find((row) => row.id === option.category_id);
+    if (category?.code === 'ub') {
+      const { readOptionIncludedCategories } = await import('@/lib/data/option-included-categories');
+      const inclusion = await readOptionIncludedCategories(option.id);
+      const categories = await store.listCategories();
+      const allowed = new Set(categories
+        .filter((row) => row.status === 'published' && (row.code === 'toilet' || row.code === 'washbasin'))
+        .map((row) => row.id));
+      if (!inclusion.ok || inclusion.ids.some((categoryId) => !allowed.has(categoryId))) {
+        redirect(previewUrl({ error: '設備包含設定を確認できません。STEP 1で保存状態を確認してから公開してください。' }));
+      }
+      // The reviewed DB snapshot must still match at publish time; empty [] is valid.
+      let expectedIds: unknown;
+      try {
+        expectedIds = JSON.parse(String(formData.get('included_categories_expected_ids') ?? ''));
+      } catch {
+        expectedIds = null;
+      }
+      const { sameCategoryIdSet } = await import('@/lib/domain/included-equipment-action-contract');
+      if (!Array.isArray(expectedIds) ||
+          !expectedIds.every((item): item is string => typeof item === 'string' && allowed.has(item)) ||
+          new Set(expectedIds).size !== expectedIds.length ||
+          !sameCategoryIdSet(expectedIds, inclusion.ids)) {
+        redirect(previewUrl({ error: '設備包含設定が確認後に変更されたか、STEP 2の確認情報がありません。STEP 1から読み直してください。' }));
+      }
+    }
+  }
+
   if (option.status !== 'published' && !option.image_url?.trim()) {
     redirect(
       previewUrl({

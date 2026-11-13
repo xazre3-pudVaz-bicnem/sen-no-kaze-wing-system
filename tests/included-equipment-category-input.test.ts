@@ -37,11 +37,12 @@ describe('商品登録：設備包含カテゴリーのコンパクトな入力�
     expect(includedEquipmentCategoryCandidates([], 'ub')).toEqual([]);
   });
 
-  it('コンパクト表示・カテゴリー名・フォーム名を持ち、DB保存には接続していない', () => {
+  it('コンパクト表示・カテゴリー名・独立の選択変更ハンドラを持ち、フォームの入れ子にしない', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'components/admin/included-equipment-category-fields.tsx'), 'utf8');
     expect(source).toContain('<details');
     expect(source).toContain('この商品に含まれる設備');
-    expect(source).toContain('name="included_category_ids"');
+    expect(source).toContain('onSelectionChange');
+    expect(source).not.toContain('<form');
     expect(source).toContain('onToggle=');
     expect(source).toContain('設定なし（必要なときだけ開く）');
     expect(source).not.toContain('saveOptionAction');

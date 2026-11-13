@@ -179,7 +179,7 @@ describe.sequential('電子契約：ローカル検証モード（SQL と同じ�
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  async function acceptedQuote() {
+  async function acceptedQuote(kind: 'formal' | 'preliminary' | null = 'formal') {
     const { LocalStore } = await import('@/lib/data/local-store');
     const { loadDb, saveDb } = await import('@/lib/data/local-db');
     const { buildEstimateSpecSelection } = await import('@/lib/domain/estimate-template');
@@ -205,10 +205,19 @@ describe.sequential('電子契約：ローカル検証モード（SQL と同じ�
       configuration.lock_version ?? 1
     );
     const db = loadDb();
-    db.quotes.find((row) => row.id === quote.id)!.status = 'accepted';
+    const issued = db.quotes.find((row) => row.id === quote.id)!;
+    issued.status = 'accepted';
+    issued.quote_kind = kind;
     saveDb(db);
     return { store, quote };
   }
+
+  it('承諾済みでも概算・旧形式NULLの見積では契約を開始しない', async () => {
+    for (const kind of ['preliminary', null] as const) {
+      const { store, quote } = await acceptedQuote(kind);
+      await expect(store.beginElectronicContract(admin, quote.id, '顧客', 'c@example.com')).rejects.toThrow('正式見積');
+    }
+  });
 
   it('本部だけが承諾済みの見積から送信でき、二重送信・他人の閲覧・締結後の取り消しは拒否する', async () => {
     const { store, quote } = await acceptedQuote();

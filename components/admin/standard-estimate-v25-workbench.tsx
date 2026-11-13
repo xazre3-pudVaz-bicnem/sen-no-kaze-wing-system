@@ -390,7 +390,7 @@ function WorkbenchBody({
   // Excel明細の入力セルだけにTab・Enter移動を適用し、保存やポップアップは変更しない。
   const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement) || !target.dataset.v25ExcelCol || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!(target instanceof HTMLInputElement) || !target.dataset.v25ExcelCol || event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     const rows = Array.from(event.currentTarget.tBodies[0]?.rows ?? []);
     const row = target.closest('tr');
     const index = row ? rows.indexOf(row) : -1;

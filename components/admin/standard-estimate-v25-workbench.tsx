@@ -1120,6 +1120,15 @@ function WorkbenchBody({
                 {replacementPreview?.error ?? '商品原価・仕様の価格を確認してください'}
               </Alert>
             )}
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs" data-testid="v25-wb-replacement-total-comparison">
+              <p className="font-semibold">税込合計（画面の試算・参考）</p>
+              <p>
+                置換前：{calc.result ? (calc.result.total === null ? '未確定' : yen(calc.result.total)) : '試算不可'}
+                {' → '}
+                置換後：{replacementPreview?.result ? (replacementPreview.result.total === null ? '未確定' : yen(replacementPreview.result.total)) : '試算不可'}
+              </p>
+              <p className="mt-1 text-muted">保存後の正式金額はDBで再計算されます。表示された差額を確定金額として扱わないでください。</p>
+            </div>
             <p className="text-xs leading-5 text-muted">
               この操作では元の旧明細を下書きから除外し、商品行を同じ区分へ1件追加します。旧明細の数量・単位・備考・手動単価は自動で引き継ぎません。カテゴリーは旧グループ名から自動判定しません。保存すると旧明細の情報はDraftから除かれます。
               商品行はその区分の上部へ移動し、商品の標準仕様と現在の原価Versionによって試算します。

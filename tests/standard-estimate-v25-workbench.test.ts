@@ -229,6 +229,48 @@ describe('Excel 風の画面（描画）', () => {
   });
 
 
+  it('「要見直し」の旧明細だけに商品選択アイコンを出し、確定前には削除しない', () => {
+    const editable = { ...initial, lines: [
+      ...initial.lines,
+      {
+        key: 'legacy-interior', line_key: 'legacy-interior', section_code: 'interior_exterior' as const,
+        group_label: '旧仕様', name: '旧サッシ', quantity: '2', unit: '台',
+        price_mode: 'manual' as const, unit_price: '5000', remark: '旧明細', review_required: true,
+      },
+      {
+        key: 'new-unsaved', line_key: null, section_code: 'interior_exterior' as const,
+        group_label: '入力中', name: '未保存の明細', quantity: '1', unit: '式',
+        price_mode: 'manual' as const, unit_price: '200', remark: '', review_required: true,
+      },
+      {
+        key: 'reviewed-interior', line_key: 'reviewed-interior', section_code: 'interior_exterior' as const,
+        group_label: '直接入力', name: '確認済みの明細', quantity: '1', unit: '式',
+        price_mode: 'manual' as const, unit_price: '5000', remark: '', review_required: false,
+      },
+    ] };
+    const html = render(false, { initial: editable });
+    expect((html.match(/data-testid="v25-wb-legacy-line-replace-icon"/g) ?? []).length).toBe(1);
+    expect(html).toContain('旧サッシを商品台帳の商品に置き換える');
+    expect(html).toContain('title="旧明細を商品台帳から置き換える"');
+    expect(html).toContain('value="旧サッシ"'); // 選択前の旧行は維持
+    expect(html).not.toContain('data-testid="v25-wb-legacy-replacement-confirm"');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('planLegacyLineReplacement');
+    expect(source).toContain("line.review_required && Boolean(line.line_key)");
+    expect(source).toContain('setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id, categoryId: pickerCategory })');
+    expect(source).toContain('picker.replaceLineKey && !pickerCategory');
+    expect(source).toContain('置換先カテゴリーを選択（必須）');
+    expect(source).toContain('replacementPending.categoryId');
+    expect(source).toContain('v25-wb-replacement-undo-bar');
+    expect(source).toContain('v25-wb-replacement-total-comparison');
+    expect(source).toContain('直前の置換を元に戻す');
+    expect(source).toContain('JSON.stringify(state) === JSON.stringify(replacementUndo.after)');
+    expect(source).toContain('data-testid="v25-wb-legacy-replacement-confirm"');
+    expect(source).toContain('data-testid="v25-wb-replacement-ack"');
+    expect(source).toContain('この1行を置換（未保存）');
+    expect(render(true, { initial: editable })).not.toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+  });
+
   it('売価単価は数字だけを表示・入力し、切替と行操作を右端メニューへ集約する', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');

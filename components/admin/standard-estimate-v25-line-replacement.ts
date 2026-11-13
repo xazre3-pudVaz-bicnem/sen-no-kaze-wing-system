@@ -20,6 +20,7 @@ export type LegacyLineReplacementPlan =
  * 確認済みの旧明細だけを対象とする。旧明細の数量・単位・備考・手動単価は
  * 商品の選択枠へ自動転記できないため、候補商品の標準仕様・標準原価で再計算する。
  * 単位が変わることを UI で必ず明示し、明示同意するまでは plan を state に反映しない。
+ * 旧明細には商品カテゴリーIDがないため自動推測せず、操作担当者の選択したカテゴリーIDと照合する。
  */
 export function planLegacyLineReplacement(
   state: V25EditorState,
@@ -27,13 +28,16 @@ export function planLegacyLineReplacement(
   candidate: V25WorkbenchCandidate,
   candidates: V25WorkbenchCandidate[],
   costs: V25WorkbenchCosts,
+  confirmedCategoryId: string,
   newSlotKey: string
 ): LegacyLineReplacementPlan {
   const oldLine = state.lines.find((line) => line.key === lineKey);
   if (!oldLine) return { ok: false, error: '置換元の明細が見つかりません。画面を再確認してください' };
-  if (!oldLine.review_required) return { ok: false, error: '置換できるのは「要見直し」の旧明細だけです' };
+  if (!oldLine.review_required || !oldLine.line_key) return { ok: false, error: '置換できるのは保存済みの「要見直し」旧明細だけです' };
   // 別途工事のカタログ登録・保存形式は別工程。直接入力の工事明細を無断で商品行へ移さない。
   if (oldLine.section_code === 'sitework') return { ok: false, error: '別途工事の旧明細は今回の置換対象外です' };
+  if (!confirmedCategoryId) return { ok: false, error: '旧明細に対応する商品カテゴリーを選択してください' };
+  if (candidate.categoryId !== confirmedCategoryId) return { ok: false, error: '確認したカテゴリーと選択商品のカテゴリーが一致しません' };
   if (candidate.section !== oldLine.section_code) return { ok: false, error: '元の明細と商品の区分が異なります' };
   if (candidate.retired || candidate.unavailable) return { ok: false, error: '販売停止・この仕様で選べない商品には置換できません' };
   if (state.slots.length >= 200) return { ok: false, error: '商品の選択枠は200件までです' };

@@ -207,11 +207,12 @@ const render = (readOnly: boolean, view?: { initial?: V25EditorState; candidates
 
 describe('Excel 風の画面（描画）', () => {
 
-  it('旧Excel型の表示密度・固定列・表内スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
+  it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);
     expect(html).toContain('data-testid="v25-excel-toolbar"');
     expect(html).toContain('data-testid="v25-excel-grid-scroll"');
-    expect(html).toContain('max-h-[70vh]');
+    expect(html).toContain('overflow-x-auto');
+    expect(html).not.toContain('max-h-[70vh]');
     expect(html).toContain('sticky left-[8rem]');
     expect(html).toContain('bg-emerald-900');
     expect(html).toContain('data-v25-excel-col="group"');

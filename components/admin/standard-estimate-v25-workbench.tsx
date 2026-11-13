@@ -417,7 +417,7 @@ function WorkbenchBody({
     return (
       <tr className="bg-emerald-900 text-white" data-testid={`v25-section-${code}`}>
         <td colSpan={columnCount} className="border-y border-emerald-800 px-2 py-0.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="flex items-center gap-1.5 text-left text-[11px] font-semibold text-white" onClick={() => toggleSection(code)} aria-expanded={!collapsed.has(code)}>
               <span aria-hidden="true">{collapsed.has(code) ? '▸' : '▾'}</span>
               {label}
@@ -516,11 +516,11 @@ function WorkbenchBody({
                     STANDARD_SECTION_LABEL[code],
                     readOnly ? undefined : (
                       <div className="flex gap-2">
-                        <button type="button" className="btn-secondary btn-sm" data-testid={`v25-wb-add-product-${code}`}
+                        <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-product-${code}`}
                           onClick={() => { setPicker({ section: code, targetKey: null }); setPickerCategory(''); setPickerQuery(''); }}>
                           ＋ 商品台帳から追加
                         </button>
-                        <button type="button" className="btn-secondary btn-sm" data-testid={`v25-wb-add-line-${code}`} onClick={() => addLine(code)}>
+                        <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-line-${code}`} onClick={() => addLine(code)}>
                           ＋ 明細（工事費など）
                         </button>
                       </div>

@@ -728,7 +728,6 @@ function WorkbenchBody({
               <td />
               <td />
               <td />
-              <td />
             </tr>
             <tr>
               <td colSpan={columnCount - 4} className="px-1 py-0.5 text-right text-muted">調整額</td>
@@ -736,12 +735,10 @@ function WorkbenchBody({
               <td />
               <td />
               <td />
-              <td />
             </tr>
             <tr>
               <td colSpan={columnCount - 4} className="px-1 py-0.5 text-right text-muted">消費税</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
-              <td />
               <td />
               <td />
               <td />

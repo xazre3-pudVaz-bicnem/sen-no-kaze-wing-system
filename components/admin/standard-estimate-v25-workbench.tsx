@@ -116,7 +116,7 @@ function WorkbenchBody({
     expense_rate: rateToPercent(initial.expense_rate),
     markup_rate: rateToPercent(initial.markup_rate),
   }));
-  const [showCost, setShowCost] = useState(false);
+  const [showCost, setShowCost] = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
@@ -467,7 +467,7 @@ function WorkbenchBody({
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
       <div className="max-h-[70vh] overflow-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[82rem] min-w-[82rem]' : 'w-[76rem] min-w-[76rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[76rem] min-w-[76rem]' : 'w-[70rem] min-w-[70rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="sticky top-0 z-20 bg-slate-200 text-[10px] text-slate-600">
             <tr>
               <th className="sticky left-0 z-30 w-7 border-b border-r border-slate-300 bg-slate-100 px-0.5 py-0.5 text-center font-normal">#</th>
@@ -493,7 +493,7 @@ function WorkbenchBody({
                   <tr key={line.id} className="border-b border-slate-200 text-slate-700">
                     <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
                     <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">{line.section}</td>
-                    <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-1 py-0.5">{line.name}</td>
+                    <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-1 py-0.5"><span className="block truncate" title={line.name}>{line.name}</span></td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-muted">本体マスターの明細</td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5">{line.unit ?? ''}</td>
@@ -612,7 +612,7 @@ function WorkbenchBody({
                           <td className="space-y-1 px-1 py-0.5">
                             {status && <Badge tone={COST_TONE[status]}>{V25_COST_STATUS_LABEL[status]}</Badge>}
                             {!readOnly && (
-                              <button type="button" className="block text-[0.7rem] text-danger underline"
+                              <button type="button" className="inline-block ml-1 text-[10px] text-danger underline"
                                 onClick={() => setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) }))}>
                                 削除
                               </button>
@@ -678,12 +678,12 @@ function WorkbenchBody({
                               (readOnly ? (
                                 <Badge tone="warn">要見直し</Badge>
                               ) : (
-                                <button type="button" className="block text-left text-[0.7rem] text-navy underline" onClick={() => setLine(line.key, { review_required: false })}>
-                                  要見直し → 見直し済みにする
+                                <button type="button" className="inline-block text-[10px] text-navy underline" title="要見直し → 見直し済みにする" onClick={() => setLine(line.key, { review_required: false })}>
+                                  見直し済みにする
                                 </button>
                               ))}
                             {!readOnly && (
-                              <button type="button" className="block text-[0.7rem] text-danger underline"
+                              <button type="button" className="inline-block ml-1 text-[10px] text-danger underline"
                                 onClick={() => setState((current) => ({ ...current, lines: current.lines.filter((row) => row.key !== line.key) }))}>
                                 削除
                               </button>

@@ -74,7 +74,7 @@ describe('標準見積 v2.5 の編集（PR-B1b の処理を「見積書管理 �
   });
 
   it('別途工事の商品は自動計算を選べず、選ぶと別途見積にする。保存前の確認でも止める', () => {
-    expect(workbench).toContain("disabled={mode === 'auto' && code === 'sitework'}");
+    expect(workbench).toContain("code !== 'sitework' && slot.price_mode !== 'auto'");
     expect(workbench).toContain("const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';");
     expect(workbench).toContain('validateV25EditorState(state, sectionOf)');
   });

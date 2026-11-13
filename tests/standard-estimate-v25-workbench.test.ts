@@ -220,8 +220,8 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('data-v25-excel-col="qty"');
     expect(html).toContain('data-v25-excel-col="note"');
     expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>状態</th>'));
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[63rem] min-w-[63rem]'");
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 3}');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[62rem] min-w-[62rem]'");
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 4}');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
     expect(html).toContain('data-testid="v25-wb-publish"');
@@ -229,24 +229,45 @@ describe('Excel 風の画面（描画）', () => {
   });
 
 
-  it('計算列を廃止し売価単価で計算方法を選び、状態操作を横並びにする', () => {
+  it('売価単価は数字だけを表示・入力し、切替と行操作を右端メニューへ集約する', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(html).not.toContain('>計算</th>');
     expect(html).toContain('>売価単価</th>');
-    expect(html).toContain('data-testid="v25-wb-slot-price-mode"');
-    expect(html).toContain('data-testid="v25-wb-line-price-mode"');
+    expect(html).toContain('>操作</th>');
     expect(html).toContain('data-testid="v25-wb-slot-price-cell"');
     expect(html).toContain('data-testid="v25-wb-line-price-cell"');
-    expect(html).toContain('aria-label="商品売価の計算方法"');
-    expect(html).toContain('aria-label="明細売価の計算方法"');
-    expect(html).toContain('data-testid="v25-wb-line-status-actions"');
-    expect(html).toContain('data-testid="v25-wb-slot-status-actions"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-price-mode"');
+    expect(html).not.toContain('data-testid="v25-wb-line-price-mode"');
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).toContain('data-testid="v25-wb-line-menu"');
+    expect(html).toContain('data-testid="v25-wb-slot-status"');
+    expect(html).toContain('原価未設定');
+    expect(html).toContain('原価更新あり');
+    expect(source).toContain('title={V25_COST_STATUS_LABEL[status]}');
+    expect(html).toContain('data-testid="v25-wb-line-status"');
+    expect(html).toContain('商品台帳から選択');
+    expect(html).toContain('金額を入力する');
+    expect(html).toContain('別途見積にする');
+    expect(html).toContain('自動計算に戻す');
     expect(html).toContain('見直し済みにする');
-    expect(source).toContain('const columnCount = showCost ? 10 : 9;');
-    expect(source).toContain('setSlot(slot.key, { price_mode: event.target.value as V25SlotPriceMode })');
-    expect(source).toContain('setLine(line.key, { price_mode: event.target.value as V25LinePriceMode })');
+    expect(html).toContain('行を削除');
+    expect(source).toContain('const columnCount = showCost ? 11 : 10;');
+    expect(source).toContain("code !== 'sitework' && slot.price_mode !== 'auto'");
+    expect(source).toContain("setSlot(slot.key, { price_mode: 'auto' })");
+    expect(source).toContain("setSlot(slot.key, { price_mode: 'manual' })");
+    expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
+    expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
+    expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
     expect(source).toContain('payload: buildV25SavePayload(state)');
+  });
+
+  it('公開中の版では右端の変更メニューを表示しない', () => {
+    const html = render(true);
+    expect(html).not.toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).not.toContain('data-testid="v25-wb-line-menu"');
+    expect(html).toContain('data-testid="v25-wb-slot-price-cell"');
+    expect(html).toContain('data-testid="v25-wb-line-price-cell"');
   });
 
   it('選択肢が4種類でも表には短い要約だけを出し、ドロップダウンを縦に並べない', () => {

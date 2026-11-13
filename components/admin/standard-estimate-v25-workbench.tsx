@@ -41,6 +41,7 @@ import {
 } from '@/lib/domain/standard-estimate-v25-workbench';
 import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
+import { planLegacyLineReplacement } from '@/components/admin/standard-estimate-v25-line-replacement';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -117,7 +118,9 @@ function WorkbenchBody({
   }));
   const [showCost, setShowCost] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
+  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null; replaceLineKey?: string } | null>(null);
+  const [replacementPending, setReplacementPending] = useState<{ lineKey: string; candidateId: string } | null>(null);
+  const [replacementAcknowledged, setReplacementAcknowledged] = useState(false);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
@@ -172,10 +175,11 @@ function WorkbenchBody({
   ];
 
   useEffect(() => {
-    if (!picker && !selectableFor && !variantEditor && !positionFor) return;
+    if (!picker && !selectableFor && !variantEditor && !positionFor && !replacementPending) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (selectableFor) setSelectableFor(null);
+      if (replacementPending) { setReplacementPending(null); setReplacementAcknowledged(false); }
+      else if (selectableFor) setSelectableFor(null);
       else if (positionFor) {
         setPositionFor(null);
         setPositionDraft(null);
@@ -185,7 +189,7 @@ function WorkbenchBody({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [picker, selectableFor, variantEditor, positionFor]);
+  }, [picker, selectableFor, variantEditor, positionFor, replacementPending]);
 
   const setSlot = (key: string, patch: Partial<V25SlotRow>) =>
     setState((current) => ({ ...current, slots: current.slots.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)) }));
@@ -198,6 +202,13 @@ function WorkbenchBody({
 
   const choose = (candidate: V25WorkbenchCandidate) => {
     if (!picker) return;
+    if (picker.replaceLineKey) {
+      // 旧行は商品を選んだ段階では残す。数量・仕様・試算金額の比較と明示確認後にだけ置換する。
+      setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id });
+      setReplacementAcknowledged(false);
+      setPicker(null);
+      return;
+    }
     // 別途工事は販売費・経費・掛率を掛けない（自動にできない）。Web では金額を確定しないので別途見積にする
     const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';
     // 選択枠の数量は、外壁は 4（面）、それ以外は 1（シミュレーターと連携する選択枠の決まり）
@@ -372,6 +383,7 @@ function WorkbenchBody({
     return candidates.filter(
       (candidate) =>
         !candidate.retired &&
+        (!picker.replaceLineKey || !candidate.unavailable) &&
         candidate.section === picker.section &&
         (!pickerCategory || candidate.categoryId === pickerCategory) &&
         (!query || [candidate.name, candidate.manufacturer, candidate.modelNo, candidate.categoryName].join(' ').toLocaleLowerCase('ja-JP').includes(query))
@@ -659,8 +671,19 @@ function WorkbenchBody({
                               onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                           </td>
                           <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-0.5 py-0.5">
-                            <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
-                              onChange={(event) => setLine(line.key, { name: event.target.value })} />
+                            <div className="flex min-w-0 items-center gap-0.5">
+                              <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setLine(line.key, { name: event.target.value })} />
+                              {!readOnly && line.review_required && code !== 'sitework' && (
+                                <button type="button" title="旧明細を商品台帳から置き換える"
+                                  aria-label={`${line.name || '旧明細'}を商品台帳の商品に置き換える`}
+                                  data-testid="v25-wb-legacy-line-replace-icon"
+                                  className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"
+                                  onClick={() => { setPicker({ section: code, targetKey: null, replaceLineKey: line.key }); setPickerCategory(''); setPickerQuery(''); }}>
+                                  <Package className="size-3.5" aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
                           </td>
 
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
@@ -960,7 +983,7 @@ function WorkbenchBody({
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setPicker(null)}>
           <div role="dialog" aria-modal="true" aria-label="商品台帳から選ぶ" className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <p className="font-semibold">{STANDARD_SECTION_LABEL[picker.section]}：商品台帳から選ぶ</p>
+              <p className="font-semibold">{STANDARD_SECTION_LABEL[picker.section]}：{picker.replaceLineKey ? '旧明細を置き換える商品を選ぶ' : '商品台帳から選ぶ'}</p>
               <button type="button" className="text-sm text-muted underline" onClick={() => setPicker(null)}>閉じる</button>
             </div>
             <div className="flex flex-wrap gap-2 border-b border-line px-4 py-2">

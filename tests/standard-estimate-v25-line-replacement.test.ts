@@ -31,7 +31,7 @@ const costs: V25WorkbenchCosts = {
   pinned: {}, currentProduct: { 'p-wall': 1000 }, currentChoice: { white: 0 },
 };
 const proposal = (state = base, candidate = product, overrideCosts = costs) =>
-  planLegacyLineReplacement(state, 'legacy-1', candidate, [product, candidate], overrideCosts, 'replacement-1');
+  planLegacyLineReplacement(state, 'legacy-1', candidate, [product, candidate], overrideCosts, 'c-wall', 'replacement-1');
 
 describe('旧明細1行の安全な商品置換案（UI stateのみ、DB操作なし）', () => {
   it('要見直しの旧1行を消して商品1枠に置き換え、他の行と元の状態を維持する', () => {
@@ -90,13 +90,25 @@ describe('旧明細1行の安全な商品置換案（UI stateのみ、DB操作�
     expect(proposal(base, { ...product, unavailable: true }).ok).toBe(false);
   });
 
+  it('旧明細のカテゴリーを推測せず、担当者の指定と選択商品が一致しない場合は停止する', () => {
+    expect(planLegacyLineReplacement(base, 'legacy-1', product, [product], costs, '', 'new')).toMatchObject({ ok: false });
+    expect(planLegacyLineReplacement(base, 'legacy-1', product, [product], costs, 'unrelated-category', 'new')).toMatchObject({ ok: false });
+    const saved = planLegacyLineReplacement(base, 'legacy-1', product, [product], costs, 'c-wall', 'new');
+    expect(saved.ok).toBe(true);
+    const unsaved = {
+      ...base, lines: base.lines.map((line) => line.key === 'legacy-1'
+        ? { ...line, line_key: null } : line),
+    };
+    expect(planLegacyLineReplacement(unsaved, 'legacy-1', product, [product], costs, 'c-wall', 'new').ok).toBe(false);
+  });
+
   it('見直し済み・対象外の工事明細は勝手に商品行へ変更しない', () => {
-    expect(planLegacyLineReplacement(base, 'legacy-2', product, [product], costs, 'new').ok).toBe(false);
+    expect(planLegacyLineReplacement(base, 'legacy-2', product, [product], costs, 'c-wall', 'new').ok).toBe(false);
     const sitework = {
       ...base, lines: base.lines.map((line) => line.key === 'legacy-1'
         ? { ...line, section_code: 'sitework' as const } : line),
     };
     expect(proposal(sitework).ok).toBe(false);
-    expect(planLegacyLineReplacement(base, 'missing-key', product, [product], costs, 'new').ok).toBe(false);
+    expect(planLegacyLineReplacement(base, 'missing-key', product, [product], costs, 'c-wall', 'new').ok).toBe(false);
   });
 });

@@ -398,6 +398,44 @@ function WorkbenchBody({
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
   }, [candidates, picker]);
 
+  // 旧明細の置換は確認画面内でのみ試算し、明示確定まで state を変えない。
+  // 実 DB のロールバック・競合・金額試験が完了するまでは本番利用を承認しない。
+  const replacementSource = replacementPending
+    ? state.lines.find((line) => line.key === replacementPending.lineKey) ?? null : null;
+  const replacementCandidate = replacementPending ? candidateById.get(replacementPending.candidateId) : undefined;
+  const replacementPlan = replacementPending && replacementCandidate
+    ? planLegacyLineReplacement(
+        state, replacementPending.lineKey, replacementCandidate, candidates, costs,
+        `slot-replacement-preview-${replacementPending.lineKey}`
+      ) : null;
+  const replacementPreview = replacementPlan?.ok
+    ? calculateV25Workbench(rule, taxRule, replacementPlan.state, baseLines, costs, sectionOf)
+    : null;
+  const previousLineAmount = replacementSource
+    ? resultByKey.get(calc.lineKeyOf[replacementSource.key] ?? '')?.amount ?? null
+    : null;
+  const replacementPriceLine = replacementPlan?.ok && replacementPreview?.result
+    ? replacementPreview.result.sections.flatMap((section) => section.lines)
+        .find((line) => line.key === replacementPreview.lineKeyOf[replacementPlan.newSlot.key])
+    : null;
+  const replacementCanConfirm = Boolean(
+    !readOnly && replacementAcknowledged && replacementPlan?.ok &&
+    replacementPreview && !replacementPreview.error && replacementPriceLine?.amount !== null &&
+    replacementPriceLine?.amount !== undefined
+  );
+  const closeReplacement = () => { setReplacementPending(null); setReplacementAcknowledged(false); };
+  const confirmReplacement = () => {
+    if (!replacementPending || !replacementCandidate || !replacementCanConfirm) return;
+    // 確定時にも現在の編集状態から作り直す。削除と商品追加を一回の state 更新にまとめる。
+    const confirmed = planLegacyLineReplacement(
+      state, replacementPending.lineKey, replacementCandidate, candidates, costs, newKey('slot')
+    );
+    if (!confirmed.ok) { onNotice({ tone: 'danger', text: confirmed.error }); return; }
+    setState(confirmed.state);
+    closeReplacement();
+    onNotice({ tone: 'success', text: '旧明細1行を商品行に置き換えました（画面内・未保存）。数量・仕様・価格を確認し、下書き保存後に金額を再確認してください。' });
+  };
+
   // Excel明細の入力セルだけにTab・Enter移動を適用し、保存やポップアップは変更しない。
   const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {
     const target = event.target;
@@ -1007,6 +1045,68 @@ function WorkbenchBody({
               ))}
               {pickerCandidates.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">選べる商品がありません。</li>}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {replacementPending && replacementSource && replacementCandidate && (
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-[7vh]"
+          onClick={closeReplacement}>
+          <div role="dialog" aria-modal="true" aria-label="旧明細を商品に置き換える前の確認"
+            data-testid="v25-wb-legacy-replacement-confirm"
+            className="w-full max-w-2xl space-y-3 rounded-xl bg-white p-4 shadow-xl"
+            onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-2">
+              <h3 className="font-semibold">旧明細1行を商品台帳の商品へ置き換える</h3>
+              <button type="button" className="text-sm text-muted underline" onClick={closeReplacement}>閉じる</button>
+            </div>
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="space-y-1 rounded-md border border-line p-3" data-testid="v25-wb-replacement-before">
+                <p className="text-xs font-semibold text-muted">置換前：要見直しの旧明細</p>
+                <p className="font-medium">{replacementSource.name}</p>
+                <p>数量：{replacementSource.quantity} {replacementSource.unit || '（単位なし）'}</p>
+                <p>単価：{replacementSource.price_mode === 'por' ? '別途見積' : yen(Number(replacementSource.unit_price))}</p>
+                <p>この行の税別金額：{replacementSource.price_mode === 'por' ? '別途見積（未確定）' : yen(previousLineAmount)}</p>
+                {replacementSource.remark && <p className="break-words text-xs text-muted">備考：{replacementSource.remark}</p>}
+              </div>
+              <div className="space-y-1 rounded-md border border-line p-3" data-testid="v25-wb-replacement-after">
+                <p className="text-xs font-semibold text-muted">置換後：商品台帳の標準仕様</p>
+                <p className="font-medium">{replacementCandidate.name}</p>
+                <p className="text-xs text-muted">{[replacementCandidate.manufacturer, replacementCandidate.modelNo].filter(Boolean).join(' ／ ')}</p>
+                <p>数量：{replacementPlan?.ok ? replacementPlan.newSlot.quantity : '—'}（{replacementCandidate.categoryCode === 'exterior-wall' ? '面' : '商品選択枠'}）</p>
+                <p className="break-words text-xs">仕様：{replacementPlan?.ok ? v25VariantSummary(replacementCandidate, replacementPlan.newSlot.variant_choices) : '確認できません'}</p>
+                <p>試算売価単価：{replacementPriceLine ? yen(replacementPriceLine.sale_unit_price) : '未算定'}</p>
+                <p>この行の試算税別金額：{replacementPriceLine ? yen(replacementPriceLine.amount) : '未算定'}</p>
+              </div>
+            </div>
+            {!replacementPlan?.ok && (
+              <Alert tone="danger" title="この商品への置換はできません">{replacementPlan?.error ?? '置換内容を確認できません'}</Alert>
+            )}
+            {replacementPlan?.ok && (replacementPreview?.error || replacementPriceLine?.amount == null) && (
+              <Alert tone="danger" title="置換後の試算を確定できません">
+                {replacementPreview?.error ?? '商品原価・仕様の価格を確認してください'}
+              </Alert>
+            )}
+            <p className="text-xs leading-5 text-muted">
+              この操作では元の旧明細を下書きから除外し、商品行を同じ区分へ1件追加します。旧明細の数量・単位・備考・手動単価は自動で引き継ぎません。
+              商品行はその区分の上部へ移動し、商品の標準仕様と現在の原価Versionによって試算します。
+              画面の金額は目安であり、正式金額は下書き保存後にDBで再計算されます。
+            </p>
+            <label className="flex items-start gap-2 rounded-md bg-slate-50 p-3 text-sm" data-testid="v25-wb-replacement-ack-label">
+              <input type="checkbox" className="mt-1 size-4" checked={replacementAcknowledged}
+                onChange={(event) => setReplacementAcknowledged(event.target.checked)}
+                data-testid="v25-wb-replacement-ack" />
+              <span>元の明細が除かれること、数量・単位・仕様・税別金額が変更され得ることを確認しました。</span>
+            </label>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+              <Button type="button" variant="secondary" onClick={closeReplacement}>キャンセル</Button>
+              <Button type="button" variant="secondary" onClick={() => {
+                setPicker({ section: replacementSource.section_code, targetKey: null, replaceLineKey: replacementSource.key });
+                setPickerCategory(''); setPickerQuery(''); closeReplacement();
+              }}>商品を選び直す</Button>
+              <Button type="button" disabled={!replacementCanConfirm} data-testid="v25-wb-replacement-confirm"
+                onClick={confirmReplacement}>この1行を置換（未保存）</Button>
+            </div>
           </div>
         </div>
       )}

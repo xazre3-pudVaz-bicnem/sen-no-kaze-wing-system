@@ -9,6 +9,7 @@ import { Alert, Badge } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 import { StandardEstimateV25Workbench } from '@/components/admin/standard-estimate-v25-workbench';
+import { StandardEstimateWorkspaceLayout } from '@/components/admin/standard-estimate-workspace-layout';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 
 export const dynamic = 'force-dynamic';
@@ -54,19 +55,22 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
   const workspace = selected ? await loadStandardEstimateWorkspace(supabase, selected) : null;
 
   return (
-    <AdminPage title="見積書管理" lead="標準見積を Excel の表と同じ並びで編集し、本部が公開します。" actions={headerActions}>
+    <AdminPage title="見積書管理" lead="標準見積を Excel の表と同じ並びで編集し、本部が公開します。" actions={headerActions} wide>
       <QuoteManagementTabs active="standard" />
       {sp.started && <Alert tone="success">v2.5 の下書きを作りました。内容を確認して保存・公開してください。</Alert>}
       {sp.error && <Alert tone="danger">{sp.error === 'local' ? '標準見積の管理はSupabase接続環境で利用できます。' : sp.error === 'invalid' ? '入力内容を確認してください。' : sp.error}</Alert>}
 
-      <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-        <nav aria-label="標準見積の一覧" className="space-y-1 rounded-lg border border-line bg-white p-2 lg:max-h-[78vh] lg:overflow-y-auto" data-testid="standard-estimate-selector">
+      <StandardEstimateWorkspaceLayout
+        selectedName={selected?.identity}
+        sidebar={(
+          <nav aria-label="標準見積の一覧" className="space-y-1 rounded-lg border border-line bg-white p-2" data-testid="standard-estimate-selector">
           {entries.length === 0 && <p className="px-2 py-4 text-sm text-muted">標準見積がまだありません。「新しい標準見積を作る」で、本体マスターの公開版から作成してください。</p>}
           {entries.map((entry) => (
             <EntryLink key={entry.masterId} entry={entry} active={entry.masterId === selected?.masterId} />
           ))}
-        </nav>
-
+          </nav>
+        )}
+      >
         <div className="min-w-0 space-y-3">
           {selected && workspace ? (
             <>
@@ -122,7 +126,7 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
             <Alert tone="warn">この標準見積には公開中の版・下書きがありません。</Alert>
           ) : null}
         </div>
-      </div>
+      </StandardEstimateWorkspaceLayout>
     </AdminPage>
   );
 }

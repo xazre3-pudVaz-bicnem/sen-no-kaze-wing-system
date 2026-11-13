@@ -2,9 +2,9 @@ import Link from 'next/link';
 import type { ComponentProps, ReactNode } from 'react';
 import { Alert } from '@/components/ui';
 
-export function AdminPage({ title, lead, actions, notice, children }: { title: string; lead?: string; actions?: ReactNode; notice?: ReactNode; children: ReactNode }) {
+export function AdminPage({ title, lead, actions, notice, children, wide = false }: { title: string; lead?: string; actions?: ReactNode; notice?: ReactNode; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className={wide ? "mx-auto w-full max-w-none" : "mx-auto max-w-6xl"}>
       {notice && <div className="mb-4 rounded-xl border border-forest/20 border-l-4 border-l-forest bg-forest/5 px-4 py-3 text-sm leading-6 text-ink-soft">{notice}</div>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>

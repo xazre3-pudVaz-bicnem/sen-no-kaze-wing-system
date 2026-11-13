@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 
 type StandardEstimateWorkspaceLayoutProps = {
   sidebar: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   selectedName?: string;
 };
 

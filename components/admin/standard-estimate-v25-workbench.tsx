@@ -44,8 +44,6 @@ import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
-const SLOT_MODE_LABEL: Record<V25SlotPriceMode, string> = { auto: '自動', manual: '売価入力', por: '別途見積' };
-const LINE_MODE_LABEL: Record<V25LinePriceMode, string> = { manual: '金額確定', por: '別途見積' };
 const RATE_LABEL = { sales_fee_rate: '販売費率', expense_rate: '経費率', markup_rate: '掛率' } as const;
 
 let rowSeq = 0;
@@ -410,7 +408,7 @@ function WorkbenchBody({
   };
 
   let rowNumber = 0;
-  const columnCount = showCost ? 10 : 9;
+  const columnCount = showCost ? 11 : 10;
 
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
@@ -467,7 +465,7 @@ function WorkbenchBody({
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
       <div className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[69rem] min-w-[69rem]' : 'w-[63rem] min-w-[63rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[68rem] min-w-[68rem]' : 'w-[62rem] min-w-[62rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="sticky top-0 z-20 bg-slate-200 text-[10px] text-slate-600">
             <tr>
               <th className="sticky left-0 z-30 w-7 border-b border-r border-slate-300 bg-slate-100 px-0.5 py-0.5 text-center font-normal">#</th>
@@ -476,10 +474,11 @@ function WorkbenchBody({
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
               {showCost && <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
-              <th className="w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
+              <th className="w-28 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
               <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
-              <th className="w-32 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
-              <th className="w-[9rem] border-b border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
+              <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
+              <th className="w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
+              <th className="w-10 border-b border-slate-300 px-0.5 py-0.5 text-center font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -500,6 +499,7 @@ function WorkbenchBody({
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.amount)}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5" />
                     <td className="px-1 py-0.5 text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
+                    <td className="px-1 py-0.5" />
                   </tr>
                 );
               })}
@@ -554,8 +554,6 @@ function WorkbenchBody({
                             <div className="flex min-w-0 items-center gap-1">
                               <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(" ／ ")}>{candidate?.name ?? "（商品が見つかりません）"}</span>
                               {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
-                              {!readOnly && <button type="button" className="shrink-0 text-[10px] text-navy underline" aria-label={`${candidate?.name ?? "商品"}を選び直す`}
-                                onClick={() => { setPicker({ section: code, targetKey: slot.key }); setPickerCategory(""); setPickerQuery(""); }}>変更</button>}
                               {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(" ／ ")}</span>}
                             </div>
                           </td>
@@ -570,23 +568,16 @@ function WorkbenchBody({
                               {slot.price_mode === 'auto' ? (missing ? '原価未設定' : yen(result?.cost_unit_price)) : '—'}
                             </td>
                           )}
-                          <td className="border-r border-slate-200 px-0.5 py-0.5">
-                            <div className="flex min-w-0 items-center gap-1" data-testid="v25-wb-slot-price-cell">
-                              <Select value={slot.price_mode} disabled={readOnly} aria-label="商品売価の計算方法" data-testid="v25-wb-slot-price-mode"
-                                className={`h-6 shrink-0 appearance-auto rounded-sm border-0 bg-amber-50 pl-0.5 pr-1 text-[10px] shadow-none focus-visible:ring-1 ${slot.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
-                                onChange={(event) => setSlot(slot.key, { price_mode: event.target.value as V25SlotPriceMode })}>
-                                {(Object.keys(SLOT_MODE_LABEL) as V25SlotPriceMode[]).map((mode) => (
-                                  <option key={mode} value={mode} disabled={mode === 'auto' && code === 'sitework'}>{SLOT_MODE_LABEL[mode]}</option>
-                                ))}
-                              </Select>
-                              {slot.price_mode === 'manual' ? (
-                                <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
-                                  className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-amber-50 px-0.5 text-right text-[11px] shadow-none focus-visible:ring-1"
-                                  onChange={(event) => setSlot(slot.key, { manual_unit_price: event.target.value })} />
-                              ) : slot.price_mode === 'auto' ? (
-                                <span className="min-w-0 flex-1 truncate text-right tabular-nums" title={yen(result?.sale_unit_price)}>{yen(result?.sale_unit_price)}</span>
-                              ) : null}
-                            </div>
+                          <td className="border-r border-slate-200 px-0.5 py-0.5 text-right" data-testid="v25-wb-slot-price-cell">
+                            {slot.price_mode === 'manual' ? (
+                              <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
+                                className="h-6 w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setSlot(slot.key, { manual_unit_price: event.target.value })} />
+                            ) : slot.price_mode === 'auto' ? (
+                              <span className="block truncate px-1 tabular-nums" title={yen(result?.sale_unit_price)}>{yen(result?.sale_unit_price)}</span>
+                            ) : (
+                              <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
+                            )}
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">
                             {slot.price_mode === 'por' ? (
@@ -599,16 +590,8 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0.5">
-                            <div className="flex items-center gap-1 whitespace-nowrap" data-testid="v25-wb-slot-status-actions">
-                              {status && <Badge tone={COST_TONE[status]}>{V25_COST_STATUS_LABEL[status]}</Badge>}
-                              {!readOnly && (
-                                <button type="button" className="shrink-0 text-[10px] text-danger underline"
-                                  onClick={() => setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) }))}>
-                                  削除
-                                </button>
-                              )}
-                            </div>
+                          <td className="border-r border-slate-200 px-1 py-0.5" data-testid="v25-wb-slot-status">
+                            {status && <Badge tone={COST_TONE[status]}>{V25_COST_STATUS_LABEL[status]}</Badge>}
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5">
                             <div className="flex min-w-0 items-center gap-2">
@@ -620,6 +603,34 @@ function WorkbenchBody({
                                   onClick={() => openVariant(slot)}>{readOnly ? '仕様を確認' : '仕様を変更'}</button>
                               )}
                             </div>
+                          </td>
+
+                          <td className="relative px-0.5 py-0.5 text-center">
+                            {!readOnly && (
+                              <details className="group relative inline-block" data-testid="v25-wb-slot-menu"
+                                onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); } }}>
+                                <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+                                  aria-label={(candidate?.name ?? '商品') + 'の操作'} title="行の操作">⋯</summary>
+                                <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setPicker({ section: code, targetKey: slot.key }); setPickerCategory(''); setPickerQuery(''); }}>商品台帳から選択</button>
+                                  {slot.price_mode !== 'manual' && (
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'manual' }); }}>金額を入力する</button>
+                                  )}
+                                  {slot.price_mode !== 'por' && (
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'por' }); }}>別途見積にする</button>
+                                  )}
+                                  {code !== 'sitework' && slot.price_mode !== 'auto' && (
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'auto' }); }}>自動計算に戻す</button>
+                                  )}
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) })); }}>行を削除</button>
+                                </div>
+                              </details>
+                            )}
                           </td>
                         </tr>
                         </Fragment>
@@ -650,19 +661,14 @@ function WorkbenchBody({
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
                           {showCost && <td className="border-r border-slate-200 px-1 py-0.5 text-right text-muted">—</td>}
-                          <td className="border-r border-slate-200 px-0.5 py-0.5">
-                            <div className="flex min-w-0 items-center gap-1" data-testid="v25-wb-line-price-cell">
-                              <Select value={line.price_mode} disabled={readOnly} aria-label="明細売価の計算方法" data-testid="v25-wb-line-price-mode"
-                                className={`h-6 shrink-0 appearance-auto rounded-sm border-0 bg-amber-50 pl-0.5 pr-1 text-[10px] shadow-none focus-visible:ring-1 ${line.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
-                                onChange={(event) => setLine(line.key, { price_mode: event.target.value as V25LinePriceMode })}>
-                                {(Object.keys(LINE_MODE_LABEL) as V25LinePriceMode[]).map((mode) => <option key={mode} value={mode}>{LINE_MODE_LABEL[mode]}</option>)}
-                              </Select>
-                              {line.price_mode === 'manual' && (
-                                <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
-                                  className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-amber-50 px-0.5 text-right text-[11px] shadow-none focus-visible:ring-1"
-                                  onChange={(event) => setLine(line.key, { unit_price: event.target.value })} />
-                              )}
-                            </div>
+                          <td className="border-r border-slate-200 px-0.5 py-0.5 text-right" data-testid="v25-wb-line-price-cell">
+                            {line.price_mode === 'manual' ? (
+                              <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
+                                className="h-6 w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setLine(line.key, { unit_price: event.target.value })} />
+                            ) : (
+                              <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
+                            )}
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">
                             {line.price_mode === 'por' ? (
@@ -673,28 +679,38 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0.5">
-                            <div className="flex items-center gap-1 whitespace-nowrap" data-testid="v25-wb-line-status-actions">
-                              {line.review_required &&
-                                (readOnly ? (
-                                  <Badge tone="warn">要見直し</Badge>
-                                ) : (
-                                  <button type="button" className="shrink-0 text-[10px] text-navy underline" aria-label="見直し済みにする"
-                                    title="要見直し → 見直し済みにする" onClick={() => setLine(line.key, { review_required: false })}>
-                                    見直し済みにする
-                                  </button>
-                                ))}
-                              {!readOnly && (
-                                <button type="button" className="shrink-0 text-[10px] text-danger underline"
-                                  onClick={() => setState((current) => ({ ...current, lines: current.lines.filter((row) => row.key !== line.key) }))}>
-                                  削除
-                                </button>
-                              )}
-                            </div>
+                          <td className="border-r border-slate-200 px-1 py-0.5" data-testid="v25-wb-line-status">
+                            {line.review_required && <Badge tone="warn">要見直し</Badge>}
                           </td>
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
                             <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 w-full rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
+                          </td>
+
+                          <td className="relative px-0.5 py-0.5 text-center">
+                            {!readOnly && (
+                              <details className="group relative inline-block" data-testid="v25-wb-line-menu"
+                                onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); } }}>
+                                <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+                                  aria-label={(line.name || '明細') + 'の操作'} title="行の操作">⋯</summary>
+                                <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
+                                  {line.price_mode !== 'manual' && (
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { price_mode: 'manual' }); }}>金額を入力する</button>
+                                  )}
+                                  {line.price_mode !== 'por' && (
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { price_mode: 'por' }); }}>別途見積にする</button>
+                                  )}
+                                  {line.review_required && (
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { review_required: false }); }}>見直し済みにする</button>
+                                  )}
+                                  <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50"
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setState((current) => ({ ...current, lines: current.lines.filter((row) => row.key !== line.key) })); }}>行を削除</button>
+                                </div>
+                              </details>
+                            )}
                           </td>
                         </tr>
                       );
@@ -705,31 +721,38 @@ function WorkbenchBody({
           </tbody>
           <tfoot className="bg-slate-50 text-xs">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
+              <td colSpan={columnCount - 4} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
               <td className="px-1 py-0.5.5 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
               <td />
               <td />
+              <td />
+              <td />
             </tr>
             <tr>
-              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">調整額</td>
+              <td colSpan={columnCount - 4} className="px-1 py-0.5 text-right text-muted">調整額</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
               <td />
               <td />
+              <td />
+              <td />
             </tr>
             <tr>
-              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">消費税</td>
+              <td colSpan={columnCount - 4} className="px-1 py-0.5 text-right text-muted">消費税</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
+              <td />
+              <td />
               <td />
               <td />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={columnCount - 4} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="px-1 py-0.5.5 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
               <td className="px-1 py-0.5.5 text-[0.68rem] text-muted">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
+              <td />
               <td />
             </tr>
           </tfoot>

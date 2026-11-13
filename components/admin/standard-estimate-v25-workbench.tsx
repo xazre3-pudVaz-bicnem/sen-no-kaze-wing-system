@@ -410,7 +410,7 @@ function WorkbenchBody({
   };
 
   let rowNumber = 0;
-  const columnCount = showCost ? 11 : 10;
+  const columnCount = showCost ? 10 : 9;
 
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
@@ -467,7 +467,7 @@ function WorkbenchBody({
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
       <div className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[70rem] min-w-[70rem]' : 'w-[64rem] min-w-[64rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[69rem] min-w-[69rem]' : 'w-[63rem] min-w-[63rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="sticky top-0 z-20 bg-slate-200 text-[10px] text-slate-600">
             <tr>
               <th className="sticky left-0 z-30 w-7 border-b border-r border-slate-300 bg-slate-100 px-0.5 py-0.5 text-center font-normal">#</th>
@@ -475,11 +475,10 @@ function WorkbenchBody({
               <th className="sticky left-[8rem] z-30 w-[15rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">品名</th>
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
               <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
-              <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">計算</th>
               {showCost && <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
-              <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
+              <th className="w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価・方法</th>
               <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
-              <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
+              <th className="w-32 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
               <th className="w-[9rem] border-b border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
             </tr>
           </thead>
@@ -496,7 +495,6 @@ function WorkbenchBody({
                     <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-1 py-0.5"><span className="block truncate" title={line.name}>{line.name}</span></td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5">{line.unit ?? ''}</td>
-                    <td className="border-r border-slate-200 px-1 py-0.5 text-muted">自動</td>
                     {showCost && <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.sale_unit_price)}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.amount)}</td>
@@ -567,26 +565,28 @@ function WorkbenchBody({
                               onChange={(event) => setSlot(slot.key, { quantity: event.target.value })} />
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5 text-muted">—</td>
-                          <td className="border-r border-slate-200 px-0.5 py-0.5">
-                            <Select value={slot.price_mode} disabled={readOnly} aria-label="計算" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
-                              onChange={(event) => setSlot(slot.key, { price_mode: event.target.value as V25SlotPriceMode })}>
-                              {(Object.keys(SLOT_MODE_LABEL) as V25SlotPriceMode[]).map((mode) => (
-                                <option key={mode} value={mode} disabled={mode === 'auto' && code === 'sitework'}>{SLOT_MODE_LABEL[mode]}</option>
-                              ))}
-                            </Select>
-                          </td>
                           {showCost && (
                             <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">
                               {slot.price_mode === 'auto' ? (missing ? '原価未設定' : yen(result?.cost_unit_price)) : '—'}
                             </td>
                           )}
-                          <td className="border-r border-slate-200 px-0.5 py-0.5 text-right">
-                            {slot.price_mode === 'manual' ? (
-                              <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
-                                onChange={(event) => setSlot(slot.key, { manual_unit_price: event.target.value })} />
-                            ) : (
-                              <span className="block pt-0.5 tabular-nums">{slot.price_mode === 'por' ? '別途見積' : yen(result?.sale_unit_price)}</span>
-                            )}
+                          <td className="border-r border-slate-200 px-0.5 py-0.5">
+                            <div className="flex min-w-0 items-center gap-1" data-testid="v25-wb-slot-price-cell">
+                              <Select value={slot.price_mode} disabled={readOnly} aria-label="商品売価の計算方法" data-testid="v25-wb-slot-price-mode"
+                                className={`h-6 shrink-0 rounded-sm border-0 bg-amber-50 px-0.5 text-[10px] shadow-none focus-visible:ring-1 ${slot.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
+                                onChange={(event) => setSlot(slot.key, { price_mode: event.target.value as V25SlotPriceMode })}>
+                                {(Object.keys(SLOT_MODE_LABEL) as V25SlotPriceMode[]).map((mode) => (
+                                  <option key={mode} value={mode} disabled={mode === 'auto' && code === 'sitework'}>{SLOT_MODE_LABEL[mode]}</option>
+                                ))}
+                              </Select>
+                              {slot.price_mode === 'manual' ? (
+                                <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
+                                  className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-amber-50 px-0.5 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                  onChange={(event) => setSlot(slot.key, { manual_unit_price: event.target.value })} />
+                              ) : slot.price_mode === 'auto' ? (
+                                <span className="min-w-0 flex-1 truncate text-right tabular-nums" title={yen(result?.sale_unit_price)}>{yen(result?.sale_unit_price)}</span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">
                             {slot.price_mode === 'por' ? (
@@ -599,14 +599,16 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          <td className="space-y-1 px-1 py-0.5">
-                            {status && <Badge tone={COST_TONE[status]}>{V25_COST_STATUS_LABEL[status]}</Badge>}
-                            {!readOnly && (
-                              <button type="button" className="inline-block ml-1 text-[10px] text-danger underline"
-                                onClick={() => setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) }))}>
-                                削除
-                              </button>
-                            )}
+                          <td className="border-r border-slate-200 px-1 py-0.5">
+                            <div className="flex items-center gap-1 whitespace-nowrap" data-testid="v25-wb-slot-status-actions">
+                              {status && <Badge tone={COST_TONE[status]}>{V25_COST_STATUS_LABEL[status]}</Badge>}
+                              {!readOnly && (
+                                <button type="button" className="shrink-0 text-[10px] text-danger underline"
+                                  onClick={() => setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) }))}>
+                                  削除
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5">
                             <div className="flex min-w-0 items-center gap-2">
@@ -647,20 +649,20 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 px-0.5 py-0.5">
-                            <Select value={line.price_mode} disabled={readOnly} aria-label="明細の計算" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
-                              onChange={(event) => setLine(line.key, { price_mode: event.target.value as V25LinePriceMode })}>
-                              {(Object.keys(LINE_MODE_LABEL) as V25LinePriceMode[]).map((mode) => <option key={mode} value={mode}>{LINE_MODE_LABEL[mode]}</option>)}
-                            </Select>
-                          </td>
                           {showCost && <td className="border-r border-slate-200 px-1 py-0.5 text-right text-muted">—</td>}
-                          <td className="border-r border-slate-200 px-0.5 py-0.5 text-right">
-                            {line.price_mode === 'manual' ? (
-                              <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
-                                onChange={(event) => setLine(line.key, { unit_price: event.target.value })} />
-                            ) : (
-                              <span className="block pt-0.5">別途見積</span>
-                            )}
+                          <td className="border-r border-slate-200 px-0.5 py-0.5">
+                            <div className="flex min-w-0 items-center gap-1" data-testid="v25-wb-line-price-cell">
+                              <Select value={line.price_mode} disabled={readOnly} aria-label="明細売価の計算方法" data-testid="v25-wb-line-price-mode"
+                                className={`h-6 shrink-0 rounded-sm border-0 bg-amber-50 px-0.5 text-[10px] shadow-none focus-visible:ring-1 ${line.price_mode === 'por' ? 'w-full' : 'w-[4.8rem]'}`}
+                                onChange={(event) => setLine(line.key, { price_mode: event.target.value as V25LinePriceMode })}>
+                                {(Object.keys(LINE_MODE_LABEL) as V25LinePriceMode[]).map((mode) => <option key={mode} value={mode}>{LINE_MODE_LABEL[mode]}</option>)}
+                              </Select>
+                              {line.price_mode === 'manual' && (
+                                <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
+                                  className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-amber-50 px-0.5 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                  onChange={(event) => setLine(line.key, { unit_price: event.target.value })} />
+                              )}
+                            </div>
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">
                             {line.price_mode === 'por' ? (
@@ -671,21 +673,24 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          <td className="space-y-1 px-1 py-0.5">
-                            {line.review_required &&
-                              (readOnly ? (
-                                <Badge tone="warn">要見直し</Badge>
-                              ) : (
-                                <button type="button" className="inline-block text-[10px] text-navy underline" title="要見直し → 見直し済みにする" onClick={() => setLine(line.key, { review_required: false })}>
-                                  見直し済みにする
+                          <td className="border-r border-slate-200 px-1 py-0.5">
+                            <div className="flex items-center gap-1 whitespace-nowrap" data-testid="v25-wb-line-status-actions">
+                              {line.review_required &&
+                                (readOnly ? (
+                                  <Badge tone="warn">要見直し</Badge>
+                                ) : (
+                                  <button type="button" className="shrink-0 text-[10px] text-navy underline" aria-label="見直し済みにする"
+                                    title="要見直し → 見直し済みにする" onClick={() => setLine(line.key, { review_required: false })}>
+                                    見直し済み
+                                  </button>
+                                ))}
+                              {!readOnly && (
+                                <button type="button" className="shrink-0 text-[10px] text-danger underline"
+                                  onClick={() => setState((current) => ({ ...current, lines: current.lines.filter((row) => row.key !== line.key) }))}>
+                                  削除
                                 </button>
-                              ))}
-                            {!readOnly && (
-                              <button type="button" className="inline-block ml-1 text-[10px] text-danger underline"
-                                onClick={() => setState((current) => ({ ...current, lines: current.lines.filter((row) => row.key !== line.key) }))}>
-                                削除
-                              </button>
-                            )}
+                              )}
+                            </div>
                           </td>
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
                             <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 w-full rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"

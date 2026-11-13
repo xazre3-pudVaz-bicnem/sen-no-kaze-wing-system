@@ -256,6 +256,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('置換先カテゴリーを選択（必須）');
     expect(source).toContain('replacementPending.categoryId');
     expect(source).toContain('v25-wb-replacement-undo-bar');
+    expect(source).toContain('v25-wb-replacement-total-comparison');
     expect(source).toContain('直前の置換を元に戻す');
     expect(source).toContain('JSON.stringify(state) === JSON.stringify(replacementUndo.after)');
     expect(source).toContain('data-testid="v25-wb-legacy-replacement-confirm"');

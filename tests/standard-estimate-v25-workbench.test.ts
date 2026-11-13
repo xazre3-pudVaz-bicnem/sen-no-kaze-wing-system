@@ -207,6 +207,24 @@ const render = (readOnly: boolean, view?: { initial?: V25EditorState; candidates
 
 describe('Excel 風の画面（描画）', () => {
 
+  it('旧Excel型の表示密度・固定列・表内スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
+    const html = render(false);
+    expect(html).toContain('data-testid="v25-excel-toolbar"');
+    expect(html).toContain('data-testid="v25-excel-grid-scroll"');
+    expect(html).toContain('max-h-[70vh]');
+    expect(html).toContain('sticky left-[8rem]');
+    expect(html).toContain('bg-emerald-900');
+    expect(html).toContain('data-v25-excel-col="group"');
+    expect(html).toContain('data-v25-excel-col="name"');
+    expect(html).toContain('data-v25-excel-col="qty"');
+    expect(html).toContain('data-v25-excel-col="note"');
+    expect(html).toContain('data-testid="v25-wb-save"');
+    expect(html).toContain('data-testid="v25-wb-refresh"');
+    expect(html).toContain('data-testid="v25-wb-publish"');
+    expect(html).toContain('data-testid="v25-wb-variant-summary"');
+  });
+
+
   it('選択肢が4種類でも表には短い要約だけを出し、ドロップダウンを縦に並べない', () => {
     const groups = [
       { id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] },

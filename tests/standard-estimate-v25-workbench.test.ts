@@ -220,7 +220,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('data-v25-excel-col="qty"');
     expect(html).toContain('data-v25-excel-col="note"');
     expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>状態</th>'));
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[64rem] min-w-[64rem]'");
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[63rem] min-w-[63rem]'");
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 3}');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
@@ -228,6 +228,26 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('data-testid="v25-wb-variant-summary"');
   });
 
+
+  it('計算列を廃止し売価単価で計算方法を選び、状態操作を横並びにする', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(html).not.toContain('>計算</th>');
+    expect(html).toContain('>売価単価</th>');
+    expect(html).toContain('data-testid="v25-wb-slot-price-mode"');
+    expect(html).toContain('data-testid="v25-wb-line-price-mode"');
+    expect(html).toContain('data-testid="v25-wb-slot-price-cell"');
+    expect(html).toContain('data-testid="v25-wb-line-price-cell"');
+    expect(html).toContain('aria-label="商品売価の計算方法"');
+    expect(html).toContain('aria-label="明細売価の計算方法"');
+    expect(html).toContain('data-testid="v25-wb-line-status-actions"');
+    expect(html).toContain('data-testid="v25-wb-slot-status-actions"');
+    expect(html).toContain('見直し済みにする');
+    expect(source).toContain('const columnCount = showCost ? 10 : 9;');
+    expect(source).toContain('setSlot(slot.key, { price_mode: event.target.value as V25SlotPriceMode })');
+    expect(source).toContain('setLine(line.key, { price_mode: event.target.value as V25LinePriceMode })');
+    expect(source).toContain('payload: buildV25SavePayload(state)');
+  });
 
   it('選択肢が4種類でも表には短い要約だけを出し、ドロップダウンを縦に並べない', () => {
     const groups = [

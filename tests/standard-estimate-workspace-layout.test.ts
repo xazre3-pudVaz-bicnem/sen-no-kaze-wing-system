@@ -12,8 +12,7 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     const html = renderToStaticMarkup(createElement(StandardEstimateWorkspaceLayout, {
       selectedName: 'Wing ホテル仕様・非防火',
       sidebar: createElement('nav', { 'aria-label': '標準見積の一覧' }, '一覧サンプル'),
-      children: createElement('main', null, '編集サンプル'),
-    }));
+    }, createElement('main', null, '編集サンプル')));
     expect(html).toContain('data-testid="standard-estimate-workspace-layout"');
     expect(html).toContain('data-testid="standard-estimate-selector-toggle"');
     expect(html).toContain('aria-expanded="false"');

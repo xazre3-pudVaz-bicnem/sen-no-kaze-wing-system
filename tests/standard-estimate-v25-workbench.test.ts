@@ -251,7 +251,13 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('data-testid="v25-wb-legacy-replacement-confirm"');
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(source).toContain('planLegacyLineReplacement');
-    expect(source).toContain('setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id })');
+    expect(source).toContain('setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id, categoryId: pickerCategory })');
+    expect(source).toContain('picker.replaceLineKey && !pickerCategory');
+    expect(source).toContain('置換先カテゴリーを選択（必須）');
+    expect(source).toContain('replacementPending.categoryId');
+    expect(source).toContain('v25-wb-replacement-undo-bar');
+    expect(source).toContain('直前の置換を元に戻す');
+    expect(source).toContain('JSON.stringify(state) === JSON.stringify(replacementUndo.after)');
     expect(source).toContain('data-testid="v25-wb-legacy-replacement-confirm"');
     expect(source).toContain('data-testid="v25-wb-replacement-ack"');
     expect(source).toContain('この1行を置換（未保存）');

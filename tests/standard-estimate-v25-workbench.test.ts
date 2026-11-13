@@ -238,6 +238,11 @@ describe('Excel 風の画面（描画）', () => {
         price_mode: 'manual' as const, unit_price: '5000', remark: '旧明細', review_required: true,
       },
       {
+        key: 'new-unsaved', line_key: null, section_code: 'interior_exterior' as const,
+        group_label: '入力中', name: '未保存の明細', quantity: '1', unit: '式',
+        price_mode: 'manual' as const, unit_price: '200', remark: '', review_required: true,
+      },
+      {
         key: 'reviewed-interior', line_key: 'reviewed-interior', section_code: 'interior_exterior' as const,
         group_label: '直接入力', name: '確認済みの明細', quantity: '1', unit: '式',
         price_mode: 'manual' as const, unit_price: '5000', remark: '', review_required: false,
@@ -251,6 +256,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('data-testid="v25-wb-legacy-replacement-confirm"');
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(source).toContain('planLegacyLineReplacement');
+    expect(source).toContain("line.review_required && Boolean(line.line_key)");
     expect(source).toContain('setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id, categoryId: pickerCategory })');
     expect(source).toContain('picker.replaceLineKey && !pickerCategory');
     expect(source).toContain('置換先カテゴリーを選択（必須）');

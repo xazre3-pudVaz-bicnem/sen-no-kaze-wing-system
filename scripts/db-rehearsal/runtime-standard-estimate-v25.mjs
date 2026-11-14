@@ -223,6 +223,98 @@ async function readRevision(connectionString, id) {
   )).rows[0]);
 }
 
+
+/** 使い捨てDBでの実commit→別接続の再読込を検証する（本番に接続しない）。 */
+async function verifyCommittedReplacement(connectionString, draft) {
+  const results = [];
+  const push = (step, expected, actual) => results.push({ step, expected, actual, ok: actual === expected });
+  const payload = (slots, lines) => ({
+    rates: { sales_fee_rate: '1.07', markup_rate: '1.5', expense_rate: '0.15' },
+    adjustment: 0, slots, lines,
+  });
+  const slots = [{ option_id: PRODUCT, quantity: 1 }];
+  const old = { section_code: 'option', group_label: '旧材料', name: '旧明細',
+    quantity: 2, unit: '台', price_mode: 'manual', unit_price: 35000,
+    remark: '旧備考', review_required: true };
+  const keep = { section_code: 'option', group_label: '工事費', name: '残す行',
+    quantity: 1, unit: '式', price_mode: 'manual', unit_price: 1234,
+    remark: '保持', review_required: false };
+  const save = async (lock, data) => withClient(connectionString, async (client) => {
+    try {
+      await client.query('begin');
+      const next = (await asUser(client, EDITOR,
+        'select (public.save_standard_estimate_v25_draft($1, $2, $3::jsonb)).lock_version as version',
+        [draft, lock, JSON.stringify(data)])).rows[0].version;
+      await client.query('commit');
+      return next;
+    } catch (error) {
+      await client.query('rollback').catch(() => {});
+      throw error;
+    }
+  });
+  const load = async () => withClient(connectionString, async (client) => {
+    const result = await client.query(`
+      select r.lock_version, r.status, r.v25_calc_result,
+             (select coalesce(jsonb_agg(to_jsonb(l) order by l.sort_order), '[]'::jsonb)
+                from public.standard_estimate_revision_v25_lines l where l.revision_id = r.id) as lines,
+             (select coalesce(jsonb_agg(to_jsonb(b) order by b.sort_order), '[]'::jsonb)
+                from public.standard_estimate_revision_baseline_items b where b.revision_id = r.id) as slots,
+             (r.v25_calc_result -> 'calc' = public.pricing_calculate(
+                r.calc_rule_version_id, r.tax_rule_version_id,
+                public.standard_estimate_v25_calc_input(r.id) -> 'input')) as formal_matches
+        from public.standard_estimate_revisions r where r.id = $1`, [draft]);
+    return result.rows[0];
+  });
+  try {
+    const draftBefore = await load();
+    const stagedLock = await save(draftBefore.lock_version, payload(slots, [old, keep]));
+    const staged = await load(); // 同じ接続ではなく、commit後の新しい接続で取得
+    const oldRow = staged.lines.find((line) => line.name === '旧明細');
+    const keepRow = staged.lines.find((line) => line.name === '残す行');
+    const original = staged.slots.find((slot) => slot.option_id === PRODUCT);
+    push('旧明細置換・別接続：置換前の保存済み旧行と保持行を確認', 'true',
+      String(Boolean(oldRow?.line_key && keepRow?.line_key && original) &&
+        staged.lock_version === stagedLock && staged.lines.length === 2));
+    if (!oldRow || !keepRow || !original) return { ok: false, results, error: '試験用の旧行を再読込できません' };
+
+    const afterLock = await save(stagedLock, payload(
+      [...slots, { option_id: REPLACEMENT_PRODUCT, quantity: 1 }],
+      [{ ...keep, line_key: keepRow.line_key }]));
+    const saved = await load(); // さらに別のPG接続でcommit後の正式保存結果を読む
+    const replacement = saved.slots.find((slot) => slot.option_id === REPLACEMENT_PRODUCT);
+    const unchanged = saved.slots.find((slot) => slot.option_id === PRODUCT);
+    push('旧明細置換・別接続：旧行削除・新商品追加・保持行・原価pinが揃う', 'true',
+      String(saved.status === 'draft' && saved.lock_version === afterLock &&
+        saved.lines.length === 1 && saved.lines[0].line_key === keepRow.line_key &&
+        saved.lines[0].name === '残す行' && saved.lines[0].remark === '保持' &&
+        saved.slots.length === 2 && Boolean(replacement?.standard_cost_version_id) &&
+        replacement?.price_mode === 'auto' && Number(replacement?.sale_unit_price) > 0 &&
+        unchanged?.standard_cost_version_id === original.standard_cost_version_id));
+    push('旧明細置換・別接続：DBの再計算結果は正式価格計算と一致', 'true',
+      String(saved.formal_matches === true));
+
+    const preview = await withClient(connectionString, async (client) => {
+      try {
+        await client.query('begin');
+        const obj = (await asUser(client, EDITOR,
+          'select public.preview_standard_estimate_v25_revision($1) as result', [draft])).rows[0].result;
+        await client.query('commit');
+        return obj;
+      } catch (error) {
+        await client.query('rollback').catch(() => {});
+        throw error;
+      }
+    });
+    push('旧明細置換・別接続：再読込previewと正式計算と版番号が一致', 'true',
+      String(preview.review_required_lines === 0 && preview.lock_version === afterLock &&
+        JSON.stringify(preview.calc) === JSON.stringify(saved.v25_calc_result.calc) &&
+        preview.slots.some((slot) => slot.option_id === REPLACEMENT_PRODUCT)));
+  } catch (error) {
+    return { ok: false, results, error: error.message };
+  }
+  return { ok: results.length > 0 && results.every((item) => item.ok), results };
+}
+
 async function runRaces(connectionString) {
   const results = [];
   const push = (step, expected, actual) => results.push({ step, expected, actual, ok: actual === expected });
@@ -281,6 +373,9 @@ async function runRaces(connectionString) {
     push('保存が先：保存の確定後、古い版の公開は止まる', 'P0001 LOCKED', errorKind(r3.secondResult));
     rev = await readRevision(connectionString, next);
     push('保存が先：次の下書きは下書きのまま版が 1 つ進む', `draft/${nextRev.lock_version + 1}`, `${rev.status}/${rev.lock_version}`);
+    const committed = await verifyCommittedReplacement(connectionString, next);
+    results.push(...committed.results);
+    if (!committed.ok) throw new Error(committed.error || '旧明細置換・別接続テストが不合格です');
   } catch (error) {
     return { ok: false, results, error: error.message };
   } finally {

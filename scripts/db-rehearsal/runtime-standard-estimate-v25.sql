@@ -118,6 +118,10 @@ declare
   v_slots jsonb;
   v_lines jsonb;
   v_lock integer;
+  v_replace_line_key uuid;
+  v_replace_keep_key uuid;
+  v_replace_before_calc jsonb;
+  v_replace_before_pin uuid;
   v_qd uuid := gen_random_uuid();
 begin
   set local session_replication_role = replica;
@@ -520,6 +524,113 @@ begin
     (select s.line_subtotal || '/' || s.expense_amount || '/' || s.expense_method || '/' || s.has_por
        from public.standard_estimate_revision_sections s where s.revision_id = v_b2 and s.section_code = 'sitework') || '/' ||
     (select s.expense_method from public.standard_estimate_revision_sections s where s.revision_id = v_b2 and s.section_code = 'option'));
+
+  -- ---------- 旧明細 1 行 -> 商品 1 枠の置換（PR #640 の保存 payload、使い捨てDB限定） ----------
+  -- UI 上では確認を経て state.lines から1行だけ除き、state.slots に商品を1つ追加する。
+  -- 保存 RPC は全件置換方式なので、他の旧行・商品枠を payload に残したまま実行する。
+  select l.line_key into v_replace_line_key
+    from public.standard_estimate_revision_v25_lines l
+   where l.revision_id = v_b2 and l.name = '洗面器';
+  perform pg_temp.sev_expect_eq('旧明細置換：元の保存済み行キーを取得できる', 'true', (v_replace_line_key is not null)::text);
+
+  -- 試験前のDraftへ、移行した「要見直し」旧行と維持する直接入力行を再現。
+  -- p2 と別途工事 p5 は既存商品枠として保存内容に含める。
+  v_slots := jsonb_build_array(
+    jsonb_build_object('option_id', p2, 'quantity', 1),
+    jsonb_build_object('option_id', p5, 'quantity', 1, 'price_mode', 'manual', 'manual_unit_price', 100000));
+  v_lines := jsonb_build_array(
+    jsonb_build_object('line_key', v_replace_line_key, 'section_code', 'option',
+      'group_label', '旧部材', 'name', '洗面器', 'quantity', 2, 'unit', '台',
+      'price_mode', 'manual', 'unit_price', 69225, 'remark', '移行元の備考', 'review_required', true),
+    jsonb_build_object('section_code', 'option', 'group_label', '工事費', 'name', '保持する工事費',
+      'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 1234,
+      'remark', 'そのまま残す', 'review_required', false));
+  v_out := pg_temp.sev_run_as('authenticated', u_editor, format(
+    'select (public.save_standard_estimate_v25_draft(%L, 2, %L::jsonb)).lock_version::text',
+    v_b2, pg_temp.sev_payload(v_slots, v_lines, 0, null, '1')));
+  perform pg_temp.sev_expect_eq('旧明細置換：試験前の旧行と維持行が保存される', '3/2/2/true',
+    v_out || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2) || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2) || '/' ||
+    (select l.review_required::text from public.standard_estimate_revision_v25_lines l
+      where l.revision_id = v_b2 and l.line_key = v_replace_line_key));
+  select l.line_key into v_replace_keep_key from public.standard_estimate_revision_v25_lines l
+   where l.revision_id = v_b2 and l.name = '保持する工事費';
+  select r.v25_calc_result into v_replace_before_calc from public.standard_estimate_revisions r where r.id = v_b2;
+  select b.standard_cost_version_id into v_replace_before_pin
+    from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2 and b.option_id = p2;
+
+  -- 故意に単価欠落の後続行を渡す。RPC内部では「旧行削除＋新商品登録」を進めた後に
+  -- バリデーションが失敗するが、例外を受けたトランザクション全体は確定されてはならない。
+  perform pg_temp.sev_expect_error('旧明細置換：途中で入力不備が起きれば原子的に拒否', 'P0001', 'VALIDATION',
+    pg_temp.sev_run_as('authenticated', u_editor, format(
+      'select (public.save_standard_estimate_v25_draft(%L, 3, %L::jsonb)).lock_version::text',
+      v_b2, pg_temp.sev_payload(
+        v_slots || jsonb_build_array(jsonb_build_object('option_id', p4, 'quantity', 1)),
+        jsonb_build_array(
+          jsonb_build_object('line_key', v_replace_keep_key, 'section_code', 'option',
+            'group_label', '工事費', 'name', '保持する工事費', 'quantity', 1, 'unit', '式',
+            'price_mode', 'manual', 'unit_price', 1234, 'remark', 'そのまま残す'),
+          jsonb_build_object('section_code', 'option', 'name', '不正な後続行',
+            'quantity', 1, 'price_mode', 'manual')),
+        0, null, '1'))));
+  perform pg_temp.sev_expect_eq('旧明細置換：失敗後は旧行・既存枠・金額・版番号が一切変わらない',
+    '3/1/0/2/true',
+    (select r.lock_version::text from public.standard_estimate_revisions r where r.id = v_b2) || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_v25_lines l
+      where l.revision_id = v_b2 and l.line_key = v_replace_line_key and l.review_required) || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2 and b.option_id = p4) || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2) || '/' ||
+    (select (r.v25_calc_result = v_replace_before_calc)::text from public.standard_estimate_revisions r where r.id = v_b2));
+
+  -- UI の「この1行を置換」に相当：元の行だけを lines から除き、p4 商品枠を slots に追加。
+  v_lines := jsonb_build_array(
+    jsonb_build_object('line_key', v_replace_keep_key, 'section_code', 'option',
+      'group_label', '工事費', 'name', '保持する工事費', 'quantity', 1, 'unit', '式',
+      'price_mode', 'manual', 'unit_price', 1234, 'remark', 'そのまま残す', 'review_required', false));
+  v_out := pg_temp.sev_run_as('authenticated', u_editor, format(
+    'select (public.save_standard_estimate_v25_draft(%L, 3, %L::jsonb)).lock_version::text',
+    v_b2, pg_temp.sev_payload(
+      v_slots || jsonb_build_array(jsonb_build_object('option_id', p4, 'quantity', 1)),
+      v_lines, 0, null, '1')));
+  perform pg_temp.sev_expect_eq('旧明細置換：成功後は旧行0件、新商品1件、他行と他枠は維持', '4/0/1/1/3',
+    v_out || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_v25_lines l
+      where l.revision_id = v_b2 and l.line_key = v_replace_line_key) || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_baseline_items b
+      where b.revision_id = v_b2 and b.option_id = p4) || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_v25_lines l
+      where l.revision_id = v_b2 and l.line_key = v_replace_keep_key and l.name = '保持する工事費'
+        and l.remark = 'そのまま残す' and l.unit_price = 1234) || '/' ||
+    (select count(*)::text from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2));
+  perform pg_temp.sev_expect_eq('旧明細置換：p4は正式原価Versionでauto計算、既存p2のpinは維持', 'true/true/true',
+    (select (b.standard_cost_version_id = v.id and b.sale_unit_price > 0 and b.price_mode = 'auto')::text
+       from public.standard_estimate_revision_baseline_items b
+       join public.option_standard_cost_versions v on v.option_id = b.option_id and v.superseded_at is null
+      where b.revision_id = v_b2 and b.option_id = p4) || '/' ||
+    (select (b.standard_cost_version_id = v_replace_before_pin)::text
+       from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2 and b.option_id = p2) || '/' ||
+    (select (b.manual_unit_price = 100000 and b.price_mode = 'manual')::text
+       from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2 and b.option_id = p5));
+  perform pg_temp.sev_expect_eq('旧明細置換：再読込previewとDB正式計算が一致し、要見直し行が0件', '0/true/true/true',
+    (pg_temp.sev_preview(u_editor, v_b2) ->> 'review_required_lines') || '/' ||
+    (select (pg_temp.sev_preview(u_editor, v_b2) -> 'calc' = r.v25_calc_result -> 'calc')::text
+      from public.standard_estimate_revisions r where r.id = v_b2) || '/' ||
+    (select (public.pricing_calculate(r.calc_rule_version_id, r.tax_rule_version_id,
+                   public.standard_estimate_v25_calc_input(r.id) -> 'input') = r.v25_calc_result -> 'calc')::text
+      from public.standard_estimate_revisions r where r.id = v_b2) || '/' ||
+    (select (pg_temp.sev_preview(u_editor, v_b2) -> 'slots' @>
+      jsonb_build_array(jsonb_build_object('option_id', p4, 'cost_status', 'current')))::text));
+  perform pg_temp.sev_expect_error('旧明細置換：古い版で再保存すると拒否', 'P0001', 'LOCKED',
+    pg_temp.sev_run_as('authenticated', u_editor, format(
+      'select (public.save_standard_estimate_v25_draft(%L, 3, %L::jsonb)).lock_version::text',
+      v_b2, pg_temp.sev_payload(v_slots, v_lines, 0, null, '1'))));
+  perform pg_temp.sev_expect_eq('旧明細置換：旧版の公開済Revisionは不変、置換Draftのみ更新',
+    'published/draft/4/true',
+    (select r.status from public.standard_estimate_revisions r where r.id::text = v_se_b1) || '/' ||
+    (select r.status || '/' || r.lock_version::text from public.standard_estimate_revisions r where r.id = v_b2) || '/' ||
+    (select (m.current_published_revision_id::text = v_se_b1)::text
+       from public.standard_estimate_masters m where m.id = v_master_b));
 end;
 $test$;
 

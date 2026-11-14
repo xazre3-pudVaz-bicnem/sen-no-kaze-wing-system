@@ -11,6 +11,7 @@ const MODEL = '25000000-0000-4000-8000-000000000651';
 const MATRIX_ROW = '25000000-0000-4000-8000-000000000661';
 const CATEGORY = '25000000-0000-4000-8000-000000000241';
 const PRODUCT = '25000000-0000-4000-8000-000000000341';
+const REPLACEMENT_PRODUCT = '25000000-0000-4000-8000-000000000342';
 
 async function runSingleConnectionChecks(client) {
   const sql = fs.readFileSync(path.join(HERE, 'runtime-standard-estimate-v25.sql'), 'utf8').split('\r').join('');
@@ -88,12 +89,14 @@ async function seedFixture(connectionString) {
       );
       await client.query(
         `insert into public.options (id, category_id, code, name, price, status, product_no)
-         values ($1, $2, 'runtime-sev-race-product', 'v2.5 Race 商品', 50000, 'published', 'PRD-925041')`,
-        [PRODUCT, CATEGORY]
+         values ($1, $2, 'runtime-sev-race-product', 'v2.5 Race 商品', 50000, 'published', 'PRD-925041'),
+                ($3, $2, 'runtime-sev-replace-product', 'v2.5 置換商品', 40000, 'published', 'PRD-925042')`,
+        [PRODUCT, CATEGORY, REPLACEMENT_PRODUCT]
       );
       await client.query('set local session_replication_role = origin');
 
       await asUser(client, ADMIN, `select changed from public.set_option_hq_standard_cost($1, 10000, 0, '初回設定')`, [PRODUCT]);
+      await asUser(client, ADMIN, `select changed from public.set_option_hq_standard_cost($1, 18000, 0, '置換商品の原価')`, [REPLACEMENT_PRODUCT]);
       const bmr = (await asUser(client, EDITOR,
         `select public.create_base_master_draft($1, $2, 'v2.5 Race 本体', 'non_fire', null, $3)::text as id`, [MODEL, ORG, MATRIX_ROW])).rows[0].id;
       await asUser(client, EDITOR, `select (public.save_base_master_draft($1, 'v2.5 Race 本体', 'non_fire', 'none', null, 0,
@@ -147,10 +150,10 @@ async function cleanupFixture(connectionString) {
       await client.query(`delete from public.base_masters where base_model_id = $1`, [MODEL]);
       await client.query(`delete from public.matrix_cells where matrix_row_id = $1`, [MATRIX_ROW]);
       await client.query(`delete from public.matrix_rows where id = $1`, [MATRIX_ROW]);
-      await client.query(`delete from public.audit_logs where actor_id = any($1::uuid[]) or entity_id = $2`, [[ADMIN, EDITOR], PRODUCT]);
-      await client.query(`delete from public.option_hq_standard_costs where option_id = $1`, [PRODUCT]);
-      await client.query(`delete from public.option_standard_cost_versions where option_id = $1`, [PRODUCT]);
-      await client.query(`delete from public.options where id = $1`, [PRODUCT]);
+      await client.query(`delete from public.audit_logs where actor_id = any($1::uuid[]) or entity_id = any($2::uuid[])`, [[ADMIN, EDITOR], [PRODUCT, REPLACEMENT_PRODUCT]]);
+      await client.query(`delete from public.option_hq_standard_costs where option_id = any($1::uuid[])`, [[PRODUCT, REPLACEMENT_PRODUCT]]);
+      await client.query(`delete from public.option_standard_cost_versions where option_id = any($1::uuid[])`, [[PRODUCT, REPLACEMENT_PRODUCT]]);
+      await client.query(`delete from public.options where id = any($1::uuid[])`, [[PRODUCT, REPLACEMENT_PRODUCT]]);
       await client.query(`delete from public.option_categories where id = $1`, [CATEGORY]);
       await client.query(`delete from public.base_models where id = $1`, [MODEL]);
       await client.query(`delete from public.organization_memberships where organization_id = $1`, [ORG]);

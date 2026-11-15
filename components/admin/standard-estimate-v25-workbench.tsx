@@ -43,6 +43,7 @@ import {
 import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { planLegacyLineReplacement } from '@/components/admin/standard-estimate-v25-line-replacement';
+import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -979,6 +980,13 @@ function WorkbenchBody({
           </tfoot>
         </table>
       </div>
+
+      <StandardEstimateV25AmountBreakdown
+        result={calc.result}
+        savedTotal={savedTotal}
+        unpricedCount={calc.unpriced.length}
+        incompleteCostCount={calc.incomplete.length}
+      />
 
       {calc.error && <Alert tone="warn">画面の試算ができません：{calc.error}</Alert>}
       {calc.unpriced.length > 0 && (

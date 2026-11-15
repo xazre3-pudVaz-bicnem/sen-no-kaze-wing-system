@@ -19,6 +19,7 @@ import {
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   saveStandardEstimateV25DraftAction: vi.fn(),
+  readStandardEstimateV25SaveStatusAction: vi.fn(),
   refreshStandardEstimateV25CostsAction: vi.fn(),
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
@@ -275,6 +276,14 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('replacementSlotPosition');
     expect(source).toContain('!editLocked && replacementAcknowledged');
     expect(source).toContain('saveInFlightRef.current = true');
+    expect(source).toContain("setSavePhase('uncertain')");
+    expect(source).toContain("result.saveOutcome !== 'rejected'");
+    expect(source).toContain('v25-wb-uncertain-save-recovery');
+    expect(source).toContain('v25-wb-check-save-status');
+    expect(source).toContain('v25-wb-copy-unsaved-input');
+    expect(source).toContain('v25-wb-save-status-result');
+    expect(source).toContain('readStandardEstimateV25SaveStatusAction({ revision_id: revisionId })');
+    expect(source).toContain('同じ版番号が返っても後から保存が完了する場合があります');
     expect(source).toContain("setSavePhase('saving')");
     expect(source).toContain("setSavePhase('refreshing')");
     expect(source).toContain("setSavePhase('idle')");

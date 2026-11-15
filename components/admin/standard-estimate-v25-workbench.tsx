@@ -6,6 +6,7 @@ import { Package } from 'lucide-react';
 import {
   publishStandardEstimateV25RevisionAction,
   refreshStandardEstimateV25CostsAction,
+  readStandardEstimateV25SaveStatusAction,
   saveStandardEstimateV25DraftAction,
 } from '@/lib/actions/standard-estimate-v25';
 import { formatYen } from '@/lib/domain/pricing';
@@ -139,7 +140,9 @@ function WorkbenchBody({
   // 保存開始のイベント内で同期的にフラグを立て、再読込による key の更新までロックする。
   // 保存が失敗した場合のみロック解除し、state をそのまま保持する。
   const saveInFlightRef = useRef(false);
-  const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'refreshing'>('idle');
+  const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'refreshing' | 'uncertain'>('idle');
+  const [saveCheck, setSaveCheck] = useState<string | null>(null);
+  const [checkingSave, setCheckingSave] = useState(false);
   const editLocked = pending || savePhase !== 'idle';
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
@@ -378,6 +381,31 @@ function WorkbenchBody({
       if (result.ok) router.refresh();
     });
 
+  const inspectUnknownSave = async () => {
+    if (checkingSave || savePhase !== 'uncertain') return;
+    setCheckingSave(true);
+    try {
+      const result = await readStandardEstimateV25SaveStatusAction({ revision_id: revisionId });
+      if (!result.ok) {
+        setSaveCheck(`読み取りに失敗しました：${result.error}。編集ロックは維持しています。`);
+      } else if (result.lockVersion !== lockVersion || result.status !== 'draft') {
+        setSaveCheck(`現在のDB状態：${result.status}、版番号 ${result.lockVersion}（送信前：${lockVersion}）。更新を検出しました。入力内容を控えたうえでページを再読み込みしてください。`);
+      } else {
+        setSaveCheck(`現在のDB状態：${result.status}、版番号 ${result.lockVersion}（送信前と同じ）。ただし保存処理が後から確定する可能性があるため、再保存せず入力内容を控えてページを再読み込みしてください。`);
+      }
+    } catch {
+      setSaveCheck('保存状態を読み取れませんでした。編集ロックを維持しています。入力内容を控えてからページを再読み込みしてください。');
+    } finally {
+      setCheckingSave(false);
+    }
+  };
+  const recoveryBackup = JSON.stringify({
+    revision_id: revisionId,
+    lock_version_before_save: lockVersion,
+    editor_state: state,
+    entered_percentages: percents,
+  }, null, 2);
+
   const save = () => {
     if (readOnly || editLocked || saveInFlightRef.current) return;
     // 率は % で入力する。読めない入力は % の文で案内する（範囲は validateV25EditorState・DB で確かめる）
@@ -388,6 +416,7 @@ function WorkbenchBody({
     }
     // 検証済みのpayloadを確定し、同じイベントでロック。保存中の追加入力を許可しない。
     const payload = buildV25SavePayload(state);
+    setSaveCheck(null);
     saveInFlightRef.current = true;
     setSavePhase('saving');
     startTransition(async () => {
@@ -397,12 +426,17 @@ function WorkbenchBody({
           revision_id: revisionId, expected_lock_version: lockVersion, payload,
         });
       } catch {
-        onNotice({ tone: 'danger', text: '保存処理に失敗しました。内容は未保存のまま残っています。再度確認してください。' });
-        saveInFlightRef.current = false;
-        setSavePhase('idle');
+        // 応答未着でもDBがcommit済みの可能性がある。旧版で編集・再保存させない。
+        setSavePhase('uncertain');
+        onNotice({ tone: 'danger', text: '保存の成否を確認できません。編集は保護のため停止しています。保存状態を照合してください。' });
         return;
       }
       if (!result.ok) {
+        if (result.saveOutcome !== 'rejected') {
+          setSavePhase('uncertain');
+          onNotice({ tone: 'danger', text: '通信状態により保存の成否が不明です。再保存せず、保存状態を照合してください。' });
+          return;
+        }
         onNotice({ tone: 'danger', text: result.error });
         saveInFlightRef.current = false;
         setSavePhase('idle');
@@ -571,8 +605,37 @@ function WorkbenchBody({
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
       {savePhase !== 'idle' && (
         <p role="status" aria-live="polite" data-testid="v25-wb-save-lock-notice" className="rounded-md border border-slate-300 bg-slate-50 p-2 text-sm text-slate-700">
-          {savePhase === 'saving' ? '下書きを保存中です。処理が終わるまで編集できません。' : '保存した内容を再読込中です。編集は再読込完了後に再開できます。'}
+          {savePhase === 'saving' ? '下書きを保存中です。処理が終わるまで編集できません。'
+            : savePhase === 'refreshing' ? '保存した内容を再読込中です。編集は再読込完了後に再開できます。'
+              : '保存の成否を確認できないため、旧データを使った編集・再保存を停止しています。'}
         </p>
+      )}
+      {savePhase === 'uncertain' && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm" role="alert" data-testid="v25-wb-uncertain-save-recovery">
+          <p className="font-semibold">保存結果を確認できません。再保存はしないでください。</p>
+          <p>入力内容はこの画面に保持しています。DBが保存済みの可能性があるため、版番号を確認し、必要なら控えを取ってからページを再読み込みしてください。</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" disabled={checkingSave}
+              data-testid="v25-wb-check-save-status" onClick={() => void inspectUnknownSave()}>
+              {checkingSave ? '確認中…' : 'DBの保存状態を確認'}
+            </Button>
+            <Button type="button" variant="secondary" data-testid="v25-wb-copy-unsaved-input"
+              onClick={() => {
+                void navigator.clipboard.writeText(recoveryBackup).then(
+                  () => onNotice({ tone: 'success', text: '現在の入力内容をクリップボードにコピーしました。' }),
+                  () => onNotice({ tone: 'danger', text: 'コピーできませんでした。下の「入力内容の控え」を開き、テキストを手動でコピーしてください。' })
+                );
+              }}>入力内容をコピー</Button>
+          </div>
+          {saveCheck && <p className="rounded border border-amber-200 bg-white p-2" data-testid="v25-wb-save-status-result">{saveCheck}</p>}
+          <details>
+            <summary className="cursor-pointer text-xs underline">入力内容の控えを表示（手動コピー用）</summary>
+            <p className="mt-1 text-xs">見積情報を含みます。安全な場所で保管し、画面やDBへ直接貼り戻さないでください。</p>
+            <textarea value={recoveryBackup} readOnly rows={8} aria-label="未保存の入力内容の控え"
+              className="mt-2 w-full rounded border border-slate-300 bg-white p-2 font-mono text-xs" />
+          </details>
+          <p className="text-xs">版番号が同じでも後から保存が完了する場合があります。DBの読み取りだけでは安全に再編集できると判断しません。</p>
+        </div>
       )}
       <fieldset disabled={editLocked} aria-label="標準見積の編集領域" data-testid="v25-wb-edit-lock" className="min-w-0 space-y-3">
       <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
@@ -956,7 +1019,7 @@ function WorkbenchBody({
           )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={save} disabled={editLocked || !dirty} data-testid="v25-wb-save">
-              {savePhase === 'saving' ? '保存中…' : savePhase === 'refreshing' ? '再読込中…' : pending ? '処理中…' : '下書きを保存'}
+              {savePhase === 'saving' ? '保存中…' : savePhase === 'refreshing' ? '再読込中…' : savePhase === 'uncertain' ? '保存状態を確認' : pending ? '処理中…' : '下書きを保存'}
             </Button>
             <Button type="button" variant="secondary" disabled={editLocked || !dirty} title="この画面の未保存の編集をすべて破棄します（旧明細の置換だけではありません）" onClick={() => {
               setState(initial);

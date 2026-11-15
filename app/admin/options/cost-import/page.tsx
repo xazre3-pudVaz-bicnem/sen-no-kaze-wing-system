@@ -87,6 +87,14 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
   // 指定値の誤りや価格変更時は、安全のため一覧を出さずに止める。
   const choiceScope = parseChoiceImportScope(sp.choice_ids);
   const narrowed = choiceScope?.valid ? narrowZeroCostChoices(candidates.products, choiceScope.ids) : null;
+  if (choiceScope?.valid && !narrowed && sp.imported !== undefined) {
+    return (
+      <AdminPage title="原価 Version の取り込み結果">
+        <BackLink href="/admin/ledger" label="商品台帳へ戻る" />
+        <Alert tone="success">限定対象の取り込み処理が完了しました（新しく記録 {sp.imported} 件・既に記録済み {sp.unchanged ?? 0} 件）。他の商品は選択されていません。</Alert>
+      </AdminPage>
+    );
+  }
   if (choiceScope && (!choiceScope.valid || !narrowed)) {
     return (
       <AdminPage title="原価 Version の取り込み">
@@ -147,6 +155,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
       </section>
 
       <form action={importOptionCostsAction} className="card space-y-4 p-4 sm:p-5" data-testid="cost-import-form">
+        {choiceScope?.valid && <input type="hidden" name="choice_scope" value={choiceScope.ids.join(',')} />}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] text-sm">
             <thead>

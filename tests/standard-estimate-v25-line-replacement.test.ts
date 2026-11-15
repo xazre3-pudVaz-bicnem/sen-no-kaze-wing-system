@@ -186,6 +186,60 @@ describe('旧明細1行の安全な商品置換案（UI stateのみ、DB操作�
     expect(buildV25SavePayload(plan.state).adjustment).toBe(7);
   });
 
+  it.each([
+    { name: '選択肢原価差額マイナス', adjustment: -103, saleUnit: 16045, expense: 3906, subtotal: 29951, tax: 2993, total: 32927 },
+    { name: '選択肢原価差額プラス', adjustment: 37, saleUnit: 16270, expense: 3940, subtotal: 30210, tax: 3019, total: 33212 },
+  ])('複合率・選択肢差額・端数：$name を独立期待金額と比較する', ({
+    adjustment, saleUnit, expense, subtotal, tax, total,
+  }) => {
+    const candidate: V25WorkbenchCandidate = {
+      id: 'p-sash', name: '窓サッシ', section: 'interior_exterior',
+      categoryId: 'c-sash', categoryName: 'サッシ', categoryCode: 'sash',
+      singleSelect: false, manufacturer: 'メーカー', modelNo: 'W-11',
+      variantGroups: [{ id: 'glass', name: 'ガラス', choices: [{ id: 'glass-a', name: '標準' }] }],
+      defaultChoices: { glass: 'glass-a' },
+    };
+    const choiceCosts: V25WorkbenchCosts = {
+      pinned: {}, currentProduct: { 'p-sash': 10101 }, currentChoice: { 'glass-a': adjustment },
+    };
+    const input: V25EditorState = {
+      ...base, sales_fee_rate: '1.07', expense_rate: '0.15', markup_rate: '1.5',
+      adjustment: '-17', adjustment_reason: '現場の調整',
+    };
+    const plan = planLegacyLineReplacement(input, 'legacy-1', candidate, [candidate], choiceCosts,
+      'c-sash', 'sash-new', { slot_code: 'washroom-window', slot_label: '洗面窓' });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const rule: PricingCalculationRule = {
+      id: 'rule', formula_code: 'v2.5', rounding_mode: 'trunc',
+      expense_target_sections: ['base', 'interior_exterior', 'option'],
+      auto_price_sections: ['base', 'interior_exterior', 'option'],
+    };
+    const taxRule: PricingTaxRule = {
+      id: 'tax', tax_mode: 'full_single_rate', tax_rate: '0.100000', rounding_mode: 'trunc',
+    };
+    const result = calculateV25Workbench(rule, taxRule, plan.state, [], choiceCosts,
+      (id) => id === candidate.id ? 'interior_exterior' : undefined);
+    expect(result.error).toBeNull();
+    const section = result.result?.sections.find((item) => item.code === 'interior_exterior');
+    // 原価 10,101円 + 選択肢差額 → 販売費1.07を切捨 → 掛率1.5を切捨。
+    // 旧明細1行は除外、新商品と保持する手動行10,000円だけを計上。
+    expect(section?.lines.map((item) => item.key)).toEqual(['slot:sash-new', 'line:legacy-2']);
+    expect(section?.lines[0].sale_unit_price).toBe(saleUnit);
+    expect(section?.priced_subtotal).toBe(saleUnit + 10000);
+    expect(section?.expense).toBe(expense);
+    expect(section?.total).toBe(subtotal);
+    // 調整額-17円、10%税の円未満切捨、税込合計まで独立期待値と照合。
+    expect(result.result?.subtotal).toBe(subtotal);
+    expect(result.result?.adjusted_subtotal).toBe(subtotal - 17);
+    expect(result.result?.tax).toBe(tax);
+    expect(result.result?.total).toBe(total);
+    expect(buildV25SavePayload(plan.state).slots[0]).toMatchObject({
+      option_id: 'p-sash', variant_choice_ids: ['glass-a'],
+      slot_code: 'washroom-window', slot_label: '洗面窓',
+    });
+  });
+
   it('PORの旧明細は0円扱いにせず、置換できても画面側の未確定金額確認が必要', () => {
     const porState: V25EditorState = {
       ...base, lines: base.lines.map((line) => line.key === 'legacy-1'

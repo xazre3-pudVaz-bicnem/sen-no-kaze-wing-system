@@ -44,6 +44,19 @@ import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
+type V25RowFilter = 'all' | 'review' | 'unsettled';
+
+/** 表示条件のみ。計算・保存・公開の対象は変更しない。 */
+export function v25VisibleSlot(slot: Pick<V25SlotRow, 'key' | 'price_mode'>, filter: V25RowFilter,
+  incomplete: ReadonlyMap<string, unknown>, unpriced: ReadonlySet<string>): boolean {
+  return filter === 'all' || (filter === 'unsettled'
+    && (slot.price_mode === 'por' || incomplete.has(slot.key) || unpriced.has(slot.key)));
+}
+export function v25VisibleLine(line: Pick<V25LineRow, 'key' | 'price_mode' | 'review_required'>,
+  filter: V25RowFilter, unpriced: ReadonlySet<string>): boolean {
+  if (filter === 'review') return line.review_required;
+  return filter === 'all' || line.price_mode === 'por' || unpriced.has(line.key);
+}
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
 const COST_COMPACT_LABEL: Record<V25CostStatus, string> = { current: '原価最新', stale: '原価更新あり', missing: '原価未設定' };
 const RATE_LABEL = { sales_fee_rate: '販売費率', expense_rate: '経費率', markup_rate: '掛率' } as const;
@@ -118,6 +131,8 @@ function WorkbenchBody({
   }));
   const [showCost, setShowCost] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [rowFilter, setRowFilter] = useState<V25RowFilter>('all');
+  const [jumpTarget, setJumpTarget] = useState<'base' | StandardLineSectionCode | null>(null);
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
@@ -171,6 +186,22 @@ function WorkbenchBody({
     ...v25PublishBlockers(preview, dirty),
     ...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),
   ];
+
+  const reviewCount = state.lines.filter((line) => line.review_required).length;
+  const unresolvedCount = state.slots.filter((slot) => v25VisibleSlot(slot, 'unsettled', incompleteKeys, unpricedKeys)).length
+    + state.lines.filter((line) => v25VisibleLine(line, 'unsettled', unpricedKeys)).length;
+  const porCount = state.slots.filter((slot) => slot.price_mode === 'por').length
+    + state.lines.filter((line) => line.price_mode === 'por').length;
+  const selectFilter = (filter: V25RowFilter) => { setRowFilter(filter); setCollapsed(new Set()); };
+  const jumpTo = (target: 'base' | StandardLineSectionCode) => {
+    selectFilter('all');
+    setJumpTarget(target);
+  };
+  useEffect(() => {
+    if (!jumpTarget) return;
+    document.getElementById(`v25-section-${jumpTarget}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setJumpTarget(null);
+  }, [jumpTarget, rowFilter]);
 
   useEffect(() => {
     if (!picker && !selectableFor && !variantEditor && !positionFor) return;
@@ -415,7 +446,7 @@ function WorkbenchBody({
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
     return (
-      <tr className="bg-emerald-900 text-white" data-testid={`v25-section-${code}`}>
+      <tr id={`v25-section-${code}`} className="scroll-mt-24 bg-emerald-900 text-white" data-testid={`v25-section-${code}`}>
         <td colSpan={columnCount} className="border-y border-emerald-800 px-2 py-0.5">
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="flex items-center gap-1.5 text-left text-[11px] font-semibold text-white" onClick={() => toggleSection(code)} aria-expanded={!collapsed.has(code)}>
@@ -437,6 +468,39 @@ function WorkbenchBody({
   return (
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
+
+      <div className="space-y-2 rounded-lg border border-slate-300 bg-white p-3 text-xs" data-testid="v25-wb-workflow-summary">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <strong className="text-sm text-slate-900">標準仕様の確認・作業状況</strong>
+          <span className="text-slate-500">公開の可否は下部の正式な確認結果に従います。</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="rounded border border-amber-300 bg-amber-50 px-2 py-1 font-semibold text-amber-950 hover:bg-amber-100"
+            data-testid="v25-wb-summary-review" onClick={() => selectFilter('review')}>要見直し {reviewCount}件</button>
+          <button type="button" className="rounded border border-slate-300 bg-slate-50 px-2 py-1 font-semibold text-slate-800 hover:bg-slate-100"
+            data-testid="v25-wb-summary-unsettled" onClick={() => selectFilter('unsettled')}>未確定 {unresolvedCount}件</button>
+          <span className="text-slate-600">内訳：原価未設定 {calc.incomplete.length}件 ／ 売価未入力 {calc.unpriced.length}件 ／ 別途見積 {porCount}件</span>
+          {calc.error && <span className="font-semibold text-amber-800">試算エラーあり</span>}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-2">
+          <div role="group" aria-label="明細の表示" className="flex flex-wrap items-center gap-1">
+            <span className="mr-1 text-slate-600">表示</span>
+            {([['all', 'すべて'], ['review', '要見直し'], ['unsettled', '未確定']] as const).map(([value, label]) => (
+              <button key={value} type="button" data-testid={`v25-wb-filter-${value}`} aria-pressed={rowFilter === value}
+                className={`rounded px-2 py-1 ${rowFilter === value ? 'bg-emerald-900 font-semibold text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                onClick={() => selectFilter(value)}>{label}</button>
+            ))}
+          </div>
+          <nav aria-label="明細の区分へ移動" className="flex flex-wrap items-center gap-1">
+            <span className="mr-1 text-slate-600">区分へ移動</span>
+            {([['base', '本体'], ['interior_exterior', '内外装'], ['option', 'オプション'], ['sitework', '別途工事']] as const).map(([target, label]) => (
+              <button key={target} type="button" className="rounded border border-slate-200 px-2 py-1 text-navy hover:bg-slate-100"
+                onClick={() => jumpTo(target)}>{label}</button>
+            ))}
+          </nav>
+        </div>
+        {rowFilter !== 'all' && <p className="text-slate-600">絞り込みは表示だけです。非表示の明細も保存・公開の対象です。</p>}
+      </div>
 
       <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
@@ -484,8 +548,8 @@ function WorkbenchBody({
             </tr>
           </thead>
           <tbody>
-            {sectionHeader('base', '本体（本体マスター）')}
-            {!collapsed.has('base') &&
+            {rowFilter === 'all' && sectionHeader('base', '本体（本体マスター）')}
+            {rowFilter === 'all' && !collapsed.has('base') &&
               baseLines.map((line) => {
                 const result = resultByKey.get(`base:${line.id}`);
                 rowNumber += 1;
@@ -509,12 +573,15 @@ function WorkbenchBody({
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
               const lines = state.lines.filter((line) => line.section_code === code);
+              const visibleSlots = slots.filter((slot) => v25VisibleSlot(slot, rowFilter, incompleteKeys, unpricedKeys));
+              const visibleLines = lines.filter((line) => v25VisibleLine(line, rowFilter, unpricedKeys));
+              const showSection = rowFilter === 'all' || visibleSlots.length > 0 || visibleLines.length > 0;
               return (
                 <Fragment key={code}>
-                  {sectionHeader(
+                  {showSection && sectionHeader(
                     code,
                     STANDARD_SECTION_LABEL[code],
-                    readOnly ? undefined : (
+                    readOnly || rowFilter !== 'all' ? undefined : (
                       <div className="flex gap-2">
                         <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-product-${code}`}
                           onClick={() => { setPicker({ section: code, targetKey: null }); setPickerCategory(''); setPickerQuery(''); }}>
@@ -527,7 +594,7 @@ function WorkbenchBody({
                     )
                   )}
                   {!collapsed.has(code) &&
-                    slots.map((slot) => {
+                    visibleSlots.map((slot) => {
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const missing = incompleteKeys.get(slot.key);
@@ -649,7 +716,7 @@ function WorkbenchBody({
                       );
                     })}
                   {!collapsed.has(code) &&
-                    lines.map((line) => {
+                    visibleLines.map((line) => {
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       rowNumber += 1;
                       return (
@@ -731,6 +798,11 @@ function WorkbenchBody({
                 </Fragment>
               );
             })}
+            {rowFilter !== 'all' && (rowFilter === 'review' ? reviewCount : unresolvedCount) === 0 && (
+              <tr data-testid="v25-wb-filter-empty">
+                <td colSpan={columnCount} className="px-4 py-8 text-center text-slate-600">該当する明細はありません。「すべて」で全明細を表示できます。</td>
+              </tr>
+            )}
           </tbody>
           <tfoot className="bg-slate-50 text-xs">
             <tr className="border-t-2 border-slate-300">

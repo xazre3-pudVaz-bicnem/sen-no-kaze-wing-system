@@ -9,7 +9,9 @@ type ProductPickerProps = {
   sectionLabel: string;
   candidates: V25WorkbenchCandidate[];
   currentSlot: Pick<V25SlotRow, 'option_id' | 'variant_choices'> | null;
-  onChoose: (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => void;
+  requireCategory?: boolean;
+  replaceLineName?: string;
+  onChoose: (candidate: V25WorkbenchCandidate, choices: Record<string, string>, confirmedCategoryId?: string) => void;
   onClose: () => void;
 };
 
@@ -28,7 +30,7 @@ export function v25PickerChoicesValid(
  * 検索・選択中はローカルstateのみ。確定まで親の明細stateに触れない。
  */
 export function StandardEstimateV25ProductPicker({
-  sectionLabel, candidates, currentSlot, onChoose, onClose,
+  sectionLabel, candidates, currentSlot, requireCategory = false, replaceLineName, onChoose, onClose,
 }: ProductPickerProps) {
   const [categoryId, setCategoryId] = useState('');
   const [query, setQuery] = useState('');
@@ -43,10 +45,11 @@ export function StandardEstimateV25ProductPicker({
   const visible = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ja-JP');
     return candidates.filter((candidate) =>
+      (!requireCategory || Boolean(categoryId)) &&
       (!categoryId || candidate.categoryId === categoryId) &&
       (!normalized || [candidate.name, candidate.manufacturer, candidate.modelNo, candidate.categoryName].join(' ').toLocaleLowerCase('ja-JP').includes(normalized))
     );
-  }, [candidates, categoryId, query]);
+  }, [candidates, categoryId, query, requireCategory]);
 
   const selected = candidates.find((candidate) => candidate.id === selectedId) ?? null;
   const current = currentSlot ? candidates.find((candidate) => candidate.id === currentSlot.option_id) ?? null : null;
@@ -67,7 +70,8 @@ export function StandardEstimateV25ProductPicker({
       onClick={(event) => event.stopPropagation()}>
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-3">
         <div className="min-w-0">
-          <h2 className="font-semibold">{sectionLabel}：{currentSlot ? '商品を変更' : '商品を追加'}</h2>
+          <h2 className="font-semibold">{sectionLabel}：{requireCategory ? '旧明細を商品に置き換える' : currentSlot ? '商品を変更' : '商品を追加'}</h2>
+          {requireCategory && <p className="text-xs text-muted">元の明細：{replaceLineName || '要確認'}。対応する商品カテゴリーを選んでください。</p>}
           {currentSlot && <p className="truncate text-xs text-muted" title={current?.name ?? ''}>現在：{current?.name ?? '登録中の商品'}</p>}
         </div>
         <button type="button" className="shrink-0 text-sm text-muted underline" onClick={onClose}>閉じる</button>
@@ -75,14 +79,17 @@ export function StandardEstimateV25ProductPicker({
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="flex min-h-0 flex-col">
           <div className="flex shrink-0 flex-wrap gap-2 border-b border-line px-3 py-2">
-            <Select aria-label="カテゴリー" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}
+            <Select aria-label="カテゴリー" value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setSelectedId(null); setChoices({}); }}
               className="h-8 text-xs">
-              <option value="">すべてのカテゴリー</option>
+              <option value="">{requireCategory ? '置換先カテゴリーを選択（必須）' : 'すべてのカテゴリー'}</option>
               {categories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </Select>
             <Input aria-label="商品を検索" value={query} onChange={(event) => setQuery(event.target.value)}
               placeholder="商品名・メーカー・型番" className="h-8 min-w-[10rem] flex-1 text-xs" />
           </div>
+          {requireCategory && !categoryId && (
+            <p className="px-3 py-2 text-xs text-amber-800" data-testid="v25-wb-replacement-category-required">旧明細に対応する商品カテゴリーを選択してください。</p>
+          )}
           <ul className="min-h-0 max-h-[32vh] flex-1 divide-y divide-line overflow-y-auto md:max-h-none" data-testid="v25-wb-picker">
             {visible.map((candidate) => (
               <li key={candidate.id}>
@@ -148,8 +155,12 @@ export function StandardEstimateV25ProductPicker({
         <div className="flex shrink-0 gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>キャンセル</Button>
           <Button type="button" data-testid="v25-wb-picker-apply"
-            disabled={!selected || !choicesValid}
-            onClick={() => { if (selected && choicesValid) onChoose(selected, { ...choices }); }}>
+            disabled={!selected || !choicesValid || (requireCategory && (!categoryId || hasUnselectedChoices))}
+            onClick={() => {
+              if (selected && choicesValid && (!requireCategory || (categoryId && !hasUnselectedChoices))) {
+                onChoose(selected, { ...choices }, requireCategory ? categoryId : undefined);
+              }
+            }}>
             明細に反映
           </Button>
         </div>

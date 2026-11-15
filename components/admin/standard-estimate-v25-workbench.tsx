@@ -42,6 +42,7 @@ import {
 import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
+import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -119,8 +120,6 @@ function WorkbenchBody({
   const [showCost, setShowCost] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
-  const [pickerCategory, setPickerCategory] = useState('');
-  const [pickerQuery, setPickerQuery] = useState('');
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
   const [variantEditor, setVariantEditor] = useState<{ slotKey: string; choices: V25SlotRow['variant_choices'] } | null>(null);
   const [positionFor, setPositionFor] = useState<string | null>(null);
@@ -197,7 +196,7 @@ function WorkbenchBody({
     setState((current) => ({ ...current, [key]: percentToRate(value) }));
   };
 
-  const choose = (candidate: V25WorkbenchCandidate) => {
+  const choose = (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => {
     if (!picker) return;
     // 別途工事は販売費・経費・掛率を掛けない（自動にできない）。Web では金額を確定しないので別途見積にする
     const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';
@@ -207,7 +206,7 @@ function WorkbenchBody({
       const target = state.slots.find((slot) => slot.key === picker.targetKey);
       setSlot(picker.targetKey, {
         option_id: candidate.id,
-        variant_choices: { ...candidate.defaultChoices },
+        variant_choices: { ...choices },
         quantity,
         ...(candidate.section === 'sitework' ? { price_mode: priceMode } : {}),
         // 位置の枠の選べる商品は、新しい標準の商品と同じカテゴリーのものだけ残す（標準の商品そのものは外す）
@@ -228,7 +227,7 @@ function WorkbenchBody({
             key: newKey('slot'),
             baseline_key: null,
             option_id: candidate.id,
-            variant_choices: { ...candidate.defaultChoices },
+            variant_choices: { ...choices },
             quantity,
             price_mode: priceMode,
             manual_unit_price: '',
@@ -367,26 +366,6 @@ function WorkbenchBody({
       return next;
     });
 
-  const pickerCandidates = useMemo(() => {
-    if (!picker) return [];
-    const query = pickerQuery.trim().toLocaleLowerCase('ja-JP');
-    return candidates.filter(
-      (candidate) =>
-        !candidate.retired &&
-        candidate.section === picker.section &&
-        (!pickerCategory || candidate.categoryId === pickerCategory) &&
-        (!query || [candidate.name, candidate.manufacturer, candidate.modelNo, candidate.categoryName].join(' ').toLocaleLowerCase('ja-JP').includes(query))
-    );
-  }, [candidates, picker, pickerCategory, pickerQuery]);
-  const pickerCategories = useMemo(() => {
-    if (!picker) return [];
-    const map = new Map<string, string>();
-    for (const candidate of candidates) {
-      if (!candidate.retired && candidate.section === picker.section) map.set(candidate.categoryId, candidate.categoryName);
-    }
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
-  }, [candidates, picker]);
-
   // Excel明細の入力セルだけにTab・Enter移動を適用し、保存やポップアップは変更しない。
   const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {
     const target = event.target;
@@ -517,7 +496,7 @@ function WorkbenchBody({
                     readOnly ? undefined : (
                       <div className="flex gap-2">
                         <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-product-${code}`}
-                          onClick={() => { setPicker({ section: code, targetKey: null }); setPickerCategory(''); setPickerQuery(''); }}>
+                          onClick={() => { setPicker({ section: code, targetKey: null });  }}>
                           ＋ 商品台帳から追加
                         </button>
                         <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-line-${code}`} onClick={() => addLine(code)}>
@@ -562,7 +541,7 @@ function WorkbenchBody({
                                   title="商品台帳から選ぶ"
                                   aria-label={`${candidate?.name ?? '商品'}を商品台帳から選び直す`}
                                   data-testid="v25-wb-slot-product-picker-icon"
-                                  onClick={() => { setPicker({ section: code, targetKey: slot.key }); setPickerCategory(''); setPickerQuery(''); }}>
+                                  onClick={() => { setPicker({ section: code, targetKey: slot.key });  }}>
                                   <Package className="size-3.5" aria-hidden="true" />
                                 </button>
                               )}
@@ -625,7 +604,7 @@ function WorkbenchBody({
                                   aria-label={(candidate?.name ?? '商品') + 'の操作'} title="行の操作">⋯</summary>
                                 <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setPicker({ section: code, targetKey: slot.key }); setPickerCategory(''); setPickerQuery(''); }}>商品台帳から選択</button>
+                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setPicker({ section: code, targetKey: slot.key });  }}>商品台帳から選択</button>
                                   {slot.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'manual' }); }}>金額を入力する</button>
@@ -965,34 +944,14 @@ function WorkbenchBody({
       )}
 
       {picker && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setPicker(null)}>
-          <div role="dialog" aria-modal="true" aria-label="商品台帳から選ぶ" className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <p className="font-semibold">{STANDARD_SECTION_LABEL[picker.section]}：商品台帳から選ぶ</p>
-              <button type="button" className="text-sm text-muted underline" onClick={() => setPicker(null)}>閉じる</button>
-            </div>
-            <div className="flex flex-wrap gap-2 border-b border-line px-4 py-2">
-              <Select value={pickerCategory} onChange={(event) => setPickerCategory(event.target.value)} aria-label="カテゴリー" className="h-8 text-xs">
-                <option value="">すべてのカテゴリー</option>
-                {pickerCategories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-              </Select>
-              <Input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="商品名・メーカー・型番" aria-label="商品を検索" className="h-8 flex-1 text-xs" />
-            </div>
-            <ul className="divide-y divide-line overflow-y-auto" data-testid="v25-wb-picker">
-              {pickerCandidates.map((candidate) => (
-                <li key={candidate.id}>
-                  <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm hover:bg-sand/40" onClick={() => choose(candidate)}>
-                    <span>
-                      <span className="font-medium">{candidate.name}</span>
-                      <span className="block text-xs text-muted">{[candidate.categoryName, candidate.manufacturer, candidate.modelNo].filter(Boolean).join(' ／ ')}</span>
-                    </span>
-                    {state.slots.some((slot) => slot.option_id === candidate.id) && <Badge tone="neutral">追加済み</Badge>}
-                  </button>
-                </li>
-              ))}
-              {pickerCandidates.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">選べる商品がありません。</li>}
-            </ul>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[6vh]" onClick={() => setPicker(null)}>
+          <StandardEstimateV25ProductPicker
+            sectionLabel={STANDARD_SECTION_LABEL[picker.section]}
+            candidates={candidates.filter((candidate) => candidate.section === picker.section && !candidate.retired)}
+            currentSlot={picker.targetKey ? state.slots.find((slot) => slot.key === picker.targetKey) ?? null : null}
+            onChoose={choose}
+            onClose={() => setPicker(null)}
+          />
         </div>
       )}
 

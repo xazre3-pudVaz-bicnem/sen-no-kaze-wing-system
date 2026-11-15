@@ -28,6 +28,8 @@ export interface V25WorkbenchCandidate extends V25ProductCandidate {
   displayGroup?: string | null;
   manufacturer: string;
   modelNo: string;
+  /** 商品台帳の販売単位（台・セット・㎡など）。表示専用で価格計算には影響しない。 */
+  priceUnit?: string | null;
   /** 商品台帳に登録したメイン画像。商品選択画面でのみ使用。 */
   imageUrl?: string | null;
   /** 窓タイプを使うカテゴリー（サッシ）の商品か（v2.5 PR-S2。位置の枠の選べる商品を窓タイプで絞り込む） */

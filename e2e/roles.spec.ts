@@ -12,8 +12,8 @@ import {
 const adminNav = (page: Page) => page.getByRole('navigation', { name: '管理メニュー' });
 
 test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () => {
-  test('総代理店は商品台帳を編集でき、代理店は商品を登録・編集できない', async ({ page }) => {
-    // --- 総代理店: 管理画面の入口は案件管理。商品台帳は編集できるが、本部だけの領域は出ない ---
+  test('総代理店・代理店は商品台帳を閲覧だけでき、商品を登録・編集できない', async ({ page }) => {
+    // --- 総代理店: 管理画面の入口は案件管理。商品台帳は閲覧だけ（2026-11-04 の先方回答 B-2）。本部だけの領域は出ない ---
     await signIn(page, MASTER, '/admin', '総代理店 担当');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('案件管理');
     const nav = adminNav(page);
@@ -23,13 +23,14 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     // 見積書管理・管理設定（ユーザー・権限など）は本部のみ
     await expect(nav.getByRole('link', { name: '見積書管理' })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: '管理設定' })).toHaveCount(0);
-    // 台帳の商品を編集できる
+    // 台帳の商品は閲覧専用（編集フォームを出さない）
     await page.goto('/admin/options');
-    const ubLink = page.getByTestId('admin-option-ub-1216').getByRole('link', { name: '詳細・編集' });
+    const ubLink = page.getByTestId('admin-option-ub-1216').getByRole('link', { name: '詳細', exact: true });
     const ubHref = (await ubLink.getAttribute('href'))!;
     await ubLink.click();
-    await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
-    await expect(page.getByRole('button', { name: '変更内容を確認' })).toBeVisible();
+    await expect(page.getByText('この商品は閲覧専用です')).toBeVisible();
+    await expect(page.getByTestId('registered-option-edit-flow')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '変更内容を確認' })).toHaveCount(0);
     await logout(page);
 
     // --- 代理店: 商品は見られるが、登録も編集もできない ---

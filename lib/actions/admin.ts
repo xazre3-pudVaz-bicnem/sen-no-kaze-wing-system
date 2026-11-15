@@ -1752,7 +1752,7 @@ export async function importEstimateTemplatesAction(
 
 /* ---------------- 本体内訳マスター ---------------- */
 
-/** 本体内訳マスター（分類表見積書）を丸ごと保存する（総代理店以上） */
+/** 本体内訳マスター（分類表見積書）を丸ごと保存する（本部だけ。2026-11-04 B-2） */
 export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
   // 本体内訳の金額（旧価格の列）は本部だけが登録・変更できる（v2.5 PR-C1b。DB のトリガーも止める）
@@ -1802,7 +1802,7 @@ export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: F
 }
 
 
-/** 本体内訳マスターの一括管理表：オプション価格の一括保存（総代理店以上） */
+/** 本体内訳マスターの一括管理表：オプション価格の一括保存（本部だけ。2026-11-04 B-2） */
 export async function bulkUpdateOptionPricesAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
   const costAccess = await getCostRecordingAccess();

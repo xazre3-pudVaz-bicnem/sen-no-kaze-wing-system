@@ -464,10 +464,13 @@ begin
   perform pg_temp.pl_expect_eq('PL-57 お客様・代理店は商品の状態を変えられない（RLS で 0 行）', '0/0',
     pg_temp.pl_run_as('authenticated', u_cust, format('with u as (update public.options set archived_at = now() where id = %L returning 1) select count(*)::text from u', o_vis)) || '/' ||
     pg_temp.pl_run_as('authenticated', u_dealer, format('with u as (update public.options set archived_at = now() where id = %L returning 1) select count(*)::text from u', o_vis)));
-  perform pg_temp.pl_expect_eq('PL-58 商品台帳を編集できる利用者（今の can_edit_catalog のまま。#502 の未確定事項は変えない）は状態を変えられる', '1',
+  -- 商品台帳の編集は本部だけ（2026-11-04 の先方回答 B-2。総代理店・代理店は閲覧だけ）
+  perform pg_temp.pl_expect_eq('PL-58 総代理店は商品の状態を変えられない（商品台帳は閲覧だけ：B-2。RLS で 0 行）', '0',
     pg_temp.pl_run_as('authenticated', u_editor, format('with u as (update public.options set archived_at = now() where id = %L returning 1) select count(*)::text from u', o_hid)));
-  perform pg_temp.pl_expect_error('PL-59 商品台帳を編集できる利用者でも、参照保護は DB で止まる', 'P0001', 'LOCKED',
-    pg_temp.pl_run_as('authenticated', u_editor, format('update public.options set archived_at = now() where id = %L returning ''ok''', o_default)));
+  perform pg_temp.pl_expect_eq('PL-58b 商品台帳を編集できる本部の管理者は状態を変えられる', '1',
+    pg_temp.pl_run_as('authenticated', u_admin, format('with u as (update public.options set archived_at = now() where id = %L returning 1) select count(*)::text from u', o_hid)));
+  perform pg_temp.pl_expect_error('PL-59 本部の管理者でも、参照保護は DB で止まる', 'P0001', 'LOCKED',
+    pg_temp.pl_run_as('authenticated', u_admin, format('update public.options set archived_at = now() where id = %L returning ''ok''', o_default)));
   perform pg_temp.pl_expect_error('PL-60 構成の明細は直接書き込めない（保存は RPC だけ）', '42501', '',
     pg_temp.pl_run_as('authenticated', u_cust, format('insert into public.configuration_items (configuration_id, option_id, quantity, variant_choice_ids) values (%L, %L, 1, ''{}'') returning ''ok''', v_cfg, o_ret)));
   perform pg_temp.pl_expect_error('PL-61 見積 Draft の明細は直接書き込めない', '42501', '',

@@ -45,7 +45,7 @@ export async function requireAdmin(nextPath = '/admin'): Promise<SessionUserWith
 
 /**
  * 指定した権限以上を要求する（customer < dealer < master_dealer < admin）。
- * 管理画面は代理店以上が入れるが、商品台帳の編集は総代理店以上に限る。
+ * 管理画面は代理店以上が入れるが、商品台帳の編集は本部だけ（2026-11-04 の先方回答 B-2）。
  */
 export async function requireRole(min: RoleCode, nextPath = '/admin'): Promise<SessionUserWithProfile> {
   const user = await requireUser(nextPath);
@@ -55,5 +55,5 @@ export async function requireRole(min: RoleCode, nextPath = '/admin'): Promise<S
 
 /** 管理画面に入れる（代理店以上） */
 export const requireStaff = (nextPath = '/admin') => requireRole('dealer', nextPath);
-/** 商品台帳を編集できる（総代理店以上） */
-export const requireCatalogEditor = (nextPath = '/admin') => requireRole('master_dealer', nextPath);
+/** 商品台帳を編集できる（本部だけ。2026-11-04 の先方回答 B-2。総代理店・代理店は閲覧だけ） */
+export const requireCatalogEditor = (nextPath = '/admin') => requireRole('admin', nextPath);

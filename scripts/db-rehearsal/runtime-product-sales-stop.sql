@@ -51,7 +51,9 @@ $fn$;
 do $test$
 declare
   u_admin constant uuid := '7b000000-0000-4000-8000-000000000001';
+  -- 商品台帳の編集は本部だけ（2026-11-04 の先方回答 B-2）。編集者は本部の管理者、総代理店は閲覧だけ
   u_editor constant uuid := '7b000000-0000-4000-8000-000000000002';
+  u_md constant uuid := '7b000000-0000-4000-8000-000000000009';
   u_dealer constant uuid := '7b000000-0000-4000-8000-000000000003';
   u_cust constant uuid := '7b000000-0000-4000-8000-000000000004';
   m_model constant uuid := '7b100000-0000-4000-8000-000000000001';
@@ -86,10 +88,10 @@ begin
   -- ---------- 検査用のデータ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる） ----------
   set local session_replication_role = replica;
   insert into auth.users (id, email, raw_user_meta_data)
-  values (u_admin, 'pss-admin@runtime.invalid', '{}'), (u_editor, 'pss-editor@runtime.invalid', '{}'),
+  values (u_admin, 'pss-admin@runtime.invalid', '{}'), (u_editor, 'pss-editor@runtime.invalid', '{}'), (u_md, 'pss-md@runtime.invalid', '{}'),
          (u_dealer, 'pss-dealer@runtime.invalid', '{}'), (u_cust, 'pss-cust@runtime.invalid', '{}');
   insert into public.profiles (id, email, full_name, role_code)
-  values (u_admin, 'pss-admin@runtime.invalid', '本部', 'admin'), (u_editor, 'pss-editor@runtime.invalid', '総代理店', 'master_dealer'),
+  values (u_admin, 'pss-admin@runtime.invalid', '本部', 'admin'), (u_editor, 'pss-editor@runtime.invalid', '本部（商品台帳の編集）', 'admin'), (u_md, 'pss-md@runtime.invalid', '総代理店', 'master_dealer'),
          (u_dealer, 'pss-dealer@runtime.invalid', '代理店', 'dealer'), (u_cust, 'pss-cust@runtime.invalid', 'お客様', 'customer');
   insert into public.base_models (id, slug, name, base_price, status, presets)
   values (m_model, 'runtime-pss-model', '販売停止の検査用モデル', 1000000, 'published',
@@ -133,6 +135,8 @@ begin
 
   -- ---------- 販売停止（参照の緩和） ----------
   v_audit_before := (select count(*) from public.audit_logs where entity = 'option' and entity_id in (o_preset, o_disc));
+  perform pg_temp.pss_expect_eq('PSS-0 総代理店は商品を販売停止にできない（商品台帳は閲覧だけ：2026-11-04 B-2。RLS で 0 行）', '0',
+    pg_temp.pss_run_as('authenticated', u_md, format('with u as (update public.options set archived_at = now() where id = %L returning 1) select count(*)::text from u', o_preset)));
   perform pg_temp.pss_expect_eq('PSS-1 本体の仕様・公開中の標準見積・Excel 標準の基準商品で使っていても、商品台帳の編集者は販売停止にできる', 'ok/ok/ok',
     pg_temp.pss_run_as('authenticated', u_editor, format('update public.options set archived_at = now() where id = %L returning ''ok''', o_preset)) || '/' ||
     pg_temp.pss_run_as('authenticated', u_editor, format('update public.options set archived_at = now() where id = %L returning ''ok''', o_se)) || '/' ||
@@ -199,7 +203,7 @@ begin
     pg_temp.pss_run_as('authenticated', u_editor, format('update public.options set simulator_visible = false where id = %L returning ''ok''', o_disc)));
   select updated_at::text into v_updated2 from public.options where id = o_disc;
   perform pg_temp.pss_expect_error('PSS-20 廃番の取り消しは本部の管理者だけ（総代理店は不可）', '42501', 'FORBIDDEN',
-    pg_temp.pss_run_as('authenticated', u_editor, format('select public.set_option_discontinued(%L, %L::timestamptz, false, ''誤操作'')::text', o_disc, v_updated2)));
+    pg_temp.pss_run_as('authenticated', u_md, format('select public.set_option_discontinued(%L, %L::timestamptz, false, ''誤操作'')::text', o_disc, v_updated2)));
   perform pg_temp.pss_expect_error('PSS-21 RPC を通さない取り消し（直接の更新）は、本部の管理者でも理由なしでは止める', 'P0001', 'VALIDATION: 廃番を取り消す理由を入力してください',
     pg_temp.pss_run_as('authenticated', u_admin, format('update public.options set discontinued_at = null where id = %L returning ''ok''', o_disc)));
   v_out := pg_temp.pss_run_as('authenticated', u_admin, format('select public.set_option_discontinued(%L, %L::timestamptz, false, ''誤って廃番にした'')::text', o_disc, v_updated2));

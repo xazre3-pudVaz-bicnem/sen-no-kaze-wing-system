@@ -99,11 +99,12 @@ test.describe('運用機能（通知・承諾・変更履歴）', () => {
     const before = Number(await page.locator('#registered-price').inputValue());
     await applyRegisteredOptionPrice(page, before + 10_000);
 
-    // 権限を変更する（代理店を総代理店へ一時的に上げる）
+    // 権限を変更する（代理店を管理者へ一時的に上げる。総代理店は組織の登録と招待で作るため、会員一覧からは選べない。
+    // 顧客に下げると、担当者だけの一覧から行が消えて結果を確かめられない）
     await page.goto('/admin/customers');
     const dealerRow = page.getByTestId(`user-row-${DEALER}`);
     await dealerRow.scrollIntoViewIfNeeded();
-    await dealerRow.getByRole('combobox').selectOption('master_dealer');
+    await dealerRow.getByRole('combobox').selectOption('admin');
     await dealerRow.getByRole('button', { name: '変更' }).click();
     await expect(dealerRow.getByText('保存しました')).toBeVisible();
 

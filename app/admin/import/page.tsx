@@ -3,7 +3,7 @@ import { AdminPage } from '@/components/admin/ui';
 import { ImportForm } from '@/components/admin/import-form';
 import { isLocalMode } from '@/lib/data/store';
 
-/** Excel と画像 ZIP から商品をまとめて登録する。総代理店以上 */
+/** Excel と画像 ZIP から商品をまとめて登録する。本部だけ（2026-11-04 の先方回答 B-2） */
 export default async function AdminImportPage() {
   await requireCatalogEditor();
 

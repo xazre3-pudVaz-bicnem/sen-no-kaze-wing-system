@@ -107,6 +107,8 @@ import {
 } from './store';
 import { productLedgerState, productSimulatorVisibleSetting, type ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
+import { MASTER_DEALER_VIA_ORGANIZATION_MESSAGE, ORGANIZATION_ROLE_LOCKED_MESSAGE } from '@/lib/domain/organizations';
+import { organizationRoleCodeFor } from './organizations/local-tables';
 import {
   configurationPorSelections,
   findUnresolvedLines,
@@ -654,6 +656,14 @@ export class LocalStore implements DataStore {
       if (actor.id === userId) throw new StoreError('VALIDATION', '自分自身の権限は変更できません');
       const p = db.profiles.find((x) => x.id === userId);
       if (!p) throw new StoreError('NOT_FOUND', 'ユーザーが見つかりません');
+      // 代理店・総代理店に所属している人は、組織の画面で所属を外してから（DB のトリガーと同じ）
+      const fromOrganization = organizationRoleCodeFor(db.organizations, p.id);
+      if (fromOrganization !== null && role !== fromOrganization) {
+        throw new StoreError('VALIDATION', ORGANIZATION_ROLE_LOCKED_MESSAGE);
+      }
+      if (role === 'master_dealer' && p.role_code !== 'master_dealer') {
+        throw new StoreError('VALIDATION', MASTER_DEALER_VIA_ORGANIZATION_MESSAGE);
+      }
       const before = p.role_code;
       p.role_code = role;
       p.updated_at = nowIso();

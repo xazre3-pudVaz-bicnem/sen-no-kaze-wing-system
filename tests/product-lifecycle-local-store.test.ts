@@ -231,29 +231,33 @@ describe.sequential('商品の状態：ローカル検証モード（DB の保�
     expect(rebuilt).not.toContain(presetProduct.id);
   });
 
-  it('廃番は販売停止の商品だけ・理由が必須。廃番の間は販売を再開できず、取り消しは本部の管理者だけ（取り消すと販売停止に戻る）', async () => {
+  it('廃番は販売停止の商品だけ・理由が必須。廃番の間は販売を再開できず、廃番も取り消しも本部の管理者だけ（総代理店は商品台帳を編集できない：2026-11-04 B-2。取り消すと販売停止に戻る）', async () => {
     const { store, free, optionOf } = await setup();
-    const editor = { id: 'editor-user', email: 'editor@example.com', role: 'master_dealer' as const, full_name: '総代理店' };
+    const masterDealer = { id: 'md-user', email: 'md@example.com', role: 'master_dealer' as const, full_name: '総代理店' };
     const admin = { id: 'admin-user', email: 'admin@example.com', role: 'admin' as const, full_name: '本部' };
     const product = free[0];
     await expect(
-      store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: product.updated_at }, editor)
+      store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: product.updated_at }, admin)
     ).rejects.toThrow('廃番にできるのは販売停止の商品だけです');
     const stopped = await store.setProductLifecycle({ id: product.id, action: 'retire', expectedUpdatedAt: product.updated_at });
     await expect(
-      store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '  ', expectedUpdatedAt: stopped.updated_at }, editor)
+      store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '  ', expectedUpdatedAt: stopped.updated_at }, admin)
     ).rejects.toThrow('理由を 500 文字以内で入力してください');
     await expect(
       store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: stopped.updated_at }, actor)
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    const discontinued = await store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: stopped.updated_at }, editor);
+    // 総代理店は商品台帳を閲覧だけ（B-2）。廃番にもできない
+    await expect(
+      store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: stopped.updated_at }, masterDealer)
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const discontinued = await store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: stopped.updated_at }, admin);
     expect((await optionOf(product.id)).discontinued_at).toBeTruthy();
 
     await expect(store.setProductLifecycle({ id: product.id, action: 'resume', expectedUpdatedAt: discontinued.updated_at })).rejects.toThrow(
       '廃番の商品は販売を再開できません'
     );
     await expect(
-      store.setProductDiscontinued({ id: product.id, discontinued: false, reason: '誤操作', expectedUpdatedAt: discontinued.updated_at }, editor)
+      store.setProductDiscontinued({ id: product.id, discontinued: false, reason: '誤操作', expectedUpdatedAt: discontinued.updated_at }, masterDealer)
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     const restored = await store.setProductDiscontinued({ id: product.id, discontinued: false, reason: '誤操作', expectedUpdatedAt: discontinued.updated_at }, admin);
     const after = await optionOf(product.id);
@@ -261,7 +265,7 @@ describe.sequential('商品の状態：ローカル検証モード（DB の保�
     expect(productLedgerState(after)).toBe('retired');
     // 古い版の操作は失敗にする
     await expect(
-      store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: discontinued.updated_at }, editor)
+      store.setProductDiscontinued({ id: product.id, discontinued: true, reason: '生産終了', expectedUpdatedAt: discontinued.updated_at }, admin)
     ).rejects.toMatchObject({ code: 'LOCKED' });
     // 取り消した後は、販売を再開できる
     await store.setProductLifecycle({ id: product.id, action: 'resume', expectedUpdatedAt: restored.updated_at });

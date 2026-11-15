@@ -48,6 +48,7 @@ const candidates: V25WorkbenchCandidate[] = [
     singleSelect: false,
     manufacturer: 'メーカーA',
     modelNo: 'A-1',
+    priceUnit: '台',
     section: 'option',
     variantGroups: [{ id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] }],
     defaultChoices: { g1: 'c1' },
@@ -206,6 +207,15 @@ const render = (readOnly: boolean, view?: { initial?: V25EditorState; candidates
   );
 
 describe('Excel 風の画面（描画）', () => {
+
+  it('商品行は商品台帳の販売単位（台・㎡）を表示し、未設定の場合は—を表示する', () => {
+    const html = render(false);
+    expect(html).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>台<\/td>/);
+    expect(html).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>—<\/td>/);
+    const changed = render(false, { candidates: candidates.map((row) => row.id === 'p1' ? { ...row, priceUnit: '㎡' } : row) });
+    expect(changed).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>㎡<\/td>/);
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(state)');
+  });
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);

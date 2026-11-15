@@ -102,6 +102,102 @@ describe('旧明細1行の安全な商品置換案（UI stateのみ、DB操作�
     expect(planLegacyLineReplacement(unsaved, 'legacy-1', product, [product], costs, 'c-wall', 'new').ok).toBe(false);
   });
 
+  it('同じサッシ商品を寝室窓・洗面窓で使い分け、既存枠・旧行と保存payloadの整合を維持する', () => {
+    const sash: V25WorkbenchCandidate = {
+      id: 'p-window', name: 'サッシ', section: 'interior_exterior',
+      categoryId: 'c-window', categoryName: 'サッシ', categoryCode: 'sash',
+      singleSelect: true, manufacturer: 'メーカー', modelNo: 'W-2',
+      variantGroups: [], defaultChoices: {},
+    };
+    const sashCosts = { ...costs, currentProduct: { ...costs.currentProduct, 'p-window': 20000 } };
+    const priorSlot = {
+      key: 'slot-bedroom', baseline_key: 'old-bedroom', option_id: 'p-window', variant_choices: {},
+      quantity: '1', price_mode: 'auto' as const, manual_unit_price: '',
+      slot_code: 'bedroom-window', slot_label: '寝室窓', selectable_option_ids: [],
+    };
+    const withPosition: V25EditorState = { ...base, slots: [priorSlot] };
+    const plan = planLegacyLineReplacement(
+      withPosition, 'legacy-1', sash, [sash], sashCosts, 'c-window', 'slot-washroom',
+      { slot_code: 'washroom-window', slot_label: '洗面窓' },
+    );
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.state.lines.map((line) => line.key)).toEqual(['legacy-2']);
+    expect(plan.state.slots.map((slot) => [slot.option_id, slot.slot_code])).toEqual([
+      ['p-window', 'bedroom-window'], ['p-window', 'washroom-window'],
+    ]);
+    const payload = buildV25SavePayload(plan.state);
+    expect(payload.slots.map((slot) => [slot.option_id, slot.slot_code, slot.slot_label, slot.quantity])).toEqual([
+      ['p-window', 'bedroom-window', '寝室窓', '1'],
+      ['p-window', 'washroom-window', '洗面窓', '1'],
+    ]);
+    expect(payload.lines.map((line) => line.line_key)).toEqual(['old-2']);
+
+    // 同一商品・同一位置は不可。カテゴリー単位の枠との混在も不可。
+    expect(planLegacyLineReplacement(withPosition, 'legacy-1', sash, [sash], sashCosts, 'c-window',
+      'dup', { slot_code: 'bedroom-window', slot_label: '寝室窓2' }).ok).toBe(false);
+    expect(planLegacyLineReplacement(withPosition, 'legacy-1', sash, [sash], sashCosts, 'c-window',
+      'dup-label', { slot_code: 'extra-window', slot_label: '寝室窓' }).ok).toBe(false);
+    expect(planLegacyLineReplacement(withPosition, 'legacy-1', sash, [sash], sashCosts, 'c-window',
+      'missing-position').ok).toBe(false);
+    const categorySlot = { ...priorSlot, slot_code: '', slot_label: '' };
+    expect(planLegacyLineReplacement({ ...base, slots: [categorySlot] }, 'legacy-1', sash, [sash],
+      sashCosts, 'c-window', 'mixed', { slot_code: 'washroom-window', slot_label: '洗面窓' }).ok).toBe(false);
+    expect(planLegacyLineReplacement(base, 'legacy-1', product, [product], costs, 'c-wall', 'wall-position',
+      { slot_code: 'front', slot_label: '正面' }).ok).toBe(false);
+  });
+
+  it('位置識別子と位置名の両方を求め、DB同様の書式制約を検査する', () => {
+    const sash: V25WorkbenchCandidate = {
+      ...product, id: 'p-window', categoryId: 'c-window',
+      categoryCode: 'sash', categoryName: 'サッシ', singleSelect: false,
+    };
+    const sashCosts = { ...costs, currentProduct: { ...costs.currentProduct, 'p-window': 20000 } };
+    const propose = (slot_code: string, slot_label: string) =>
+      planLegacyLineReplacement(base, 'legacy-1', sash, [sash], sashCosts, 'c-window', 'slot-new',
+        { slot_code, slot_label });
+    expect(propose('', '寝室窓').ok).toBe(false);
+    expect(propose('bedroom-window', '').ok).toBe(false);
+    expect(propose('Bedroom Window', '寝室窓').ok).toBe(false);
+    expect(propose('bedroom-window', '寝室窓').ok).toBe(true);
+  });
+
+  it('円単位の計算：手動旧行→標準原価商品、数量・税率・丸め・調整額を独立期待値と照合する', () => {
+    const input: V25EditorState = {
+      ...base, sales_fee_rate: '1', expense_rate: '0', markup_rate: '1',
+      adjustment: '7', adjustment_reason: '端数の補正',
+    };
+    const plan = proposal(input);
+    if (!plan.ok) throw Error(plan.error);
+    const rule: PricingCalculationRule = {
+      id: 'rule', formula_code: 'v2.5', rounding_mode: 'trunc',
+      expense_target_sections: ['base', 'interior_exterior', 'option'],
+      auto_price_sections: ['base', 'interior_exterior', 'option'],
+    };
+    const taxRule: PricingTaxRule = { id: 'tax', tax_mode: 'full_single_rate', tax_rate: '0.100000', rounding_mode: 'trunc' };
+    const result = calculateV25Workbench(rule, taxRule, plan.state, [], costs,
+      (id) => id === 'p-wall' ? 'interior_exterior' : undefined);
+    // 商品標準原価1,000円 × 外壁4面 + 手動10,000円 = 14,000円
+    // 調整+7円後の税額 trunc(14,007×10%)=1,400円、税込15,407円
+    expect(result.error).toBeNull();
+    expect(result.result?.subtotal).toBe(14000);
+    expect(result.result?.tax).toBe(1400);
+    expect(result.result?.total).toBe(15407);
+    expect(buildV25SavePayload(plan.state).adjustment).toBe(7);
+  });
+
+  it('PORの旧明細は0円扱いにせず、置換できても画面側の未確定金額確認が必要', () => {
+    const porState: V25EditorState = {
+      ...base, lines: base.lines.map((line) => line.key === 'legacy-1'
+        ? { ...line, price_mode: 'por' as const, unit_price: '' } : line),
+    };
+    const plan = proposal(porState);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(porState.lines[0].price_mode).toBe('por');
+    expect(plan.state.lines.map((line) => line.key)).toEqual(['legacy-2']);
+  });
+
   it('見直し済み・対象外の工事明細は勝手に商品行へ変更しない', () => {
     expect(planLegacyLineReplacement(base, 'legacy-2', product, [product], costs, 'c-wall', 'new').ok).toBe(false);
     const sitework = {

@@ -39,6 +39,12 @@ import {
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
 } from '@/lib/domain/standard-estimate-v25-workbench';
+import {
+  addV25PositionRow,
+  replaceV25PositionStandard,
+  updateV25Position,
+  v25PositionMixes,
+} from '@/lib/domain/standard-estimate-v25-position-ui';
 import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
@@ -125,6 +131,14 @@ function WorkbenchBody({
   const [positionFor, setPositionFor] = useState<string | null>(null);
   const [positionDraft, setPositionDraft] = useState<Pick<V25SlotRow, 'slot_code' | 'slot_label' | 'selectable_option_ids'> | null>(null);
   const [addPositionOnConfirm, setAddPositionOnConfirm] = useState(false);
+  const [addedPositionLabel, setAddedPositionLabel] = useState('');
+  const [inheritCandidates, setInheritCandidates] = useState(false);
+  const [inheritedCandidateIds, setInheritedCandidateIds] = useState<string[]>([]);
+  const [positionError, setPositionError] = useState<string | null>(null);
+  const [replacementDraft, setReplacementDraft] = useState<{
+    slotKey: string; candidate: V25WorkbenchCandidate; choices: Record<string, string>; selectableIds: string[];
+  } | null>(null);
+  const [jumpToKey, setJumpToKey] = useState<string | null>(null);
   const [selectableFor, setSelectableFor] = useState<string | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
@@ -164,6 +178,7 @@ function WorkbenchBody({
   const unpricedKeys = useMemo(() => new Set(calc.unpriced), [calc.unpriced]);
   const unavailableCount = state.slots.filter((slot) => candidateById.get(slot.option_id)?.unavailable).length;
   const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
+  const positionMixes = useMemo(() => v25PositionMixes(state.slots, (id) => candidateById.get(id)), [state.slots, candidateById]);
   // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
   const slotRuleIssues = useMemo(() => v25SlotRuleIssues(state.slots, (optionId) => candidateById.get(optionId)), [state.slots, candidateById]);
   const blockers = [
@@ -172,20 +187,32 @@ function WorkbenchBody({
   ];
 
   useEffect(() => {
-    if (!picker && !selectableFor && !variantEditor && !positionFor) return;
+    if (!picker && !selectableFor && !variantEditor && !positionFor && !replacementDraft) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (selectableFor) setSelectableFor(null);
+      else if (replacementDraft) setReplacementDraft(null);
       else if (positionFor) {
         setPositionFor(null);
         setPositionDraft(null);
         setAddPositionOnConfirm(false);
+        setPositionError(null);
       } else if (variantEditor) setVariantEditor(null);
       else setPicker(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [picker, selectableFor, variantEditor, positionFor]);
+  }, [picker, selectableFor, variantEditor, positionFor, replacementDraft]);
+
+  // 案内から未設定行へ移動。折り畳まれていた場合は行を開いてから移動する。
+  useEffect(() => {
+    if (!jumpToKey) return;
+    const row = document.getElementById(`v25-position-row-${jumpToKey}`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.focus({ preventScroll: true });
+    setJumpToKey(null);
+  }, [jumpToKey, collapsed]);
 
   const setSlot = (key: string, patch: Partial<V25SlotRow>) =>
     setState((current) => ({ ...current, slots: current.slots.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)) }));
@@ -204,6 +231,12 @@ function WorkbenchBody({
     const quantity = String(standardSlotQuantity(candidate.categoryCode));
     if (picker.targetKey) {
       const target = state.slots.find((slot) => slot.key === picker.targetKey);
+      if (target?.slot_code.trim()) {
+        // 同じ位置の標準品入替は、候補の見直しまで確定操作を保留する。
+        setReplacementDraft({ slotKey: target.key, candidate, choices: { ...choices }, selectableIds: [] });
+        setPicker(null);
+        return;
+      }
       setSlot(picker.targetKey, {
         option_id: candidate.id,
         variant_choices: { ...choices },
@@ -252,20 +285,30 @@ function WorkbenchBody({
   const variantSlot = variantEditor ? state.slots.find((slot) => slot.key === variantEditor.slotKey) : null;
   const variantCandidate = variantSlot ? candidateById.get(variantSlot.option_id) : undefined;
 
-  // 位置設定も仮編集し、確定時に既存の slot ID / variant ID を保持したまま反映する。
+  // 位置名と候補は一時編集し、確定時だけ既存の行へ反映する。
   const openPosition = (slot: V25SlotRow) => {
     setPositionFor(slot.key);
     setPositionDraft({ slot_code: slot.slot_code, slot_label: slot.slot_label, selectable_option_ids: [...slot.selectable_option_ids] });
     setAddPositionOnConfirm(false);
+    setAddedPositionLabel('');
+    setInheritCandidates(false);
+    setInheritedCandidateIds([]);
+    setPositionError(null);
   };
   const closePosition = () => {
     setSelectableFor(null);
     setPositionFor(null);
     setPositionDraft(null);
     setAddPositionOnConfirm(false);
+    setAddedPositionLabel('');
+    setInheritCandidates(false);
+    setInheritedCandidateIds([]);
+    setPositionError(null);
   };
-  const updatePosition = (patch: Partial<Pick<V25SlotRow, 'slot_code' | 'slot_label' | 'selectable_option_ids'>>) =>
+  const updatePosition = (patch: Partial<Pick<V25SlotRow, 'slot_code' | 'slot_label' | 'selectable_option_ids'>>) => {
+    setPositionError(null);
     setPositionDraft((current) => current ? { ...current, ...patch } : null);
+  };
   const toggleSelectable = (optionId: string) =>
     setPositionDraft((current) => current ? {
       ...current,
@@ -277,21 +320,40 @@ function WorkbenchBody({
   const positionCandidate = positionSlot ? candidateById.get(positionSlot.option_id) : undefined;
   const confirmPosition = () => {
     if (readOnly || !positionFor || !positionDraft) return;
-    const draft = { ...positionDraft, selectable_option_ids: [...positionDraft.selectable_option_ids] };
-    setState((current) => {
-      const slots = current.slots.map((slot) => slot.key === positionFor ? { ...slot, ...draft } : slot);
-      const index = slots.findIndex((slot) => slot.key === positionFor);
-      if (addPositionOnConfirm && index !== -1) {
-        const source = slots[index];
-        slots.splice(index + 1, 0, {
-          ...source, key: newKey('slot'), baseline_key: null,
-          variant_choices: { ...source.variant_choices }, quantity: '1',
-          slot_code: '', slot_label: '', selectable_option_ids: [...source.selectable_option_ids],
-        });
-      }
-      return { ...current, slots };
-    });
+    const candidateOf = (id: string) => candidateById.get(id);
+    const result = addPositionOnConfirm
+      ? addV25PositionRow(state, positionFor, newKey('slot'), addedPositionLabel,
+        inheritCandidates ? inheritedCandidateIds : [], candidateOf)
+      : updateV25Position(state, positionFor, positionDraft.slot_label,
+        positionDraft.selectable_option_ids, candidateOf);
+    if (result.error) { setPositionError(result.error); return; }
+    setState(result.state);
     closePosition();
+  };
+  const replacementSource = replacementDraft
+    ? state.slots.find((slot) => slot.key === replacementDraft.slotKey) : null;
+  const replacementChoices = replacementDraft && replacementSource
+    ? replacementSource.selectable_option_ids.map((id) => candidateById.get(id))
+      .filter((candidate): candidate is V25WorkbenchCandidate => Boolean(candidate &&
+        candidate.id !== replacementDraft.candidate.id && !candidate.retired && !candidate.unavailable &&
+        candidate.categoryId === replacementDraft.candidate.categoryId))
+    : [];
+  const confirmReplacement = () => {
+    if (!replacementDraft || readOnly) return;
+    const result = replaceV25PositionStandard(
+      state, replacementDraft.slotKey, replacementDraft.candidate,
+      replacementDraft.choices, replacementDraft.selectableIds, (id) => candidateById.get(id)
+    );
+    if (result.error) { onNotice({ tone: 'danger', text: result.error }); return; }
+    setState(result.state);
+    setReplacementDraft(null);
+  };
+  const jumpToPosition = (key: string) => {
+    const slot = state.slots.find((row) => row.key === key);
+    if (!slot) return;
+    const section = sectionOf(slot.option_id);
+    if (section) setCollapsed((current) => { const next = new Set(current); next.delete(section); return next; });
+    setJumpToKey(key);
   };
   const selectableSlot = selectableFor ? (state.slots.find((slot) => slot.key === selectableFor) ?? null) : null;
   const selectableBase = selectableSlot ? candidateById.get(selectableSlot.option_id) : undefined;
@@ -416,6 +478,21 @@ function WorkbenchBody({
   return (
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
+      {!readOnly && dirty && <p className="text-xs font-semibold text-amber-800" data-testid="v25-wb-unsaved-position">明細に反映済み・下書き未保存（保存は「下書きを保存」から）</p>}
+      {positionMixes.length > 0 && (
+        <div className="space-y-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs" data-testid="v25-wb-position-mixed">
+          {positionMixes.map((mix) => (
+            <div key={mix.categoryId} className="flex flex-wrap items-center gap-2">
+              <span>{mix.categoryName}{mix.total}行のうち{mix.unsetKeys.length}行が位置未設定。公開には混在の解消が必要です。</span>
+              {mix.unsetKeys.map((key, index) => (
+                <button type="button" className="font-semibold text-navy underline" key={key} onClick={() => jumpToPosition(key)}>
+                  未設定の行{index + 1}へ移動
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
@@ -514,38 +591,49 @@ function WorkbenchBody({
                       const status: V25CostStatus | null = slot.price_mode !== 'auto' ? null : missing ? 'missing' : pinnedPreview ? slotCostStatus(pinnedPreview) : null;
                       const slotCode = slot.slot_code.trim();
                       const positionAllowed = Boolean(candidate && !candidate.unavailable && canUsePositionSlot(candidate.categoryCode));
+                      const isSash = candidate?.categoryCode === 'sash';
+                      const mixedUnset = !slotCode && positionMixes.some((mix) =>
+                        mix.categoryId === candidate?.categoryId && mix.unsetKeys.includes(slot.key));
                       rowNumber += 1;
                       return (
                         <Fragment key={slot.key}>
-                        <tr className="border-b border-slate-200 align-middle" data-testid="v25-wb-slot">
+                        <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
                           <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
-                                                    <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">
+                          <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">
                             <div className="flex min-w-0 items-center gap-1">
-                              <span className="min-w-0 flex-1 truncate" title={candidate?.categoryName ?? ""}>{candidate?.categoryName ?? ""}</span>
-                              {(slotCode || (positionAllowed && !readOnly)) && (
-                                <button type="button" className="max-w-[4rem] shrink-0 truncate text-[10px] text-navy underline" title={slot.slot_label.trim() || "位置・選べる商品を設定"}
-                                  aria-label="位置・選べる商品を設定" data-testid="v25-wb-slot-position-toggle" onClick={() => openPosition(slot)}>
-                                  <span data-testid="v25-wb-slot-position">{slotCode ? (slot.slot_label.trim() || "位置") : "位置"}</span>
-                                  {slotCode && <span> {slot.selectable_option_ids.length + 1}件</span>}
-                                </button>
+                              <span className="min-w-0 flex-1 truncate" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
+                              {isSash && positionAllowed && !readOnly && (
+                                <button type="button" className="shrink-0 text-[10px] text-navy underline" data-testid="v25-wb-slot-position-toggle"
+                                  aria-label="位置・選べる商品を設定" onClick={() => openPosition(slot)}>位置別設定</button>
                               )}
                             </div>
                           </td>
-                                                    <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0.5">
-                            <div className="flex min-w-0 items-center gap-1">
-                              <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(" ／ ")}>{candidate?.name ?? "（商品が見つかりません）"}</span>
-                              {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
-                              {!readOnly && (
-                                <button type="button"
-                                  className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"
-                                  title="商品台帳から選ぶ"
-                                  aria-label={`${candidate?.name ?? '商品'}を商品台帳から選び直す`}
-                                  data-testid="v25-wb-slot-product-picker-icon"
-                                  onClick={() => { setPicker({ section: code, targetKey: slot.key });  }}>
-                                  <Package className="size-3.5" aria-hidden="true" />
+                          <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0.5">
+                            <div className="min-w-0">
+                              <div className="flex min-w-0 items-center gap-1">
+                                <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
+                                {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
+                                {!readOnly && (
+                                  <button type="button"
+                                    className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"
+                                    title="商品台帳から選ぶ"
+                                    aria-label={`${candidate?.name ?? '商品'}を商品台帳から選び直す`}
+                                    data-testid="v25-wb-slot-product-picker-icon"
+                                    onClick={() => { setPicker({ section: code, targetKey: slot.key }); }}>
+                                    <Package className="size-3.5" aria-hidden="true" />
+                                  </button>
+                                )}
+                                {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</span>}
+                              </div>
+                              {slotCode && (
+                                <button type="button" className="block max-w-full truncate text-left text-[10px] text-navy underline"
+                                  data-testid="v25-wb-slot-position" aria-label="位置・選べる商品を設定"
+                                  title={`${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
+                                  onClick={() => openPosition(slot)}>
+                                  {slot.slot_label.trim() || '位置'} · {slot.selectable_option_ids.length > 0 ? `変更候補${slot.selectable_option_ids.length}件` : '標準品のみ'}
                                 </button>
                               )}
-                              {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(" ／ ")}</span>}
+                              {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
                             </div>
                           </td>
 
@@ -609,6 +697,10 @@ function WorkbenchBody({
                                 <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setPicker({ section: code, targetKey: slot.key });  }}>商品台帳から選択</button>
+                                  {positionAllowed && !isSash && !slotCode && (
+                                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                      onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); openPosition(slot); }}>位置別設定</button>
+                                  )}
                                   {slot.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'manual' }); }}>金額を入力する</button>

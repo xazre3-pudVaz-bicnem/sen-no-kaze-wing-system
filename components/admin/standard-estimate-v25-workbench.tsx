@@ -948,6 +948,7 @@ function WorkbenchBody({
           <StandardEstimateV25ProductPicker
             sectionLabel={STANDARD_SECTION_LABEL[picker.section]}
             candidates={candidates.filter((candidate) => candidate.section === picker.section && !candidate.retired)}
+            productCosts={costs.currentProduct}
             currentSlot={picker.targetKey ? state.slots.find((slot) => slot.key === picker.targetKey) ?? null : null}
             onChoose={choose}
             onClose={() => setPicker(null)}

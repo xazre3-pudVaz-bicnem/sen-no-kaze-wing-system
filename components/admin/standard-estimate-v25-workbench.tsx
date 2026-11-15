@@ -467,12 +467,23 @@ function WorkbenchBody({
     ? replacementPreview.result.sections.flatMap((section) => section.lines)
         .find((line) => line.key === replacementPreview.lineKeyOf[replacementPlan.newSlot.key])
     : null;
-  const replacementComparisonIncomplete = Boolean(
-    replacementSource?.price_mode === 'por' || previousLineAmount === null ||
-    !calc.result || calc.result.total === null || calc.unpriced.length > 0 || calc.incomplete.length > 0 ||
-    !replacementPreview?.result || replacementPreview.result.total === null ||
-    (replacementPreview?.unpriced.length ?? 0) > 0 || (replacementPreview?.incomplete.length ?? 0) > 0
-  );
+  const replacementUnknownReasons = [
+    ...(replacementSource?.price_mode === 'por' ? ['置換元の旧明細は「別途見積」です'] : []),
+    ...(replacementSource?.price_mode === 'manual' && !replacementSource.unit_price.trim()
+      ? ['置換元の手動単価が未入力です'] : []),
+    ...(replacementSource && previousLineAmount === null && replacementSource.price_mode !== 'por'
+      && !(replacementSource.price_mode === 'manual' && !replacementSource.unit_price.trim())
+      ? ['置換元明細の金額を試算できません'] : []),
+    ...(calc.unpriced.length > 0 ? [`置換前に未算定の明細が${calc.unpriced.length}件あります`] : []),
+    ...(calc.incomplete.length > 0 ? [`置換前に原価が未設定の商品が${calc.incomplete.length}件あります`] : []),
+    ...(calc.result?.total == null ? ['置換前の税込合計が未確定です'] : []),
+    ...((replacementPreview?.unpriced.length ?? 0) > 0
+      ? [`置換後に未算定の明細が${replacementPreview?.unpriced.length}件あります`] : []),
+    ...((replacementPreview?.incomplete.length ?? 0) > 0
+      ? [`置換後に原価が未設定の商品が${replacementPreview?.incomplete.length}件あります`] : []),
+    ...(replacementPreview?.result?.total == null ? ['置換後の税込合計が未確定です'] : []),
+  ];
+  const replacementComparisonIncomplete = replacementUnknownReasons.length > 0;
   const replacementCanConfirm = Boolean(
     !readOnly && !editLocked && replacementAcknowledged &&
     (!replacementComparisonIncomplete || replacementIncompleteAcknowledged) &&
@@ -1179,7 +1190,7 @@ function WorkbenchBody({
                 <p className="text-xs">旧グループ：{replacementSource.group_label || '未設定'}</p>
                 <p className="font-medium">{replacementSource.name}</p>
                 <p>数量：{replacementSource.quantity} {replacementSource.unit || '（単位なし）'}</p>
-                <p>単価：{replacementSource.price_mode === 'por' ? '別途見積' : yen(Number(replacementSource.unit_price))}</p>
+                <p>単価：{replacementSource.price_mode === 'por' ? '別途見積' : !replacementSource.unit_price.trim() ? '未入力（未算定）' : yen(Number(replacementSource.unit_price))}</p>
                 <p>この行の税別金額：{replacementSource.price_mode === 'por' ? '別途見積（未確定）' : yen(previousLineAmount)}</p>
                 {replacementSource.remark && <p className="break-words text-xs text-muted">備考：{replacementSource.remark}</p>}
               </div>
@@ -1214,10 +1225,10 @@ function WorkbenchBody({
             {replacementComparisonIncomplete && (
               <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3" data-testid="v25-wb-replacement-amount-uncertain">
                 <p className="text-sm font-semibold text-amber-900">置換前後の金額を完全には比較できません</p>
-                <p className="text-xs text-amber-900">
-                  元の明細が別途見積、または他の未確定・原価未設定の明細を含む可能性があります。
-                  税込合計の差額は未確定です。旧明細の金額と新商品の試算金額を確認してください。
-                </p>
+                <ul className="list-disc space-y-0.5 pl-5 text-xs text-amber-900" data-testid="v25-wb-replacement-uncertain-reasons">
+                  {replacementUnknownReasons.map((reason) => <li key={reason}>{reason}</li>)}
+                </ul>
+                <p className="text-xs text-amber-900">税込合計の差額は未確定です。旧明細の金額と新商品の試算金額を確認してください。</p>
                 <label className="flex items-start gap-2 text-sm">
                   <input type="checkbox" checked={replacementIncompleteAcknowledged}
                     data-testid="v25-wb-replacement-amount-ack"

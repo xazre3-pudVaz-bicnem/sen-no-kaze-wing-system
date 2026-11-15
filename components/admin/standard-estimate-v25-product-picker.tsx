@@ -1,17 +1,28 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { V25WorkbenchCandidate } from '@/lib/domain/standard-estimate-v25-workbench';
+import Link from 'next/link';
+import { formatYen } from '@/lib/domain/pricing';
+import type { V25WorkbenchCandidate, V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
 import type { V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
 import { Button, Input, Select } from '@/components/ui';
 
 type ProductPickerProps = {
   sectionLabel: string;
   candidates: V25WorkbenchCandidate[];
+  /** DBで記録された現在の商品の標準原価Version。原価が無い場合はマップに載せない。 */
+  productCosts: V25WorkbenchCosts['currentProduct'];
   currentSlot: Pick<V25SlotRow, 'option_id' | 'variant_choices'> | null;
   onChoose: (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => void;
   onClose: () => void;
 };
+
+/** 見積売価・メーカー参考価格とは区別し、Version未登録は0円にせず明示する。 */
+export function v25PickerStandardCostLabel(cost: number | null | undefined): string {
+  return typeof cost === 'number' && Number.isFinite(cost) && cost >= 0
+    ? formatYen(cost)
+    : '原価未設定';
+}
 
 /** 画面側の確認。金額・商品可否・保存の正本は従来どおりDB。 */
 export function v25PickerChoicesValid(
@@ -28,7 +39,7 @@ export function v25PickerChoicesValid(
  * 検索・選択中はローカルstateのみ。確定まで親の明細stateに触れない。
  */
 export function StandardEstimateV25ProductPicker({
-  sectionLabel, candidates, currentSlot, onChoose, onClose,
+  sectionLabel, candidates, productCosts, currentSlot, onChoose, onClose,
 }: ProductPickerProps) {
   const [categoryId, setCategoryId] = useState('');
   const [query, setQuery] = useState('');
@@ -99,6 +110,9 @@ export function StandardEstimateV25ProductPicker({
                   <span className="min-w-0 flex-1 text-sm">
                     <span className="block font-medium text-ink">{candidate.name}</span>
                     <span className="block text-xs text-muted">{[candidate.categoryName, candidate.manufacturer, candidate.modelNo].filter(Boolean).join(' ／ ')}</span>
+                    <span className="mt-0.5 block text-xs tabular-nums text-ink-soft" data-testid="v25-wb-picker-list-cost">
+                      商品標準原価（税別） <span className="font-semibold">{v25PickerStandardCostLabel(productCosts[candidate.id])}</span>
+                    </span>
                     {currentSlot?.option_id === candidate.id && <span className="mt-1 block text-xs font-semibold text-emerald-900">現在の商品</span>}
                   </span>
                   <span className="shrink-0 text-xs font-semibold text-navy">{selectedId === candidate.id ? '選択中' : '選ぶ'}</span>
@@ -118,6 +132,20 @@ export function StandardEstimateV25ProductPicker({
                   <p className="text-xs font-semibold text-muted">選んだ商品と標準仕様</p>
                   <p className="mt-1 font-semibold">{selected.name}</p>
                   <p className="text-xs text-muted">{[selected.manufacturer, selected.modelNo].filter(Boolean).join(' ／ ')}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-ivory/30 px-3 py-2" data-testid="v25-wb-picker-detail-cost">
+                  <p className="text-xs text-muted">商品標準原価（現在のVersion・税別）</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-ink">{v25PickerStandardCostLabel(productCosts[selected.id])}</p>
+                  <p className="mt-1 text-xs text-muted">選択肢の原価差額・見積売価は含みません。</p>
+                </div>
+                <div className="space-y-1">
+                  <Link href={`/admin/options/${encodeURIComponent(selected.id)}`}
+                    target="_blank" rel="noopener noreferrer" prefetch={false}
+                    data-testid="v25-wb-picker-edit-product"
+                    className="inline-block text-xs font-semibold text-navy underline underline-offset-2">
+                    商品台帳で編集（別タブ）
+                  </Link>
+                  <p className="text-xs text-muted">商品台帳で変更した原価は自動反映されません。標準見積の未保存入力を保存してから画面を再読込し、最新原価を取り込んでください。</p>
                 </div>
                 {selected.variantGroups.length === 0 ? (
                   <p className="rounded bg-slate-50 p-2 text-xs text-muted">選択する仕様はありません。</p>

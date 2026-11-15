@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package } from 'lucide-react';
 import {
@@ -136,6 +136,11 @@ function WorkbenchBody({
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
   const [pending, startTransition] = useTransition();
+  // 保存開始のイベント内で同期的にフラグを立て、再読込による key の更新までロックする。
+  // 保存が失敗した場合のみロック解除し、state をそのまま保持する。
+  const saveInFlightRef = useRef(false);
+  const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'refreshing'>('idle');
+  const editLocked = pending || savePhase !== 'idle';
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const sectionOf = (optionId: string) => candidateById.get(optionId)?.section;
@@ -374,13 +379,36 @@ function WorkbenchBody({
     });
 
   const save = () => {
+    if (readOnly || editLocked || saveInFlightRef.current) return;
     // 率は % で入力する。読めない入力は % の文で案内する（範囲は validateV25EditorState・DB で確かめる）
     const problem = percentProblem(percents) ?? validateV25EditorState(state, sectionOf);
     if (problem) {
       onNotice({ tone: 'danger', text: problem });
       return;
     }
-    run(() => saveStandardEstimateV25DraftAction({ revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(state) }));
+    // 検証済みのpayloadを確定し、同じイベントでロック。保存中の追加入力を許可しない。
+    const payload = buildV25SavePayload(state);
+    saveInFlightRef.current = true;
+    setSavePhase('saving');
+    startTransition(async () => {
+      try {
+        const result = await saveStandardEstimateV25DraftAction({
+          revision_id: revisionId, expected_lock_version: lockVersion, payload,
+        });
+        onNotice(result.ok ? { tone: 'success', text: result.message } : { tone: 'danger', text: result.error });
+        if (result.ok) {
+          // router.refresh は完了 Promise を返さない。ここでは解除せず、
+          // lock_version に基づく WorkbenchBody の key 更新（再マウント）に委ねる。
+          setSavePhase('refreshing');
+          router.refresh();
+          return;
+        }
+      } catch {
+        onNotice({ tone: 'danger', text: '保存処理に失敗しました。内容は未保存のまま残っています。再度確認してください。' });
+      }
+      saveInFlightRef.current = false;
+      setSavePhase('idle');
+    });
   };
 
   const toggleSection = (code: string) =>
@@ -446,7 +474,7 @@ function WorkbenchBody({
     (replacementPreview?.unpriced.length ?? 0) > 0 || (replacementPreview?.incomplete.length ?? 0) > 0
   );
   const replacementCanConfirm = Boolean(
-    !readOnly && !pending && replacementAcknowledged &&
+    !readOnly && !editLocked && replacementAcknowledged &&
     (!replacementComparisonIncomplete || replacementIncompleteAcknowledged) &&
     replacementPlan?.ok && calc.result && !calc.error &&
     replacementPreview?.result && !replacementPreview.error &&
@@ -520,6 +548,12 @@ function WorkbenchBody({
   return (
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
+      {savePhase !== 'idle' && (
+        <p role="status" aria-live="polite" data-testid="v25-wb-save-lock-notice" className="rounded-md border border-slate-300 bg-slate-50 p-2 text-sm text-slate-700">
+          {savePhase === 'saving' ? '下書きを保存中です。処理が終わるまで編集できません。' : '保存した内容を再読込中です。編集は再読込完了後に再開できます。'}
+        </p>
+      )}
+      <fieldset disabled={editLocked} aria-label="標準見積の編集領域" data-testid="v25-wb-edit-lock" className="min-w-0 space-y-3">
       <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
           <label key={key} className="space-y-1">
@@ -748,7 +782,7 @@ function WorkbenchBody({
                               {!readOnly && line.review_required && Boolean(line.line_key) && code !== 'sitework' && (
                                 <button type="button" title="旧明細を商品台帳から置き換える"
                                   aria-label={`${line.name || '旧明細'}を商品台帳の商品に置き換える`}
-                                  data-testid="v25-wb-legacy-line-replace-icon" disabled={pending}
+                                  data-testid="v25-wb-legacy-line-replace-icon" disabled={editLocked}
                                   className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"
                                   onClick={() => { setPicker({ section: code, targetKey: null, replaceLineKey: line.key }); setPickerCategory(''); setPickerQuery(''); }}>
                                   <Package className="size-3.5" aria-hidden="true" />
@@ -900,23 +934,23 @@ function WorkbenchBody({
             </Alert>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={save} disabled={pending || !dirty} data-testid="v25-wb-save">
-              {pending ? '処理中…' : '下書きを保存'}
+            <Button type="button" onClick={save} disabled={editLocked || !dirty} data-testid="v25-wb-save">
+              {savePhase === 'saving' ? '保存中…' : savePhase === 'refreshing' ? '再読込中…' : pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !dirty} title="この画面の未保存の編集をすべて破棄します（旧明細の置換だけではありません）" onClick={() => {
+            <Button type="button" variant="secondary" disabled={editLocked || !dirty} title="この画面の未保存の編集をすべて破棄します（旧明細の置換だけではありません）" onClick={() => {
               setState(initial);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>
               変更を破棄
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || dirty} data-testid="v25-wb-refresh"
+            <Button type="button" variant="secondary" disabled={editLocked || dirty} data-testid="v25-wb-refresh"
               title={dirty ? '保存してから取り込んでください' : undefined}
               onClick={() => run(() => refreshStandardEstimateV25CostsAction({ revision_id: revisionId, expected_lock_version: lockVersion }))}>
               最新原価を取り込む
             </Button>
             <ConfirmActionButton
               className="btn-primary"
-              disabled={pending || blockers.length > 0}
+              disabled={editLocked || blockers.length > 0}
               dialogTitle="この内容で公開しますか？"
               message="公開すると、この標準見積の現在の版になり、前の版は置き換わります。公開した金額は変わりません。"
               confirmLabel="公開する"
@@ -1262,6 +1296,7 @@ function WorkbenchBody({
           </div>
         </div>
       )}
+      </fieldset>
     </section>
   );
 }

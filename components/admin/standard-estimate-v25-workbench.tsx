@@ -120,8 +120,11 @@ function WorkbenchBody({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null; replaceLineKey?: string } | null>(null);
   const [replacementPending, setReplacementPending] = useState<{ lineKey: string; candidateId: string; categoryId: string } | null>(null);
-  const [replacementUndo, setReplacementUndo] = useState<{ before: V25EditorState; after: V25EditorState } | null>(null);
   const [replacementAcknowledged, setReplacementAcknowledged] = useState(false);
+  const [replacementIncompleteAcknowledged, setReplacementIncompleteAcknowledged] = useState(false);
+  const [replacementPosition, setReplacementPosition] = useState<{ mode: 'category' | 'position'; slot_code: string; slot_label: string }>({
+    mode: 'category', slot_code: '', slot_label: '',
+  });
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
@@ -179,7 +182,7 @@ function WorkbenchBody({
     if (!picker && !selectableFor && !variantEditor && !positionFor && !replacementPending) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (replacementPending) { setReplacementPending(null); setReplacementAcknowledged(false); }
+      if (replacementPending) { setReplacementPending(null); setReplacementAcknowledged(false); setReplacementIncompleteAcknowledged(false); }
       else if (selectableFor) setSelectableFor(null);
       else if (positionFor) {
         setPositionFor(null);
@@ -211,7 +214,12 @@ function WorkbenchBody({
       }
       // 商品を選んだ段階では元の行を残す。確認後にのみ置換する。
       setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id, categoryId: pickerCategory });
+      // このカテゴリーに位置別の枠がある場合は、位置別の指定を必須にする。
+      const hasPosition = state.slots.some((slot) =>
+        candidateById.get(slot.option_id)?.categoryId === candidate.categoryId && Boolean(slot.slot_code.trim()));
+      setReplacementPosition({ mode: hasPosition ? 'position' : 'category', slot_code: '', slot_label: '' });
       setReplacementAcknowledged(false);
+      setReplacementIncompleteAcknowledged(false);
       setPicker(null);
       return;
     }
@@ -405,14 +413,21 @@ function WorkbenchBody({
   }, [candidates, picker]);
 
   // 旧明細の置換は確認画面内でのみ試算し、明示確定まで state を変えない。
-  // 実 DB のロールバック・競合・金額試験が完了するまでは本番利用を承認しない。
+  // 保存RPCの原子性・金額は隔離DBで検証済み。画面操作とマージ前の最終確認は別工程。
   const replacementSource = replacementPending
     ? state.lines.find((line) => line.key === replacementPending.lineKey) ?? null : null;
   const replacementCandidate = replacementPending ? candidateById.get(replacementPending.candidateId) : undefined;
+  const replacementCategorySlots = replacementCandidate
+    ? state.slots.filter((slot) => candidateById.get(slot.option_id)?.categoryId === replacementCandidate.categoryId) : [];
+  const replacementCategoryHasPosition = replacementCategorySlots.some((slot) => Boolean(slot.slot_code.trim()));
+  const replacementCategoryHasUnit = replacementCategorySlots.some((slot) => !slot.slot_code.trim());
+  const replacementSlotPosition = replacementPosition.mode === 'position'
+    ? { slot_code: replacementPosition.slot_code, slot_label: replacementPosition.slot_label } : undefined;
   const replacementPlan = replacementPending && replacementCandidate
     ? planLegacyLineReplacement(
         state, replacementPending.lineKey, replacementCandidate, candidates, costs,
-        replacementPending.categoryId, `slot-replacement-preview-${replacementPending.lineKey}`
+        replacementPending.categoryId, `slot-replacement-preview-${replacementPending.lineKey}`,
+        replacementSlotPosition
       ) : null;
   const replacementPreview = replacementPlan?.ok
     ? calculateV25Workbench(rule, taxRule, replacementPlan.state, baseLines, costs, sectionOf)
@@ -424,33 +439,35 @@ function WorkbenchBody({
     ? replacementPreview.result.sections.flatMap((section) => section.lines)
         .find((line) => line.key === replacementPreview.lineKeyOf[replacementPlan.newSlot.key])
     : null;
-  const replacementCanConfirm = Boolean(
-    !readOnly && replacementAcknowledged && replacementPlan?.ok &&
-    replacementPreview && !replacementPreview.error && replacementPriceLine?.amount !== null &&
-    replacementPriceLine?.amount !== undefined
+  const replacementComparisonIncomplete = Boolean(
+    replacementSource?.price_mode === 'por' || previousLineAmount === null ||
+    !calc.result || calc.result.total === null || calc.unpriced.length > 0 || calc.incomplete.length > 0 ||
+    !replacementPreview?.result || replacementPreview.result.total === null ||
+    (replacementPreview?.unpriced.length ?? 0) > 0 || (replacementPreview?.incomplete.length ?? 0) > 0
   );
-  const closeReplacement = () => { setReplacementPending(null); setReplacementAcknowledged(false); };
+  const replacementCanConfirm = Boolean(
+    !readOnly && !pending && replacementAcknowledged &&
+    (!replacementComparisonIncomplete || replacementIncompleteAcknowledged) &&
+    replacementPlan?.ok && calc.result && !calc.error &&
+    replacementPreview?.result && !replacementPreview.error &&
+    replacementPriceLine?.amount !== null && replacementPriceLine?.amount !== undefined
+  );
+  const closeReplacement = () => {
+    setReplacementPending(null);
+    setReplacementAcknowledged(false);
+    setReplacementIncompleteAcknowledged(false);
+  };
   const confirmReplacement = () => {
     if (!replacementPending || !replacementCandidate || !replacementCanConfirm) return;
     // 確定時にも現在の編集状態から作り直す。削除と商品追加を一回の state 更新にまとめる。
     const confirmed = planLegacyLineReplacement(
       state, replacementPending.lineKey, replacementCandidate, candidates, costs,
-      replacementPending.categoryId, newKey('slot')
+      replacementPending.categoryId, newKey('slot'), replacementSlotPosition
     );
     if (!confirmed.ok) { onNotice({ tone: 'danger', text: confirmed.error }); return; }
     setState(confirmed.state);
-    setReplacementUndo({ before: state, after: confirmed.state });
     closeReplacement();
-    onNotice({ tone: 'success', text: '旧明細1行を商品行に置き換えました（未保存）。直前の置換は画面から元に戻せます。保存する前に数量・仕様・金額を確認してください。' });
-  };
-
-  // 直前の置換のみ、ほかの編集が加わる前なら安全に元に戻せる。古い状態で別の変更を上書きしない。
-  const canUndoReplacement = Boolean(replacementUndo && JSON.stringify(state) === JSON.stringify(replacementUndo.after));
-  const undoReplacement = () => {
-    if (!replacementUndo || !canUndoReplacement) return;
-    setState(replacementUndo.before);
-    setReplacementUndo(null);
-    onNotice({ tone: 'success', text: '直前の旧明細置換を元に戻しました（未保存）。' });
+    onNotice({ tone: 'success', text: '旧明細1行を商品行に置き換えました（未保存）。数量・仕様・金額を確認後に下書き保存してください。取り消す場合は、ほかの未保存編集も含めて「変更を破棄」します。' });
   };
 
   // Excel明細の入力セルだけにTab・Enter移動を適用し、保存やポップアップは変更しない。
@@ -503,13 +520,6 @@ function WorkbenchBody({
   return (
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
-      {canUndoReplacement && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs" data-testid="v25-wb-replacement-undo-bar">
-          <span>旧明細1行の置換は未保存です。続けて編集する前なら元に戻せます。</span>
-          <Button type="button" variant="secondary" data-testid="v25-wb-replacement-undo" onClick={undoReplacement}>直前の置換を元に戻す</Button>
-        </div>
-      )}
-
       <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
           <label key={key} className="space-y-1">
@@ -893,7 +903,7 @@ function WorkbenchBody({
             <Button type="button" onClick={save} disabled={pending || !dirty} data-testid="v25-wb-save">
               {pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !dirty} onClick={() => {
+            <Button type="button" variant="secondary" disabled={pending || !dirty} title="この画面の未保存の編集をすべて破棄します（旧明細の置換だけではありません）" onClick={() => {
               setState(initial);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>
@@ -916,6 +926,7 @@ function WorkbenchBody({
               公開する
             </ConfirmActionButton>
           </div>
+          {dirty && <p className="mt-1 text-xs text-muted" data-testid="v25-wb-discard-scope">「変更を破棄」は旧明細の置換だけでなく、すべての未保存編集を取り消します。</p>}
         </div>
       )}
 

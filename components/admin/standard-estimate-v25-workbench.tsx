@@ -1,11 +1,12 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package } from 'lucide-react';
 import {
   publishStandardEstimateV25RevisionAction,
   refreshStandardEstimateV25CostsAction,
+  readStandardEstimateV25SaveStatusAction,
   saveStandardEstimateV25DraftAction,
 } from '@/lib/actions/standard-estimate-v25';
 import { formatYen } from '@/lib/domain/pricing';
@@ -41,6 +42,7 @@ import {
 } from '@/lib/domain/standard-estimate-v25-workbench';
 import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
+import { planLegacyLineReplacement } from '@/components/admin/standard-estimate-v25-line-replacement';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -117,7 +119,13 @@ function WorkbenchBody({
   }));
   const [showCost, setShowCost] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
+  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null; replaceLineKey?: string } | null>(null);
+  const [replacementPending, setReplacementPending] = useState<{ lineKey: string; candidateId: string; categoryId: string } | null>(null);
+  const [replacementAcknowledged, setReplacementAcknowledged] = useState(false);
+  const [replacementIncompleteAcknowledged, setReplacementIncompleteAcknowledged] = useState(false);
+  const [replacementPosition, setReplacementPosition] = useState<{ mode: 'category' | 'position'; slot_code: string; slot_label: string }>({
+    mode: 'category', slot_code: '', slot_label: '',
+  });
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
@@ -129,6 +137,13 @@ function WorkbenchBody({
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
   const [pending, startTransition] = useTransition();
+  // 保存開始のイベント内で同期的にフラグを立て、再読込による key の更新までロックする。
+  // 保存が失敗した場合のみロック解除し、state をそのまま保持する。
+  const saveInFlightRef = useRef(false);
+  const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'refreshing' | 'uncertain'>('idle');
+  const [saveCheck, setSaveCheck] = useState<string | null>(null);
+  const [checkingSave, setCheckingSave] = useState(false);
+  const editLocked = pending || savePhase !== 'idle';
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const sectionOf = (optionId: string) => candidateById.get(optionId)?.section;
@@ -172,10 +187,11 @@ function WorkbenchBody({
   ];
 
   useEffect(() => {
-    if (!picker && !selectableFor && !variantEditor && !positionFor) return;
+    if (!picker && !selectableFor && !variantEditor && !positionFor && !replacementPending) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (selectableFor) setSelectableFor(null);
+      if (replacementPending) { setReplacementPending(null); setReplacementAcknowledged(false); setReplacementIncompleteAcknowledged(false); }
+      else if (selectableFor) setSelectableFor(null);
       else if (positionFor) {
         setPositionFor(null);
         setPositionDraft(null);
@@ -185,7 +201,7 @@ function WorkbenchBody({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [picker, selectableFor, variantEditor, positionFor]);
+  }, [picker, selectableFor, variantEditor, positionFor, replacementPending]);
 
   const setSlot = (key: string, patch: Partial<V25SlotRow>) =>
     setState((current) => ({ ...current, slots: current.slots.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)) }));
@@ -198,6 +214,23 @@ function WorkbenchBody({
 
   const choose = (candidate: V25WorkbenchCandidate) => {
     if (!picker) return;
+    if (picker.replaceLineKey) {
+      // 旧明細は正式カテゴリーIDを持たない。作業者がカテゴリーを選択し、同じカテゴリーの候補だけを比較する。
+      if (!pickerCategory || candidate.categoryId !== pickerCategory) {
+        onNotice({ tone: 'danger', text: '置換対象のカテゴリーを選び、同じカテゴリーの商品を指定してください。' });
+        return;
+      }
+      // 商品を選んだ段階では元の行を残す。確認後にのみ置換する。
+      setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id, categoryId: pickerCategory });
+      // このカテゴリーに位置別の枠がある場合は、位置別の指定を必須にする。
+      const hasPosition = state.slots.some((slot) =>
+        candidateById.get(slot.option_id)?.categoryId === candidate.categoryId && Boolean(slot.slot_code.trim()));
+      setReplacementPosition({ mode: hasPosition ? 'position' : 'category', slot_code: '', slot_label: '' });
+      setReplacementAcknowledged(false);
+      setReplacementIncompleteAcknowledged(false);
+      setPicker(null);
+      return;
+    }
     // 別途工事は販売費・経費・掛率を掛けない（自動にできない）。Web では金額を確定しないので別途見積にする
     const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';
     // 選択枠の数量は、外壁は 4（面）、それ以外は 1（シミュレーターと連携する選択枠の決まり）
@@ -348,14 +381,78 @@ function WorkbenchBody({
       if (result.ok) router.refresh();
     });
 
+  const inspectUnknownSave = async () => {
+    if (checkingSave || savePhase !== 'uncertain') return;
+    setCheckingSave(true);
+    try {
+      const result = await readStandardEstimateV25SaveStatusAction({ revision_id: revisionId });
+      if (!result.ok) {
+        setSaveCheck(`読み取りに失敗しました：${result.error}。編集ロックは維持しています。`);
+      } else if (result.lockVersion !== lockVersion || result.status !== 'draft') {
+        setSaveCheck(`現在のDB状態：${result.status}、版番号 ${result.lockVersion}（送信前：${lockVersion}）。更新を検出しました。入力内容を控えたうえでページを再読み込みしてください。`);
+      } else {
+        setSaveCheck(`現在のDB状態：${result.status}、版番号 ${result.lockVersion}（送信前と同じ）。ただし保存処理が後から確定する可能性があるため、再保存せず入力内容を控えてページを再読み込みしてください。`);
+      }
+    } catch {
+      setSaveCheck('保存状態を読み取れませんでした。編集ロックを維持しています。入力内容を控えてからページを再読み込みしてください。');
+    } finally {
+      setCheckingSave(false);
+    }
+  };
+  const recoveryBackup = JSON.stringify({
+    revision_id: revisionId,
+    lock_version_before_save: lockVersion,
+    editor_state: state,
+    entered_percentages: percents,
+  }, null, 2);
+
   const save = () => {
+    if (readOnly || editLocked || saveInFlightRef.current) return;
     // 率は % で入力する。読めない入力は % の文で案内する（範囲は validateV25EditorState・DB で確かめる）
     const problem = percentProblem(percents) ?? validateV25EditorState(state, sectionOf);
     if (problem) {
       onNotice({ tone: 'danger', text: problem });
       return;
     }
-    run(() => saveStandardEstimateV25DraftAction({ revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(state) }));
+    // 検証済みのpayloadを確定し、同じイベントでロック。保存中の追加入力を許可しない。
+    const payload = buildV25SavePayload(state);
+    setSaveCheck(null);
+    saveInFlightRef.current = true;
+    setSavePhase('saving');
+    startTransition(async () => {
+      let result: Awaited<ReturnType<typeof saveStandardEstimateV25DraftAction>>;
+      try {
+        result = await saveStandardEstimateV25DraftAction({
+          revision_id: revisionId, expected_lock_version: lockVersion, payload,
+        });
+      } catch {
+        // 応答未着でもDBがcommit済みの可能性がある。旧版で編集・再保存させない。
+        setSavePhase('uncertain');
+        onNotice({ tone: 'danger', text: '保存の成否を確認できません。編集は保護のため停止しています。保存状態を照合してください。' });
+        return;
+      }
+      if (!result.ok) {
+        if (result.saveOutcome !== 'rejected') {
+          setSavePhase('uncertain');
+          onNotice({ tone: 'danger', text: '通信状態により保存の成否が不明です。再保存せず、保存状態を照合してください。' });
+          return;
+        }
+        onNotice({ tone: 'danger', text: result.error });
+        saveInFlightRef.current = false;
+        setSavePhase('idle');
+        return;
+      }
+      onNotice({ tone: 'success', text: result.message });
+      // 保存成功後は絶対に同じ編集stateのロックを解除しない。router.refresh は
+      // Promise を返さないので、lock_version に基づくkeyの更新に任せる。
+      setSavePhase('refreshing');
+      try {
+        router.refresh();
+      } catch {
+        // DBは既に保存済み。古い入力を編集可能にすると上書き事故になる。
+        onNotice({ tone: 'danger', text: '保存は完了しましたが画面の再読込に失敗しました。ブラウザのページを再読み込みしてください。' });
+      }
+    });
   };
 
   const toggleSection = (code: string) =>
@@ -367,11 +464,12 @@ function WorkbenchBody({
     });
 
   const pickerCandidates = useMemo(() => {
-    if (!picker) return [];
+    if (!picker || (picker.replaceLineKey && !pickerCategory)) return [];
     const query = pickerQuery.trim().toLocaleLowerCase('ja-JP');
     return candidates.filter(
       (candidate) =>
         !candidate.retired &&
+        (!picker.replaceLineKey || !candidate.unavailable) &&
         candidate.section === picker.section &&
         (!pickerCategory || candidate.categoryId === pickerCategory) &&
         (!query || [candidate.name, candidate.manufacturer, candidate.modelNo, candidate.categoryName].join(' ').toLocaleLowerCase('ja-JP').includes(query))
@@ -385,6 +483,75 @@ function WorkbenchBody({
     }
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
   }, [candidates, picker]);
+
+  // 旧明細の置換は確認画面内でのみ試算し、明示確定まで state を変えない。
+  // 保存RPCの原子性・金額は隔離DBで検証済み。画面操作とマージ前の最終確認は別工程。
+  const replacementSource = replacementPending
+    ? state.lines.find((line) => line.key === replacementPending.lineKey) ?? null : null;
+  const replacementCandidate = replacementPending ? candidateById.get(replacementPending.candidateId) : undefined;
+  const replacementCategorySlots = replacementCandidate
+    ? state.slots.filter((slot) => candidateById.get(slot.option_id)?.categoryId === replacementCandidate.categoryId) : [];
+  const replacementCategoryHasPosition = replacementCategorySlots.some((slot) => Boolean(slot.slot_code.trim()));
+  const replacementCategoryHasUnit = replacementCategorySlots.some((slot) => !slot.slot_code.trim());
+  const replacementSlotPosition = replacementPosition.mode === 'position'
+    ? { slot_code: replacementPosition.slot_code, slot_label: replacementPosition.slot_label } : undefined;
+  const replacementPlan = replacementPending && replacementCandidate
+    ? planLegacyLineReplacement(
+        state, replacementPending.lineKey, replacementCandidate, candidates, costs,
+        replacementPending.categoryId, `slot-replacement-preview-${replacementPending.lineKey}`,
+        replacementSlotPosition
+      ) : null;
+  const replacementPreview = replacementPlan?.ok
+    ? calculateV25Workbench(rule, taxRule, replacementPlan.state, baseLines, costs, sectionOf)
+    : null;
+  const previousLineAmount = replacementSource
+    ? resultByKey.get(calc.lineKeyOf[replacementSource.key] ?? '')?.amount ?? null
+    : null;
+  const replacementPriceLine = replacementPlan?.ok && replacementPreview?.result
+    ? replacementPreview.result.sections.flatMap((section) => section.lines)
+        .find((line) => line.key === replacementPreview.lineKeyOf[replacementPlan.newSlot.key])
+    : null;
+  const replacementUnknownReasons = [
+    ...(replacementSource?.price_mode === 'por' ? ['置換元の旧明細は「別途見積」です'] : []),
+    ...(replacementSource?.price_mode === 'manual' && !replacementSource.unit_price.trim()
+      ? ['置換元の手動単価が未入力です'] : []),
+    ...(replacementSource && previousLineAmount === null && replacementSource.price_mode !== 'por'
+      && !(replacementSource.price_mode === 'manual' && !replacementSource.unit_price.trim())
+      ? ['置換元明細の金額を試算できません'] : []),
+    ...(calc.unpriced.length > 0 ? [`置換前に未算定の明細が${calc.unpriced.length}件あります`] : []),
+    ...(calc.incomplete.length > 0 ? [`置換前に原価が未設定の商品が${calc.incomplete.length}件あります`] : []),
+    ...(calc.result?.total == null ? ['置換前の税込合計が未確定です'] : []),
+    ...((replacementPreview?.unpriced.length ?? 0) > 0
+      ? [`置換後に未算定の明細が${replacementPreview?.unpriced.length}件あります`] : []),
+    ...((replacementPreview?.incomplete.length ?? 0) > 0
+      ? [`置換後に原価が未設定の商品が${replacementPreview?.incomplete.length}件あります`] : []),
+    ...(replacementPreview?.result?.total == null ? ['置換後の税込合計が未確定です'] : []),
+  ];
+  const replacementComparisonIncomplete = replacementUnknownReasons.length > 0;
+  const replacementCanConfirm = Boolean(
+    !readOnly && !editLocked && replacementAcknowledged &&
+    (!replacementComparisonIncomplete || replacementIncompleteAcknowledged) &&
+    replacementPlan?.ok && calc.result && !calc.error &&
+    replacementPreview?.result && !replacementPreview.error &&
+    replacementPriceLine?.amount !== null && replacementPriceLine?.amount !== undefined
+  );
+  const closeReplacement = () => {
+    setReplacementPending(null);
+    setReplacementAcknowledged(false);
+    setReplacementIncompleteAcknowledged(false);
+  };
+  const confirmReplacement = () => {
+    if (!replacementPending || !replacementCandidate || !replacementCanConfirm) return;
+    // 確定時にも現在の編集状態から作り直す。削除と商品追加を一回の state 更新にまとめる。
+    const confirmed = planLegacyLineReplacement(
+      state, replacementPending.lineKey, replacementCandidate, candidates, costs,
+      replacementPending.categoryId, newKey('slot'), replacementSlotPosition
+    );
+    if (!confirmed.ok) { onNotice({ tone: 'danger', text: confirmed.error }); return; }
+    setState(confirmed.state);
+    closeReplacement();
+    onNotice({ tone: 'success', text: '旧明細1行を商品行に置き換えました（未保存）。数量・仕様・金額を確認後に下書き保存してください。取り消す場合は、ほかの未保存編集も含めて「変更を破棄」します。' });
+  };
 
   // Excel明細の入力セルだけにTab・Enter移動を適用し、保存やポップアップは変更しない。
   const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {
@@ -436,7 +603,41 @@ function WorkbenchBody({
   return (
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
-
+      {savePhase !== 'idle' && (
+        <p role="status" aria-live="polite" data-testid="v25-wb-save-lock-notice" className="rounded-md border border-slate-300 bg-slate-50 p-2 text-sm text-slate-700">
+          {savePhase === 'saving' ? '下書きを保存中です。処理が終わるまで編集できません。'
+            : savePhase === 'refreshing' ? '保存した内容を再読込中です。編集は再読込完了後に再開できます。'
+              : '保存の成否を確認できないため、旧データを使った編集・再保存を停止しています。'}
+        </p>
+      )}
+      {savePhase === 'uncertain' && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm" role="alert" data-testid="v25-wb-uncertain-save-recovery">
+          <p className="font-semibold">保存結果を確認できません。再保存はしないでください。</p>
+          <p>入力内容はこの画面に保持しています。DBが保存済みの可能性があるため、版番号を確認し、必要なら控えを取ってからページを再読み込みしてください。</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" disabled={checkingSave}
+              data-testid="v25-wb-check-save-status" onClick={() => void inspectUnknownSave()}>
+              {checkingSave ? '確認中…' : 'DBの保存状態を確認'}
+            </Button>
+            <Button type="button" variant="secondary" data-testid="v25-wb-copy-unsaved-input"
+              onClick={() => {
+                void navigator.clipboard.writeText(recoveryBackup).then(
+                  () => onNotice({ tone: 'success', text: '現在の入力内容をクリップボードにコピーしました。' }),
+                  () => onNotice({ tone: 'danger', text: 'コピーできませんでした。下の「入力内容の控え」を開き、テキストを手動でコピーしてください。' })
+                );
+              }}>入力内容をコピー</Button>
+          </div>
+          {saveCheck && <p className="rounded border border-amber-200 bg-white p-2" data-testid="v25-wb-save-status-result">{saveCheck}</p>}
+          <details>
+            <summary className="cursor-pointer text-xs underline">入力内容の控えを表示（手動コピー用）</summary>
+            <p className="mt-1 text-xs">見積情報を含みます。安全な場所で保管し、画面やDBへ直接貼り戻さないでください。</p>
+            <textarea value={recoveryBackup} readOnly rows={8} aria-label="未保存の入力内容の控え"
+              className="mt-2 w-full rounded border border-slate-300 bg-white p-2 font-mono text-xs" />
+          </details>
+          <p className="text-xs">版番号が同じでも後から保存が完了する場合があります。DBの読み取りだけでは安全に再編集できると判断しません。</p>
+        </div>
+      )}
+      <fieldset disabled={editLocked} aria-label="標準見積の編集領域" data-testid="v25-wb-edit-lock" className="min-w-0 space-y-3">
       <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
           <label key={key} className="space-y-1">
@@ -659,8 +860,19 @@ function WorkbenchBody({
                               onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                           </td>
                           <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-0.5 py-0.5">
-                            <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
-                              onChange={(event) => setLine(line.key, { name: event.target.value })} />
+                            <div className="flex min-w-0 items-center gap-0.5">
+                              <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setLine(line.key, { name: event.target.value })} />
+                              {!readOnly && line.review_required && Boolean(line.line_key) && code !== 'sitework' && (
+                                <button type="button" title="旧明細を商品台帳から置き換える"
+                                  aria-label={`${line.name || '旧明細'}を商品台帳の商品に置き換える`}
+                                  data-testid="v25-wb-legacy-line-replace-icon" disabled={editLocked}
+                                  className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"
+                                  onClick={() => { setPicker({ section: code, targetKey: null, replaceLineKey: line.key }); setPickerCategory(''); setPickerQuery(''); }}>
+                                  <Package className="size-3.5" aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
                           </td>
 
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
@@ -806,23 +1018,23 @@ function WorkbenchBody({
             </Alert>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={save} disabled={pending || !dirty} data-testid="v25-wb-save">
-              {pending ? '処理中…' : '下書きを保存'}
+            <Button type="button" onClick={save} disabled={editLocked || !dirty} data-testid="v25-wb-save">
+              {savePhase === 'saving' ? '保存中…' : savePhase === 'refreshing' ? '再読込中…' : savePhase === 'uncertain' ? '保存状態を確認' : pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !dirty} onClick={() => {
+            <Button type="button" variant="secondary" disabled={editLocked || !dirty} title="この画面の未保存の編集をすべて破棄します（旧明細の置換だけではありません）" onClick={() => {
               setState(initial);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>
               変更を破棄
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || dirty} data-testid="v25-wb-refresh"
+            <Button type="button" variant="secondary" disabled={editLocked || dirty} data-testid="v25-wb-refresh"
               title={dirty ? '保存してから取り込んでください' : undefined}
               onClick={() => run(() => refreshStandardEstimateV25CostsAction({ revision_id: revisionId, expected_lock_version: lockVersion }))}>
               最新原価を取り込む
             </Button>
             <ConfirmActionButton
               className="btn-primary"
-              disabled={pending || blockers.length > 0}
+              disabled={editLocked || blockers.length > 0}
               dialogTitle="この内容で公開しますか？"
               message="公開すると、この標準見積の現在の版になり、前の版は置き換わります。公開した金額は変わりません。"
               confirmLabel="公開する"
@@ -832,6 +1044,7 @@ function WorkbenchBody({
               公開する
             </ConfirmActionButton>
           </div>
+          {dirty && <p className="mt-1 text-xs text-muted" data-testid="v25-wb-discard-scope">「変更を破棄」は旧明細の置換だけでなく、すべての未保存編集を取り消します。</p>}
         </div>
       )}
 
@@ -960,16 +1173,24 @@ function WorkbenchBody({
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setPicker(null)}>
           <div role="dialog" aria-modal="true" aria-label="商品台帳から選ぶ" className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <p className="font-semibold">{STANDARD_SECTION_LABEL[picker.section]}：商品台帳から選ぶ</p>
+              <div>
+                <p className="font-semibold">{STANDARD_SECTION_LABEL[picker.section]}：{picker.replaceLineKey ? '旧明細を置き換える商品を選ぶ' : '商品台帳から選ぶ'}</p>
+                {picker.replaceLineKey && <p className="text-xs text-muted">元の明細を確認し、同じ用途のカテゴリーを選んでください（旧明細にはカテゴリーIDがありません）。</p>}
+              </div>
               <button type="button" className="text-sm text-muted underline" onClick={() => setPicker(null)}>閉じる</button>
             </div>
             <div className="flex flex-wrap gap-2 border-b border-line px-4 py-2">
               <Select value={pickerCategory} onChange={(event) => setPickerCategory(event.target.value)} aria-label="カテゴリー" className="h-8 text-xs">
-                <option value="">すべてのカテゴリー</option>
+                <option value="">{picker.replaceLineKey ? '置換先カテゴリーを選択（必須）' : 'すべてのカテゴリー'}</option>
                 {pickerCategories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
               </Select>
               <Input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="商品名・メーカー・型番" aria-label="商品を検索" className="h-8 flex-1 text-xs" />
             </div>
+            {picker.replaceLineKey && !pickerCategory && (
+              <p className="px-4 py-2 text-xs text-amber-800" data-testid="v25-wb-replacement-category-required">
+                元の明細：{state.lines.find((line) => line.key === picker.replaceLineKey)?.name ?? '要確認'} ／ グループ：{state.lines.find((line) => line.key === picker.replaceLineKey)?.group_label || '未設定'}。対応する商品カテゴリーを選択してください。
+              </p>
+            )}
             <ul className="divide-y divide-line overflow-y-auto" data-testid="v25-wb-picker">
               {pickerCandidates.map((candidate) => (
                 <li key={candidate.id}>
@@ -984,6 +1205,132 @@ function WorkbenchBody({
               ))}
               {pickerCandidates.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">選べる商品がありません。</li>}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {replacementPending && replacementSource && replacementCandidate && (
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-[7vh]"
+          onClick={closeReplacement}>
+          <div role="dialog" aria-modal="true" aria-label="旧明細を商品に置き換える前の確認"
+            data-testid="v25-wb-legacy-replacement-confirm"
+            className="w-full max-w-2xl space-y-3 rounded-xl bg-white p-4 shadow-xl"
+            onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-2">
+              <h3 className="font-semibold">旧明細1行を商品台帳の商品へ置き換える</h3>
+              <button type="button" className="text-sm text-muted underline" onClick={closeReplacement}>閉じる</button>
+            </div>
+            <div className="space-y-2 rounded-md border border-slate-200 p-3 text-sm" data-testid="v25-wb-replacement-position-settings">
+              {canUsePositionSlot(replacementCandidate.categoryCode) ? (
+                <>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-semibold">商品を配置する枠</span>
+                    <Select value={replacementPosition.mode}
+                      disabled={replacementCategoryHasPosition || replacementCategoryHasUnit}
+                      aria-label="置換先の枠の種類" data-testid="v25-wb-replacement-position-mode"
+                      onChange={(event) => {
+                        setReplacementPosition((current) => ({ ...current, mode: event.target.value === 'position' ? 'position' : 'category' }));
+                        setReplacementAcknowledged(false);
+                      }} className="h-8 w-full text-xs">
+                      <option value="category">カテゴリー単位（位置指定なし）</option>
+                      <option value="position">位置・用途別（サッシの設置場所など）</option>
+                    </Select>
+                  </label>
+                  {replacementCategoryHasPosition && <p className="text-xs text-muted">このカテゴリーには位置別の枠があります。新しい位置を入力してください。</p>}
+                  {replacementCategoryHasUnit && <p className="text-xs text-muted">このカテゴリーにはカテゴリー単位の枠があります。位置別の枠を混在させることはできません。</p>}
+                  {replacementPosition.mode === 'position' && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-xs">位置識別子（英小文字・数字・ハイフン、40文字まで）</span>
+                        <Input value={replacementPosition.slot_code} placeholder="例：bedroom-window"
+                          data-testid="v25-wb-replacement-slot-code" className="h-8 font-mono text-xs"
+                          onChange={(event) => { setReplacementPosition((current) => ({ ...current, slot_code: event.target.value })); setReplacementAcknowledged(false); }} />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs">位置・用途の名前</span>
+                        <Input value={replacementPosition.slot_label} placeholder="例：寝室窓"
+                          data-testid="v25-wb-replacement-slot-label" className="h-8 text-xs"
+                          onChange={(event) => { setReplacementPosition((current) => ({ ...current, slot_label: event.target.value })); setReplacementAcknowledged(false); }} />
+                      </label>
+                    </div>
+                  )}
+                </>
+              ) : <p className="text-xs text-muted">このカテゴリーは位置・用途別の枠を使用しません（外壁・防火仕様は既存の専用ルールを適用）。</p>}
+            </div>
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="space-y-1 rounded-md border border-line p-3" data-testid="v25-wb-replacement-before">
+                <p className="text-xs font-semibold text-muted">置換前：要見直しの旧明細</p>
+                <p className="text-xs">旧グループ：{replacementSource.group_label || '未設定'}</p>
+                <p className="font-medium">{replacementSource.name}</p>
+                <p>数量：{replacementSource.quantity} {replacementSource.unit || '（単位なし）'}</p>
+                <p>単価：{replacementSource.price_mode === 'por' ? '別途見積' : !replacementSource.unit_price.trim() ? '未入力（未算定）' : yen(Number(replacementSource.unit_price))}</p>
+                <p>この行の税別金額：{replacementSource.price_mode === 'por' ? '別途見積（未確定）' : yen(previousLineAmount)}</p>
+                {replacementSource.remark && <p className="break-words text-xs text-muted">備考：{replacementSource.remark}</p>}
+              </div>
+              <div className="space-y-1 rounded-md border border-line p-3" data-testid="v25-wb-replacement-after">
+                <p className="text-xs font-semibold text-muted">置換後：商品台帳の標準仕様</p>
+                <p className="font-medium">{replacementCandidate.name}</p>
+                <p className="text-xs">担当者が確認した置換先カテゴリー：{replacementCandidate.categoryName}</p>
+                <p className="text-xs text-muted">{[replacementCandidate.manufacturer, replacementCandidate.modelNo].filter(Boolean).join(' ／ ')}</p>
+                <p>数量：{replacementPlan?.ok ? replacementPlan.newSlot.quantity : '—'}（{replacementCandidate.categoryCode === 'exterior-wall' ? '面' : '商品選択枠'}）</p>
+                <p className="break-words text-xs">仕様：{replacementPlan?.ok ? v25VariantSummary(replacementCandidate, replacementPlan.newSlot.variant_choices) : '確認できません'}</p>
+                <p>試算売価単価：{replacementPriceLine ? yen(replacementPriceLine.sale_unit_price) : '未算定'}</p>
+                <p>この行の試算税別金額：{replacementPriceLine ? yen(replacementPriceLine.amount) : '未算定'}</p>
+              </div>
+            </div>
+            {!replacementPlan?.ok && (
+              <Alert tone="danger" title="この商品への置換はできません">{replacementPlan?.error ?? '置換内容を確認できません'}</Alert>
+            )}
+            {replacementPlan?.ok && (replacementPreview?.error || replacementPriceLine?.amount == null) && (
+              <Alert tone="danger" title="置換後の試算を確定できません">
+                {replacementPreview?.error ?? '商品原価・仕様の価格を確認してください'}
+              </Alert>
+            )}
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs" data-testid="v25-wb-replacement-total-comparison">
+              <p className="font-semibold">税込合計（画面の試算・参考）</p>
+              <p>
+                置換前：{calc.result ? (calc.result.total === null ? '未確定' : yen(calc.result.total)) : '試算不可'}
+                {' → '}
+                置換後：{replacementPreview?.result ? (replacementPreview.result.total === null ? '未確定' : yen(replacementPreview.result.total)) : '試算不可'}
+              </p>
+              <p className="mt-1 text-muted">保存後の正式金額はDBで再計算されます。表示された差額を確定金額として扱わないでください。</p>
+            </div>
+            {replacementComparisonIncomplete && (
+              <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3" data-testid="v25-wb-replacement-amount-uncertain">
+                <p className="text-sm font-semibold text-amber-900">置換前後の金額を完全には比較できません</p>
+                <ul className="list-disc space-y-0.5 pl-5 text-xs text-amber-900" data-testid="v25-wb-replacement-uncertain-reasons">
+                  {replacementUnknownReasons.map((reason) => <li key={reason}>{reason}</li>)}
+                </ul>
+                <p className="text-xs text-amber-900">税込合計の差額は未確定です。旧明細の金額と新商品の試算金額を確認してください。</p>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" checked={replacementIncompleteAcknowledged}
+                    data-testid="v25-wb-replacement-amount-ack"
+                    onChange={(event) => setReplacementIncompleteAcknowledged(event.target.checked)}
+                    className="mt-1 size-4" />
+                  <span>置換前後の合計金額を確定比較できないことを理解し、下書き保存後の正式金額を再確認します。</span>
+                </label>
+              </div>
+            )}
+            <p className="text-xs leading-5 text-muted">
+              この操作では元の旧明細を下書きから除外し、商品行を同じ区分へ1件追加します。旧明細の数量・単位・備考・手動単価は自動で引き継ぎません。カテゴリーは旧グループ名から自動判定しません。保存すると旧明細の情報はDraftから除かれます。
+              商品行はその区分の上部へ移動し、v2.5の既存の原価Version固定ルールに従って試算します。
+              画面の金額は目安であり、正式金額は下書き保存後にDBで再計算されます。
+            </p>
+            <label className="flex items-start gap-2 rounded-md bg-slate-50 p-3 text-sm" data-testid="v25-wb-replacement-ack-label">
+              <input type="checkbox" className="mt-1 size-4" checked={replacementAcknowledged}
+                onChange={(event) => setReplacementAcknowledged(event.target.checked)}
+                data-testid="v25-wb-replacement-ack" />
+              <span>旧明細と商品カテゴリーの対応、数量・単位・備考・手動単価が引き継がれないこと、金額が変わり得ること、保存後は元の旧行に戻せないことを確認しました。</span>
+            </label>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+              <Button type="button" variant="secondary" onClick={closeReplacement}>キャンセル</Button>
+              <Button type="button" variant="secondary" onClick={() => {
+                setPicker({ section: replacementSource.section_code, targetKey: null, replaceLineKey: replacementSource.key });
+                setPickerCategory(''); setPickerQuery(''); closeReplacement();
+              }}>商品を選び直す</Button>
+              <Button type="button" disabled={!replacementCanConfirm} data-testid="v25-wb-replacement-confirm"
+                onClick={confirmReplacement}>この1行を置換（未保存）</Button>
+            </div>
           </div>
         </div>
       )}
@@ -1033,6 +1380,7 @@ function WorkbenchBody({
           </div>
         </div>
       )}
+      </fieldset>
     </section>
   );
 }

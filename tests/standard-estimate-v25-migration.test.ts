@@ -106,6 +106,18 @@ describe('v2.5 PR-B1：標準見積の v2.5 の Revision', () => {
     expect(recalc).not.toMatch(/\bround\s*\(|\bfloor\s*\(/i);
   });
 
+  it('旧明細置換の実DB検証で成功・途中失敗・再読込・正式金額を照合する', () => {
+    expect(runtimeSql).toContain('旧明細置換：途中で入力不備が起きれば原子的に拒否');
+    expect(runtimeSql).toContain('旧明細置換：失敗後は旧行・既存枠・金額・版番号が一切変わらない');
+    expect(runtimeSql).toContain('旧明細置換：成功後は旧行0件、新商品1件、他行と他枠は維持');
+    expect(runtimeSql).toContain('旧明細置換：p4は正式原価Versionでauto計算、既存p2のpinは維持');
+    expect(runtimeSql).toContain('旧明細置換：再読込previewとDB正式計算が一致し、要見直し行が0件');
+    expect(runtimeSql).toContain('旧明細置換：古い版で再保存すると拒否');
+    expect(runtimeSql).toContain('旧明細置換：旧版の公開済Revisionは不変、置換Draftのみ更新');
+    expect(runtimeSql.trimStart().startsWith('-- v2.5 PR-B1')).toBe(true);
+    expect(runtimeSql.trimEnd().endsWith('rollback;')).toBe(true);
+  });
+
   it('「要見直し」の明細が残っていれば、公開の RPC で止め、編集画面の確認でも公開できないと返す（2026-10-19 の確定方針）', () => {
     const publish = functionBody('publish_standard_estimate_v25_revision');
     expect(publish).toContain('if exists (select 1 from public.standard_estimate_revision_v25_lines l where l.revision_id = rev.id and l.review_required) then');

@@ -19,6 +19,7 @@ import {
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   saveStandardEstimateV25DraftAction: vi.fn(),
+  readStandardEstimateV25SaveStatusAction: vi.fn(),
   refreshStandardEstimateV25CostsAction: vi.fn(),
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
@@ -222,12 +223,82 @@ describe('Excel 風の画面（描画）', () => {
     expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>状態</th>'));
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[62rem] min-w-[62rem]'");
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 4}');
+    expect(html).toContain('data-testid="v25-wb-edit-lock"');
+    expect(html).toContain('aria-label="標準見積の編集領域"');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
     expect(html).toContain('data-testid="v25-wb-publish"');
     expect(html).toContain('data-testid="v25-wb-variant-summary"');
   });
 
+
+  it('「要見直し」の旧明細だけに商品選択アイコンを出し、確定前には削除しない', () => {
+    const editable = { ...initial, lines: [
+      ...initial.lines,
+      {
+        key: 'legacy-interior', line_key: 'legacy-interior', section_code: 'interior_exterior' as const,
+        group_label: '旧仕様', name: '旧サッシ', quantity: '2', unit: '台',
+        price_mode: 'manual' as const, unit_price: '5000', remark: '旧明細', review_required: true,
+      },
+      {
+        key: 'new-unsaved', line_key: null, section_code: 'interior_exterior' as const,
+        group_label: '入力中', name: '未保存の明細', quantity: '1', unit: '式',
+        price_mode: 'manual' as const, unit_price: '200', remark: '', review_required: true,
+      },
+      {
+        key: 'reviewed-interior', line_key: 'reviewed-interior', section_code: 'interior_exterior' as const,
+        group_label: '直接入力', name: '確認済みの明細', quantity: '1', unit: '式',
+        price_mode: 'manual' as const, unit_price: '5000', remark: '', review_required: false,
+      },
+    ] };
+    const html = render(false, { initial: editable });
+    expect((html.match(/data-testid="v25-wb-legacy-line-replace-icon"/g) ?? []).length).toBe(1);
+    expect(html).toContain('旧サッシを商品台帳の商品に置き換える');
+    expect(html).toContain('title="旧明細を商品台帳から置き換える"');
+    expect(html).toContain('value="旧サッシ"'); // 選択前の旧行は維持
+    expect(html).not.toContain('data-testid="v25-wb-legacy-replacement-confirm"');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('planLegacyLineReplacement');
+    expect(source).toContain("line.review_required && Boolean(line.line_key)");
+    expect(source).toContain('setReplacementPending({ lineKey: picker.replaceLineKey, candidateId: candidate.id, categoryId: pickerCategory })');
+    expect(source).toContain('picker.replaceLineKey && !pickerCategory');
+    expect(source).toContain('置換先カテゴリーを選択（必須）');
+    expect(source).toContain('replacementPending.categoryId');
+    expect(source).not.toContain('replacementUndo');
+    expect(source).not.toContain('undoReplacement');
+    expect(source).toContain('v25-wb-discard-scope');
+    expect(source).toContain('v25-wb-replacement-total-comparison');
+    expect(source).toContain('v25-wb-replacement-amount-uncertain');
+    expect(source).toContain('v25-wb-replacement-amount-ack');
+    expect(source).toContain('v25-wb-replacement-position-mode');
+    expect(source).toContain('v25-wb-replacement-slot-code');
+    expect(source).toContain('v25-wb-replacement-slot-label');
+    expect(source).toContain('replacementSlotPosition');
+    expect(source).toContain('!editLocked && replacementAcknowledged');
+    expect(source).toContain('saveInFlightRef.current = true');
+    expect(source).toContain("setSavePhase('uncertain')");
+    expect(source).toContain("result.saveOutcome !== 'rejected'");
+    expect(source).toContain('v25-wb-uncertain-save-recovery');
+    expect(source).toContain('v25-wb-check-save-status');
+    expect(source).toContain('v25-wb-copy-unsaved-input');
+    expect(source).toContain('v25-wb-save-status-result');
+    expect(source).toContain('readStandardEstimateV25SaveStatusAction({ revision_id: revisionId })');
+    expect(source).toContain('版番号が同じでも後から保存が完了する場合があります');
+    expect(source).toContain("setSavePhase('saving')");
+    expect(source).toContain("setSavePhase('refreshing')");
+    expect(source).toContain("setSavePhase('idle')");
+    expect(source).toContain('router.refresh()');
+    expect(source).toContain('<fieldset disabled={editLocked}');
+    expect(source).toContain('</fieldset>');
+    expect(source).toContain('data-testid="v25-wb-save-lock-notice"');
+    expect(source).toContain('保存した内容を再読込中です');
+    expect(source).toContain("!replacementSource.unit_price.trim() ? '未入力（未算定）'");
+    expect(source).toContain('v25-wb-replacement-uncertain-reasons');
+    expect(source).toContain('data-testid="v25-wb-legacy-replacement-confirm"');
+    expect(source).toContain('data-testid="v25-wb-replacement-ack"');
+    expect(source).toContain('この1行を置換（未保存）');
+    expect(render(true, { initial: editable })).not.toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+  });
 
   it('売価単価は数字だけを表示・入力し、切替と行操作を右端メニューへ集約する', () => {
     const html = render(false);
@@ -259,7 +330,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
-    expect(source).toContain('payload: buildV25SavePayload(state)');
+    expect(source).toContain('const payload = buildV25SavePayload(state)');
   });
 
   it('商品名右端に商品台帳アイコンを配置し、既存の選び直し画面を使用する', () => {

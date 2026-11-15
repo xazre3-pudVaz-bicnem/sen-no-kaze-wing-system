@@ -553,7 +553,11 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setSlot(slot.key, { quantity: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0.5 text-muted">—</td>
+                          <td className="border-r border-slate-200 px-1 py-0.5 text-muted"
+                            data-testid="v25-wb-slot-unit"
+                            title="商品台帳の販売単位です。単位を変更する場合は台帳の価格・換算条件も確認してください。">
+                            {candidate?.priceUnit?.trim() || '—'}
+                          </td>
                           {showCost && (
                             <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">
                               {slot.price_mode === 'auto' ? (missing ? '原価未設定' : yen(result?.cost_unit_price)) : '—'}

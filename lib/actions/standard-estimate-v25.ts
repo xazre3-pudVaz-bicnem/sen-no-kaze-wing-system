@@ -15,7 +15,7 @@ import { createClient } from '@/lib/supabase/server';
 
 export type StandardEstimateV25ActionResult =
   | { ok: true; message: string; lockVersion?: number }
-  | { ok: false; error: string };
+  | { ok: false; error: string; saveOutcome?: 'rejected' | 'unknown' };
 
 function message(error: { message?: string } | null | undefined): string {
   const raw = error?.message ?? '処理に失敗しました。時間をおいて再度お試しください。';
@@ -99,14 +99,20 @@ export async function saveStandardEstimateV25DraftAction(input: unknown): Promis
   const unavailable = localUnavailable();
   if (unavailable) return unavailable;
   const parsed = revisionSchema.extend({ payload: payloadSchema }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください' };
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください', saveOutcome: 'rejected' };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('save_standard_estimate_v25_draft', {
     p_revision_id: parsed.data.revision_id,
     p_expected_lock_version: parsed.data.expected_lock_version,
     p_payload: parsed.data.payload,
   });
-  if (error) return { ok: false, error: message(error) };
+  if (error) {
+    // DBが明示的に拒否した検証・権限・競合のみ確実な不成立と扱う。
+    // 通信切断・タイムアウト等はcommit済みか不明なため、画面をロックしたまま照合する。
+    const rejected = error.code === 'P0001'
+      && /^(VALIDATION|FORBIDDEN|LOCKED|NOT_FOUND|UNAUTHENTICATED|RETIRED):\s*/i.test(error.message ?? '');
+    return { ok: false, error: message(error), saveOutcome: rejected ? 'rejected' : 'unknown' };
+  }
   revalidatePath(`/admin/standard-estimates/${parsed.data.revision_id}`);
   revalidatePath('/admin/standard-estimates');
   return {
@@ -114,6 +120,28 @@ export async function saveStandardEstimateV25DraftAction(input: unknown): Promis
     message: '保存しました。金額は DB で計算し直しています（原価は、商品・選択肢を変えた行だけ現在の原価になります）。',
     lockVersion: (data as { lock_version?: number } | null)?.lock_version,
   };
+}
+
+/**
+ * 保存結果の成否が不明な場合の読み取り専用照合。
+ * 同じ版番号が返っても通信中の保存が後からcommitする可能性があるため、
+ * この照合結果だけで編集ロックを解除してはならない。
+ */
+export async function readStandardEstimateV25SaveStatusAction(input: unknown):
+  Promise<{ ok: true; lockVersion: number; status: string } | { ok: false; error: string }> {
+  await requireAdmin('/admin/standard-estimates');
+  if (isLocalMode()) return { ok: false, error: '標準見積の管理はSupabase接続環境で利用できます。' };
+  const parsed = revisionSchema.pick({ revision_id: true }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: '対象の標準見積を確認してください' };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('standard_estimate_revisions')
+    .select('lock_version, status')
+    .eq('id', parsed.data.revision_id)
+    .maybeSingle();
+  if (error) return { ok: false, error: message(error) };
+  if (!data || !Number.isSafeInteger(data.lock_version)) return { ok: false, error: '対象Revisionを読み取れません。管理者に確認してください' };
+  return { ok: true, lockVersion: data.lock_version, status: data.status };
 }
 
 /** 最新原価を取り込む（auto の選択枠の原価 Version と、計算ルール・税ルールを現在の Version にする） */

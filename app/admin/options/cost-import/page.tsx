@@ -111,7 +111,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
           この画面は確認した選択肢 {choiceScope?.valid ? choiceScope.ids.length : 0} 件だけを表示します。商品本体の原価は選ばず、各選択肢の差額0円だけを正式な原価Versionへ取り込みます。
         </Alert>
       )}
-      {sp.error && <Alert tone="danger">{sp.error}</Alert>
+      {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       {sp.imported !== undefined && (
         <Alert tone="success">
           取り込みました（新しく記録 {sp.imported} 件・同じ金額で記録済み {sp.unchanged ?? 0} 件）。

@@ -280,6 +280,21 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('商品台帳から選択');
   });
 
+  it('移行対象の保存済み旧明細にだけ商品台帳の選択アイコンを表示する', () => {
+    const html = render(false);
+    expect(html).toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+    expect(html).toContain('旧明細を商品台帳から置き換える');
+    const readOnly = render(true);
+    expect(readOnly).not.toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+    const reviewed = render(false, { initial: { ...initial, lines: initial.lines.map((l) => ({ ...l, review_required: false })) } });
+    expect(reviewed).not.toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+    const src = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(src).toContain('replacementPending.choices');
+    expect(src).toContain('data-testid="v25-wb-legacy-replacement-confirm"');
+    expect(src).not.toContain('savePhase');
+    expect(src).toContain('payload: buildV25SavePayload(state)');
+  });
+
   it('公開中の版では右端の変更メニューを表示しない', () => {
     const html = render(true);
     expect(html).not.toContain('data-testid="v25-wb-slot-menu"');

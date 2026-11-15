@@ -14,12 +14,12 @@ type ProductPickerProps = {
 };
 
 /** 画面側の確認。金額・商品可否・保存の正本は従来どおりDB。 */
-export function v25PickerChoicesComplete(
+export function v25PickerChoicesValid(
   candidate: Pick<V25WorkbenchCandidate, 'variantGroups'>,
   choices: Readonly<Record<string, string>>
 ): boolean {
   return candidate.variantGroups.every((group) =>
-    group.choices.some((choice) => choice.id === choices[group.id])
+    !choices[group.id] || group.choices.some((choice) => choice.id === choices[group.id])
   );
 }
 
@@ -50,12 +50,14 @@ export function StandardEstimateV25ProductPicker({
 
   const selected = candidates.find((candidate) => candidate.id === selectedId) ?? null;
   const current = currentSlot ? candidates.find((candidate) => candidate.id === currentSlot.option_id) ?? null : null;
-  const complete = selected ? v25PickerChoicesComplete(selected, choices) : false;
+  const choicesValid = selected ? v25PickerChoicesValid(selected, choices) : false;
+  const hasUnselectedChoices = selected?.variantGroups.some((group) => !choices[group.id]) ?? false;
 
   const inspect = (candidate: V25WorkbenchCandidate) => {
     setSelectedId(candidate.id);
     // 同じ商品を選び直す場合は、設定済みの色・サイズなどを保持する。
-    setChoices(candidate.id === currentSlot?.option_id ? { ...currentSlot.variant_choices } : { ...candidate.defaultChoices });
+    const previousChoices = candidate.id === currentSlot?.option_id ? currentSlot.variant_choices : candidate.defaultChoices;
+    setChoices(Object.fromEntries(candidate.variantGroups.map((group) => [group.id, previousChoices[group.id] ?? ''])));
   };
 
   return (
@@ -132,7 +134,8 @@ export function StandardEstimateV25ProductPicker({
                     </Select>
                   </label>
                 ))}
-                {!complete && <p className="text-xs text-amber-800">すべての仕様を選択してください。</p>}
+                {!choicesValid && <p className="text-xs text-amber-800">選択肢が有効ではありません。仕様を選び直してください。</p>}
+                {choicesValid && hasUnselectedChoices && <p className="text-xs text-muted">未選択の仕様があります。必要な場合は選択してください。</p>}
               </>
             ) : (
               <p className="text-sm text-muted">左の商品を選ぶと、ここで色・サイズなどの仕様を確認できます。</p>
@@ -145,8 +148,8 @@ export function StandardEstimateV25ProductPicker({
         <div className="flex shrink-0 gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>キャンセル</Button>
           <Button type="button" data-testid="v25-wb-picker-apply"
-            disabled={!selected || !complete}
-            onClick={() => { if (selected && complete) onChoose(selected, { ...choices }); }}>
+            disabled={!selected || !choicesValid}
+            onClick={() => { if (selected && choicesValid) onChoose(selected, { ...choices }); }}>
             明細に反映
           </Button>
         </div>

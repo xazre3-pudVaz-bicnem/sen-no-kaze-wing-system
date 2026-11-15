@@ -124,7 +124,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
       lead="登録済みの商品の商品価格・選択肢の追加金額を、初期の商品標準原価・原価差額の Version へ取り込みます（本部だけ）。"
     >
       <BackLink href="/admin/ledger" label="商品台帳へ戻る" />
-      {scoped && (
+      {choiceScope?.valid && (
         <Alert tone="warn">
           この画面は確認した選択肢 {choiceScope?.valid ? choiceScope.ids.length : 0} 件だけを表示します。商品本体の原価は選ばず、各選択肢の差額0円だけを正式な原価Versionへ取り込みます。
         </Alert>
@@ -134,7 +134,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
           対象は商品本体1件だけです。表示金額 {productScope?.valid ? formatYen(productScope.amount) : '—'}（税別）が正式な商品標準原価であることを確認してください。ほかの商品・選択肢は対象外です。
         </Alert>
       )}
-      {sp.error && <Alert tone="danger">{sp.error}</Alert>
+      {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       {sp.imported !== undefined && (
         <Alert tone="success">
           取り込みました（新しく記録 {sp.imported} 件・同じ金額で記録済み {sp.unchanged ?? 0} 件）。
@@ -196,7 +196,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
           </table>
         </div>
         <Field label="取り込みの理由" htmlFor="cost-import-reason" required hint="原価の Version の履歴に残ります（1〜500文字）。">
-          <Textarea id="cost-import-reason" name="change_reason" defaultValue={productOnly ? '商品台帳に登録済みの原価480,000円を正式確認し、エアコン1商品の初期原価Versionへ記録' : choiceScope ? '標準見積v2.5の選択中で台帳上0円の選択肢のみ、初期の原価差額Versionへ記録（本部確認）' : DEFAULT_REASON} minLength={1} maxLength={500} required />
+          <Textarea id="cost-import-reason" name="change_reason" defaultValue={productOnly ? `商品台帳に登録済みの原価${productScope?.valid ? formatYen(productScope.amount) : '—'}を正式確認し、商品1件の初期原価Versionへ記録` : choiceScope ? '標準見積v2.5の選択中で台帳上0円の選択肢のみ、初期の原価差額Versionへ記録（本部確認）' : DEFAULT_REASON} minLength={1} maxLength={500} required />
         </Field>
         <div className="flex justify-end">
           <ConfirmSubmit

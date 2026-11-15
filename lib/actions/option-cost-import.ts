@@ -7,7 +7,7 @@ import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 import { parseChoiceImportScope } from '@/lib/domain/cost-import-choice-scope';
-import { parseProductImportScope, type ProductImportScope } from '@/lib/domain/cost-import-product-scope';
+import { parseProductImportScope } from '@/lib/domain/cost-import-product-scope';
 
 const PAGE = '/admin/options/cost-import';
 const ITEM_PATTERN = /^(option|choice):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(-?\d{1,10})$/i;

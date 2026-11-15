@@ -280,6 +280,30 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('商品台帳から選択');
   });
 
+  it('移行対象の保存済み旧明細にだけ商品台帳の選択アイコンを表示する', () => {
+    // 通常fixtureの要見直し行は「別途工事」で、置換の対象外。
+    const sitework = render(false);
+    expect(sitework).not.toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+    // 保存済みの「内外装工事／オプション」旧明細だけに表示する。
+    const migration = {
+      ...initial,
+      lines: initial.lines.map((line) => line.key === 'line-k1'
+        ? { ...line, section_code: 'option' as const } : line),
+    };
+    const html = render(false, { initial: migration });
+    expect(html).toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+    expect(html).toContain('旧明細を商品台帳から置き換える');
+    const readOnly = render(true, { initial: migration });
+    expect(readOnly).not.toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+    const reviewed = render(false, { initial: { ...migration, lines: migration.lines.map((l) => ({ ...l, review_required: false })) } });
+    expect(reviewed).not.toContain('data-testid="v25-wb-legacy-line-replace-icon"');
+    const src = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(src).toContain('replacementPending.choices');
+    expect(src).toContain('data-testid="v25-wb-legacy-replacement-confirm"');
+    expect(src).not.toContain('savePhase');
+    expect(src).toContain('payload: buildV25SavePayload(state)');
+  });
+
   it('公開中の版では右端の変更メニューを表示しない', () => {
     const html = render(true);
     expect(html).not.toContain('data-testid="v25-wb-slot-menu"');

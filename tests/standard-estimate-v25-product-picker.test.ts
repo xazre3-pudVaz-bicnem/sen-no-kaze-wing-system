@@ -36,6 +36,19 @@ describe('v2.5商品選択のUI', () => {
     expect(html).toContain('現在の商品');
   });
 
+  it('旧明細置換では商品カテゴリーの選択を必須とし、通常の商品選択は維持する', () => {
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
+      sectionLabel: '内外装工事', candidates: [sample], currentSlot: null,
+      requireCategory: true, replaceLineName: '旧玄関ドア',
+      onChoose: () => {}, onClose: () => {},
+    }));
+    expect(html).toContain('旧明細を商品に置き換える');
+    expect(html).toContain('旧玄関ドア');
+    expect(html).toContain('置換先カテゴリーを選択（必須）');
+    expect(html).toContain('data-testid="v25-wb-replacement-category-required"');
+    expect(html).toContain('disabled=""');
+  });
+
   it('選択肢の不正な値を拒否し、未選択は従来どおり許可する', () => {
     expect(v25PickerChoicesValid(sample, { color: 'white' })).toBe(true);
     expect(v25PickerChoicesValid(sample, { color: 'black' })).toBe(true);

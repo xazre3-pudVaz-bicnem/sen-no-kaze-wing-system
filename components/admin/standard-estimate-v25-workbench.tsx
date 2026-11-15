@@ -391,23 +391,33 @@ function WorkbenchBody({
     saveInFlightRef.current = true;
     setSavePhase('saving');
     startTransition(async () => {
+      let result: Awaited<ReturnType<typeof saveStandardEstimateV25DraftAction>>;
       try {
-        const result = await saveStandardEstimateV25DraftAction({
+        result = await saveStandardEstimateV25DraftAction({
           revision_id: revisionId, expected_lock_version: lockVersion, payload,
         });
-        onNotice(result.ok ? { tone: 'success', text: result.message } : { tone: 'danger', text: result.error });
-        if (result.ok) {
-          // router.refresh は完了 Promise を返さない。ここでは解除せず、
-          // lock_version に基づく WorkbenchBody の key 更新（再マウント）に委ねる。
-          setSavePhase('refreshing');
-          router.refresh();
-          return;
-        }
       } catch {
         onNotice({ tone: 'danger', text: '保存処理に失敗しました。内容は未保存のまま残っています。再度確認してください。' });
+        saveInFlightRef.current = false;
+        setSavePhase('idle');
+        return;
       }
-      saveInFlightRef.current = false;
-      setSavePhase('idle');
+      if (!result.ok) {
+        onNotice({ tone: 'danger', text: result.error });
+        saveInFlightRef.current = false;
+        setSavePhase('idle');
+        return;
+      }
+      onNotice({ tone: 'success', text: result.message });
+      // 保存成功後は絶対に同じ編集stateのロックを解除しない。router.refresh は
+      // Promise を返さないので、lock_version に基づくkeyの更新に任せる。
+      setSavePhase('refreshing');
+      try {
+        router.refresh();
+      } catch {
+        // DBは既に保存済み。古い入力を編集可能にすると上書き事故になる。
+        onNotice({ tone: 'danger', text: '保存は完了しましたが画面の再読込に失敗しました。ブラウザのページを再読み込みしてください。' });
+      }
     });
   };
 

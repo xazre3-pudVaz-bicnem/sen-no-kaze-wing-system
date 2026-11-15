@@ -48,7 +48,11 @@ describe('原価差額0円の限定取り込み：対象外の一括登録を遮
     const action=fs.readFileSync(path.resolve('lib/actions/option-cost-import.ts'),'utf8');
     expect(page).toContain("parseChoiceImportScope(sp.choice_ids)");
     expect(page).toContain('!scopedChoiceOnly && selectable');
+    expect(page).toContain('name="choice_scope"');
     expect(page).toContain('指定された選択肢のいずれかが未登録の0円ではなくなったか');
     expect(action).toContain("db.rpc('import_option_standard_costs'");
+    expect(action).toContain("item.kind !== 'choice' || item.amount !== 0");
+    expect(action).toContain('items.length !== scopeIds.length');
+    expect(action).toContain('choice_ids=');
   });
 });

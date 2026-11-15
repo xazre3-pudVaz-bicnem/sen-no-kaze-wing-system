@@ -48,6 +48,7 @@ const candidates: V25WorkbenchCandidate[] = [
     singleSelect: false,
     manufacturer: 'メーカーA',
     modelNo: 'A-1',
+    priceUnit: '台',
     section: 'option',
     variantGroups: [{ id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] }],
     defaultChoices: { g1: 'c1' },
@@ -206,6 +207,17 @@ const render = (readOnly: boolean, view?: { initial?: V25EditorState; candidates
   );
 
 describe('Excel 風の画面（描画）', () => {
+
+  it('商品台帳の販売単位を商品行に表示し、未設定はダッシュで示す（表示のみ）', () => {
+    const html = render(false);
+    expect(html).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>[\s\S]*?台[\s\S]*?<\/td>/);
+    const modified = render(false, { candidates: candidates.map((item) => item.id === 'p1' ? { ...item, priceUnit: '㎡' } : item) });
+    expect(modified).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>[\s\S]*?㎡[\s\S]*?<\/td>/);
+    const unregistered = render(false, { candidates: candidates.map((item) => ({ ...item, priceUnit: null })) });
+    expect(unregistered).toContain('data-testid="v25-wb-slot-unit"');
+    expect(unregistered).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>\s*—\s*<\/td>/);
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(state)');
+  });
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);

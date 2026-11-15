@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { StandardEstimateV25ProductPicker, v25PickerChoicesComplete } from '@/components/admin/standard-estimate-v25-product-picker';
+import { StandardEstimateV25ProductPicker, v25PickerChoicesValid } from '@/components/admin/standard-estimate-v25-product-picker';
 import type { V25WorkbenchCandidate } from '@/lib/domain/standard-estimate-v25-workbench';
 
 const sample: V25WorkbenchCandidate = {
@@ -36,11 +36,11 @@ describe('v2.5商品選択のUI', () => {
     expect(html).toContain('現在の商品');
   });
 
-  it('すべての選択項目を選んだ場合だけ確定可能（値の一致も検査）', () => {
-    expect(v25PickerChoicesComplete(sample, { color: 'white' })).toBe(true);
-    expect(v25PickerChoicesComplete(sample, { color: 'black' })).toBe(true);
-    expect(v25PickerChoicesComplete(sample, { color: '' })).toBe(false);
-    expect(v25PickerChoicesComplete(sample, { color: 'invalid' })).toBe(false);
-    expect(v25PickerChoicesComplete({ variantGroups: [] }, {})).toBe(true);
+  it('選択肢の不正な値を拒否し、未選択は従来どおり許可する', () => {
+    expect(v25PickerChoicesValid(sample, { color: 'white' })).toBe(true);
+    expect(v25PickerChoicesValid(sample, { color: 'black' })).toBe(true);
+    expect(v25PickerChoicesValid(sample, { color: '' })).toBe(true);
+    expect(v25PickerChoicesValid(sample, { color: 'invalid' })).toBe(false);
+    expect(v25PickerChoicesValid({ variantGroups: [] }, {})).toBe(true);
   });
 });

@@ -23,7 +23,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench, v25VariantSummary } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary, v25VisibleSlot, v25VisibleLine } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -206,6 +206,35 @@ const render = (readOnly: boolean, view?: { initial?: V25EditorState; candidates
   );
 
 describe('Excel 風の画面（描画）', () => {
+  it('上部の作業状況、要見直し・未確定フィルター、区分移動を表示する', () => {
+    const html = render(false);
+    expect(html).toContain('data-testid="v25-wb-workflow-summary"');
+    expect(html).toContain('要見直し 1件');
+    expect(html).toContain('未確定 2件');
+    expect(html).toContain('data-testid="v25-wb-filter-review"');
+    expect(html).toContain('data-testid="v25-wb-filter-unsettled"');
+    expect(html).toContain('aria-label="明細の区分へ移動"');
+    expect(html).toContain('id="v25-section-option"');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('visibleSlots.map((slot) =>');
+    expect(source).toContain('visibleLines.map((line) =>');
+    expect(source).toContain('payload: buildV25SavePayload(state)');
+  });
+
+  it('絞り込みは未確定・要見直しだけを判定し元データを変更しない', () => {
+    const incomplete = new Map([['missing', 'missing_cost']]);
+    const unpriced = new Set(['unpriced']);
+    expect(v25VisibleSlot({ key: 'missing', price_mode: 'auto' }, 'unsettled', incomplete, unpriced)).toBe(true);
+    expect(v25VisibleSlot({ key: 'ok', price_mode: 'auto' }, 'unsettled', incomplete, unpriced)).toBe(false);
+    expect(v25VisibleSlot({ key: 'por', price_mode: 'por' }, 'unsettled', incomplete, unpriced)).toBe(true);
+    expect(v25VisibleSlot({ key: 'missing', price_mode: 'auto' }, 'review', incomplete, unpriced)).toBe(false);
+    expect(v25VisibleLine({ key: 'review', price_mode: 'manual', review_required: true }, 'review', unpriced)).toBe(true);
+    expect(v25VisibleLine({ key: 'ok', price_mode: 'manual', review_required: false }, 'review', unpriced)).toBe(false);
+    expect(v25VisibleLine({ key: 'unpriced', price_mode: 'manual', review_required: false }, 'unsettled', unpriced)).toBe(true);
+    expect(v25VisibleLine({ key: 'por', price_mode: 'por', review_required: false }, 'unsettled', unpriced)).toBe(true);
+    expect(incomplete.size).toBe(1);
+    expect(unpriced.size).toBe(1);
+  });
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);

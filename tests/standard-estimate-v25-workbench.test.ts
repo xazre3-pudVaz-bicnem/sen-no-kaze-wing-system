@@ -273,7 +273,9 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('aria-label="検査商品1を商品台帳から選び直す"');
     expect(source).toContain("import { Package } from 'lucide-react'");
     expect(source).toContain('<Package className="size-3.5" aria-hidden="true" />');
-    expect(source).toContain("setPicker({ section: code, targetKey: slot.key }); setPickerCategory(''); setPickerQuery('');");
+    expect(source).toContain("setPicker({ section: code, targetKey: slot.key });");
+    expect(source).toContain('<StandardEstimateV25ProductPicker');
+    expect(source).toContain('onChoose={choose}');
     expect(html).toContain('data-testid="v25-wb-slot-menu"');
     expect(html).toContain('商品台帳から選択');
   });

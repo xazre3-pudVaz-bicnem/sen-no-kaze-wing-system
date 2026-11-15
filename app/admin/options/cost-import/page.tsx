@@ -112,7 +112,6 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
       </AdminPage>
     );
   }
-  const scoped = choiceScope !== null || productScope !== null;
   const productOnly = productScope?.valid === true;
   const products = narrowed ?? candidates.products;
   const count = (state: CostImportProductState) => products.filter((product) => product.state === state).length;

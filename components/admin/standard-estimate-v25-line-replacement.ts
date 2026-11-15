@@ -6,6 +6,7 @@
 import type { V25EditorState, V25LineRow, V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
 import { validateV25EditorState } from '@/lib/domain/standard-estimate-v25-view';
 import {
+  canUsePositionSlot,
   standardSlotQuantity,
   v25SlotRuleIssues,
   type V25WorkbenchCandidate,
@@ -21,6 +22,7 @@ export type LegacyLineReplacementPlan =
  * 商品の選択枠へ自動転記できないため、候補商品の標準仕様・標準原価で再計算する。
  * 単位が変わることを UI で必ず明示し、明示同意するまでは plan を state に反映しない。
  * 旧明細には商品カテゴリーIDがないため自動推測せず、操作担当者の選択したカテゴリーIDと照合する。
+ * 位置別であれば既存のslot_code / slot_labelを指定し、DBと同じ混在・重複ルールを検証する。
  */
 export function planLegacyLineReplacement(
   state: V25EditorState,
@@ -29,7 +31,8 @@ export function planLegacyLineReplacement(
   candidates: V25WorkbenchCandidate[],
   costs: V25WorkbenchCosts,
   confirmedCategoryId: string,
-  newSlotKey: string
+  newSlotKey: string,
+  position?: Pick<V25SlotRow, 'slot_code' | 'slot_label'>
 ): LegacyLineReplacementPlan {
   const oldLine = state.lines.find((line) => line.key === lineKey);
   if (!oldLine) return { ok: false, error: '置換元の明細が見つかりません。画面を再確認してください' };
@@ -42,9 +45,28 @@ export function planLegacyLineReplacement(
   if (candidate.retired || candidate.unavailable) return { ok: false, error: '販売停止・この仕様で選べない商品には置換できません' };
   if (state.slots.length >= 200) return { ok: false, error: '商品の選択枠は200件までです' };
   if (state.slots.some((slot) => slot.key === newSlotKey)) return { ok: false, error: '置換後の行識別子が重複しています' };
-  // 位置別の複数枠は今回の置換で自動生成しない。同じ商品が既にあれば二重計上を防ぐため停止する。
-  if (state.slots.some((slot) => slot.option_id === candidate.id)) {
-    return { ok: false, error: '同じ商品がすでに標準見積にあります。重複計上を防ぐため置換できません' };
+  // カテゴリー単位の枠と位置別の枠は混在不可。同一商品でも位置識別子が異なれば別枠を許可する。
+  const slotCode = position?.slot_code.trim() ?? '';
+  const slotLabel = position?.slot_label.trim() ?? '';
+  if (position && (!slotCode || !slotLabel)) {
+    return { ok: false, error: '位置・用途別で置換するには識別子と名前を両方入力してください' };
+  }
+  if (slotCode && !canUsePositionSlot(candidate.categoryCode)) {
+    return { ok: false, error: '外壁・防火仕様には位置・用途の枠を作れません' };
+  }
+  const byId = new Map(candidates.map((item) => [item.id, item]));
+  const categorySlots = state.slots.filter((slot) => byId.get(slot.option_id)?.categoryId === candidate.categoryId);
+  if (categorySlots.some((slot) => Boolean(slot.slot_code.trim())) && !slotCode) {
+    return { ok: false, error: 'このカテゴリーは位置・用途別の選択枠を使用中です。置換先の位置を指定してください' };
+  }
+  if (categorySlots.some((slot) => !slot.slot_code.trim()) && slotCode) {
+    return { ok: false, error: 'このカテゴリーはカテゴリー単位の選択枠を使用中です。位置別と混在できません' };
+  }
+  if (state.slots.some((slot) => slot.option_id === candidate.id && slot.slot_code.trim() === slotCode)) {
+    return { ok: false, error: '同じ商品・同じ位置の選択枠は重複登録できません' };
+  }
+  if (slotCode && categorySlots.some((slot) => slot.slot_label.trim() === slotLabel)) {
+    return { ok: false, error: 'このカテゴリーには同じ位置・用途名の選択枠があります' };
   }
 
   const variantChoices: Record<string, string> = {};
@@ -74,8 +96,8 @@ export function planLegacyLineReplacement(
     quantity: String(standardSlotQuantity(candidate.categoryCode)),
     price_mode: 'auto',
     manual_unit_price: '',
-    slot_code: '',
-    slot_label: '',
+    slot_code: slotCode,
+    slot_label: slotLabel,
     selectable_option_ids: [],
   };
   const next: V25EditorState = {
@@ -83,10 +105,9 @@ export function planLegacyLineReplacement(
     slots: [...state.slots, newSlot],
     lines: state.lines.filter((line) => line.key !== lineKey),
   };
-  const candidateById = new Map(candidates.map((item) => [item.id, item]));
-  const issues = v25SlotRuleIssues(next.slots, (id) => candidateById.get(id));
+  const issues = v25SlotRuleIssues(next.slots, (id) => byId.get(id));
   if (issues.length > 0) return { ok: false, error: issues[0] };
-  const validation = validateV25EditorState(next, (id) => candidateById.get(id)?.section);
+  const validation = validateV25EditorState(next, (id) => byId.get(id)?.section);
   if (validation) return { ok: false, error: validation };
 
   return { ok: true, oldLine, newSlot, state: next };

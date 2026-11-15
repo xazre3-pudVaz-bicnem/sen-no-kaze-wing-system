@@ -1,7 +1,7 @@
 import type { CostImportProduct } from '@/lib/data/option-cost-import';
 
 /** 商品本体の原価Versionを1商品の登録済み金額だけに限定する。 */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type ProductImportScope =
   | { valid: true; id: string; amount: number }
   | { valid: false };

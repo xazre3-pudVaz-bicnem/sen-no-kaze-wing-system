@@ -499,7 +499,7 @@ function WorkbenchBody({
             ))}
           </nav>
         </div>
-        {rowFilter !== 'all' && <p className="text-slate-600">絞り込みは表示だけです。非表示の明細も保存・公開の対象です。</p>}
+        {rowFilter !== 'all' && <p className="text-slate-600">絞り込みは表示だけです。金額内訳は全明細の集計で、非表示の明細も保存・公開の対象です。</p>}
       </div>
 
       <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">

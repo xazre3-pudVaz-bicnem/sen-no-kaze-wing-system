@@ -250,6 +250,7 @@ export async function loadStandardEstimateWorkspace(
         displayGroup: isLegacyWashbasinOption(option) ? 'washbasin-standard-set' : null,
         manufacturer: option.manufacturer ?? '',
         modelNo: option.model_no ?? '',
+        imageUrl: option.image_url ?? null,
         usesWindowType: category?.uses_window_type === true,
         windowTypeCode: option.window_type_code ?? null,
         windowTypeLabel: option.window_type_code ? (windowTypeLabel.get(option.window_type_code) ?? option.window_type_code) : null,

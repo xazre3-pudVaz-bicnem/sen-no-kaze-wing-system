@@ -73,7 +73,7 @@ describe('v2.5 PR-A3：既存の商品価格・追加金額の初期の原価 Ve
   it('取り込みの Server Action は本部だけ・ローカルでは止める・一覧の形式を確かめてから DB に渡す', () => {
     const action = read('lib/actions/option-cost-import.ts');
     expect(action).toContain("await requireAdmin(PAGE);");
-    expect(action).toContain("if (isLocalMode()) redirect(errorPath('ローカル検証モードでは取り込めません。'));");
+    expect(action).toContain("if (isLocalMode()) redirect(errorPath('ローカル検証モードでは取り込めません。', scopeIds));");
     expect(action).toContain("db.rpc('import_option_standard_costs', { p_items: items, p_change_reason: reason })");
     expect(action).toMatch(/const ITEM_PATTERN = \/\^\(option\|choice\)/);
     const page = read('app/admin/options/cost-import/page.tsx');

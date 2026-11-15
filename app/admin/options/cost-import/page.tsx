@@ -8,6 +8,7 @@ import {
   type CostImportProductState,
 } from '@/lib/data/option-cost-import';
 import { formatYen } from '@/lib/domain/pricing';
+import { parseChoiceImportScope, narrowZeroCostChoices } from '@/lib/domain/cost-import-choice-scope';
 import { Alert, Field, Textarea } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
@@ -82,7 +83,28 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
     );
   }
 
-  const products = candidates.products;
+  // このURLで指定した選択肢以外の商品・選択肢をフォームに出さない。
+  // 指定値の誤りや価格変更時は、安全のため一覧を出さずに止める。
+  const choiceScope = parseChoiceImportScope(sp.choice_ids);
+  const narrowed = choiceScope?.valid ? narrowZeroCostChoices(candidates.products, choiceScope.ids) : null;
+  if (choiceScope?.valid && !narrowed && sp.imported !== undefined) {
+    return (
+      <AdminPage title="原価 Version の取り込み結果">
+        <BackLink href="/admin/ledger" label="商品台帳へ戻る" />
+        <Alert tone="success">限定対象の取り込み処理が完了しました（新しく記録 {sp.imported} 件・既に記録済み {sp.unchanged ?? 0} 件）。他の商品は選択されていません。</Alert>
+      </AdminPage>
+    );
+  }
+  if (choiceScope && (!choiceScope.valid || !narrowed)) {
+    return (
+      <AdminPage title="原価 Version の取り込み">
+        <BackLink href="/admin/ledger" label="商品台帳へ戻る" />
+        <Alert tone="danger">指定された選択肢のいずれかが未登録の0円ではなくなったか、指定が正しくありません。取り込みは行いません。対象を再確認してください。</Alert>
+      </AdminPage>
+    );
+  }
+  const scoped = choiceScope !== null;
+  const products = narrowed ?? candidates.products;
   const count = (state: CostImportProductState) => products.filter((product) => product.state === state).length;
   const choiceCount = products.reduce((sum, product) => sum + product.choices.filter((choice) => choice.state === 'import').length, 0);
 
@@ -92,6 +114,11 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
       lead="登録済みの商品の商品価格・選択肢の追加金額を、初期の商品標準原価・原価差額の Version へ取り込みます（本部だけ）。"
     >
       <BackLink href="/admin/ledger" label="商品台帳へ戻る" />
+      {scoped && (
+        <Alert tone="warn">
+          この画面は確認した選択肢 {choiceScope?.valid ? choiceScope.ids.length : 0} 件だけを表示します。商品本体の原価は選ばず、各選択肢の差額0円だけを正式な原価Versionへ取り込みます。
+        </Alert>
+      )}
       {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       {sp.imported !== undefined && (
         <Alert tone="success">
@@ -128,6 +155,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
       </section>
 
       <form action={importOptionCostsAction} className="card space-y-4 p-4 sm:p-5" data-testid="cost-import-form">
+        {choiceScope?.valid && <input type="hidden" name="choice_scope" value={choiceScope.ids.join(',')} />}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] text-sm">
             <thead>
@@ -141,13 +169,13 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
             </thead>
             <tbody>
               {products.map((product) => (
-                <ProductRows key={product.id} product={product} />
+                <ProductRows key={product.id} product={product} scopedChoiceOnly={scoped} />
               ))}
             </tbody>
           </table>
         </div>
         <Field label="取り込みの理由" htmlFor="cost-import-reason" required hint="原価の Version の履歴に残ります（1〜500文字）。">
-          <Textarea id="cost-import-reason" name="change_reason" defaultValue={DEFAULT_REASON} minLength={1} maxLength={500} required />
+          <Textarea id="cost-import-reason" name="change_reason" defaultValue={scoped ? '標準見積v2.5の選択中で台帳上0円の選択肢のみ、初期の原価差額Versionへ記録（本部確認）' : DEFAULT_REASON} minLength={1} maxLength={500} required />
         </Field>
         <div className="flex justify-end">
           <ConfirmSubmit
@@ -163,13 +191,13 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
   );
 }
 
-function ProductRows({ product }: { product: CostImportProduct }) {
+function ProductRows({ product, scopedChoiceOnly = false }: { product: CostImportProduct; scopedChoiceOnly?: boolean }) {
   const selectable = SELECTABLE.includes(product.state);
   return (
     <>
       <tr className="border-t border-line align-top">
         <td className="px-2 py-2 text-center">
-          {selectable && product.amount !== null ? (
+          {!scopedChoiceOnly && selectable && product.amount !== null ? (
             <input
               type="checkbox"
               name="item"

@@ -89,7 +89,7 @@ describe('標準見積 v2.5 の編集（PR-B1b の処理を「見積書管理 �
 
   it('Server Action は RPC を呼ぶだけ（本部の管理者だけ・ローカル検証モードでは使わない）', () => {
     expect(actions.startsWith("'use server';")).toBe(true);
-    expect((actions.match(/await requireAdmin\('\/admin\/standard-estimates'\);/g) ?? []).length).toBe(4);
+    expect((actions.match(/await requireAdmin\('\/admin\/standard-estimates'\);/g) ?? []).length).toBe(5);
     for (const rpc of ['save_standard_estimate_v25_draft', 'refresh_standard_estimate_v25_costs', 'publish_standard_estimate_v25_revision']) {
       expect(actions).toContain(`supabase.rpc('${rpc}'`);
     }

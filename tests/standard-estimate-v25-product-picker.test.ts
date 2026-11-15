@@ -17,7 +17,7 @@ describe('v2.5商品選択のUI', () => {
   it('商品画像・メーカー・型番と、選択→仕様確認→明細反映の領域を示す', () => {
     const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
       sectionLabel: 'オプション', candidates: [sample], productCosts: { sample: 480000 },
-      currentSlot: null, onChoose: () => {}, onClose: () {},
+      currentSlot: null, onChoose: () => {}, onClose: () => {},
     }));
     expect(html).toContain('data-testid="v25-wb-product-picker"');
     expect(html).toContain('data-testid="v25-wb-picker-candidate"');

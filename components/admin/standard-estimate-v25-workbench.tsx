@@ -748,7 +748,7 @@ function WorkbenchBody({
                               {!readOnly && line.review_required && Boolean(line.line_key) && code !== 'sitework' && (
                                 <button type="button" title="旧明細を商品台帳から置き換える"
                                   aria-label={`${line.name || '旧明細'}を商品台帳の商品に置き換える`}
-                                  data-testid="v25-wb-legacy-line-replace-icon"
+                                  data-testid="v25-wb-legacy-line-replace-icon" disabled={pending}
                                   className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"
                                   onClick={() => { setPicker({ section: code, targetKey: null, replaceLineKey: line.key }); setPickerCategory(''); setPickerQuery(''); }}>
                                   <Package className="size-3.5" aria-hidden="true" />
@@ -1102,6 +1102,43 @@ function WorkbenchBody({
               <h3 className="font-semibold">旧明細1行を商品台帳の商品へ置き換える</h3>
               <button type="button" className="text-sm text-muted underline" onClick={closeReplacement}>閉じる</button>
             </div>
+            <div className="space-y-2 rounded-md border border-slate-200 p-3 text-sm" data-testid="v25-wb-replacement-position-settings">
+              {canUsePositionSlot(replacementCandidate.categoryCode) ? (
+                <>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-semibold">商品を配置する枠</span>
+                    <Select value={replacementPosition.mode}
+                      disabled={replacementCategoryHasPosition || replacementCategoryHasUnit}
+                      aria-label="置換先の枠の種類" data-testid="v25-wb-replacement-position-mode"
+                      onChange={(event) => {
+                        setReplacementPosition((current) => ({ ...current, mode: event.target.value === 'position' ? 'position' : 'category' }));
+                        setReplacementAcknowledged(false);
+                      }} className="h-8 w-full text-xs">
+                      <option value="category">カテゴリー単位（位置指定なし）</option>
+                      <option value="position">位置・用途別（サッシの設置場所など）</option>
+                    </Select>
+                  </label>
+                  {replacementCategoryHasPosition && <p className="text-xs text-muted">このカテゴリーには位置別の枠があります。新しい位置を入力してください。</p>}
+                  {replacementCategoryHasUnit && <p className="text-xs text-muted">このカテゴリーにはカテゴリー単位の枠があります。位置別の枠を混在させることはできません。</p>}
+                  {replacementPosition.mode === 'position' && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-xs">位置識別子（英小文字・数字・ハイフン、40文字まで）</span>
+                        <Input value={replacementPosition.slot_code} placeholder="例：bedroom-window"
+                          data-testid="v25-wb-replacement-slot-code" className="h-8 font-mono text-xs"
+                          onChange={(event) => { setReplacementPosition((current) => ({ ...current, slot_code: event.target.value })); setReplacementAcknowledged(false); }} />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs">位置・用途の名前</span>
+                        <Input value={replacementPosition.slot_label} placeholder="例：寝室窓"
+                          data-testid="v25-wb-replacement-slot-label" className="h-8 text-xs"
+                          onChange={(event) => { setReplacementPosition((current) => ({ ...current, slot_label: event.target.value })); setReplacementAcknowledged(false); }} />
+                      </label>
+                    </div>
+                  )}
+                </>
+              ) : <p className="text-xs text-muted">このカテゴリーは位置・用途別の枠を使用しません（外壁・防火仕様は既存の専用ルールを適用）。</p>}
+            </div>
             <div className="grid gap-3 text-sm sm:grid-cols-2">
               <div className="space-y-1 rounded-md border border-line p-3" data-testid="v25-wb-replacement-before">
                 <p className="text-xs font-semibold text-muted">置換前：要見直しの旧明細</p>
@@ -1140,6 +1177,22 @@ function WorkbenchBody({
               </p>
               <p className="mt-1 text-muted">保存後の正式金額はDBで再計算されます。表示された差額を確定金額として扱わないでください。</p>
             </div>
+            {replacementComparisonIncomplete && (
+              <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3" data-testid="v25-wb-replacement-amount-uncertain">
+                <p className="text-sm font-semibold text-amber-900">置換前後の金額を完全には比較できません</p>
+                <p className="text-xs text-amber-900">
+                  元の明細が別途見積、または他の未確定・原価未設定の明細を含む可能性があります。
+                  税込合計の差額は未確定です。旧明細の金額と新商品の試算金額を確認してください。
+                </p>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" checked={replacementIncompleteAcknowledged}
+                    data-testid="v25-wb-replacement-amount-ack"
+                    onChange={(event) => setReplacementIncompleteAcknowledged(event.target.checked)}
+                    className="mt-1 size-4" />
+                  <span>置換前後の合計金額を確定比較できないことを理解し、下書き保存後の正式金額を再確認します。</span>
+                </label>
+              </div>
+            )}
             <p className="text-xs leading-5 text-muted">
               この操作では元の旧明細を下書きから除外し、商品行を同じ区分へ1件追加します。旧明細の数量・単位・備考・手動単価は自動で引き継ぎません。カテゴリーは旧グループ名から自動判定しません。保存すると旧明細の情報はDraftから除かれます。
               商品行はその区分の上部へ移動し、v2.5の既存の原価Version固定ルールに従って試算します。

@@ -9,6 +9,7 @@ import {
 } from '@/lib/data/option-cost-import';
 import { formatYen } from '@/lib/domain/pricing';
 import { parseChoiceImportScope, narrowZeroCostChoices } from '@/lib/domain/cost-import-choice-scope';
+import { parseProductImportScope, narrowProductImport } from '@/lib/domain/cost-import-product-scope';
 import { Alert, Field, Textarea } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
@@ -86,24 +87,33 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
   // このURLで指定した選択肢以外の商品・選択肢をフォームに出さない。
   // 指定値の誤りや価格変更時は、安全のため一覧を出さずに止める。
   const choiceScope = parseChoiceImportScope(sp.choice_ids);
-  const narrowed = choiceScope?.valid ? narrowZeroCostChoices(candidates.products, choiceScope.ids) : null;
-  if (choiceScope?.valid && !narrowed && sp.imported !== undefined) {
+  const productScope = parseProductImportScope(sp.product_id, sp.product_amount);
+  const scopeConflict = choiceScope !== null && productScope !== null;
+  const narrowed = scopeConflict
+    ? null
+    : choiceScope?.valid
+      ? narrowZeroCostChoices(candidates.products, choiceScope.ids)
+      : productScope?.valid
+        ? narrowProductImport(candidates.products, productScope)
+        : null;
+  if (!scopeConflict && (choiceScope?.valid || productScope?.valid) && !narrowed && sp.imported !== undefined) {
     return (
       <AdminPage title="原価 Version の取り込み結果">
         <BackLink href="/admin/ledger" label="商品台帳へ戻る" />
-        <Alert tone="success">限定対象の取り込み処理が完了しました（新しく記録 {sp.imported} 件・既に記録済み {sp.unchanged ?? 0} 件）。他の商品は選択されていません。</Alert>
+        <Alert tone="success">限定対象の取り込み処理が完了しました（新しく記録 {sp.imported} 件・既に記録済み {sp.unchanged ?? 0} 件）。指定外の商品・選択肢は選択されていません。</Alert>
       </AdminPage>
     );
   }
-  if (choiceScope && (!choiceScope.valid || !narrowed)) {
+  if (scopeConflict || (choiceScope && (!choiceScope.valid || !narrowed)) || (productScope && (!productScope.valid || !narrowed))) {
     return (
       <AdminPage title="原価 Version の取り込み">
         <BackLink href="/admin/ledger" label="商品台帳へ戻る" />
-        <Alert tone="danger">指定された選択肢のいずれかが未登録の0円ではなくなったか、指定が正しくありません。取り込みは行いません。対象を再確認してください。</Alert>
+        <Alert tone="danger">指定された選択肢のいずれかが未登録の0円ではなくなったか、指定が正しくありません。取り込みは行いません。対象を再確認してください。商品指定の場合は原価Version・金額・商品状態を確認してください。</Alert>
       </AdminPage>
     );
   }
-  const scoped = choiceScope !== null;
+  const scoped = choiceScope !== null || productScope !== null;
+  const productOnly = productScope?.valid === true;
   const products = narrowed ?? candidates.products;
   const count = (state: CostImportProductState) => products.filter((product) => product.state === state).length;
   const choiceCount = products.reduce((sum, product) => sum + product.choices.filter((choice) => choice.state === 'import').length, 0);
@@ -119,7 +129,12 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
           この画面は確認した選択肢 {choiceScope?.valid ? choiceScope.ids.length : 0} 件だけを表示します。商品本体の原価は選ばず、各選択肢の差額0円だけを正式な原価Versionへ取り込みます。
         </Alert>
       )}
-      {sp.error && <Alert tone="danger">{sp.error}</Alert>}
+      {productOnly && (
+        <Alert tone="warn">
+          対象は商品本体1件だけです。表示金額 {productScope?.valid ? formatYen(productScope.amount) : '—'}（税別）が正式な商品標準原価であることを確認してください。ほかの商品・選択肢は対象外です。
+        </Alert>
+      )}
+      {sp.error && <Alert tone="danger">{sp.error}</Alert>
       {sp.imported !== undefined && (
         <Alert tone="success">
           取り込みました（新しく記録 {sp.imported} 件・同じ金額で記録済み {sp.unchanged ?? 0} 件）。
@@ -156,6 +171,12 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
 
       <form action={importOptionCostsAction} className="card space-y-4 p-4 sm:p-5" data-testid="cost-import-form">
         {choiceScope?.valid && <input type="hidden" name="choice_scope" value={choiceScope.ids.join(',')} />}
+        {productScope?.valid && (
+          <>
+            <input type="hidden" name="product_scope_id" value={productScope.id} />
+            <input type="hidden" name="product_scope_amount" value={String(productScope.amount)} />
+          </>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] text-sm">
             <thead>
@@ -169,13 +190,13 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
             </thead>
             <tbody>
               {products.map((product) => (
-                <ProductRows key={product.id} product={product} scopedChoiceOnly={scoped} />
+                <ProductRows key={product.id} product={product} scopedChoiceOnly={Boolean(choiceScope)} productOnly={productOnly} />
               ))}
             </tbody>
           </table>
         </div>
         <Field label="取り込みの理由" htmlFor="cost-import-reason" required hint="原価の Version の履歴に残ります（1〜500文字）。">
-          <Textarea id="cost-import-reason" name="change_reason" defaultValue={scoped ? '標準見積v2.5の選択中で台帳上0円の選択肢のみ、初期の原価差額Versionへ記録（本部確認）' : DEFAULT_REASON} minLength={1} maxLength={500} required />
+          <Textarea id="cost-import-reason" name="change_reason" defaultValue={productOnly ? '商品台帳に登録済みの原価480,000円を正式確認し、エアコン1商品の初期原価Versionへ記録' : choiceScope ? '標準見積v2.5の選択中で台帳上0円の選択肢のみ、初期の原価差額Versionへ記録（本部確認）' : DEFAULT_REASON} minLength={1} maxLength={500} required />
         </Field>
         <div className="flex justify-end">
           <ConfirmSubmit
@@ -191,7 +212,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
   );
 }
 
-function ProductRows({ product, scopedChoiceOnly = false }: { product: CostImportProduct; scopedChoiceOnly?: boolean }) {
+function ProductRows({ product, scopedChoiceOnly = false, productOnly = false }: { product: CostImportProduct; scopedChoiceOnly?: boolean; productOnly?: boolean }) {
   const selectable = SELECTABLE.includes(product.state);
   return (
     <>
@@ -215,7 +236,7 @@ function ProductRows({ product, scopedChoiceOnly = false }: { product: CostImpor
         <td className="px-2 py-2 text-right tabular-nums">{yen(product.currentAmount)}</td>
         <td className="px-2 py-2 text-xs font-semibold">{STATE_LABEL[product.state]}</td>
       </tr>
-      <ChoiceRows product={product} />
+      {!productOnly && <ChoiceRows product={product} />}
     </>
   );
 }

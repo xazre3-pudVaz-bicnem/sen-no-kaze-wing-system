@@ -222,6 +222,8 @@ describe('Excel 風の画面（描画）', () => {
     expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>状態</th>'));
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[62rem] min-w-[62rem]'");
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 4}');
+    expect(html).toContain('data-testid="v25-wb-edit-lock"');
+    expect(html).toContain('aria-label="標準見積の編集領域"');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
     expect(html).toContain('data-testid="v25-wb-publish"');
@@ -271,7 +273,18 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('v25-wb-replacement-slot-code');
     expect(source).toContain('v25-wb-replacement-slot-label');
     expect(source).toContain('replacementSlotPosition');
-    expect(source).toContain('!pending && replacementAcknowledged');
+    expect(source).toContain('!editLocked && replacementAcknowledged');
+    expect(source).toContain('saveInFlightRef.current = true');
+    expect(source).toContain("setSavePhase('saving')");
+    expect(source).toContain("setSavePhase('refreshing')");
+    expect(source).toContain("setSavePhase('idle')");
+    expect(source).toContain('router.refresh()');
+    expect(source).toContain('<fieldset disabled={editLocked}');
+    expect(source).toContain('</fieldset>');
+    expect(source).toContain('data-testid="v25-wb-save-lock-notice"');
+    expect(source).toContain('保存した内容を再読込中です');
+    expect(source).toContain("!replacementSource.unit_price.trim() ? '未入力（未算定）'");
+    expect(source).toContain('v25-wb-replacement-uncertain-reasons');
     expect(source).toContain('data-testid="v25-wb-legacy-replacement-confirm"');
     expect(source).toContain('data-testid="v25-wb-replacement-ack"');
     expect(source).toContain('この1行を置換（未保存）');
@@ -308,7 +321,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
-    expect(source).toContain('payload: buildV25SavePayload(state)');
+    expect(source).toContain('const payload = buildV25SavePayload(state)');
   });
 
   it('商品名右端に商品台帳アイコンを配置し、既存の選び直し画面を使用する', () => {

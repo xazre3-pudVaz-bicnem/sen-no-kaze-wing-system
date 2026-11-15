@@ -250,6 +250,7 @@ export async function loadStandardEstimateWorkspace(
         displayGroup: isLegacyWashbasinOption(option) ? 'washbasin-standard-set' : null,
         manufacturer: option.manufacturer ?? '',
         modelNo: option.model_no ?? '',
+        priceUnit: option.price_unit ?? null,
         imageUrl: option.image_url ?? null,
         usesWindowType: category?.uses_window_type === true,
         windowTypeCode: option.window_type_code ?? null,
@@ -300,6 +301,8 @@ export async function loadStandardEstimateWorkspace(
       singleSelect: false,
       manufacturer: '',
       modelNo: '',
+      // 旧スナップショットには販売単位を保持していないため、推測しない。
+      priceUnit: null,
       section: row.section_code,
       retired: true,
       unavailable: true,

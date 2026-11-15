@@ -1,7 +1,7 @@
 /**
  * 旧明細 1 行 → 商品台帳の商品 1 件の、確認画面専用の置換案。
  * DB・RPC・金額計算は変更しない。確定時にこの plan の state を一度に反映する。
- * 保存済みの置換履歴を新設しないため、事前の実 DB 検証が完了するまでは本番適用しない。
+ * 置換履歴の永続記録は新設しない。既存保存RPCの隔離DB検証は完了しているが、ブラウザ操作と独立レビュー後にマージを判定する。
  */
 import type { V25EditorState, V25LineRow, V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
 import { validateV25EditorState } from '@/lib/domain/standard-estimate-v25-view';

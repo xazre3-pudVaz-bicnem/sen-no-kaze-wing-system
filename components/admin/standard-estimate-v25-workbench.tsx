@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Package } from 'lucide-react';
+import { Package, Trash2 } from 'lucide-react';
 import {
   publishStandardEstimateV25RevisionAction,
   refreshStandardEstimateV25CostsAction,
@@ -77,6 +77,23 @@ type V25MenuPlacement = { left: number; top?: number; bottom?: number; maxHeight
  * スクロール可能な明細内でも操作メニューを切らさないため、viewport基準で表示する。
  * メニューを開いたまま表／画面がスクロールしたら閉じ、誤った行での操作を防ぐ。
  */
+/** 品名を確認してからだけ行を削除する。削除は画面上の下書きstateに限定する。 */
+function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
+  name: string; disabled: boolean; testId: string; onConfirm: () => void;
+}) {
+  return (
+    <ConfirmActionButton destructive data-testid={testId} disabled={disabled}
+      dialogTitle="この明細を削除しますか？"
+      message={`「${name}」を明細から削除します。削除は下書き保存まで確定しません。`}
+      confirmLabel="削除する" onConfirm={onConfirm}
+      aria-label={`「${name}」を削除`}
+      title={disabled ? '位置名を確定または取り消してから削除してください' : `${name}を削除`}
+      className="flex size-5 shrink-0 items-center justify-center rounded text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40">
+      <Trash2 className="size-3.5" aria-hidden="true" />
+    </ConfirmActionButton>
+  );
+}
+
 function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
@@ -132,7 +149,7 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
       onKeyDown={(event) => {
         if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); }
       }}>
-      <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+      <summary className="flex size-5 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
         aria-label={label} title="行の操作"
         onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>⋯</summary>
       {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
@@ -713,8 +730,7 @@ function WorkbenchBody({
     if (next) { event.preventDefault(); next.focus(); next.select(); }
   };
 
-  let rowNumber = 0;
-  const columnCount = showCost ? 11 : 10;
+  const columnCount = showCost ? 9 : 8;
 
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
@@ -789,17 +805,15 @@ function WorkbenchBody({
         <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[68rem] min-w-[68rem]' : 'w-[62rem] min-w-[62rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 top-0 z-40 w-7 border-b border-r border-slate-300 bg-slate-100 px-0.5 py-0.5 text-center font-normal">#</th>
-              <th className="sticky left-7 top-0 z-40 w-[6.25rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">グループ</th>
-              <th className="sticky left-[8rem] top-0 z-40 w-[15rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">品名</th>
+              <th className="sticky left-0 top-0 z-40 w-[6.25rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">グループ</th>
+              <th className="sticky left-[6.25rem] top-0 z-40 w-[21rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">品名</th>
               <th className="sticky top-0 z-30 bg-slate-200 w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
               <th className="sticky top-0 z-30 bg-slate-200 w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
               {showCost && <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
               <th className="sticky top-0 z-30 bg-slate-200 w-28 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
               <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
-              <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
               <th className="sticky top-0 z-30 bg-slate-200 w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
-              <th className="sticky top-0 z-30 bg-slate-200 w-10 border-b border-slate-300 px-0.5 py-0.5 text-center font-medium">操作</th>
+              <th className="sticky top-0 z-30 bg-slate-200 w-[4.5rem] border-b border-slate-300 px-0.5 py-0.5 text-center font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -807,19 +821,16 @@ function WorkbenchBody({
             {!collapsed.has('base') &&
               baseLines.map((line) => {
                 const result = resultByKey.get(`base:${line.id}`);
-                rowNumber += 1;
                 return (
                   <tr key={line.id} className="border-b border-slate-200 text-slate-700">
-                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
-                    <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">{line.section}</td>
-                    <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-1 py-0.5"><span className="block truncate" title={line.name}>{line.name}</span></td>
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-1 py-0 text-muted">{line.section}</td>
+                    <td className="sticky left-[6.25rem] z-10 border-r border-slate-200 bg-white px-1 py-0"><span className="block truncate" title={line.name}>{line.name}</span></td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5">{line.unit ?? ''}</td>
                     {showCost && <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.sale_unit_price)}</td>
                     <td className="border-r border-slate-200 px-1 py-0.5 text-right tabular-nums">{yen(result?.amount)}</td>
-                    <td className="border-r border-slate-200 px-1 py-0.5" />
-                    <td className="px-1 py-0.5 text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
+                    <td className="px-1 py-0 text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
                     <td className="px-1 py-0.5" />
                   </tr>
                 );
@@ -857,12 +868,10 @@ function WorkbenchBody({
                       const isSash = candidate?.categoryCode === 'sash';
                       const mixedUnset = !slotCode && positionMixes.some((mix) =>
                         mix.categoryId === candidate?.categoryId && mix.unsetKeys.includes(slot.key));
-                      rowNumber += 1;
                       return (
                         <Fragment key={slot.key}>
                         <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
-                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
-                          <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-1 py-0.5 text-muted">
+                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-1 py-0 text-muted">
                             <div className="flex min-w-0 items-center gap-1">
                               <span className="min-w-0 flex-1 truncate" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                               {isSash && positionAllowed && !readOnly && (
@@ -873,7 +882,7 @@ function WorkbenchBody({
                               )}
                             </div>
                           </td>
-                          <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0.5">
+                          <td className="sticky left-[6.25rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0">
                             <div className="min-w-0">
                               <div className="flex min-w-0 items-center gap-1">
                                 <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
@@ -924,6 +933,11 @@ function WorkbenchBody({
                                 </button>
                               ))}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
+                              {status && status !== 'current' && (
+                                <div className="mt-0.5" data-testid="v25-wb-slot-cost-alert">
+                                  <Badge tone={COST_TONE[status]} title={V25_COST_STATUS_LABEL[status]}>{COST_COMPACT_LABEL[status]}</Badge>
+                                </div>
+                              )}
                             </div>
                           </td>
 
@@ -962,9 +976,6 @@ function WorkbenchBody({
                             ) : (
                               yen(result?.amount)
                             )}
-                          </td>
-                          <td className="border-r border-slate-200 px-1 py-0.5" data-testid="v25-wb-slot-status">
-                            {status && <Badge tone={COST_TONE[status]} title={V25_COST_STATUS_LABEL[status]}>{COST_COMPACT_LABEL[status]}</Badge>}
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0.5">
                             <div className="flex min-w-0 items-center gap-2">
@@ -1044,17 +1055,16 @@ function WorkbenchBody({
                   {!collapsed.has(code) &&
                     lines.map((line) => {
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
-                      rowNumber += 1;
                       return (
                         <tr key={line.key} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
-                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-1 text-center text-slate-400">{rowNumber}</td>
-                          <td className="sticky left-7 z-10 border-r border-slate-200 bg-white px-0.5 py-0.5">
+                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-0.5 py-0">
                             <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly} aria-label="グループ" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                           </td>
-                          <td className="sticky left-[8rem] z-10 border-r border-slate-200 bg-white px-0.5 py-0.5">
-                            <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-6 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                          <td className="sticky left-[6.25rem] z-10 border-r border-slate-200 bg-white px-0.5 py-0">
+                            <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-5 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { name: event.target.value })} />
+                            {line.review_required && <div className="px-1" data-testid="v25-wb-line-review-alert"><Badge tone="warn">要見直し</Badge></div>}
                           </td>
 
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
@@ -1083,9 +1093,6 @@ function WorkbenchBody({
                             ) : (
                               yen(result?.amount)
                             )}
-                          </td>
-                          <td className="border-r border-slate-200 px-1 py-0.5" data-testid="v25-wb-line-status">
-                            {line.review_required && <Badge tone="warn">要見直し</Badge>}
                           </td>
                           <td className="border-r border-slate-200 px-0.5 py-0.5">
                             <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 w-full rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
@@ -1122,7 +1129,7 @@ function WorkbenchBody({
           </tbody>
           <tfoot className="bg-slate-50 text-xs">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={columnCount - 4} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
               <td className="px-1 py-0.5.5 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
@@ -1131,21 +1138,21 @@ function WorkbenchBody({
               <td />
             </tr>
             <tr>
-              <td colSpan={columnCount - 4} className="px-1 py-0.5 text-right text-muted">調整額</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">調整額</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
               <td />
               <td />
               <td />
             </tr>
             <tr>
-              <td colSpan={columnCount - 4} className="px-1 py-0.5 text-right text-muted">消費税</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">消費税</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
               <td />
               <td />
               <td />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={columnCount - 4} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="px-1 py-0.5.5 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>

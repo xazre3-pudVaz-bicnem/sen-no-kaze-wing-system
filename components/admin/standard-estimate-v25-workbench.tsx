@@ -338,7 +338,7 @@ function WorkbenchBody({
   const replacementSource = replacementDraft
     ? state.slots.find((slot) => slot.key === replacementDraft.slotKey) : null;
   const replacementChoices = replacementDraft && replacementSource
-    ? replacementSource.selectable_option_ids.map((id) => candidateById.get(id))
+    ? [replacementSource.option_id, ...replacementSource.selectable_option_ids].map((id) => candidateById.get(id))
       .filter((candidate): candidate is V25WorkbenchCandidate => Boolean(candidate &&
         candidate.id !== replacementDraft.candidate.id && !candidate.retired && !candidate.unavailable &&
         candidate.categoryId === replacementDraft.candidate.categoryId))

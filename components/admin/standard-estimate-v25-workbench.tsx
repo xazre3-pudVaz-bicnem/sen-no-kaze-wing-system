@@ -54,6 +54,15 @@ import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
 import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
+import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
+import {
+  V25ColumnDisplayMenu,
+  V25WidthHandle,
+  V25_GRID_COLUMNS,
+  v25GridWidth,
+  useV25GridPreferences,
+  type V25GridColumnId,
+} from '@/components/admin/v25-grid-preferences';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -200,7 +209,7 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
  * 幅は元表の各 th から測定し、横スクロールは同じ scrollLeft を使う。
  * 複製は aria-hidden / pointer-events-none とし、編集や保存には一切関与しない。
  */
-function useV25PageFloatingHeader(showCost: boolean) {
+function useV25PageFloatingHeader(headerLayoutKey: string) {
   const gridRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const saveAreaRef = useRef<HTMLDivElement>(null);
@@ -269,7 +278,7 @@ function useV25PageFloatingHeader(showCost: boolean) {
       resizeObserver?.disconnect();
       overlay.remove();
     };
-  }, [showCost]);
+  }, [headerLayoutKey]);
 
   return { gridRef, tableRef, saveAreaRef };
 }
@@ -375,8 +384,14 @@ function WorkbenchBody({
     expense_rate: rateToPercent(initial.expense_rate),
     markup_rate: rateToPercent(initial.markup_rate),
   }));
-  const [showCost, setShowCost] = useState(true);
-  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(showCost);
+  const columnPrefs = useV25GridPreferences();
+  const visible = columnPrefs.prefs.visible;
+  const displayedColumns = V25_GRID_COLUMNS.filter((col) => visible[col.id]);
+  const columnCount = displayedColumns.length;
+  const beforeSaleAmount = 3 + Number(visible.cost_unit) + Number(visible.cost_amount) + Number(visible.sale_unit);
+  const afterSaleAmount = Number(visible.gross) + Number(visible.note) + 1;
+  const headerLayoutKey = displayedColumns.map((col) => `${col.id}:${columnPrefs.prefs.widths[col.id]}`).join('|');
+  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(headerLayoutKey);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
@@ -477,6 +492,29 @@ function WorkbenchBody({
   const setRate = (key: keyof typeof RATE_LABEL, value: string) => {
     setPercents((current) => ({ ...current, [key]: value }));
     setState((current) => ({ ...current, [key]: percentToRate(value) }));
+  };
+  const stepRate = (key: keyof typeof RATE_LABEL, direction: -1 | 1) => {
+    const next = v25StepPercent(percents[key], direction);
+    if (next !== percents[key]) setRate(key, next);
+  };
+  const autoWidth = (id: V25GridColumnId) => {
+    const table = tableRef.current;
+    const header = Array.from(table?.tHead?.rows[0]?.cells ?? []);
+    const index = header.findIndex((cell) => cell.getAttribute('data-v25-column') === id);
+    if (!table || index < 0) return;
+    let desired = header[index].scrollWidth + 10;
+    for (const tbody of Array.from(table.tBodies)) {
+      for (const row of Array.from(tbody.rows)) {
+        if (row.cells.length !== header.length) continue;
+        const cell = row.cells[index];
+        if (!cell || cell.colSpan !== 1) continue;
+        desired = Math.max(desired, cell.scrollWidth + 10);
+        for (const child of Array.from(cell.querySelectorAll<HTMLElement>('[title], input, button'))) {
+          desired = Math.max(desired, child.scrollWidth + 14);
+        }
+      }
+    }
+    columnPrefs.setWidth(id, desired);
   };
 
   const choose = (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => {
@@ -781,8 +819,6 @@ function WorkbenchBody({
     if (next) { event.preventDefault(); next.focus(); next.select(); }
   };
 
-  const columnCount = showCost ? 10 : 7;
-
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
     return (
@@ -810,14 +846,14 @@ function WorkbenchBody({
     const result = sectionResult(code);
     return (
       <tr className="border-y-2 border-emerald-800 bg-emerald-50 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
-        <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">
+        <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right font-semibold">
           {label} 小計（税別）
           {result?.has_por && <span className="ml-2 text-amber-800">別途見積を含む</span>}
         </td>
         <td className="border-l border-emerald-200 px-2 py-1 text-right font-semibold tabular-nums" data-testid={`v25-section-subtotal-value-${code}`}>
           {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
         </td>
-        <td colSpan={showCost ? 3 : 2} />
+        <td colSpan={afterSaleAmount} />
       </tr>
     );
   };
@@ -1217,28 +1253,28 @@ function WorkbenchBody({
           </tbody>
           <tfoot className="bg-slate-100 text-[11px]">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">調整額</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">調整額</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">消費税</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">消費税</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
-              <td colSpan={showCost ? 3 : 2} className="px-2 py-1 text-right text-[0.68rem] text-slate-500">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
+              <td colSpan={afterSaleAmount} className="px-2 py-1 text-right text-[0.68rem] text-slate-500">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
             </tr>
           </tfoot>
         </table>

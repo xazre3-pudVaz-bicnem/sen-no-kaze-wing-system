@@ -877,33 +877,51 @@ function WorkbenchBody({
         </div>
       )}
 
-      <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-t-md border border-slate-300 bg-white px-2 py-1.5 text-[11px]" data-testid="v25-wb-compact-settings">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
-          <label key={key} className="space-y-1">
-            <span className="text-muted">{RATE_LABEL[key]}（%）</span>
-            <Input value={percents[key]} disabled={readOnly} inputMode="decimal" className="h-8 text-right" data-testid={`v25-wb-${key}`}
-              onChange={(event) => setRate(key, event.target.value)} />
-          </label>
+          <div key={key} className="flex items-center gap-1.5">
+            <label htmlFor={`v25-wb-rate-${key}`} className="whitespace-nowrap text-slate-600">{RATE_LABEL[key]}（%）</label>
+            <div className="relative">
+              <Input id={`v25-wb-rate-${key}`} value={percents[key]} disabled={readOnly} inputMode="decimal"
+                className="h-7 min-h-7! w-[5rem] rounded-sm pr-5 text-right text-[11px]" data-testid={`v25-wb-${key}`}
+                onChange={(event) => setRate(key, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    stepRate(key, event.key === 'ArrowUp' ? 1 : -1);
+                  }
+                }} />
+              <span className="absolute inset-y-0 right-0 flex w-[18px] flex-col border-l border-slate-300" aria-label={`${RATE_LABEL[key]}の増減`}>
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%増やす`} title="1%増やす" disabled={readOnly}
+                  className="flex h-1/2 items-center justify-center rounded-tr-sm text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => stepRate(key, 1)}>▲</button>
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%減らす`} title="1%減らす" disabled={readOnly}
+                  className="flex h-1/2 items-center justify-center rounded-br-sm border-t border-slate-200 text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => stepRate(key, -1)}>▼</button>
+              </span>
+            </div>
+          </div>
         ))}
-        <label className="space-y-1">
-          <span className="text-muted">調整額（税別・円）</span>
-          <Input value={state.adjustment} disabled={readOnly} inputMode="numeric" className="h-8 text-right" data-testid="v25-wb-adjustment"
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="v25-wb-adjustment" className="whitespace-nowrap text-slate-600">調整額（税別・円）</label>
+          <Input id="v25-wb-adjustment" value={state.adjustment} disabled={readOnly} inputMode="numeric"
+            className="h-7 min-h-7! w-[7rem] rounded-sm text-right text-[11px]" data-testid="v25-wb-adjustment"
             onChange={(event) => setState((current) => ({ ...current, adjustment: event.target.value }))} />
-        </label>
-        <label className="space-y-1">
-          <span className="text-muted">調整額の理由</span>
-          <Input value={state.adjustment_reason} disabled={readOnly} className="h-8"
+        </div>
+        <div className="flex min-w-[11rem] flex-1 items-center gap-1.5">
+          <label htmlFor="v25-wb-adjustment-reason" className="shrink-0 whitespace-nowrap text-slate-600">調整理由</label>
+          <Input id="v25-wb-adjustment-reason" value={state.adjustment_reason} disabled={readOnly}
+            className="h-7 min-h-7! min-w-0 flex-1 rounded-sm text-[11px]"
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
-        </label>
-        <label className="flex items-center gap-2 pb-1.5 text-ink-soft">
-          <input type="checkbox" checked={showCost} onChange={(event) => setShowCost(event.target.checked)} data-testid="v25-wb-show-cost" />
-          原価を表示
-        </label>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-x border-slate-300 bg-slate-100 px-2 py-1 text-[10px] text-slate-600" data-testid="v25-excel-toolbar">
         <strong>標準見積明細（Excel風）</strong>
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
+        <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
+          setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
       </div>
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
         <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>

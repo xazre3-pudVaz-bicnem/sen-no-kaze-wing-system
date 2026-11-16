@@ -144,6 +144,7 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
 function useV25PageFloatingHeader(showCost: boolean) {
   const gridRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const saveAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const grid = gridRef.current;
@@ -176,7 +177,10 @@ function useV25PageFloatingHeader(showCost: boolean) {
       const headerHeight = sourceHead.getBoundingClientRect().height;
       // 明細に入ったときだけ表示し、明細の末尾で必ず解除して保存欄を隠さない。
       const nativeHeaderPassed = sourceHead.getBoundingClientRect().bottom <= 0;
-      const visible = nativeHeaderPassed && gridRect.bottom > headerHeight;
+      // 保存操作が見え始めたら固定見出しを解除し、画面末尾でも残さない。
+      const saveAreaReached = saveAreaRef.current !== null &&
+        saveAreaRef.current.getBoundingClientRect().top < window.innerHeight;
+      const visible = nativeHeaderPassed && gridRect.bottom > headerHeight && !saveAreaReached;
       overlay.style.display = visible ? 'block' : 'none';
       if (!visible) return;
 
@@ -208,7 +212,7 @@ function useV25PageFloatingHeader(showCost: boolean) {
     };
   }, [showCost]);
 
-  return { gridRef, tableRef };
+  return { gridRef, tableRef, saveAreaRef };
 }
 
 /** 表示用要約のみ。variant choice ID と保存 payload は変更しない。 */
@@ -271,7 +275,7 @@ function WorkbenchBody({
     markup_rate: rateToPercent(initial.markup_rate),
   }));
   const [showCost, setShowCost] = useState(false);
-  const { gridRef, tableRef } = useV25PageFloatingHeader(showCost);
+  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(showCost);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
@@ -1047,7 +1051,7 @@ function WorkbenchBody({
       </p>
 
       {!readOnly && (
-        <div className="space-y-3 rounded-lg border border-slate-300 bg-white p-3">
+        <div ref={saveAreaRef} className="space-y-3 rounded-lg border border-slate-300 bg-white p-3">
           {blockers.length > 0 && (
             <Alert tone="warn">
               <p className="font-semibold">公開できない理由</p>

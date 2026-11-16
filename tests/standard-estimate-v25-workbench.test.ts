@@ -328,8 +328,8 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('data-testid="v25-wb-variant-choice"');
     expect(html).not.toContain('data-testid="v25-wb-variant-editor"');
     expect(html).toContain('リビング');
-    expect(html).toContain('2件');
-    expect(html).toContain('data-testid="v25-wb-slot-position-toggle"');
+    expect(html).toContain('変更候補1件');
+    expect(html).toContain('data-testid="v25-wb-slot-position"');
     expect(html).not.toContain('data-testid="v25-wb-slot-position-editor"');
   });
 

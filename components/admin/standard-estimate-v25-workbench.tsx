@@ -43,6 +43,8 @@ import {
 import {
   addV25PositionRow,
   clearV25Position,
+  renameV25Position,
+  v25PositionNameKeyAction,
   replaceV25PositionStandard,
   updateV25Position,
   v25PositionMixes,
@@ -215,6 +217,46 @@ function useV25PageFloatingHeader(showCost: boolean) {
   return { gridRef, tableRef, saveAreaRef };
 }
 
+/** 位置名のEnter確定は日本語変換中／変換終了直後には実行しない。 */
+function V25PositionNameInput({
+  value, onChange, onConfirm, onCancel, testId, placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  testId: string;
+  placeholder: string;
+}) {
+  const composing = useRef(false);
+  const justComposed = useRef(false);
+  return (
+    <Input autoFocus value={value} maxLength={40} data-testid={testId}
+      aria-label="位置名" placeholder={placeholder}
+      className="h-7 w-full rounded-sm border border-amber-400 bg-white px-1 text-[11px]"
+      onChange={(event) => onChange(event.target.value)}
+      onCompositionStart={() => { composing.current = true; justComposed.current = false; }}
+      onCompositionEnd={() => { composing.current = false; justComposed.current = true; }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== 'Escape') return;
+        // 明細の Enter＝下の行、グローバル Esc＝ダイアログ終了へ伝播させない。
+        event.stopPropagation();
+        const action = v25PositionNameKeyAction(
+          event.key, composing.current || event.nativeEvent.isComposing,
+          justComposed.current, event.nativeEvent.keyCode
+        );
+        if (!action) return; // 日本語IMEの候補確定は標準操作に委ねる。
+        event.preventDefault();
+        if (action === 'commit') onConfirm();
+        else onCancel();
+      }}
+      onKeyUp={(event) => {
+        if (event.key === 'Enter' && !composing.current) justComposed.current = false;
+      }}
+    />
+  );
+}
+
 /** 表示用要約のみ。variant choice ID と保存 payload は変更しない。 */
 export function v25VariantSummary(candidate: Pick<V25WorkbenchCandidate, 'variantGroups'> | undefined, choices: V25SlotRow['variant_choices']): string {
   if (!candidate) return '商品を確認';
@@ -282,11 +324,9 @@ function WorkbenchBody({
   const [variantEditor, setVariantEditor] = useState<{ slotKey: string; choices: V25SlotRow['variant_choices'] } | null>(null);
   const [positionFor, setPositionFor] = useState<string | null>(null);
   const [positionDraft, setPositionDraft] = useState<Pick<V25SlotRow, 'slot_code' | 'slot_label' | 'selectable_option_ids'> | null>(null);
-  const [addPositionOnConfirm, setAddPositionOnConfirm] = useState(false);
   const [removePositionOnConfirm, setRemovePositionOnConfirm] = useState(false);
-  const [addedPositionLabel, setAddedPositionLabel] = useState('');
-  const [inheritCandidates, setInheritCandidates] = useState(false);
-  const [inheritedCandidateIds, setInheritedCandidateIds] = useState<string[]>([]);
+  const [positionLabelEditor, setPositionLabelEditor] = useState<{ slotKey: string; label: string; error: string | null } | null>(null);
+  const [duplicateFor, setDuplicateFor] = useState<{ slotKey: string; label: string; error: string | null } | null>(null);
   const [positionError, setPositionError] = useState<string | null>(null);
   const [replacementDraft, setReplacementDraft] = useState<{
     slotKey: string; candidate: V25WorkbenchCandidate; choices: Record<string, string>; selectableIds: string[];
@@ -341,22 +381,23 @@ function WorkbenchBody({
   ];
 
   useEffect(() => {
-    if (!picker && !selectableFor && !variantEditor && !positionFor && !replacementDraft) return;
+    if (!picker && !selectableFor && !variantEditor && !positionFor && !replacementDraft && !duplicateFor) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (selectableFor) setSelectableFor(null);
+      else if (duplicateFor) setDuplicateFor(null);
       else if (replacementDraft) setReplacementDraft(null);
       else if (positionFor) {
         setPositionFor(null);
         setPositionDraft(null);
-        setAddPositionOnConfirm(false);
+        setRemovePositionOnConfirm(false);
         setPositionError(null);
       } else if (variantEditor) setVariantEditor(null);
       else setPicker(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [picker, selectableFor, variantEditor, positionFor, replacementDraft]);
+  }, [picker, selectableFor, variantEditor, positionFor, replacementDraft, duplicateFor]);
 
   // 案内から未設定行へ移動。折り畳まれていた場合は行を開いてから移動する。
   useEffect(() => {
@@ -454,22 +495,14 @@ function WorkbenchBody({
   const openPosition = (slot: V25SlotRow) => {
     setPositionFor(slot.key);
     setPositionDraft({ slot_code: slot.slot_code, slot_label: slot.slot_label, selectable_option_ids: [...slot.selectable_option_ids] });
-    setAddPositionOnConfirm(false);
     setRemovePositionOnConfirm(false);
-    setAddedPositionLabel('');
-    setInheritCandidates(false);
-    setInheritedCandidateIds([]);
     setPositionError(null);
   };
   const closePosition = () => {
     setSelectableFor(null);
     setPositionFor(null);
     setPositionDraft(null);
-    setAddPositionOnConfirm(false);
     setRemovePositionOnConfirm(false);
-    setAddedPositionLabel('');
-    setInheritCandidates(false);
-    setInheritedCandidateIds([]);
     setPositionError(null);
   };
   const updatePosition = (patch: Partial<Pick<V25SlotRow, 'slot_code' | 'slot_label' | 'selectable_option_ids'>>) => {
@@ -492,17 +525,39 @@ function WorkbenchBody({
   const confirmPosition = () => {
     if (readOnly || !positionFor || !positionDraft) return;
     const candidateOf = (id: string) => candidateById.get(id);
-    const result = addPositionOnConfirm
-      ? addV25PositionRow(state, positionFor, newKey('slot'), addedPositionLabel,
-        inheritCandidates ? inheritedCandidateIds : [], candidateOf)
-      : removePositionOnConfirm
-        ? clearV25Position(state, positionFor)
-        : updateV25Position(state, positionFor, positionDraft.slot_label,
-          positionDraft.selectable_option_ids, candidateOf);
+    const result = removePositionOnConfirm
+      ? clearV25Position(state, positionFor)
+      : updateV25Position(state, positionFor, positionDraft.slot_label,
+        positionDraft.selectable_option_ids, candidateOf);
     if (result.error) { setPositionError(result.error); return; }
     setState(result.state);
     closePosition();
   };
+  // 明細上の位置名変更は位置ラベル以外の情報を変更しない。
+  const commitInlinePositionLabel = () => {
+    if (!positionLabelEditor || readOnly) return;
+    const result = renameV25Position(state, positionLabelEditor.slotKey, positionLabelEditor.label,
+      (id) => candidateById.get(id));
+    if (result.error) {
+      setPositionLabelEditor((current) => current ? { ...current, error: result.error } : null);
+      return;
+    }
+    setState(result.state);
+    setPositionLabelEditor(null);
+  };
+  const confirmDuplicatePosition = () => {
+    if (!duplicateFor || readOnly) return;
+    const result = addV25PositionRow(state, duplicateFor.slotKey, newKey('slot'), duplicateFor.label, [],
+      (id) => candidateById.get(id));
+    if (result.error) {
+      setDuplicateFor((current) => current ? { ...current, error: result.error } : null);
+      return;
+    }
+    setState(result.state);
+    setDuplicateFor(null);
+  };
+  const duplicateSource = duplicateFor ? state.slots.find((slot) => slot.key === duplicateFor.slotKey) : null;
+
   const replacementSource = replacementDraft
     ? state.slots.find((slot) => slot.key === replacementDraft.slotKey) : null;
   const replacementChoices = replacementDraft && replacementSource

@@ -425,6 +425,42 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).not.toContain("updatePosition({ slot_code: '', slot_label: '', selectable_option_ids: [] })");
   });
 
+  it('位置名直接編集・別位置複製は設定済みの編集行だけにあり、公開版は閲覧のみ', () => {
+    const positioned = render(false, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビングの窓', selectable_option_ids: ['p2'] }
+          : slot),
+      },
+    });
+    expect(positioned).toContain('data-testid="v25-wb-duplicate-position"');
+    expect(positioned).toContain('別の位置に複製');
+    expect(positioned).toContain('位置名を直接編集');
+    expect(positioned).toContain('位置別設定');
+    expect(positioned).toContain('この商品を台帳で編集');
+    expect(positioned).not.toContain('v25-wb-duplicate-position-dialog');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain('event.nativeEvent.isComposing');
+    expect(source).toContain('event.nativeEvent.keyCode');
+    expect(source).toContain('onCompositionStart=');
+    expect(source).toContain('onCompositionEnd=');
+    expect(source).toContain('v25PositionNameKeyAction(');
+    expect(source).toContain('renameV25Position(state, positionLabelEditor.slotKey');
+    expect(source).not.toContain('data-v25-excel-col="position"');
+    const published = render(true, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビングの窓' } : slot),
+      },
+    });
+    expect(published).not.toContain('v25-wb-duplicate-position');
+    expect(published).not.toContain('位置名を直接編集');
+    expect(published).toContain('リビングの窓');
+  });
+
   it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {
     const html = render(true, {
       initial: {

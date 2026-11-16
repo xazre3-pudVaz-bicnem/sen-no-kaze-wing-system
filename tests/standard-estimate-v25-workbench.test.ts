@@ -357,10 +357,10 @@ describe('Excel 風の画面（描画）', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const globals = read('app/globals.css');
     const grid = source.slice(source.indexOf('<tbody>'), source.indexOf('</tbody>'));
-    const excelInputs = Array.from(grid.matchAll(/<Input data-v25-excel-col="[^"]+"[\\s\\S]*?className="([^"]+)"/g));
+    const excelInputs = Array.from(grid.matchAll(/<Input data-v25-excel-col="[^"]+"[\s\S]*?className="([^"]+)"/g));
     expect(excelInputs).toHaveLength(8);
     for (const match of excelInputs) {
-      const classes = match[1].split(/\\s+/);
+      const classes = match[1].split(/\s+/);
       expect(classes).toContain('h-5');
       expect(classes).toContain('min-h-5!'); // Tailwind v4 important で .input の min-h-12 を上書き
       expect(classes).toContain('text-[11px]'); // 文字サイズは変更しない
@@ -374,7 +374,7 @@ describe('Excel 風の画面（描画）', () => {
     const beforeGrid = source.slice(0, source.indexOf('<tbody>'));
     expect(beforeGrid).not.toContain('className="h-5 min-h-5!');
     const html = render(false);
-    const renderedInputs = Array.from(html.matchAll(/<input\\b[^>]*data-v25-excel-col="[^"]+"[^>]*>/g));
+    const renderedInputs = Array.from(html.matchAll(/<input\b[^>]*data-v25-excel-col="[^"]+"[^>]*>/g));
     expect(renderedInputs).toHaveLength(8);
     for (const input of renderedInputs) {
       expect(input[0]).toContain('min-h-5!');

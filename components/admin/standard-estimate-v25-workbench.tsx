@@ -924,6 +924,7 @@ function WorkbenchBody({
                     slots.map((slot) => {
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
+                      const display = v25DisplayedCostAndGross(result, slot.quantity);
                       const missing = incompleteKeys.get(slot.key);
                       const pinnedPreview = previewByIdentity.get(slot);
                       const status: V25CostStatus | null = slot.price_mode !== 'auto' ? null : missing ? 'missing' : pinnedPreview ? slotCostStatus(pinnedPreview) : null;
@@ -935,22 +936,18 @@ function WorkbenchBody({
                       return (
                         <Fragment key={slot.key}>
                         <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
-                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-1 py-0 text-muted">
-                            <div className="flex min-w-0 items-center gap-1">
-                              <span className="min-w-0 flex-1 truncate" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
-                              {isSash && positionAllowed && !readOnly && (
-                                <button type="button" className="shrink-0 text-[10px] text-navy underline disabled:opacity-50" data-testid="v25-wb-slot-position-toggle"
-                                  disabled={positionActionsLocked}
-                                  title={positionActionsLocked ? '位置名をEnterで確定するかEscで取り消してください' : undefined}
-                                  aria-label="位置・選べる商品を設定" onClick={(event) => { rememberDialogOpener(event.currentTarget); openPosition(slot); }}>位置別設定</button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="sticky left-[6.25rem] z-10 border-r border-slate-200 bg-amber-50 px-1 py-0">
+                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                             <div className="min-w-0">
                               <div className="flex min-w-0 items-center gap-1">
+                                <span className="max-w-[5.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                                 <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
                                 {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
+                                {isSash && positionAllowed && !readOnly && (
+                                  <button type="button" className="shrink-0 text-[10px] text-navy underline disabled:opacity-50" data-testid="v25-wb-slot-position-toggle"
+                                    disabled={positionActionsLocked}
+                                    title={positionActionsLocked ? '位置名をEnterで確定するかEscで取り消してください' : undefined}
+                                    aria-label="位置・選べる商品を設定" onClick={(event) => { rememberDialogOpener(event.currentTarget); openPosition(slot); }}>位置別設定</button>
+                                )}
                                 {!readOnly && (
                                   <button type="button"
                                     className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700"

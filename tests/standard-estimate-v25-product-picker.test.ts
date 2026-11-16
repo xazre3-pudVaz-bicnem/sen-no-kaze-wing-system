@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { StandardEstimateV25ProductPicker, v25PickerChoicesValid, v25PickerEligibleCandidates, v25PickerStandardCostLabel } from '@/components/admin/standard-estimate-v25-product-picker';
+import { StandardEstimateV25ProductPicker, v25PickerChoicesValid, v25PickerEligibleCandidates, v25PickerReplacementCandidates, v25PickerStandardCostLabel } from '@/components/admin/standard-estimate-v25-product-picker';
 import { readFileSync } from 'node:fs';
 import type { V25WorkbenchCandidate } from '@/lib/domain/standard-estimate-v25-workbench';
 
@@ -145,5 +145,75 @@ describe('v2.5商品選択のカテゴリーと区分の保護', () => {
     expect(workbench).toContain('original.categoryId !== candidate.categoryId');
     expect(workbench).toContain('originalProduct={picker.targetKey');
     expect(workbench).toContain('onChoose={choose}');
+  });
+});
+
+describe('v2.5現在商品の固定表示と仕様変更', () => {
+  const current = { ...sample, id: 'current-door', name: '現在の勝手口ドア' };
+  const alternative = { ...sample, id: 'new-door', name: '変更候補ドア' };
+  const slot = { option_id: current.id, variant_choices: { color: 'black' } };
+  const pickerProps = {
+    sectionLabel: 'オプション', section: 'option' as const,
+    candidates: [current, alternative],
+    productCosts: { 'current-door': 102000, 'new-door': 94000 },
+    currentSlot: slot, originalProduct: current,
+    onChoose: () => {}, onClose: () => {},
+  };
+
+  it('現在商品は一覧より上に固定され、候補リストに重複表示しない', () => {
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, pickerProps));
+    expect(html).toContain('data-testid="v25-wb-current-product"');
+    expect(html).toContain('data-testid="v25-wb-current-variant"');
+    expect(html).toContain('現在の勝手口ドア');
+    expect(html).toContain('変更候補ドア');
+    expect(html).toContain('¥102,000');
+    expect(html).toContain('¥94,000');
+    expect(html).toContain('仕様を変更');
+    expect(html.indexOf('data-testid="v25-wb-current-product"'))
+      .toBeLessThan(html.indexOf('data-testid="v25-wb-picker"'));
+    expect(v25PickerReplacementCandidates([current, alternative], slot).map((product) => product.id))
+      .toEqual(['new-door']);
+    expect(html).not.toContain('aria-label="カテゴリー"');
+  });
+
+  it('固定欄の仕様変更は元の仕様を引き継ぎ、選択中の間は見積を書き換えない', () => {
+    const source = readFileSync('components/admin/standard-estimate-v25-product-picker.tsx', 'utf8');
+    expect(source).toContain('onClick={() => { if (currentSelectable) inspect(currentSelectable); }}');
+    expect(source).toContain('candidate.id === currentSlot?.option_id ? currentSlot.variant_choices : candidate.defaultChoices');
+    expect(source).toContain('selected.id === currentSlot?.option_id');
+    expect(source).toContain('const selected = eligibleCandidates.find((candidate) => candidate.id === selectedId) ?? null;');
+    expect(source).toContain('onChoose(selected, { ...choices })');
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, pickerProps));
+    expect(html).toContain('disabled=""'); // 確定は商品未選択の初期状態では不可
+  });
+
+  it('廃番・取扱終了の商品は固定表示するが仕様変更できず、代替品は表示', () => {
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
+      ...pickerProps, candidates: [alternative], originalProduct: { ...current, retired: true },
+    }));
+    expect(html).toContain('現在の勝手口ドア');
+    expect(html).toContain('現在の商品は廃番・取扱終了');
+    expect(html).toContain('変更候補ドア');
+    expect(html).toMatch(/data-testid="v25-wb-current-variant"[^>]*disabled=""/);
+  });
+
+  it('カテゴリー不明なら固定欄も操作不可として候補を遮断', () => {
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
+      ...pickerProps, candidates: [alternative], originalProduct: { ...current, categoryId: '', unavailable: true },
+    }));
+    expect(html).toContain('現在の勝手口ドア');
+    expect(html).toContain('現在の商品のカテゴリーを確認できないため変更できません');
+    expect(html).not.toContain('data-testid="v25-wb-picker-candidate"');
+    expect(html).toMatch(/data-testid="v25-wb-current-variant"[^>]*disabled=""/);
+  });
+
+  it('新規商品追加時は固定欄なしで従来のカテゴリー検索を維持', () => {
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
+      ...pickerProps, currentSlot: null, originalProduct: null,
+    }));
+    expect(html).not.toContain('data-testid="v25-wb-current-product"');
+    expect(html).toContain('aria-label="カテゴリー"');
+    expect(v25PickerReplacementCandidates([current, alternative], null).map((product) => product.id))
+      .toEqual(['current-door', 'new-door']);
   });
 });

@@ -23,7 +23,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked, deleteV25WorkbenchRow } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -227,20 +227,26 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('max-h-[70vh]');
     expect(html).not.toContain('overscroll-contain');
     expect(html).toContain('sticky left-0 top-0 z-40');
-    expect(html).toContain('sticky left-7 top-0 z-40');
-    expect(html).toContain('sticky left-[8rem] top-0 z-40');
+    expect(html).toContain('sticky left-[6.25rem] top-0 z-40');
+    expect(html).not.toContain('sticky left-7 top-0 z-40');
+    expect(html).not.toContain('sticky left-[8rem] top-0 z-40');
     expect(html).toContain('sticky top-0 z-30 bg-slate-200');
     expect(html).toContain('data-testid="v25-wb-menu-panel"');
     expect(html).toContain('fixed z-[60]');
-    expect(html).toContain('sticky left-[8rem]');
+    expect(html).toContain('sticky left-[6.25rem]');
     expect(html).toContain('bg-emerald-900');
     expect(html).toContain('data-v25-excel-col="group"');
     expect(html).toContain('data-v25-excel-col="name"');
     expect(html).toContain('data-v25-excel-col="qty"');
     expect(html).toContain('data-v25-excel-col="note"');
-    expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>状態</th>'));
+    expect(html).not.toContain('>状態</th>');
+    expect(html).not.toContain('>#</th>');
+    expect(html).toContain('>品名</th>');
+    expect(html).toContain('>数量</th>');
+    expect(html).toContain('>単位</th>');
+    expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>金額（税別）</th>'));
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[62rem] min-w-[62rem]'");
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 4}');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 3}');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
     expect(html).toContain('data-testid="v25-wb-publish"');
@@ -294,18 +300,24 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('data-testid="v25-wb-line-price-mode"');
     expect(html).toContain('data-testid="v25-wb-slot-menu"');
     expect(html).toContain('data-testid="v25-wb-line-menu"');
-    expect(html).toContain('data-testid="v25-wb-slot-status"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-status"');
+    expect(html).not.toContain('data-testid="v25-wb-line-status"');
+    expect(html).toContain('data-testid="v25-wb-slot-cost-alert"');
+    expect(html).toContain('data-testid="v25-wb-line-review-alert"');
     expect(html).toContain('原価未設定');
     expect(html).toContain('原価更新あり');
+    expect(html).not.toContain('原価最新');
+    expect(html).toContain('要見直し');
+    expect(source).toContain("status && status !== 'current'");
     expect(source).toContain('title={V25_COST_STATUS_LABEL[status]}');
-    expect(html).toContain('data-testid="v25-wb-line-status"');
     expect(html).toContain('商品台帳から選択');
     expect(html).toContain('金額を入力する');
     expect(html).toContain('別途見積にする');
     expect(html).toContain('自動計算に戻す');
     expect(html).toContain('見直し済みにする');
-    expect(html).toContain('行を削除');
-    expect(source).toContain('const columnCount = showCost ? 11 : 10;');
+    expect(html).toContain('data-testid="v25-wb-slot-delete"');
+    expect(html).toContain('data-testid="v25-wb-line-delete"');
+    expect(source).toContain('const columnCount = showCost ? 9 : 8;');
     expect(source).toContain("code !== 'sitework' && slot.price_mode !== 'auto'");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'auto' })");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'manual' })");
@@ -313,6 +325,65 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
     expect(source).toContain('payload: buildV25SavePayload(state)');
+  });
+
+  it('列を8列（原価を表示する場合9列）に整理し、入力サイズを詰めても状態表示を失わない', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
+    expect((header.match(/<th /g) ?? []).length).toBe(8);
+    expect(source).toContain('const columnCount = showCost ? 9 : 8;');
+    expect(source).toContain('w-[21rem]');
+    expect(source).toContain('w-[4.5rem]');
+    expect(source).toContain('className="h-5');
+    expect(source).toContain('data-v25-excel-col="qty"');
+    expect(source).toContain('data-v25-excel-col="unit"');
+    expect(source).toContain('data-v25-excel-col="sale"');
+    expect(source).toContain('data-v25-excel-col="name"');
+    expect(source).toContain('data-v25-excel-col="note"');
+    expect(source).toContain('if (event.key === \'Enter\' && index >= 0)');
+    expect(source).toContain("} else if (event.key === 'Tab') {");
+    expect(source).toContain("overlay.scrollLeft = grid.scrollLeft");
+    expect(source).toContain('columns[index].style.width =');
+    expect(source).toContain('}, [showCost]);');
+    // 原価の警告は原価列の表示フラグに依存しない位置にある。
+    const warningSource = source.slice(source.indexOf('data-testid="v25-wb-slot-cost-alert"') - 130, source.indexOf('data-testid="v25-wb-slot-cost-alert"') + 180);
+    expect(warningSource).not.toContain('showCost &&');
+    expect(html).toContain('原価未設定');
+    expect(html).toContain('原価更新あり');
+  });
+
+  it('確認なしの即削除を撤去し、品名を示す確認ダイアログの確定時だけ対象行を削除する', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const confirmSource = read('components/admin/confirm-action-button.tsx');
+    expect((html.match(/data-testid="v25-wb-slot-delete"/g) ?? []).length).toBe(initial.slots.length);
+    expect((html.match(/data-testid="v25-wb-line-delete"/g) ?? []).length).toBe(initial.lines.length);
+    expect(html).toContain('aria-label="「検査商品1」を削除"');
+    expect(html).toContain('aria-label="「外構工事」を削除"');
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).toContain('data-testid="v25-wb-line-menu"');
+    expect(source).toContain('dialogTitle="この明細を削除しますか？"');
+    expect(source).toContain('message={`「${name}」を明細から削除します。削除は下書き保存まで確定しません。`}');
+    expect(source).toContain('confirmLabel="削除する"');
+    expect(source).toContain('onConfirm={onConfirm}');
+    expect(source).toContain('if (positionActionsLocked) return;');
+    expect(confirmSource).toContain('onClick={closeDialog}');
+    expect(confirmSource).toContain('void onConfirm()');
+    // 取消時は操作関数が呼ばれない。確認時だけ対象の種類・キーを限定して更新する。
+    const before = initial;
+    const removedSlot = deleteV25WorkbenchRow(before, 'slot', 'slot-b1');
+    expect(removedSlot.slots).toHaveLength(before.slots.length - 1);
+    expect(removedSlot.slots.find((row) => row.key === 'slot-b1')).toBeUndefined();
+    expect(removedSlot.lines).toEqual(before.lines);
+    const removedLine = deleteV25WorkbenchRow(before, 'line', 'line-k1');
+    expect(removedLine.lines).toHaveLength(before.lines.length - 1);
+    expect(removedLine.slots).toEqual(before.slots);
+    expect(before.slots).toHaveLength(initial.slots.length);
+    expect(before.lines).toHaveLength(initial.lines.length);
+    const published = render(true);
+    expect(published).not.toContain('data-testid="v25-wb-slot-delete"');
+    expect(published).not.toContain('data-testid="v25-wb-line-delete"');
   });
 
   it('商品名右端に商品台帳アイコンを配置し、既存の選び直し画面を使用する', () => {
@@ -524,7 +595,7 @@ describe('Excel 風の画面（描画）', () => {
     const menuButton = source.slice(source.indexOf('data-testid="v25-wb-slot-position-menu"'), source.indexOf('金額を入力する'));
     expect(menuButton).toContain('disabled={positionActionsLocked}');
     expect(menuButton).toContain('if (positionActionsLocked) return;');
-    const deleteButton = source.slice(source.indexOf('data-testid="v25-wb-slot-delete"'), source.indexOf('</V25WorkbenchRowMenu>'));
+    const deleteButton = source.slice(source.indexOf('testId="v25-wb-slot-delete"'), source.indexOf('testId="v25-wb-line-delete"'));
     expect(deleteButton).toContain('disabled={positionActionsLocked}');
     expect(deleteButton).toContain('if (positionActionsLocked) return;');
     expect(source).toContain('setPositionLabelEditor(null);'); // Enterが成功したとき

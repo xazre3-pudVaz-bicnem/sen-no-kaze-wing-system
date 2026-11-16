@@ -382,7 +382,8 @@ test.describe('顧客フロー', () => {
     await expect(page.getByText(/顧客番号/)).toBeVisible();
     // 表示例（エクセル形式）：区分見出し・小計行・別途工事の注記
     const quoteTable = page.getByTestId('quote-table');
-    for (const label of ['本体価格', '【本体価格計】', 'オプション価格', '【オプション価格計】', '別途工事', '【別途工事計】', '運送費']) {
+    // 別途工事の 9 品目は商品台帳から削除した（2026-11-04 先方回答 A-3）ので、お客様の見積に別途工事の行は無く、区分と注記だけが出る
+    for (const label of ['本体価格', '【本体価格計】', 'オプション価格', '【オプション価格計】', '別途工事', '【別途工事計】']) {
       await expect(quoteTable).toContainText(label);
     }
     await expect(quoteTable).toContainText('現地の代理店、工務店にお問合せ下さい');

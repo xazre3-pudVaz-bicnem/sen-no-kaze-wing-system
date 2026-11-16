@@ -17,6 +17,9 @@ import {
   yen,
 } from './helpers';
 
+/** 代理店の見積編集の「別途工事」に最初から並ぶ 9 種類の工事（2026-11-04 先方回答 A-3。lib/seed/quote-initial-lines.ts と同じ） */
+const SITEWORK_INITIAL_LINES = ['運送費', '設計監理及び確認申請費', '梱包養生', '現場設置工事', '電気設備工事', '給排水給湯設備工事', '基礎工事（設置後工事）', '廃材処分費', '別途現場諸費用'];
+
 test.describe('代理店による確定見積（改訂版）', () => {
   // 代理店アカウントが無いと割り当てができないため、各テストの前に用意しておく
   test.beforeEach(async ({ page }) => {
@@ -56,6 +59,13 @@ test.describe('代理店による確定見積（改訂版）', () => {
     // 本体は参照のみ（入力できない）。通常は別途工事（施工金額）だけを編集する
     await expect(form.getByLabel('品名 1', { exact: true })).toBeDisabled();
     await expect(form.getByLabel('売価 1', { exact: true })).toBeDisabled();
+    // 別途工事の 9 種類の工事が、金額が空のまま最初から並ぶ（2026-11-04 先方回答 A-3）。要らない行は削除できる
+    for (const name of SITEWORK_INITIAL_LINES) await revisionRowNumber(form, name);
+    const disposal = await revisionRowNumber(form, '廃材処分費');
+    await form.getByRole('button', { name: '削除', exact: true }).nth(disposal - 1).click();
+    await expect
+      .poll(() => form.locator('input[data-quote-grid-col="name"]').evaluateAll((els) => els.some((el) => (el as HTMLInputElement).value === '廃材処分費')))
+      .toBe(false);
     // 現地確認後に決まった別途工事と、お客様への申し送りを入れる
     await addInstallationRow(form, '傾斜地の追加基礎工事', 200_000);
     await page.locator('#dealer_note').fill('搬入路が狭いため小型クレーンを使用します。');
@@ -104,7 +114,7 @@ test.describe('代理店による確定見積（改訂版）', () => {
     const form = await openRevisionEditor(page, quoteId);
     const review = form.getByTestId('por-review');
     await expect(review).toBeVisible();
-    // 標準で選ばれる照明・別途工事（別途見積）は、0 円のまま未確定の行として示される
+    // 標準で選ばれる照明（別途見積）と、別途工事に最初から並ぶ 9 種類の工事（金額は空）は、0 円のまま未確定の行として示される
     const rows = review.getByTestId('por-review-row');
     const lightingRow = rows.filter({ hasText: '照明器具 ダウンライト一式' });
     const electricRow = rows.filter({ hasText: '電気設備工事' });

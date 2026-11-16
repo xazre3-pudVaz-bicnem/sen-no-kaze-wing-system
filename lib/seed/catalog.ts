@@ -6,7 +6,7 @@
  * 構成は先方指定の商品台帳に準拠する。
  *   本体（Wing / BOX / フラット）
  *    └ 仕様（ホテル仕様 / 住宅仕様 / 事務所・店舗用）… base_models.presets
- *       └ 分類（内外装仕上げ / サッシ / 内部建具 / 設備機器 / 照明器具 / 家具 / その他 / 別途工事）… option_categories.group_*
+ *       └ 分類（内外装仕上げ / サッシ / 内部建具 / 設備機器 / 照明器具 / 家具 / その他）… option_categories.group_*
  *          └ カテゴリー（浴室・トイレ・床材 …）… option_categories
  *             └ 商品（オプション）… options（spec_codes で仕様を絞り込み）
  *
@@ -42,18 +42,6 @@ export const MODEL_FLAT_ID = '10000000-0000-4000-8000-000000000003';
 /** 仕様コード */
 export const SPEC = { hotel: 'hotel', residence: 'residence', office: 'office' } as const;
 
-const SITEWORK_CODES = [
-  'sw-transport',
-  'sw-design-permit',
-  'sw-packing',
-  'sw-site-install',
-  'sw-electric',
-  'sw-plumbing',
-  'sw-foundation',
-  'sw-disposal',
-  'sw-site-expense',
-];
-
 // サッシは本体（分類表見積書の６．サッシ木製建具工事）に含めるため、お客様の標準構成には入れない
 const COMMON_BASE = ['fire-standard', 'floor-light-beige', 'wall-ceiling-cross', 'exterior-galnote', 'door-standard'];
 
@@ -87,7 +75,6 @@ export const seedModels: BaseModel[] = [
           'shoe-box',
           'folding-bed',
           'lighting-downlight',
-          ...SITEWORK_CODES,
         ],
       },
       {
@@ -107,14 +94,13 @@ export const seedModels: BaseModel[] = [
           'shoe-box',
           'coat-rack',
           'lighting-downlight',
-          ...SITEWORK_CODES,
         ],
       },
       {
         code: 'office',
         name: '事務所・店舗用',
         description: '水まわり設備なしの一室空間。事務所・店舗向けの構成です。',
-        option_codes: [...COMMON_BASE, 'interior-standard-wing', 'carpentry-office-wing', 'lighting-downlight', 'office-supplies', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-wing', 'carpentry-office-wing', 'lighting-downlight', 'office-supplies'],
       },
     ],
     status: 'published',
@@ -170,13 +156,13 @@ export const seedModels: BaseModel[] = [
         code: 'hotel-single',
         name: 'ホテル・単身者用',
         description: 'BOX（ホテル単身者）の標準見積に対応する構成です。',
-        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'shower-unit-1116', 'mini-kitchen', 'folding-bed', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'shower-unit-1116', 'mini-kitchen', 'folding-bed'],
       },
       {
         code: 'water-kit',
         name: '水回りキット',
         description: 'BOX（水回りキット）の標準見積に対応する構成です。',
-        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'ub-1216', 'toilet-washlet', 'mini-kitchen', 'gas-boiler-16', 'aircon', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'ub-1216', 'toilet-washlet', 'mini-kitchen', 'gas-boiler-16', 'aircon'],
       },
     ],
     status: 'published',
@@ -213,7 +199,7 @@ export const seedModels: BaseModel[] = [
         code: 'office',
         name: '事務所・店舗用',
         description: '内装仕上げと造作のみの事務所向け構成。',
-        option_codes: [...COMMON_BASE, 'interior-standard-flat', 'carpentry-flat', 'lighting-downlight', 'office-supplies', ...SITEWORK_CODES],
+        option_codes: [...COMMON_BASE, 'interior-standard-flat', 'carpentry-flat', 'lighting-downlight', 'office-supplies'],
       },
     ],
     status: 'published',
@@ -319,7 +305,6 @@ export const C = {
   exteriorParts: cid(17),
   fireproof: cid(18),
   officeSupplies: cid(19),
-  sitework: cid(20),
   insulation: cid(21),
   freeProduct: cid(22),
   roof: cid(23),
@@ -361,7 +346,6 @@ const G = {
   lighting: ['lighting', '照明器具', 6] as [string, string, number],
   furniture: ['furniture', '家具', 7] as [string, string, number],
   other: ['other', 'その他', 8] as [string, string, number],
-  sitework: ['sitework', '別途工事', 9] as [string, string, number],
   free: ['free-product', 'フリー商品', 10] as [string, string, number],
 };
 
@@ -405,11 +389,6 @@ export const seedCategories: OptionCategory[] = [
     selection_mode: 'multi',
     description: '代理店・工務店が登録した商品（家具など）。諸費用はかからず、見積書では別途工事の下に表示されます',
   }),
-  cat(C.sitework, 'sitework', '別途工事（現地施工）', G.sitework, 1, {
-    finish_level: 'shell',
-    selection_mode: 'multi',
-    description: '設置場所の確認後、代理店がお見積りします',
-  }),
 ];
 
 /* ---------------- 商品（オプション） ---------------- */
@@ -447,15 +426,6 @@ export const O = {
   carpentryBox: id(41),
   interiorStdFlat: id(50),
   carpentryFlat: id(51),
-  swTransport: id(60),
-  swDesignPermit: id(61),
-  swPacking: id(62),
-  swSiteInstall: id(63),
-  swElectric: id(64),
-  swPlumbing: id(65),
-  swFoundation: id(66),
-  swDisposal: id(67),
-  swSiteExpense: id(68),
   // 追加（先方の商品台帳）
   floorWhite: id(70),
   floorLightBeige: id(71),
@@ -505,21 +475,6 @@ const opt = (
   updated_at: NOW,
   ...p,
 });
-
-const sitework = (oid: string, code: string, name: string, description: string | null, sort: number) =>
-  opt({
-    id: oid,
-    category_id: C.sitework,
-    code,
-    name,
-    description,
-    price: 0,
-    is_installation: true,
-    price_on_request: true,
-    is_default: true,
-    is_required: true,
-    sort_order: sort,
-  });
 
 const floor = (oid: string, code: string, name: string, sort: number, isDefault = false) =>
   opt({
@@ -613,16 +568,6 @@ export const seedOptions: ProductOption[] = [
   opt({ id: O.fireStandard, category_id: C.fireproof, code: 'fire-standard', name: '非防火仕様（基本仕様）', description: '防火指定のない地域向けの標準仕様です。', price: 0, selection_type: 'radio', is_default: true, sort_order: 1 }),
   opt({ id: O.fireProof, category_id: C.fireproof, code: 'fire-proof', name: '防火仕様（防火構造）', description: '防火地域・準防火地域向けの防火構造。建築する場所によって異なるため、近くの代理店にご相談ください。', price: 0, price_on_request: true, selection_type: 'radio', sort_order: 2 }),
 
-  // ---- 別途工事 ----
-  sitework(O.swTransport, 'sw-transport', '運送費', '設置場所までの運搬', 1),
-  sitework(O.swDesignPermit, 'sw-design-permit', '設計監理及び確認申請費', '建築確認申請が必要な場合', 2),
-  sitework(O.swPacking, 'sw-packing', '梱包養生', null, 3),
-  sitework(O.swSiteInstall, 'sw-site-install', '現場設置工事', 'クレーン設置・展開作業', 4),
-  sitework(O.swElectric, 'sw-electric', '電気設備工事', '照明器具含む', 5),
-  sitework(O.swPlumbing, 'sw-plumbing', '給排水給湯設備工事', '敷地状況によって別途見積', 6),
-  sitework(O.swFoundation, 'sw-foundation', '基礎工事（設置後工事）', null, 7),
-  sitework(O.swDisposal, 'sw-disposal', '廃材処分費', '家庭用ごみ（家具等）は別途料金。トン袋のみ', 8),
-  sitework(O.swSiteExpense, 'sw-site-expense', '別途現場諸費用', '交通費、労災、安全管理費等', 9),
 ];
 
 const dep = (n: number, option_id: string, requires_option_id: string, message: string | null): OptionDependency => ({

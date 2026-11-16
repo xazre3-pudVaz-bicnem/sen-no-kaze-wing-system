@@ -122,14 +122,7 @@ const selectedCodes = [
   'shoe-box',
   'fridge',
   'lighting-downlight',
-  'sw-transport',
-  'sw-design-permit',
-  'sw-packing',
-  'sw-site-install',
-  'sw-electric',
-  'sw-plumbing',
-  'sw-foundation',
-  'sw-site-expense',
+  // 別途工事の 9 品目は商品台帳から削除した（2026-11-04 先方回答 A-3）。別途工事は見積の明細（下の addItem）だけに持つ
 ];
 
 const selectedOptions = selectedCodes.map(option);

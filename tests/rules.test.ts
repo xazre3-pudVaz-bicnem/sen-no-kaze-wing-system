@@ -12,11 +12,11 @@ const ctx: RuleContext = {
 };
 
 describe('toggleOption', () => {
-  it('初期選択は必須カテゴリー（内装・造作）と別途工事を満たし、検証エラーがない', () => {
+  it('初期選択は必須カテゴリー（内装・造作）を満たし、検証エラーがない（別途工事の 9 品目は商品台帳から削除した）', () => {
     const sel = defaultSelection(ctx);
     expect(sel).toContain(O.interiorStdWing);
     expect(sel).toContain(O.carpentryFullWing);
-    expect(sel).toContain(O.swTransport);
+    expect(seedCategories.some((c) => c.code === 'sitework')).toBe(false);
     expect(validateSelection(ctx, sel)).toEqual([]);
   });
 
@@ -60,7 +60,7 @@ describe('toggleOption', () => {
     const types = issues.map((i) => i.type);
     expect(types).toContain('conflict');
     expect(types).toContain('dependency'); // 給湯器なし
-    expect(types).toContain('required'); // 内装・造作・別途工事
+    expect(types).toContain('required'); // 内装・造作
   });
 });
 
@@ -69,7 +69,7 @@ describe('注文範囲（本体のみ／本体＋設備／フル装備）', () =
   const catCodesIn = (level: FinishLevel) => categoriesInScope(seedCategories, level).map((c) => c.code).sort();
 
   it('本体のみでは本体に含まれるカテゴリーだけが対象になる', () => {
-    expect(catCodesIn('shell')).toEqual(['entrance-door', 'exterior-wall', 'fireproof', 'insulation', 'roof', 'sash', 'sitework']);
+    expect(catCodesIn('shell')).toEqual(['entrance-door', 'exterior-wall', 'fireproof', 'insulation', 'roof', 'sash']);
   });
 
   it('本体＋設備では設備・照明・家具が加わり、内装と造作は含まれない', () => {

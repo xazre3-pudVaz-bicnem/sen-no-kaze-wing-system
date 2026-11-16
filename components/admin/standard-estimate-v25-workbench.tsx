@@ -857,18 +857,19 @@ function WorkbenchBody({
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[68rem] min-w-[68rem]' : 'w-[62rem] min-w-[62rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[85rem] min-w-[85rem]' : 'w-[64rem] min-w-[64rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 top-0 z-40 w-[6.25rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">グループ</th>
-              <th className="sticky left-[6.25rem] top-0 z-40 w-[21rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">品名</th>
-              <th className="sticky top-0 z-30 bg-slate-200 w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
-              <th className="sticky top-0 z-30 bg-slate-200 w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
-              {showCost && <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
-              <th className="sticky top-0 z-30 bg-slate-200 w-28 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
-              <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
-              <th className="sticky top-0 z-30 bg-slate-200 w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
-              <th className="sticky top-0 z-30 bg-slate-200 w-[4.5rem] border-b border-slate-300 px-0.5 py-0.5 text-center font-medium">操作</th>
+              <th className="sticky left-0 top-0 z-40 w-[24rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
+              <th className="sticky top-0 z-30 w-16 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量</th>
+              <th className="sticky top-0 z-30 w-16 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位</th>
+              {showCost && <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価</th>}
+              {showCost && <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額</th>}
+              <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価</th>
+              <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額</th>
+              {showCost && <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利</th>}
+              <th className="sticky top-0 z-30 w-[12rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考</th>
+              <th className="sticky top-0 z-30 w-[5.5rem] border-b border-slate-300 bg-slate-200 px-1 py-1 text-center font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -876,20 +877,28 @@ function WorkbenchBody({
             {!collapsed.has('base') &&
               baseLines.map((line) => {
                 const result = resultByKey.get(`base:${line.id}`);
+                const display = v25DisplayedCostAndGross(result, line.quantity);
                 return (
-                  <tr key={line.id} className="border-b border-slate-200 text-slate-700">
-                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-1 py-0 text-muted">{line.section}</td>
-                    <td className="sticky left-[6.25rem] z-10 border-r border-slate-200 bg-white px-1 py-0"><span className="block truncate" title={line.name}>{line.name}</span></td>
-                    <td className="border-r border-slate-200 px-1 py-0 text-right tabular-nums">{line.quantity}</td>
-                    <td className="border-r border-slate-200 px-1 py-0">{line.unit ?? ''}</td>
-                    {showCost && <td className="border-r border-slate-200 px-1 py-0 text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
-                    <td className="border-r border-slate-200 px-1 py-0 text-right tabular-nums">{yen(result?.sale_unit_price)}</td>
-                    <td className="border-r border-slate-200 px-1 py-0 text-right tabular-nums">{yen(result?.amount)}</td>
-                    <td className="px-1 py-0 text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
-                    <td className="px-1 py-0" />
+                  <tr key={line.id} className="border-b border-slate-200 bg-slate-100 text-slate-700" data-testid="v25-wb-base-row">
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="max-w-[7rem] shrink-0 truncate text-[10px] text-slate-600" title={line.section}>{line.section}</span>
+                        <span className="min-w-0 flex-1 truncate" title={line.name}>{line.name}</span>
+                      </div>
+                    </td>
+                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{line.quantity}</td>
+                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">{line.unit ?? ''}</td>
+                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
+                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.costAmount)}</td>}
+                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.sale_unit_price)}</td>
+                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-base-sale-amount">{yen(result?.amount)}</td>
+                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.gross)}</td>}
+                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
+                    <td className="bg-slate-100 px-1 py-px text-center text-slate-500">参照</td>
                   </tr>
                 );
               })}
+            {sectionSubtotal('base', '本体')}
 
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);

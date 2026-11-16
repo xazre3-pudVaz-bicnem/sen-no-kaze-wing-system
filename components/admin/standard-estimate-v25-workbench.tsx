@@ -67,6 +67,29 @@ const NO_WINDOW_TYPE = '__none';
 
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
 
+/**
+ * v2.5の計算結果「見積用原価単価・売価金額」をそのまま使う表示専用の内訳。
+ * 原価金額は確定済み原価単価×数量の端数切捨て。DBの計算・保存値は変更しない。
+ * 原価のないmanual/porや未確定行では推測値を出さない。
+ */
+export function v25DisplayedCostAndGross(
+  line: PricingLineResult | undefined,
+  quantity: string,
+): { costAmount: number | null; gross: number | null } {
+  const unitCost = line?.cost_unit_price;
+  const count = quantity.trim();
+  if (unitCost == null || !Number.isSafeInteger(unitCost) || unitCost < 0 || !/^\d+(?:\.\d{1,4})?$/.test(count)) {
+    return { costAmount: null, gross: null };
+  }
+  const [whole, fraction = ''] = count.split('.');
+  const scaledQuantity = BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0') || '0');
+  const amount = BigInt(unitCost) * scaledQuantity / 10000n;
+  if (amount > BigInt(Number.MAX_SAFE_INTEGER)) return { costAmount: null, gross: null };
+  const costAmount = Number(amount);
+  const gross = line?.amount == null || !Number.isSafeInteger(line.amount) ? null : line.amount - costAmount;
+  return { costAmount, gross };
+}
+
 /** 位置名の編集中や保存などの処理中は、行削除と位置別設定を保護する。 */
 export const v25PositionActionsLocked = (pending: boolean, editingPosition: boolean) => pending || editingPosition;
 
@@ -352,7 +375,7 @@ function WorkbenchBody({
     expense_rate: rateToPercent(initial.expense_rate),
     markup_rate: rateToPercent(initial.markup_rate),
   }));
-  const [showCost, setShowCost] = useState(false);
+  const [showCost, setShowCost] = useState(true);
   const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(showCost);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
@@ -745,7 +768,7 @@ function WorkbenchBody({
     if (next) { event.preventDefault(); next.focus(); next.select(); }
   };
 
-  const columnCount = showCost ? 9 : 8;
+  const columnCount = showCost ? 10 : 7;
 
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
@@ -765,6 +788,23 @@ function WorkbenchBody({
             {actions}
           </div>
         </td>
+      </tr>
+    );
+  };
+
+  // 区分の明細の末尾に、正式なv2.5試算の小計だけを表示する（区分の経費は既存見出しに保持）。
+  const sectionSubtotal = (code: string, label: string) => {
+    const result = sectionResult(code);
+    return (
+      <tr className="border-y-2 border-emerald-800 bg-emerald-50 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
+        <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">
+          {label} 小計（税別）
+          {result?.has_por && <span className="ml-2 text-amber-800">別途見積を含む</span>}
+        </td>
+        <td className="border-l border-emerald-200 px-2 py-1 text-right font-semibold tabular-nums" data-testid={`v25-section-subtotal-value-${code}`}>
+          {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
+        </td>
+        <td colSpan={showCost ? 3 : 2} />
       </tr>
     );
   };

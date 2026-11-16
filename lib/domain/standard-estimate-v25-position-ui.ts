@@ -8,11 +8,19 @@ import { canUsePositionSlot, type V25WorkbenchCandidate } from './standard-estim
 type CandidateOf = (optionId: string) => V25WorkbenchCandidate | undefined;
 export type V25PositionResult = { state: V25EditorState; error: string | null };
 
-export function nextV25PositionCode(rows: ReadonlyArray<Pick<V25SlotRow, 'slot_code'>>): string {
+/**
+ * 削除済み識別子を再利用する連番は禁止。UUID v4の122bitランダム性を使う。
+ * 保存形式（英小文字・数字・ハイフン／40字以下）は既存どおり。
+ * 厳密な履歴上の再利用禁止にはDBの廃止コード台帳が必要だが、今回はUIのみで衝突を極小化する。
+ */
+export function nextV25PositionCode(
+  rows: ReadonlyArray<Pick<V25SlotRow, 'slot_code'>>,
+  makeUuid: () => string = () => globalThis.crypto.randomUUID()
+): string {
   const taken = new Set(rows.map((row) => row.slot_code.trim()).filter(Boolean));
-  for (let sequence = 1; sequence <= rows.length + 1; sequence += 1) {
-    const code = `position-${sequence}`;
-    if (!taken.has(code) && V25_SLOT_CODE_PATTERN.test(code)) return code;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const code = `p-${makeUuid().replace(/-/g, '').toLowerCase()}`;
+    if (V25_SLOT_CODE_PATTERN.test(code) && !taken.has(code)) return code;
   }
   throw new Error('新しい位置の識別子を発行できませんでした');
 }
@@ -63,11 +71,6 @@ export function updateV25Position(
     return { state, error: 'この商品行には位置を設定できません' };
   }
   const label = labelInput.trim();
-  // 位置解除は行を消さない。必ず候補も解除する。
-  if (!label && selectableIds.length === 0 && source.slot_code.trim()) {
-    return { state: { ...state, slots: state.slots.map((slot) =>
-      slot.key === key ? { ...slot, slot_code: '', slot_label: '', selectable_option_ids: [] } : slot) }, error: null };
-  }
   const problem = labelProblem(state.slots, key, label, candidate, candidateOf) ??
     v25ValidPositionAlternatives(selectableIds, candidate, candidateOf);
   if (problem) return { state, error: problem };
@@ -77,6 +80,21 @@ export function updateV25Position(
   const code = source.slot_code.trim() || nextV25PositionCode(state.slots);
   return { state: { ...state, slots: state.slots.map((slot) =>
     slot.key === key ? { ...slot, slot_code: code, slot_label: label, selectable_option_ids: [...selectableIds] } : slot) }, error: null };
+}
+
+/** 明示的な解除操作でのみ位置と候補を外し、商品・単価・行は保持する。 */
+export function clearV25Position(state: V25EditorState, key: string): V25PositionResult {
+  const source = state.slots.find((slot) => slot.key === key);
+  if (!source || !source.slot_code.trim()) return { state, error: '解除できる位置設定がありません' };
+  return {
+    state: {
+      ...state,
+      slots: state.slots.map((slot) => slot.key === key
+        ? { ...slot, slot_code: '', slot_label: '', selectable_option_ids: [] }
+        : slot),
+    },
+    error: null,
+  };
 }
 
 /** 位置名が確定するまで行を作らない。新行の既存行ID・原価固定を使い回さない。 */
@@ -126,6 +144,18 @@ export function replaceV25PositionStandard(
   const previous = source && candidateOf(source.option_id);
   if (!source || !source.slot_code.trim() || !previous || standard.retired || standard.unavailable ||
     standard.categoryId !== previous.categoryId) return { state, error: '同じ位置での標準品入替は同じカテゴリーの商品に限ります' };
+  // 同一商品の仕様（色・サイズ等）変更は標準品入替ではない。候補を一切変更しない。
+  if (standard.id === source.option_id) {
+    return {
+      state: {
+        ...state,
+        slots: state.slots.map((slot) => slot.key === key
+          ? { ...slot, variant_choices: { ...choices } }
+          : slot),
+      },
+      error: null,
+    };
+  }
   const problem = v25ValidPositionAlternatives(selectableIds, standard, candidateOf);
   if (problem) return { state, error: problem };
   return { state: { ...state, slots: state.slots.map((slot) => slot.key === key

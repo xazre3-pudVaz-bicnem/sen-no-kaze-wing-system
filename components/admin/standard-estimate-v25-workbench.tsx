@@ -1118,35 +1118,39 @@ function WorkbenchBody({
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
                         <tr key={line.key} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
-                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-0.5 py-0">
-                            <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly} aria-label="グループ" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
-                              onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
-                          </td>
-                          <td className="sticky left-[6.25rem] z-10 border-r border-slate-200 bg-white px-0.5 py-0">
-                            <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
-                              onChange={(event) => setLine(line.key, { name: event.target.value })} />
+                          <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                            <div className="flex min-w-0 items-center gap-1">
+                              <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
+                                aria-label="グループ" placeholder="区分" title="手入力明細のグループ"
+                                className="h-6 min-h-6! w-[5.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
+                              <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
+                                className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setLine(line.key, { name: event.target.value })} />
+                            </div>
                             {line.review_required && <div className="px-1" data-testid="v25-wb-line-review-alert"><Badge tone="warn">要見直し</Badge></div>}
                           </td>
 
-                          <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="qty" value={line.quantity} disabled={readOnly} inputMode="decimal" aria-label="明細の数量" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                          <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                            <Input data-v25-excel-col="qty" value={line.quantity} disabled={readOnly} inputMode="decimal" aria-label="明細の数量" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { quantity: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                          <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                            <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
-                          {showCost && <td className="border-r border-slate-200 px-1 py-0 text-right text-muted">—</td>}
-                          <td className="border-r border-slate-200 px-0.5 py-0 text-right" data-testid="v25-wb-line-price-cell">
+                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          <td className={`border-r border-slate-200 px-0.5 py-px text-right ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
                             {line.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
-                                className="h-5 min-h-5! w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { unit_price: event.target.value })} />
                             ) : (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0 text-right tabular-nums">
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-line-sale-amount">
                             {line.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
                             ) : unpricedKeys.has(line.key) ? (
@@ -1155,14 +1159,15 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-5 min-h-5! w-full rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                            <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
                           </td>
 
-                          <td className="relative px-0.5 py-0 text-center">
+                          <td className="relative bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
-                              <div className="flex items-center justify-center gap-0.5">
+                              <div className="flex items-center justify-center gap-2">
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
                                   {line.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"

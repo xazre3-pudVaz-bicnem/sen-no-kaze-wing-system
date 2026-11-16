@@ -23,7 +23,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench, v25VariantSummary } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -503,7 +503,37 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('positionLabelEditor?.slotKey === slot.key && !readOnly');
     expect(source).toContain('onConfirm={commitInlinePositionLabel}');
     expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}');
-    expect(source).toContain('編集中は下書きを保存できず、別の位置名も編集できません。Enterで確定するかEscで取り消してください。');
+    expect(source).toContain('編集中は保存・行削除・位置別設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。');
+  });
+
+  it('位置名編集中は行削除と位置別設定の両経路を無効化し、確定・取消後は再び操作・保存が可能', () => {
+    // pendingがない通常時は編集中だけロックし、Enter・Escで編集状態がnullに戻れば解除される。
+    expect(v25PositionActionsLocked(false, true)).toBe(true);
+    expect(v25PositionActionsLocked(false, false)).toBe(false); // Enter 確定後・Esc 取消後
+    expect(v25PositionActionsLocked(true, false)).toBe(true); // 保存などの処理中
+
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;');
+    expect(source).toContain('const positionActionsLocked = v25PositionActionsLocked(pending, positionInputActive);');
+    const openDetail = source.slice(source.indexOf('const openPosition ='), source.indexOf('const closePosition ='));
+    expect(openDetail).toContain('if (positionActionsLocked) return;');
+    const sashButton = source.slice(source.indexOf('data-testid="v25-wb-slot-position-toggle"'), source.indexOf('data-testid="v25-wb-slot-product-picker-icon"'));
+    expect(sashButton).toContain('disabled={positionActionsLocked}');
+    const menuButton = source.slice(source.indexOf('data-testid="v25-wb-slot-position-menu"'), source.indexOf('金額を入力する'));
+    expect(menuButton).toContain('disabled={positionActionsLocked}');
+    expect(menuButton).toContain('if (positionActionsLocked) return;');
+    const deleteButton = source.slice(source.indexOf('data-testid="v25-wb-slot-delete"'), source.indexOf('</V25WorkbenchRowMenu>'));
+    expect(deleteButton).toContain('disabled={positionActionsLocked}');
+    expect(deleteButton).toContain('if (positionActionsLocked) return;');
+    expect(source).toContain('setPositionLabelEditor(null);'); // Enterが成功したとき
+    expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}'); // Escのとき
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
+    expect(source).toContain('編集中は保存・行削除・位置別設定・別の位置名編集ができません。');
+    // 保存ボタンは dirty のままなら編集確定／取消で再び押せる。元から未変更なら無効のまま。
+    const canSave = (pending: boolean, dirty: boolean, editing: boolean) => !pending && dirty && !editing;
+    expect(canSave(false, true, true)).toBe(false);
+    expect(canSave(false, true, false)).toBe(true);
+    expect(canSave(false, false, false)).toBe(false);
   });
 
   it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {

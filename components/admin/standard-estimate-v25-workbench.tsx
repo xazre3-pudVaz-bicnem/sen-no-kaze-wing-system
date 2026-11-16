@@ -949,7 +949,7 @@ function WorkbenchBody({
                           </td>
 
                           <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-5 rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                            <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setSlot(slot.key, { quantity: event.target.value })} />
                           </td>
                           <td className="border-r border-slate-200 px-1 py-0 text-muted"
@@ -965,7 +965,7 @@ function WorkbenchBody({
                           <td className="border-r border-slate-200 px-0.5 py-0 text-right" data-testid="v25-wb-slot-price-cell">
                             {slot.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
-                                className="h-5 w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                className="h-5 min-h-5! w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setSlot(slot.key, { manual_unit_price: event.target.value })} />
                             ) : slot.price_mode === 'auto' ? (
                               <span className="block truncate px-1 tabular-nums" title={yen(result?.sale_unit_price)}>{yen(result?.sale_unit_price)}</span>
@@ -1067,28 +1067,28 @@ function WorkbenchBody({
                       return (
                         <tr key={line.key} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
                           <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-0.5 py-0">
-                            <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly} aria-label="グループ" className="h-5 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                            <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly} aria-label="グループ" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                           </td>
                           <td className="sticky left-[6.25rem] z-10 border-r border-slate-200 bg-white px-0.5 py-0">
-                            <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-5 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                            <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { name: event.target.value })} />
                             {line.review_required && <div className="px-1" data-testid="v25-wb-line-review-alert"><Badge tone="warn">要見直し</Badge></div>}
                           </td>
 
                           <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="qty" value={line.quantity} disabled={readOnly} inputMode="decimal" aria-label="明細の数量" className="h-5 rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                            <Input data-v25-excel-col="qty" value={line.quantity} disabled={readOnly} inputMode="decimal" aria-label="明細の数量" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { quantity: event.target.value })} />
                           </td>
                           <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-5 rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                            <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
                           {showCost && <td className="border-r border-slate-200 px-1 py-0 text-right text-muted">—</td>}
                           <td className="border-r border-slate-200 px-0.5 py-0 text-right" data-testid="v25-wb-line-price-cell">
                             {line.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
-                                className="h-5 w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                className="h-5 min-h-5! w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { unit_price: event.target.value })} />
                             ) : (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
@@ -1104,7 +1104,7 @@ function WorkbenchBody({
                             )}
                           </td>
                           <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-5 w-full rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
+                            <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-5 min-h-5! w-full rounded-sm border-0 bg-amber-50 px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
                           </td>
 

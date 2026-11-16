@@ -3,8 +3,8 @@ import { buildV25SavePayload, validateV25EditorState, type V25EditorState } from
 import { calculateV25Workbench, type V25WorkbenchCandidate, type V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
 import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
 import {
-  addV25PositionRow, clearV25Position, nextV25PositionCode, replaceV25PositionStandard,
-  updateV25Position, v25PositionMixes,
+  addV25PositionRow, clearV25Position, nextV25PositionCode, renameV25Position,
+  replaceV25PositionStandard, updateV25Position, v25PositionMixes, v25PositionNameKeyAction,
 } from '@/lib/domain/standard-estimate-v25-position-ui';
 
 const products: V25WorkbenchCandidate[] = [
@@ -80,6 +80,49 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     expect(validateV25EditorState(renamed.state, (id) => get(id)?.section)).toBeNull();
     expect(before.slots[0].slot_code).toBe('');
   });
+  it('位置名の直接編集はラベル以外を一切変更しない。保存payload・金額・候補も不変', () => {
+    const original = state([
+      row('a', { slot_code: 'living', slot_label: 'リビングの窓', selectable_option_ids: ['s2'],
+        variant_choices: { color: 'white' }, price_mode: 'manual', manual_unit_price: '165000' }),
+      row('b', { slot_code: 'sleeping', slot_label: '寝室の窓' }),
+    ]);
+    const oldPrice = total(original);
+    const renamed = renameV25Position(original, 'a', '  居間の窓  ', get);
+    expect(renamed.error).toBeNull();
+    expect(renamed.state.slots).toHaveLength(2);
+    expect(renamed.state.slots[0]).toEqual({ ...original.slots[0], slot_label: '居間の窓' });
+    expect(renamed.state.slots[1]).toEqual(original.slots[1]);
+    expect(renamed.state.slots[0].slot_code).toBe('living');
+    expect(renamed.state.slots[0].selectable_option_ids).toEqual(['s2']);
+    expect(total(renamed.state)).toBe(oldPrice);
+    expect(buildV25SavePayload(renamed.state).slots[0].slot_code).toBe('living');
+    expect(original.slots[0].slot_label).toBe('リビングの窓');
+    // 既存の変更候補が販売停止になっていても、位置名だけの編集は妨げない。
+    const legacy = state([row('a', { slot_code: 'living', slot_label: '旧位置', selectable_option_ids: ['s3'] })]);
+    expect(renameV25Position(legacy, 'a', '新位置', get).state.slots[0].selectable_option_ids).toEqual(['s3']);
+  });
+  it('位置名の空欄・重複・40字超・位置無しを拒否し、stateを維持', () => {
+    const original = state([
+      row('a', { slot_code: 'living', slot_label: 'リビングの窓' }),
+      row('b', { slot_code: 'sleeping', slot_label: '寝室の窓' }),
+    ]);
+    for (const name of ['', '   ', '寝室の窓', 'あ'.repeat(41)]) {
+      const result = renameV25Position(original, 'a', name, get);
+      expect(result.error).not.toBeNull();
+      expect(result.state).toBe(original);
+    }
+    expect(renameV25Position(state([row('a')]), 'a', '寝室', get).state.slots[0].slot_code).toBe('');
+    expect(renameV25Position(original, 'a', 'リビングの窓', get).state).toBe(original);
+  });
+  it('日本語IME変換中・変換終了直後のEnterでは編集確定しない', () => {
+    expect(v25PositionNameKeyAction('Enter', true, false)).toBeNull();
+    expect(v25PositionNameKeyAction('Enter', false, false, 229)).toBeNull();
+    expect(v25PositionNameKeyAction('Enter', false, true)).toBeNull();
+    expect(v25PositionNameKeyAction('Escape', true, false)).toBeNull();
+    expect(v25PositionNameKeyAction('Enter', false, false, 13)).toBe('commit');
+    expect(v25PositionNameKeyAction('Escape', false, false)).toBe('cancel');
+    expect(v25PositionNameKeyAction('Tab', false, false)).toBeNull();
+  });
   it('位置を付けるときに数量1以外、空欄、長すぎる位置名は拒否。自動で数量を変えない', () => {
     const original = state([row('a', { quantity: '2' })]);
     expect(updateV25Position(original, 'a', '洗面室の窓', [], get)).toEqual({
@@ -100,6 +143,8 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     expect(added.state.slots[1]).toMatchObject({ key: 'new-row', baseline_key: null, option_id: 's1', quantity: '1',
       slot_label: '洗面室の窓', slot_code: expect.stringMatching(/^p-[a-f0-9]{32}$/), selectable_option_ids: [] });
     expect(added.state.slots[0]).toEqual(before.slots[0]);
+    expect(added.state.slots[1].slot_code).not.toBe(before.slots[0].slot_code);
+    expect(added.state.slots[1].key).not.toBe(before.slots[0].key);
     expect(total(added.state)).toBeGreaterThan(price!);
     expect(buildV25SavePayload(added.state).slots).toHaveLength(2);
     const copied = addV25PositionRow(before, 'a', 'new-row', '寝室の窓', ['s2'], get);

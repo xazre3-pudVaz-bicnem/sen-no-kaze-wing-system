@@ -853,14 +853,33 @@ function WorkbenchBody({
                                 )}
                                 {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</span>}
                               </div>
-                              {slotCode && (
+                              {slotCode && (positionLabelEditor?.slotKey === slot.key && !readOnly ? (
+                                <div className="space-y-0.5" data-testid="v25-wb-inline-position-editor">
+                                  <V25PositionNameInput
+                                    testId="v25-wb-inline-position-input"
+                                    value={positionLabelEditor.label} placeholder="例：寝室の窓"
+                                    onChange={(label) => {
+                                      const error = renameV25Position(state, slot.key, label, (id) => candidateById.get(id)).error;
+                                      setPositionLabelEditor((current) => current ? { ...current, label, error } : null);
+                                    }}
+                                    onConfirm={commitInlinePositionLabel}
+                                    onCancel={() => setPositionLabelEditor(null)}
+                                  />
+                                  {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
+                                  <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
+                                </div>
+                              ) : (
                                 <button type="button" className="block max-w-full truncate text-left text-[10px] text-navy underline"
-                                  data-testid="v25-wb-slot-position" aria-label="位置・選べる商品を設定"
+                                  data-testid="v25-wb-slot-position"
+                                  aria-label={readOnly ? '位置・選べる商品を設定' : '位置名を直接編集'}
                                   title={`${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
-                                  onClick={() => openPosition(slot)}>
+                                  onClick={() => {
+                                    if (readOnly) openPosition(slot);
+                                    else setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null });
+                                  }}>
                                   {slot.slot_label.trim() || '位置'} · {slot.selectable_option_ids.length > 0 ? `変更候補${slot.selectable_option_ids.length}件` : '標準品のみ'}
                                 </button>
-                              )}
+                              ))}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
                             </div>
                           </td>
@@ -930,7 +949,15 @@ function WorkbenchBody({
                                       この商品を台帳で編集 ↗
                                     </Link>
                                   )}
-                                  {positionAllowed && !isSash && !slotCode && (
+                                  {positionAllowed && slotCode && (
+                                    <button type="button" data-testid="v25-wb-duplicate-position"
+                                      className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                      onClick={(event) => {
+                                        event.currentTarget.closest('details')?.removeAttribute('open');
+                                        setDuplicateFor({ slotKey: slot.key, label: '', error: null });
+                                      }}>別の位置に複製</button>
+                                  )}
+                                  {positionAllowed && (!isSash || Boolean(slotCode)) && (
                                     <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                       onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); openPosition(slot); }}>位置別設定</button>
                                   )}
@@ -1176,6 +1203,38 @@ function WorkbenchBody({
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
               <Button type="button" variant="secondary" onClick={() => setVariantEditor(null)}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
               {!readOnly && <Button type="button" data-testid="v25-wb-variant-confirm" onClick={applyVariant}>確定</Button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {duplicateFor && duplicateSource && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setDuplicateFor(null)}>
+          <div role="dialog" aria-modal="true" aria-label="別の位置に複製"
+            data-testid="v25-wb-duplicate-position-dialog"
+            className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="border-b border-line px-4 py-3">
+              <p className="font-semibold">別の位置に複製</p>
+              <p className="text-xs text-muted">{candidateById.get(duplicateSource.option_id)?.name ?? '商品'}を数量１で直下に１行追加します。元行は変更しません。</p>
+            </div>
+            <div className="space-y-2 px-4 py-3">
+              <label className="block space-y-1 text-xs">
+                <span className="font-semibold">新しい位置名</span>
+                <V25PositionNameInput
+                  testId="v25-wb-duplicate-position-input" value={duplicateFor.label}
+                  placeholder="例：寝室の窓"
+                  onChange={(label) => setDuplicateFor((current) => current ? { ...current, label, error: null } : null)}
+                  onConfirm={confirmDuplicatePosition}
+                  onCancel={() => setDuplicateFor(null)}
+                />
+              </label>
+              {duplicateFor.error && <p role="alert" className="text-xs text-red-700">{duplicateFor.error}</p>}
+              <p className="text-xs text-muted">変更候補は引き継ぎません。新しい位置識別子・行IDを自動発行します。</p>
+              <p className="text-xs text-muted">明細への反映のみです。下書き保存は別操作です。</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+              <Button type="button" variant="secondary" onClick={() => setDuplicateFor(null)}>キャンセル</Button>
+              <Button type="button" data-testid="v25-wb-duplicate-position-confirm" onClick={confirmDuplicatePosition}>１行追加</Button>
             </div>
           </div>
         </div>

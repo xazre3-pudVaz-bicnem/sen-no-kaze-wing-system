@@ -23,7 +23,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked, deleteV25WorkbenchRow } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked, deleteV25WorkbenchRow, v25DisplayedCostAndGross } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -227,13 +227,13 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('max-h-[70vh]');
     expect(html).not.toContain('overscroll-contain');
     expect(html).toContain('sticky left-0 top-0 z-40');
-    expect(html).toContain('sticky left-[6.25rem] top-0 z-40');
+    expect(html).not.toContain('sticky left-[6.25rem] top-0 z-40');
     expect(html).not.toContain('sticky left-7 top-0 z-40');
     expect(html).not.toContain('sticky left-[8rem] top-0 z-40');
-    expect(html).toContain('sticky top-0 z-30 bg-slate-200');
+    expect(html).toContain('sticky top-0 z-30');
     expect(html).toContain('data-testid="v25-wb-menu-panel"');
     expect(html).toContain('fixed z-[60]');
-    expect(html).toContain('sticky left-[6.25rem]');
+    expect(html).not.toContain('sticky left-[6.25rem]');
     expect(html).toContain('bg-emerald-900');
     expect(html).toContain('data-v25-excel-col="group"');
     expect(html).toContain('data-v25-excel-col="name"');
@@ -244,9 +244,9 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('>品名</th>');
     expect(html).toContain('>数量</th>');
     expect(html).toContain('>単位</th>');
-    expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>金額（税別）</th>'));
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[62rem] min-w-[62rem]'");
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={columnCount - 3}');
+    expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>売価金額</th>'));
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[64rem] min-w-[64rem]'");
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={showCost ? 6 : 4}');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
     expect(html).toContain('data-testid="v25-wb-publish"');
@@ -261,7 +261,9 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('>数量</th>');
     expect(html).toContain('>単位</th>');
     expect(html).toContain('>売価単価</th>');
-    expect(html).not.toContain('>原価単価</th>');
+    expect(html).toContain('>原価単価</th>');
+    expect(html).toContain('>原価金額</th>');
+    expect(html).toContain('>粗利</th>');
     expect(source).toContain('useV25PageFloatingHeader(showCost)');
     expect(source).toContain('sourceHead.cloneNode(true)');
     expect(source).toContain('table.cloneNode(false)');
@@ -317,7 +319,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('見直し済みにする');
     expect(html).toContain('data-testid="v25-wb-slot-delete"');
     expect(html).toContain('data-testid="v25-wb-line-delete"');
-    expect(source).toContain('const columnCount = showCost ? 9 : 8;');
+    expect(source).toContain('const columnCount = showCost ? 10 : 7;');
     expect(source).toContain("code !== 'sitework' && slot.price_mode !== 'auto'");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'auto' })");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'manual' })");
@@ -327,15 +329,15 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('payload: buildV25SavePayload(state)');
   });
 
-  it('列を8列（原価を表示する場合9列）に整理し、入力サイズを詰めても状態表示を失わない', () => {
+  it('通常10列・原価非表示7列の旧画面順にし、入力状態表示を残す', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
-    expect((header.match(/<th /g) ?? []).length).toBe(8);
-    expect(source).toContain('const columnCount = showCost ? 9 : 8;');
-    expect(source).toContain('w-[21rem]');
-    expect(source).toContain('w-[4.5rem]');
-    expect(source).toContain('className="h-5');
+    expect((header.match(/<th /g) ?? []).length).toBe(10);
+    expect(source).toContain('const columnCount = showCost ? 10 : 7;');
+    expect(source).toContain('w-[24rem]');
+    expect(source).toContain('w-[5.5rem]');
+    expect(source).toContain('className="h-6 min-h-6!');
     expect(source).toContain('data-v25-excel-col="qty"');
     expect(source).toContain('data-v25-excel-col="unit"');
     expect(source).toContain('data-v25-excel-col="sale"');
@@ -353,7 +355,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('原価更新あり');
   });
 
-  it('明細セル内の全入力欄だけ、共通inputの48px最小高さを20pxで上書きし、文字サイズは維持する', () => {
+  it('明細セル内の入力欄だけ旧画面に合わせた24px最小高さと11px文字を維持する', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const globals = read('app/globals.css');
     const grid = source.slice(source.indexOf('<tbody>'), source.indexOf('</tbody>'));
@@ -361,24 +363,24 @@ describe('Excel 風の画面（描画）', () => {
     expect(excelInputs).toHaveLength(8);
     for (const match of excelInputs) {
       const classes = match[1].split(/\s+/);
-      expect(classes).toContain('h-5');
-      expect(classes).toContain('min-h-5!'); // Tailwind v4 important で .input の min-h-12 を上書き
+      expect(classes).toContain('h-6');
+      expect(classes).toContain('min-h-6!'); // Tailwind v4 important で .input の min-h-12 を上書き
       expect(classes).toContain('text-[11px]'); // 文字サイズは変更しない
       expect(classes).not.toContain('text-[10px]');
     }
     expect(globals).toContain('@utility input {');
     expect(globals).toContain('min-h-12');
     const nonGrid = source.slice(source.indexOf('</tbody>'));
-    expect(nonGrid).not.toContain('min-h-5!');
+    expect(nonGrid).not.toContain('min-h-6!');
     // 標準見積の外の共通Inputやモーダル入力には同じ上書きを適用しない。
     const beforeGrid = source.slice(0, source.indexOf('<tbody>'));
-    expect(beforeGrid).not.toContain('className="h-5 min-h-5!');
+    expect(beforeGrid).not.toContain('className="h-6 min-h-6!');
     const html = render(false);
     const renderedInputs = Array.from(html.matchAll(/<input\b[^>]*data-v25-excel-col="[^"]+"[^>]*>/g));
     // 8種類のJSX入力が複数の明細行に描画されるため、実際のinput要素数は8より多い。
     expect(renderedInputs.length).toBeGreaterThan(8);
     for (const input of renderedInputs) {
-      expect(input[0]).toContain('min-h-5!');
+      expect(input[0]).toContain('min-h-6!');
       expect(input[0]).toContain('text-[11px]');
     }
   });

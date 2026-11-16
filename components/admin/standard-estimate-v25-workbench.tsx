@@ -874,15 +874,19 @@ function WorkbenchBody({
                                   />
                                   {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
                                   <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
-                                  <p className="text-[10px] text-amber-800">編集中は下書きを保存できません。確定または取消をしてください。</p>
+                                  <p className="text-[10px] text-amber-800">編集中は下書きを保存できず、別の位置名も編集できません。Enterで確定するかEscで取り消してください。</p>
                                 </div>
                               ) : (
                                 <button type="button" className="block max-w-full truncate text-left text-[10px] text-navy underline"
                                   data-testid="v25-wb-slot-position"
-                                  disabled={pending}
+                                  disabled={pending || positionInputActive}
                                   aria-label={readOnly ? '位置・選べる商品を設定' : '位置名を直接編集'}
-                                  title={`${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
+                                  title={positionInputActive
+                                    ? '編集中の位置名をEnterで確定するかEscで取り消してください'
+                                    : `${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
                                   onClick={() => {
+                                    // 別行を開いて入力途中の位置名を上書きしない。
+                                    if (pending || positionInputActive) return;
                                     if (readOnly) openPosition(slot);
                                     else setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null });
                                   }}>

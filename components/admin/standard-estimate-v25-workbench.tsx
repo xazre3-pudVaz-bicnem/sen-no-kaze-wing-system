@@ -77,6 +77,13 @@ type V25MenuPlacement = { left: number; top?: number; bottom?: number; maxHeight
  * スクロール可能な明細内でも操作メニューを切らさないため、viewport基準で表示する。
  * メニューを開いたまま表／画面がスクロールしたら閉じ、誤った行での操作を防ぐ。
  */
+/** 行削除は編集中の明細のみを変更し、他種の行と保存形式を変えない。 */
+export function deleteV25WorkbenchRow(state: V25EditorState, kind: 'slot' | 'line', key: string): V25EditorState {
+  return kind === 'slot'
+    ? { ...state, slots: state.slots.filter((row) => row.key !== key) }
+    : { ...state, lines: state.lines.filter((row) => row.key !== key) };
+}
+
 /** 品名を確認してからだけ行を削除する。削除は画面上の下書きstateに限定する。 */
 function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
   name: string; disabled: boolean; testId: string; onConfirm: () => void;
@@ -1044,7 +1051,7 @@ function WorkbenchBody({
                                   disabled={positionActionsLocked}
                                   onConfirm={() => {
                                     if (positionActionsLocked) return;
-                                    setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) }));
+                                    setState((current) => deleteV25WorkbenchRow(current, 'slot', slot.key));
                                   }}
                                 />
                               </div>
@@ -1124,7 +1131,7 @@ function WorkbenchBody({
                                   disabled={positionActionsLocked}
                                   onConfirm={() => {
                                     if (positionActionsLocked) return;
-                                    setState((current) => ({ ...current, lines: current.lines.filter((row) => row.key !== line.key) }));
+                                    setState((current) => deleteV25WorkbenchRow(current, 'line', line.key));
                                   }}
                                 />
                               </div>

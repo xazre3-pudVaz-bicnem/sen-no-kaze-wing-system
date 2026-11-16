@@ -17,7 +17,8 @@ describe('重要操作の確認UI', () => {
     expect(confirmAction).toContain('fixed inset-0 z-[100] flex items-center justify-center');
     expect(confirmAction).toContain('role="dialog"');
     expect(confirmAction).toContain('aria-modal="true"');
-    expect(confirmAction).toContain("event.key !== 'Escape'");
+    expect(confirmAction).toContain("if (event.key === 'Escape')");
+    expect(confirmAction).toContain("if (event.key !== 'Tab' || !dialogRef.current) return;");
     expect(confirmAction).not.toContain('window.confirm');
   });
 

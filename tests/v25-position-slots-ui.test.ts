@@ -379,10 +379,20 @@ describe('v2.5 PR-S2：本部の編集画面（位置の枠・行ごとの原価
     expect(slotCostForWorkbench(row(null), costs)).toEqual({ status: 'ok', standard_cost: 30000, variant_adjustment: 0, pinned: true });
   });
 
-  it('編集画面に位置名・変更候補選択・確定前の1行追加と自動識別子の入口がある', () => {
+  it('位置複製は行メニューだけに置き、詳細ダイアログの旧追加導線は撤去する', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
-    for (const testId of ['v25-wb-slot-new-label', 'v25-wb-slot-label', 'v25-wb-slot-selectable-open', 'v25-wb-slot-add-position', 'v25-wb-position-confirm', 'v25-wb-selectable-window-type']) {
+    for (const testId of ['v25-wb-slot-label', 'v25-wb-slot-selectable-open',
+      'v25-wb-position-confirm', 'v25-wb-selectable-window-type',
+      'v25-wb-duplicate-position', 'v25-wb-duplicate-position-dialog']) {
       expect(source).toContain(`data-testid="${testId}"`);
     }
+    // 共通の入力部品は testId プロパティ経由で実際の data-testid を付与する。
+    expect(source).toContain('testId="v25-wb-inline-position-input"');
+    expect(source).toContain('testId="v25-wb-duplicate-position-input"');
+    expect(source).not.toContain('v25-wb-slot-add-position');
+    expect(source).not.toContain('v25-wb-slot-new-label');
+    expect(source).not.toContain('同じ商品を１行追加');
+    expect(source).toContain('addV25PositionRow(state, duplicateFor.slotKey');
+    expect(source).toContain('duplicateFor.label, []');
   });
 });

@@ -82,6 +82,44 @@ export function updateV25Position(
     slot.key === key ? { ...slot, slot_code: code, slot_label: label, selectable_option_ids: [...selectableIds] } : slot) }, error: null };
 }
 
+/** 既存の位置名だけを変更。候補の販売状態を再判定せず、識別子・商品・金額条件を保持する。 */
+export function renameV25Position(
+  state: V25EditorState,
+  key: string,
+  labelInput: string,
+  candidateOf: CandidateOf
+): V25PositionResult {
+  const source = state.slots.find((slot) => slot.key === key);
+  const candidate = source && candidateOf(source.option_id);
+  if (!source || !source.slot_code.trim() || !candidate) {
+    return { state, error: '位置設定済みの商品行を選んでください' };
+  }
+  const label = labelInput.trim();
+  const problem = labelProblem(state.slots, key, label, candidate, candidateOf);
+  if (problem) return { state, error: problem };
+  if (label === source.slot_label) return { state, error: null };
+  return {
+    state: {
+      ...state,
+      slots: state.slots.map((slot) => slot.key === key ? { ...slot, slot_label: label } : slot),
+    },
+    error: null,
+  };
+}
+
+/** 日本語IMEの確定Enter／直後のEnterは明細確定にもExcelのセル移動にも使わない。 */
+export function v25PositionNameKeyAction(
+  key: string,
+  isComposing: boolean,
+  justComposed: boolean,
+  keyCode?: number
+): 'commit' | 'cancel' | null {
+  if (isComposing || justComposed || keyCode === 229) return null;
+  if (key === 'Enter') return 'commit';
+  if (key === 'Escape') return 'cancel';
+  return null;
+}
+
 /** 明示的な解除操作でのみ位置と候補を外し、商品・単価・行は保持する。 */
 export function clearV25Position(state: V25EditorState, key: string): V25PositionResult {
   const source = state.slots.find((slot) => slot.key === key);

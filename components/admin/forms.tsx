@@ -610,6 +610,7 @@ export function OptionForm({
       <input type="hidden" name="size_note" value={option.size_note ?? ''} />
       <input type="hidden" name="highlight" value={option.highlight ?? ''} />
       <input type="hidden" name="description" value={option.description ?? ''} />
+      <input type="hidden" name="manufacturer_product_url" value={option.manufacturer_product_url ?? ''} />
     </>
   ) : null;
 
@@ -653,6 +654,8 @@ export function OptionForm({
       <input type="hidden" name="base_model_id" value={copySource?.base_model_id ?? ''} />
       <input type="hidden" name="description" value={copySource?.description ?? ''} />
       <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
+      {/* メーカー公式商品ページURLは複製元から引き継ぐ（画像・資料のファイルと違い、URL そのものを使ってよい） */}
+      <input type="hidden" name="manufacturer_product_url" value={copySource?.manufacturer_product_url ?? ''} />
       {/* 画像・メーカー資料は複製元の Storage パスを流用せず、保存の後に新しい商品の置き場所へ別ファイルとして複製する。 */}
       <input type="hidden" name="image_url" value="" />
       {copySource && showCostFields
@@ -894,6 +897,22 @@ export function OptionForm({
             description={option?.description ?? ''}
             descriptionErrors={e.description}
           />
+
+          <Field
+            label="メーカー公式商品ページURL（任意）"
+            htmlFor={`manufacturer-product-url-${mode}`}
+            hint="メーカーのカラー・仕様などを確認できる公式商品ページのURL。画像URL・メーカーPDFとは別です。販売店URLは登録しないでください。"
+            errors={e.manufacturer_product_url}
+          >
+            <Input
+              id={`manufacturer-product-url-${mode}`}
+              name="manufacturer_product_url"
+              type="url"
+              inputMode="url"
+              placeholder="https://www.example.com/products/..."
+              defaultValue={option?.manufacturer_product_url ?? ''}
+            />
+          </Field>
 
           <p className="text-xs text-muted">
             固定の商品構成・標準装備は、メーカー資料で確認できるものまで無理に個別登録する必要はありません。

@@ -15,6 +15,7 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
+import { MANUFACTURER_PRODUCT_URL_ERROR, isValidManufacturerProductUrl, normalizeManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import {
   FREE_PRODUCT_CATEGORY_CODE,
   VIEW_KEYS,
@@ -232,6 +233,11 @@ export function RegisteredOptionEditFlow({
       base_model_id: nullable(data.get('base_model_id')),
       manufacturer: nullable(data.get('manufacturer')),
       model_no: nullable(data.get('model_no')),
+      // 保存（サーバー）と同じく %エンコードした形で比べ・確かめる
+      manufacturer_product_url: (() => {
+        const url = nullable(data.get('manufacturer_product_url'));
+        return url === null ? null : normalizeManufacturerProductUrl(url);
+      })(),
       // 窓タイプ（v2.5 PR-S2）：窓タイプを使わないカテゴリーへ移すと外れる（サーバーも同じ）
       window_type_code: categories.find((category) => category.id === String(data.get('category_id') ?? ''))?.uses_window_type
         ? data.has('window_type_code')
@@ -266,6 +272,11 @@ export function RegisteredOptionEditFlow({
         setReviewError('カテゴリーを選択してください。');
         return;
       }
+      // メーカー公式商品ページURLは、保存（サーバー・DB）と同じ決まりで先に確かめる
+      if (next.option.manufacturer_product_url && !isValidManufacturerProductUrl(next.option.manufacturer_product_url)) {
+        setReviewError(MANUFACTURER_PRODUCT_URL_ERROR);
+        return;
+      }
       setReview(next);
       setScreen('review');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -287,6 +298,7 @@ export function RegisteredOptionEditFlow({
       { key: 'category', label: 'カテゴリー', before: categoryMap.get(option.category_id)?.name ?? '—', after: categoryMap.get(next.category_id)?.name ?? '—' },
       { key: 'manufacturer', label: 'メーカー', before: option.manufacturer ?? '—', after: next.manufacturer ?? '—' },
       { key: 'model_no', label: 'シリーズ・型番／品番', before: option.model_no ?? '—', after: next.model_no ?? '—' },
+      { key: 'manufacturer_product_url', label: 'メーカー公式商品ページURL', before: option.manufacturer_product_url ?? '—', after: next.manufacturer_product_url ?? '—', kind: 'long' },
       { key: 'window_type', label: '窓タイプ', before: windowTypeLabel(option.window_type_code), after: windowTypeLabel(next.window_type_code) },
       { key: 'size_note', label: 'サイズ・仕様', before: option.size_note ?? '—', after: next.size_note ?? '—' },
       ...(showCostFields
@@ -324,6 +336,10 @@ export function RegisteredOptionEditFlow({
   }, [categoryMap, modelMap, option, review, priceLabel, showCostFields, windowTypeLabel, conflicts, conflictCandidateById]);
 
   const zeroPriceNeedsServerContract = Boolean(review && introducesUnconfirmedZeroPrice(option, review.option));
+  // サーバーの入力チェックで止まった項目（STEP 2 には項目ごとの欄が無いので、まとめて出す）
+  const fieldErrorMessages = [
+    ...new Set(Object.entries(state.fieldErrors ?? {}).flatMap(([key, messages]) => (key === '_form' ? [] : (messages ?? [])))),
+  ];
   const nextCategory = review ? categoryMap.get(review.option.category_id) : undefined;
 
   const applyChanges = async () => {
@@ -382,6 +398,7 @@ export function RegisteredOptionEditFlow({
 
           {state.error && <Alert tone="danger">{state.error}</Alert>}
           {state.fieldErrors?._form?.[0] && <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>}
+          {fieldErrorMessages.length > 0 && <Alert tone="danger">{fieldErrorMessages.join(' ')}</Alert>}
           {state.ok && <Alert tone="success">変更を反映しました。最新の登録内容を読み直しています。</Alert>}
 
           <section className="card p-4 sm:p-5" aria-label="変更点一覧">
@@ -604,6 +621,16 @@ export function RegisteredOptionEditFlow({
               descriptionId="registered-description"
               description={option.description ?? ''}
             />
+            <Field label="メーカー公式商品ページURL（任意）" htmlFor="registered-manufacturer-product-url" hint="カラー・仕様を確認できるメーカー公式ページを入力します。画像・メーカーPDFのURLは入力しません。">
+              <Input
+                id="registered-manufacturer-product-url"
+                name="manufacturer_product_url"
+                type="url"
+                inputMode="url"
+                placeholder="https://www.example.com/products/..."
+                defaultValue={option.manufacturer_product_url ?? ''}
+              />
+            </Field>
           </section>
 
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-main-media">

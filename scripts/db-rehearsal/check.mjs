@@ -36,6 +36,7 @@ import { runtimeV25PositionSlots } from './runtime-v25-position-slots.mjs';
 import { runtimeV25FormalQuotes } from './runtime-v25-formal-quotes.mjs';
 import { runtimeV25StandardQuoteDrafts } from './runtime-v25-standard-quote-drafts.mjs';
 import { runtimeCasePlanPositionSlots } from './runtime-case-plan-position-slots.mjs';
+import { runtimeManufacturerProductUrl } from './runtime-manufacturer-product-url.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -95,6 +96,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
+    // メーカー公式商品ページの任意 URL（PR #535。https・認証情報なし・列ごとの読み取り許可）
+    runtime = mergeRuntime(runtime, await runtimeManufacturerProductUrl(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

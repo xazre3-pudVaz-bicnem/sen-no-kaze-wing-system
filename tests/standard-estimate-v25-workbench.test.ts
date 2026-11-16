@@ -434,6 +434,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('title={candidate?.categoryName ??');
     expect(source).toContain('flex min-w-0 flex-wrap items-center gap-1');
     expect(source).toContain('title={line.remark}');
+    expect(source).toContain("title={line.group_label || '手入力明細のグループ'}");
     expect(source).toContain('data-v25-excel-col="name"');
     expect(source).toContain('data-v25-excel-col="note"');
   });

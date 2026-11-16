@@ -1247,61 +1247,24 @@ function WorkbenchBody({
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
                 <p className="font-semibold">{positionCandidate?.name ?? '商品'}：位置別設定</p>
-                <p className="text-xs text-muted">{addPositionOnConfirm ? '同じ商品を別の位置に1行追加' : 'この商品の位置名と変更候補を設定'}</p>
+                <p className="text-xs text-muted">この商品の位置名と変更候補を設定</p>
               </div>
               <button type="button" className="text-sm text-muted underline" onClick={closePosition}>閉じる</button>
             </div>
             <div className="space-y-4 overflow-y-auto px-4 py-3">
-              {addPositionOnConfirm ? (
-                <label className="block space-y-1">
-                  <span className="text-xs font-semibold">追加する位置名（お客様に表示）</span>
-                  <Input value={addedPositionLabel} disabled={readOnly} maxLength={40} data-testid="v25-wb-slot-new-label"
-                    placeholder="例：寝室の窓" onChange={(event) => { setAddedPositionLabel(event.target.value); setPositionError(null); }} />
-                </label>
-              ) : (
-                <label className="block space-y-1">
-                  <span className="text-xs font-semibold">1. お客様に表示する位置名</span>
-                  <Input value={positionDraft.slot_label} disabled={readOnly} maxLength={40} data-testid="v25-wb-slot-label"
-                    placeholder="例：リビングの掃出し窓" onChange={(event) => updatePosition({ slot_label: event.target.value })} />
-                </label>
-              )}
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold">1. お客様に表示する位置名</span>
+                <Input value={positionDraft.slot_label} disabled={readOnly} maxLength={40} data-testid="v25-wb-slot-label"
+                  placeholder="例：リビングの掃出し窓" onChange={(event) => updatePosition({ slot_label: event.target.value })} />
+              </label>
               <div className="space-y-1 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
-                <p className="font-semibold">{addPositionOnConfirm ? '追加行の標準品' : '2. この行の標準品'}</p>
+                <p className="font-semibold">2. この行の標準品</p>
                 <p>{positionCandidate?.name ?? '（商品が見つかりません）'}
                   {positionCandidate?.windowTypeLabel ? `（${positionCandidate.windowTypeLabel}）` : ''}
                 </p>
                 <p className="text-muted">標準品はこの行の商品です。別の商品への入替は明細の商品選択から行います。</p>
               </div>
-              {addPositionOnConfirm ? (
-                <div className="space-y-2 text-xs">
-                  <p className="font-semibold">追加する位置の変更候補</p>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={inheritCandidates} disabled={readOnly || positionSlot.selectable_option_ids.length === 0}
-                      onChange={(event) => { setInheritCandidates(event.target.checked); setInheritedCandidateIds([]); setPositionError(null); }} />
-                    元の行の変更候補から選ぶ（初期状態は引き継がない）
-                  </label>
-                  {inheritCandidates && (
-                    <div className="space-y-1 pl-5" data-testid="v25-wb-position-inherit-options">
-                      {positionSlot.selectable_option_ids.map((id) => {
-                        const alternative = candidateById.get(id);
-                        const eligible = Boolean(alternative && !alternative.retired && !alternative.unavailable &&
-                          alternative.categoryId === positionCandidate?.categoryId);
-                        return (
-                          <label key={id} className="flex items-center gap-2">
-                            <input type="checkbox" checked={inheritedCandidateIds.includes(id)} disabled={!eligible || readOnly}
-                              onChange={(event) => { setInheritedCandidateIds((current) => event.target.checked ? [...current, id] : current.filter((value) => value !== id)); setPositionError(null); }} />
-                            {alternative?.name ?? '（現在選択できない商品）'} {!eligible && '（引き継げません）'}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <p className="text-muted">追加する場所の開口寸法・施工条件に使えるかは担当者が確認してください。選択可能な表示は適合を保証しません。</p>
-                  <p className="font-semibold">数量１で明細に追加され、見積金額に反映されます。</p>
-                  <p className="text-muted">元の行は変更せず、その直下に新しい行を追加します。</p>
-                </div>
-              ) : (
-                <div className="space-y-2 text-xs">
+              <div className="space-y-2 text-xs">
                   <p className="font-semibold">3. 変更候補（標準品は含まない）</p>
                   <ul className="flex flex-wrap gap-1.5" data-testid="v25-wb-slot-selectables">
                     {positionDraft.selectable_option_ids.length === 0 && <li className="text-muted">変更候補なし（標準品のみ）</li>}
@@ -1340,26 +1303,14 @@ function WorkbenchBody({
                         <p className="font-medium text-amber-800">位置名と変更候補を外します。この商品行は残ります。確定前ならキャンセルできます。</p>}
                     </div>
                   )}
-                </div>
-              )}
-              {!addPositionOnConfirm && positionSlot.slot_code.trim() && !readOnly && (
-                <button type="button" className="btn-secondary btn-sm" data-testid="v25-wb-slot-add-position"
-                  onClick={() => { setAddPositionOnConfirm(true); setAddedPositionLabel(''); setInheritCandidates(false); setInheritedCandidateIds([]); setPositionError(null); }}>
-                  ＋ 同じ商品を１行追加
-                </button>
-              )}
-              {addPositionOnConfirm && !readOnly && (
-                <button type="button" className="text-xs text-navy underline" onClick={() => { setAddPositionOnConfirm(false); setPositionError(null); }}>
-                  元の行の位置設定に戻る
-                </button>
-              )}
+              </div>
               <p className="text-[0.68rem] leading-5 text-muted">
                 {positionSlot.slot_code.trim()
                   ? `識別子：${positionSlot.slot_code}（位置名を変更しても変わりません）`
                   : '識別子は位置名を反映すると自動発行します。'}
                 位置枠は数量１です。
               </p>
-              {!addPositionOnConfirm && !positionSlot.slot_code.trim() && Number(positionSlot.quantity) !== 1 && (
+              {!positionSlot.slot_code.trim() && Number(positionSlot.quantity) !== 1 && (
                 <p className="text-xs font-medium text-amber-800">現在の数量は {positionSlot.quantity} です。新しく位置を設定するには数量１が必要です。自動変更はしません。</p>
               )}
               {positionError && <Alert tone="danger">{positionError}</Alert>}
@@ -1368,7 +1319,7 @@ function WorkbenchBody({
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
               <Button type="button" variant="secondary" onClick={closePosition}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
               {!readOnly && <Button type="button" data-testid="v25-wb-position-confirm" onClick={confirmPosition} disabled={pending}>
-                {addPositionOnConfirm ? '１行追加' : removePositionOnConfirm ? '位置設定を解除する' : 'この行に反映'}
+                {removePositionOnConfirm ? '位置設定を解除する' : 'この行に反映'}
               </Button>}
             </div>
           </div>

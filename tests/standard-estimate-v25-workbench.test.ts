@@ -432,6 +432,7 @@ describe('Excel 風の画面（描画）', () => {
     // 位置名・カテゴリー・品名・備考は省略表示でも元データを保持している。
     expect(source).toContain('title={line.section}');
     expect(source).toContain('title={candidate?.categoryName ??');
+    expect(source).toContain('flex min-w-0 flex-wrap items-center gap-1');
     expect(source).toContain('title={line.remark}');
     expect(source).toContain('data-v25-excel-col="name"');
     expect(source).toContain('data-v25-excel-col="note"');

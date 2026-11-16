@@ -8,6 +8,7 @@ type ConfirmActionButtonProps = Omit<ComponentProps<'button'>, 'onClick'> & {
   dialogTitle?: string;
   confirmLabel?: string;
   destructive?: boolean;
+  showCloseButton?: boolean;
   onConfirm: () => void | Promise<void>;
 };
 
@@ -16,6 +17,7 @@ export function ConfirmActionButton({
   dialogTitle = 'この操作を実行しますか？',
   confirmLabel = '実行する',
   destructive = false,
+  showCloseButton = false,
   onConfirm,
   children,
   ...props
@@ -38,17 +40,19 @@ export function ConfirmActionButton({
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       setOpen(false);
       queueMicrotask(() => triggerRef.current?.focus());
     };
 
     document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, true);
     cancelButtonRef.current?.focus();
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [open]);
 
@@ -66,8 +70,10 @@ export function ConfirmActionButton({
       {open && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeDialog();
+          onClick={(event) => {
+            // pointerdown で消すと後続の click が背後の操作へ抜けるため、click 完了時に閉じる。
+            event.stopPropagation();
+            if (event.target === event.currentTarget) { event.preventDefault(); closeDialog(); }
           }}
         >
           <section
@@ -76,9 +82,15 @@ export function ConfirmActionButton({
             aria-labelledby={titleId}
             aria-describedby={descriptionId}
             className="w-full max-w-md rounded-2xl border border-line bg-white p-5 shadow-2xl sm:p-6"
-            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
-            <h2 id={titleId} className="text-lg font-semibold text-ink">{dialogTitle}</h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 id={titleId} className="text-lg font-semibold text-ink">{dialogTitle}</h2>
+              {showCloseButton && (
+                <button type="button" aria-label="確認画面を閉じる" title="閉じる" data-testid="confirm-action-close"
+                  className="text-xl text-ink-soft" onClick={closeDialog}>×</button>
+              )}
+            </div>
             <p id={descriptionId} className="mt-2 text-sm leading-6 text-ink-soft">{message}</p>
 
             <div className="mt-6 flex justify-end gap-2">

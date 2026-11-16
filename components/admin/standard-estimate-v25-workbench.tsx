@@ -53,6 +53,7 @@ import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
 import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
+import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -99,16 +100,20 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
       if (details.contains(event.target as Node)) return;
       dismiss();
     };
-    const onOutside = (event: PointerEvent) => {
-      if (!details.contains(event.target as Node)) dismiss();
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dismiss();
+      details.querySelector('summary')?.focus();
     };
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', dismiss);
-    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('keydown', onEscape, true);
     return () => {
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', dismiss);
-      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('keydown', onEscape, true);
     };
   }, [placement]);
 
@@ -127,6 +132,8 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
       <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
         aria-label={label} title="行の操作"
         onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>⋯</summary>
+      {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
+        onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />}
       <div className={'fixed z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg ' + (placement ? '' : 'invisible')}
         style={placement ?? undefined} data-testid="v25-wb-menu-panel">
         {children}
@@ -322,6 +329,7 @@ function WorkbenchBody({
   const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(showCost);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
+  const [pickerDirty, setPickerDirty] = useState(false);
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
   const [variantEditor, setVariantEditor] = useState<{ slotKey: string; choices: V25SlotRow['variant_choices'] } | null>(null);
   const [positionFor, setPositionFor] = useState<string | null>(null);
@@ -336,6 +344,7 @@ function WorkbenchBody({
   const [jumpToKey, setJumpToKey] = useState<{ key: string } | null>(null);
   const lastNavigated = useRef<{ key: string } | null>(null);
   const [selectableFor, setSelectableFor] = useState<string | null>(null);
+  const [selectableDraftIds, setSelectableDraftIds] = useState<string[] | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
   const [pending, startTransition] = useTransition();
@@ -384,24 +393,6 @@ function WorkbenchBody({
     ...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),
   ];
 
-  useEffect(() => {
-    if (!picker && !selectableFor && !variantEditor && !positionFor && !replacementDraft && !duplicateFor) return;
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      if (selectableFor) setSelectableFor(null);
-      else if (duplicateFor) setDuplicateFor(null);
-      else if (replacementDraft) setReplacementDraft(null);
-      else if (positionFor) {
-        setPositionFor(null);
-        setPositionDraft(null);
-        setRemovePositionOnConfirm(false);
-        setPositionError(null);
-      } else if (variantEditor) setVariantEditor(null);
-      else setPicker(null);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [picker, selectableFor, variantEditor, positionFor, replacementDraft, duplicateFor]);
 
   // 案内から未設定行へ移動。折り畳まれていた場合は行を開いてから移動する。
   useEffect(() => {
@@ -504,6 +495,7 @@ function WorkbenchBody({
   };
   const closePosition = () => {
     setSelectableFor(null);
+    setSelectableDraftIds(null);
     setPositionFor(null);
     setPositionDraft(null);
     setRemovePositionOnConfirm(false);
@@ -587,6 +579,30 @@ function WorkbenchBody({
     if (section) setCollapsed((current) => { const next = new Set(current); next.delete(section); return next; });
     setJumpToKey({ key });
   };
+  const openSelectable = (key: string) => {
+    setSelectableDraftIds([...(positionDraft?.selectable_option_ids ?? [])]);
+    setSelectableFor(key);
+    setSelectableWindowType('');
+    setSelectableQuery('');
+  };
+  const closeSelectable = () => {
+    setSelectableFor(null);
+    setSelectableDraftIds(null);
+    setSelectableWindowType('');
+    setSelectableQuery('');
+  };
+  const applySelectable = () => {
+    // 子画面の候補は「決定」まで親の位置Draftへ反映しない。
+    if (selectableDraftIds) updatePosition({ selectable_option_ids: [...selectableDraftIds] });
+    closeSelectable();
+  };
+  const toggleSelectableDraft = (optionId: string) => {
+    setSelectableDraftIds((current) => current
+      ? current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId]
+      : null);
+  };
+  const selectableDirty = Boolean(selectableWindowType || selectableQuery ||
+    JSON.stringify(selectableDraftIds ?? []) !== JSON.stringify(positionDraft?.selectable_option_ids ?? []));
   const selectableSlot = selectableFor ? (state.slots.find((slot) => slot.key === selectableFor) ?? null) : null;
   const selectableBase = selectableSlot ? candidateById.get(selectableSlot.option_id) : undefined;
   // 選べる商品の候補：標準の商品と同じカテゴリーの、販売中でこの仕様で選べる商品（DB の保存と公開の確認と同じ）
@@ -808,7 +824,7 @@ function WorkbenchBody({
                     readOnly ? undefined : (
                       <div className="flex gap-2">
                         <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-product-${code}`}
-                          onClick={() => { setPicker({ section: code, targetKey: null });  }}>
+                          onClick={() => { setPickerDirty(false); setPicker({ section: code, targetKey: null });  }}>
                           ＋ 商品台帳から追加
                         </button>
                         <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-line-${code}`} onClick={() => addLine(code)}>
@@ -854,7 +870,7 @@ function WorkbenchBody({
                                     title="商品台帳から選ぶ"
                                     aria-label={`${candidate?.name ?? '商品'}を商品台帳から選び直す`}
                                     data-testid="v25-wb-slot-product-picker-icon"
-                                    onClick={() => { setPicker({ section: code, targetKey: slot.key }); }}>
+                                    onClick={() => { setPickerDirty(false); setPicker({ section: code, targetKey: slot.key }); }}>
                                     <Package className="size-3.5" aria-hidden="true" />
                                   </button>
                                 )}
@@ -1180,6 +1196,7 @@ function WorkbenchBody({
             <ConfirmActionButton
               className="btn-primary"
               disabled={pending || blockers.length > 0 || positionInputActive}
+              showCloseButton
               dialogTitle="この内容で公開しますか？"
               message="公開すると、この標準見積の現在の版になり、前の版は置き換わります。公開した金額は変わりません。"
               confirmLabel="公開する"
@@ -1193,7 +1210,8 @@ function WorkbenchBody({
       )}
 
       {variantEditor && variantSlot && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setVariantEditor(null)}>
+        <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClose={() => setVariantEditor(null)} dirty={!readOnly && JSON.stringify(variantEditor.choices) !== JSON.stringify(variantSlot.variant_choices)}>
+          {(requestClose) => (
           <div role="dialog" aria-modal="true" aria-label="商品の仕様を変更" data-testid="v25-wb-variant-editor"
             className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
@@ -1201,7 +1219,7 @@ function WorkbenchBody({
                 <p className="font-semibold">{variantCandidate?.name ?? '商品'}：仕様の選択</p>
                 <p className="text-xs text-muted">確定しても下書きは保存されません。保存は表の下のボタンから行います。</p>
               </div>
-              <button type="button" className="text-sm text-muted underline" onClick={() => setVariantEditor(null)}>閉じる</button>
+              <button type="button" data-v25-dialog-close aria-label="仕様変更を閉じる" title="閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
             </div>
             <div className="space-y-3 overflow-y-auto px-4 py-3">
               {(variantCandidate?.variantGroups ?? []).map((group) => (
@@ -1221,21 +1239,24 @@ function WorkbenchBody({
               {variantCandidate?.retired && <Alert tone="warn">販売停止の商品です。</Alert>}
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-              <Button type="button" variant="secondary" onClick={() => setVariantEditor(null)}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
+              <Button type="button" variant="secondary" onClick={requestClose}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
               {!readOnly && <Button type="button" data-testid="v25-wb-variant-confirm" onClick={applyVariant}>確定</Button>}
             </div>
           </div>
-        </div>
+          )}
+        </V25DialogLayer>
       )}
 
       {duplicateFor && duplicateSource && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setDuplicateFor(null)}>
+        <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClose={() => setDuplicateFor(null)} dirty={duplicateFor.label !== ''}>
+          {(requestClose) => (
           <div role="dialog" aria-modal="true" aria-label="別の位置に複製"
             data-testid="v25-wb-duplicate-position-dialog"
             className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
-            <div className="border-b border-line px-4 py-3">
-              <p className="font-semibold">別の位置に複製</p>
-              <p className="text-xs text-muted">{candidateById.get(duplicateSource.option_id)?.name ?? '商品'}を数量１で直下に１行追加します。元行は変更しません。</p>
+            <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+              <div><p className="font-semibold">別の位置に複製</p>
+              <p className="text-xs text-muted">{candidateById.get(duplicateSource.option_id)?.name ?? '商品'}を数量１で直下に１行追加します。元行は変更しません。</p></div>
+              <button type="button" data-v25-dialog-close aria-label="別位置への複製を閉じる" title="閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
             </div>
             <div className="space-y-2 px-4 py-3">
               <label className="block space-y-1 text-xs">
@@ -1245,7 +1266,7 @@ function WorkbenchBody({
                   placeholder="例：寝室の窓"
                   onChange={(label) => setDuplicateFor((current) => current ? { ...current, label, error: null } : null)}
                   onConfirm={confirmDuplicatePosition}
-                  onCancel={() => setDuplicateFor(null)}
+                  onCancel={requestClose}
                 />
               </label>
               {duplicateFor.error && <p role="alert" className="text-xs text-red-700">{duplicateFor.error}</p>}
@@ -1253,16 +1274,18 @@ function WorkbenchBody({
               <p className="text-xs text-muted">明細への反映のみです。下書き保存は別操作です。位置名を確定・取消するまでは保存できません。</p>
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-              <Button type="button" variant="secondary" onClick={() => setDuplicateFor(null)}>キャンセル</Button>
+              <Button type="button" variant="secondary" onClick={requestClose}>キャンセル</Button>
               <Button type="button" data-testid="v25-wb-duplicate-position-confirm" disabled={pending}
                 onClick={confirmDuplicatePosition}>１行追加</Button>
             </div>
           </div>
-        </div>
+          )}
+        </V25DialogLayer>
       )}
 
       {positionSlot && positionDraft && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={closePosition}>
+        <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClose={closePosition} dirty={!readOnly && (removePositionOnConfirm || positionDraft.slot_label !== positionSlot.slot_label || JSON.stringify(positionDraft.selectable_option_ids) !== JSON.stringify(positionSlot.selectable_option_ids))}>
+          {(requestClose) => (
           <div role="dialog" aria-modal="true" aria-label="位置・選べる商品を設定" data-testid="v25-wb-slot-position-editor"
             className="flex max-h-[82vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
@@ -1270,7 +1293,7 @@ function WorkbenchBody({
                 <p className="font-semibold">{positionCandidate?.name ?? '商品'}：位置別設定</p>
                 <p className="text-xs text-muted">この商品の位置名と変更候補を設定</p>
               </div>
-              <button type="button" className="text-sm text-muted underline" onClick={closePosition}>閉じる</button>
+              <button type="button" data-v25-dialog-close aria-label="位置別設定を閉じる" title="閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
             </div>
             <div className="space-y-4 overflow-y-auto px-4 py-3">
               <label className="block space-y-1">
@@ -1303,7 +1326,7 @@ function WorkbenchBody({
                   {!readOnly && (
                     <button type="button" className="btn-secondary btn-sm" disabled={!positionDraft.slot_label.trim()}
                       data-testid="v25-wb-slot-selectable-open"
-                      onClick={() => { setSelectableFor(positionSlot.key); setSelectableWindowType(''); setSelectableQuery(''); }}>
+                      onClick={() => openSelectable(positionSlot.key)}>
                       ＋ 変更候補を選ぶ
                     </button>
                   )}
@@ -1338,22 +1361,24 @@ function WorkbenchBody({
               <p className="text-xs text-muted">この操作は編集中の明細への反映です。下書きは保存されません。保存は「下書きを保存」で行います。</p>
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-              <Button type="button" variant="secondary" onClick={closePosition}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
+              <Button type="button" variant="secondary" onClick={requestClose}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
               {!readOnly && <Button type="button" data-testid="v25-wb-position-confirm" onClick={confirmPosition} disabled={pending}>
                 {removePositionOnConfirm ? '位置設定を解除する' : 'この行に反映'}
               </Button>}
             </div>
           </div>
-        </div>
+          )}
+        </V25DialogLayer>
       )}
 
       {replacementDraft && replacementSource && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setReplacementDraft(null)}>
+        <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClose={() => setReplacementDraft(null)} dirty={replacementDraft.selectableIds.length > 0}>
+          {(requestClose) => (
           <div role="dialog" aria-modal="true" aria-label="同じ位置の標準品を入れ替える" data-testid="v25-wb-position-replacement"
             className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <p className="font-semibold">「{replacementSource.slot_label}」の標準品を入替</p>
-              <button type="button" className="text-sm text-muted underline" onClick={() => setReplacementDraft(null)}>閉じる</button>
+              <button type="button" data-v25-dialog-close aria-label="標準品の入替を閉じる" title="閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
             </div>
             <div className="space-y-3 overflow-y-auto px-4 py-3 text-xs">
               <p>新しい標準品：<strong>{replacementDraft.candidate.name}</strong></p>
@@ -1377,35 +1402,40 @@ function WorkbenchBody({
               <p className="text-muted">確定後は編集中の明細と試算に反映されます。下書きはまだ保存されません。</p>
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-              <Button type="button" variant="secondary" onClick={() => setReplacementDraft(null)}>キャンセル</Button>
+              <Button type="button" variant="secondary" onClick={requestClose}>キャンセル</Button>
               <Button type="button" disabled={pending} data-testid="v25-wb-position-replace-confirm" onClick={confirmReplacement}>標準品と候補を反映</Button>
             </div>
           </div>
-        </div>
+          )}
+        </V25DialogLayer>
       )}
 
       {picker && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[6vh]" onClick={() => setPicker(null)}>
+        <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[6vh]" onClose={() => { setPicker(null); setPickerDirty(false); }} dirty={pickerDirty}>
+          {(requestClose) => (
           <StandardEstimateV25ProductPicker
             sectionLabel={STANDARD_SECTION_LABEL[picker.section]}
             candidates={candidates.filter((candidate) => candidate.section === picker.section && !candidate.retired)}
             productCosts={costs.currentProduct}
             currentSlot={picker.targetKey ? state.slots.find((slot) => slot.key === picker.targetKey) ?? null : null}
             onChoose={choose}
-            onClose={() => setPicker(null)}
+            onClose={requestClose}
+            onDirtyChange={setPickerDirty}
           />
-        </div>
+          )}
+        </V25DialogLayer>
       )}
 
       {selectableSlot && selectableBase && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setSelectableFor(null)}>
+        <V25DialogLayer className="fixed inset-0 z-[60] flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClose={closeSelectable} dirty={selectableDirty}>
+          {(requestClose) => (
           <div role="dialog" aria-modal="true" aria-label="お客様が選べる商品" className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
               <div className="min-w-0">
                 <p className="font-semibold">{positionDraft?.slot_label.trim() || positionDraft?.slot_code.trim() || 'カテゴリー単位'}：お客様が選べる商品</p>
                 <p className="text-xs text-muted">標準の「{selectableBase.name}」の代わりに選べる、{selectableBase.categoryName}の商品を選びます（いくつでも）。</p>
               </div>
-              <button type="button" className="shrink-0 text-sm text-muted underline" onClick={() => setSelectableFor(null)}>閉じる</button>
+              <button type="button" data-v25-dialog-close aria-label="変更候補の選択を閉じる" title="閉じる" className="shrink-0 text-xl text-muted" onClick={requestClose}>×</button>
             </div>
             <div className="flex flex-wrap gap-2 border-b border-line px-4 py-2">
               {selectableBase.usesWindowType && (
@@ -1420,11 +1450,11 @@ function WorkbenchBody({
             </div>
             <ul className="divide-y divide-line overflow-y-auto" data-testid="v25-wb-selectable-picker">
               {selectableShown.map((candidate) => {
-                const checked = positionDraft?.selectable_option_ids.includes(candidate.id) ?? false;
+                const checked = selectableDraftIds?.includes(candidate.id) ?? false;
                 return (
                   <li key={candidate.id}>
                     <label className="flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-sm hover:bg-sand/40">
-                      <input type="checkbox" checked={checked} onChange={() => toggleSelectable(candidate.id)} disabled={readOnly} />
+                      <input type="checkbox" checked={checked} onChange={() => toggleSelectableDraft(candidate.id)} disabled={readOnly} />
                       <span className="min-w-0 flex-1">
                         <span className="font-medium">{candidate.name}</span>
                         <span className="block text-xs text-muted">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</span>
@@ -1436,11 +1466,12 @@ function WorkbenchBody({
               {selectableShown.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">選べる商品がありません。</li>}
             </ul>
             <div className="flex items-center justify-between border-t border-line px-4 py-2 text-xs text-muted">
-              <span>選んでいる商品 {positionDraft?.selectable_option_ids.length ?? 0} 件（標準の商品のほか）</span>
-              <button type="button" className="btn-primary btn-sm" onClick={() => setSelectableFor(null)}>決定</button>
+              <span>選んでいる商品 {selectableDraftIds?.length ?? 0} 件（標準の商品のほか）</span>
+              <button type="button" className="btn-primary btn-sm" onClick={applySelectable}>決定</button>
             </div>
           </div>
-        </div>
+          )}
+        </V25DialogLayer>
       )}
     </section>
   );

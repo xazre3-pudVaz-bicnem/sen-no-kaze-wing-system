@@ -118,7 +118,7 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
       confirmLabel="削除する" onConfirm={onConfirm}
       aria-label={`「${name}」を削除`}
       title={disabled ? '位置名を確定または取り消してから削除してください' : `${name}を削除`}
-      className="flex size-5 shrink-0 items-center justify-center rounded text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40">
+      className="flex size-6 shrink-0 items-center justify-center rounded text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40">
       <Trash2 className="size-3.5" aria-hidden="true" />
     </ConfirmActionButton>
   );
@@ -179,7 +179,7 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
       onKeyDown={(event) => {
         if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); }
       }}>
-      <summary className="flex size-5 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+      <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
         aria-label={label} title="行の操作"
         onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>⋯</summary>
       {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
@@ -1197,38 +1197,35 @@ function WorkbenchBody({
                         </tr>
                       );
                     })}
+                  {sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}
                 </Fragment>
               );
             })}
           </tbody>
-          <tfoot className="bg-slate-50 text-xs">
+          <tfoot className="bg-slate-100 text-[11px]">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right text-muted">税別小計（経費を含む）</td>
-              <td className="px-1 py-0.5.5 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
+              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
+              <td className="border-l border-slate-300 px-2 py-1 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
-              <td />
-              <td />
+              <td colSpan={showCost ? 3 : 2} />
             </tr>
             <tr>
-              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">調整額</td>
-              <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
-              <td />
-              <td />
+              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">調整額</td>
+              <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
+              <td colSpan={showCost ? 3 : 2} />
             </tr>
             <tr>
-              <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">消費税</td>
-              <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
-              <td />
-              <td />
+              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">消費税</td>
+              <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
+              <td colSpan={showCost ? 3 : 2} />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={columnCount - 3} className="px-1 py-0.5.5 text-right font-semibold">税込合計（画面の試算）</td>
-              <td className="px-1 py-0.5.5 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
+              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
+              <td className="border-l border-slate-300 px-2 py-1 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
-              <td className="px-1 py-0.5.5 text-[0.68rem] text-muted">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
-              <td />
+              <td colSpan={showCost ? 3 : 2} className="px-2 py-1 text-right text-[0.68rem] text-slate-500">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
             </tr>
           </tfoot>
         </table>

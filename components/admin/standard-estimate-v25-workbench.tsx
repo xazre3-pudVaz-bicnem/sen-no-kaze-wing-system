@@ -1145,19 +1145,16 @@ function WorkbenchBody({
               </td>
               <td />
               <td />
-              <td />
             </tr>
             <tr>
               <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">調整額</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
               <td />
               <td />
-              <td />
             </tr>
             <tr>
               <td colSpan={columnCount - 3} className="px-1 py-0.5 text-right text-muted">消費税</td>
               <td className="px-1 py-0.5 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
-              <td />
               <td />
               <td />
             </tr>
@@ -1167,7 +1164,6 @@ function WorkbenchBody({
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
               <td className="px-1 py-0.5.5 text-[0.68rem] text-muted">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
-              <td />
               <td />
             </tr>
           </tfoot>

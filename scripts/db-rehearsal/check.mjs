@@ -35,6 +35,7 @@ import { runtimeLegacyPriceGuard } from './runtime-legacy-price-guard.mjs';
 import { runtimeV25PositionSlots } from './runtime-v25-position-slots.mjs';
 import { runtimeV25FormalQuotes } from './runtime-v25-formal-quotes.mjs';
 import { runtimeV25StandardQuoteDrafts } from './runtime-v25-standard-quote-drafts.mjs';
+import { runtimeV25SlotQuantity } from './runtime-v25-slot-quantity.mjs';
 import { runtimeCasePlanPositionSlots } from './runtime-case-plan-position-slots.mjs';
 import { runtimeAnonChildRows } from './runtime-anon-child-rows.mjs';
 
@@ -94,6 +95,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25FormalQuotes(client));
     // Web 以外の案件で、v2.5 の標準見積の版から見積下書きを作る・発行する・改訂する（v2.5 PR-D1c）
     runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
+    // 標準見積 v2.5 の選択枠の「選ぶ数」と「計上数量」を分ける（#647）
+    runtime = mergeRuntime(runtime, await runtimeV25SlotQuantity(client));
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
     // 子の行の読み取りの条件：匿名・お客様は親が公開中の行だけ（依頼 A）、代理店以上は親が読める行だけ（H2-C ①）

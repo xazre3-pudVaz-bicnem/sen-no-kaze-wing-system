@@ -444,7 +444,7 @@ export function QuoteSheet({
                     </button>
                   </td>
                   <td className={td.qty}>{formatQty(l.quantity)}</td>
-                  <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
+                  <td className={td.unit}>{isExteriorFace ? '面' : l.unit ?? '式'}</td>
                   <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '' : formatYen(l.unit_price)}</td>
                   <td className={td.amount}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '追加費用なし' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
                   <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
@@ -499,7 +499,7 @@ export function QuoteSheet({
                     </button>
                   </td>
                   <td className={td.qty}>{formatQty(l.quantity)}</td>
-                  <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
+                  <td className={td.unit}>{isExteriorFace ? '面' : l.unit ?? '式'}</td>
                   <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '' : formatYen(l.unit_price)}</td>
                   <td className={td.amount}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '追加費用なし' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
                   <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
@@ -540,7 +540,7 @@ export function QuoteSheet({
               <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{formatQty(l.quantity)}</td>
-                <td className={td.unit}>式</td>
+                <td className={td.unit}>{l.unit ?? '式'}</td>
                 <td className={td.price}>{l.price_on_request ? '別途見積' : formatYen(l.unit_price)}</td>
                 <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount > 0 ? formatYen(l.amount) : '標準'}</td>
                 <td className={td.remark}></td>

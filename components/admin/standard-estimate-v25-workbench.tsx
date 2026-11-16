@@ -398,7 +398,15 @@ function WorkbenchBody({
   const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
   const positionMixes = useMemo(() => v25PositionMixes(state.slots, (id) => candidateById.get(id)), [state.slots, candidateById]);
   // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
-  const slotRuleIssues = useMemo(() => v25SlotRuleIssues(state.slots, (optionId) => candidateById.get(optionId)), [state.slots, candidateById]);
+  const slotRuleIssues = useMemo(
+    () =>
+      v25SlotRuleIssues(
+        state.slots,
+        (optionId) => candidateById.get(optionId),
+        (categoryId) => candidates.filter((candidate) => candidate.categoryId === categoryId)
+      ),
+    [state.slots, candidateById, candidates]
+  );
   const blockers = [
     ...v25PublishBlockers(preview, dirty),
     ...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),

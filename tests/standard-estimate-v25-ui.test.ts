@@ -62,7 +62,8 @@ describe('標準見積 v2.5 の編集（PR-B1b の処理を「見積書管理 �
     expect(workbench).toContain('公開できない理由');
     expect(workbench).toContain('...v25PublishBlockers(preview, dirty),');
     // シミュレーターと連携する選択枠の決まりに合わなければ公開できない（DB も公開で止める）
-    expect(workbench).toContain('const slotRuleIssues = useMemo(() => v25SlotRuleIssues(state.slots, (optionId) => candidateById.get(optionId)), [state.slots, candidateById]);');
+    // 公開できない理由（選択枠の決まり）。カテゴリー単位の枠の販売単位の確認に、そのカテゴリーの候補を渡す（#647）
+    expect(workbench).toContain('v25SlotRuleIssues(\n        state.slots,\n        (optionId) => candidateById.get(optionId),\n        (categoryId) => candidates.filter((candidate) => candidate.categoryId === categoryId)\n      ),');
   });
 
   it('保存は入力の確認の後、最新原価の取り込みは未保存の変更が無いときだけ、公開は確認ダイアログを通す', () => {

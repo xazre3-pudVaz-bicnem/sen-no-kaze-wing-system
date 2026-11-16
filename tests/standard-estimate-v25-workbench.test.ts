@@ -264,7 +264,8 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('cell.getBoundingClientRect().width');
     expect(source).toContain('overlay.scrollLeft = grid.scrollLeft');
     expect(source).toContain("window.addEventListener('scroll', sync, true)");
-    expect(source).toContain("const visible = gridRect.top < 0 && gridRect.bottom > headerHeight;");
+    expect(source).toContain('const nativeHeaderPassed = sourceHead.getBoundingClientRect().bottom <= 0;');
+    expect(source).toContain('const visible = nativeHeaderPassed && gridRect.bottom > headerHeight;');
     expect(source).toContain("overlay.style.display = visible ? 'block' : 'none'");
     expect(source).toContain("overlay.setAttribute('aria-hidden', 'true')");
     expect(source).toContain('pointer-events-none fixed top-0');

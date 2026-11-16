@@ -371,7 +371,9 @@ describe('Excel 風の画面（描画）', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(source).toContain("window.addEventListener('scroll', onScroll, true)");
     expect(source).toContain("window.addEventListener('resize', dismiss)");
-    expect(source).toContain("document.addEventListener('pointerdown', onOutside)");
+    expect(source).toContain("document.addEventListener('keydown', onEscape, true)");
+    expect(source).toContain('data-testid="v25-wb-menu-backdrop"');
+    expect(source).toContain("event.stopImmediatePropagation()");
     expect(source).toContain("event.key === 'Escape'");
     expect(source).toContain('maxHeight: Math.max(80');
     expect(source).toContain('target="_blank" rel="noopener noreferrer" prefetch={false}');

@@ -63,13 +63,20 @@ export function useV25GridPreferences() {
   const [prefs, setPrefs] = useState<V25GridPrefs>(v25DefaultGridPrefs);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(V25_GRID_STORAGE_KEY);
-      if (raw) setPrefs(v25SanitizeGridPrefs(JSON.parse(raw)));
-    } catch {
-      // Private browsing / disabled storage: continue with session-only UI settings.
-    }
-    setHydrated(true);
+    let active = true;
+    // Hydration must finish before restoring local preferences. Schedule outside
+    // the synchronous effect body (react-hooks/set-state-in-effect).
+    queueMicrotask(() => {
+      if (!active) return;
+      try {
+        const raw = window.localStorage.getItem(V25_GRID_STORAGE_KEY);
+        if (raw) setPrefs(v25SanitizeGridPrefs(JSON.parse(raw)));
+      } catch {
+        // Private browsing / disabled storage: continue with session-only UI settings.
+      }
+      setHydrated(true);
+    });
+    return () => { active = false; };
   }, []);
   useEffect(() => {
     if (!hydrated) return; // Do not overwrite saved settings with SSR defaults.

@@ -156,11 +156,14 @@ export function v25PositionSlots(view: StandardEstimateSaleView | null | undefin
     }));
 }
 
-/** #647：お客様の選択に計上数量を掛ける選択枠（DB の standard_estimate_v25_slot_measured が判定した枠）。slotCode が null ならカテゴリー単位 */
-function v25MeasuredSlot(view: StandardEstimateSaleView, categoryId: string, slotCode: string | null) {
-  return slotCode
-    ? view.baseline.find((item) => item.slot_code === slotCode && item.measured === true)
-    : view.baseline.find((item) => !item.slot_code && item.measured === true && item.category_id === categoryId);
+/**
+ * #647：お客様の選択に計上数量を掛ける選択枠（DB の standard_estimate_v25_slot_measured が判定した枠）。slotCode が null ならカテゴリー単位で、
+ * 選んだ商品そのものの行を先に探し、無ければ選んだ商品のカテゴリーの行（DB の standard_estimate_v25_slot_measure と同じ）
+ */
+function v25MeasuredSlot(view: StandardEstimateSaleView, option: Pick<ProductOption, 'id' | 'category_id'>, slotCode: string | null) {
+  if (slotCode) return view.baseline.find((item) => item.slot_code === slotCode && item.measured === true);
+  const categoryLevel = view.baseline.filter((item) => !item.slot_code && item.measured === true);
+  return categoryLevel.find((item) => item.option_id === option.id) ?? categoryLevel.find((item) => item.category_id === option.category_id);
 }
 
 /** DB の nullif(btrim(price_unit), '') と同じ（前後の半角空白だけを外す） */
@@ -181,7 +184,7 @@ export function v25SlotMeasure(
   choiceIds: string[]
 ): string | number | null {
   if (!isV25SaleView(view)) return 1;
-  const slot = v25MeasuredSlot(view, option.category_id, slotCode);
+  const slot = v25MeasuredSlot(view, option, slotCode);
   if (!slot || Number(slot.quantity) === 1) return 1;
   const sameChoices = [...new Set(choiceIds)].sort().join(',') === [...slot.variant_choice_ids].sort().join(',');
   if (slot.option_id === option.id && sameChoices) return slot.quantity;
@@ -704,7 +707,7 @@ export function computeSaleViewPricing(
     const measure = v25SlotMeasure(view, option, null, choiceIdsOf(option.id));
     if (measure === 1) return line;
     if (measure === null) return { ...line, amount: 0, price_on_request: true };
-    const unit = v25MeasuredSlot(view, option.category_id, null)?.unit ?? null;
+    const unit = v25MeasuredSlot(view, option, null)?.unit ?? null;
     return { ...line, quantity: Number(measure), amount: measuredAmount(measure, line.unit_price), unit };
   });
   const currentLines = measuredLines.filter(

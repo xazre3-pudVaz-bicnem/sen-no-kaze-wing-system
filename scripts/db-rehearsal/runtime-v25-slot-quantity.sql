@@ -256,6 +256,13 @@ begin
              (select total::text from public.configurations where id = v_cfg), v_out));
   set local session_replication_role = replica;
   update public.option_categories set selection_mode = 'single' where id = cat_roof;
+  -- 公開した後に屋根1 の商品のカテゴリーが変わっても、標準の屋根は版の行のまま数える（選んだ商品そのものの行を先に探す）
+  update public.options set category_id = cat_multi where id = r1;
+  set local session_replication_role = origin;
+  perform pg_temp.q647_expect_eq('Q647-15b 公開した後に標準の商品のカテゴリーを変えても、標準のままの差額は 0', '0',
+    coalesce(public.standard_estimate_v25_configuration_money(v_cfg, v_rev) #>> '{sections,option,delta_line}', 'none'));
+  set local session_replication_role = replica;
+  update public.options set category_id = cat_roof where id = r1;
   -- 公開した後に屋根1 の販売単位が変わっても、版の枠と同じ「商品＋選択肢」はそのまま。別の選択肢は価格未確定
   update public.options set price_unit = '式' where id = r1;
   set local session_replication_role = origin;
@@ -301,10 +308,19 @@ begin
                where x.value ->> 'name' = '#647 設備1'), 'none'));
 
   -- ---------- 次の版への写し・公開した版は変えない ----------
+  -- 今の販売単位ではなく、公開した版の写しを引き継ぐことを確かめるため、作る前に屋根1 の販売単位を変えておく
+  set local session_replication_role = replica;
+  update public.options set price_unit = '式' where id = r1;
+  set local session_replication_role = origin;
   v_rev2 := pg_temp.q647_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L, null)::text', v_master))::uuid;
-  perform pg_temp.q647_expect_eq('Q647-20 公開した版から作る次の下書きに、計上数量と販売単位を写す', '23.5000/㎡',
+  perform pg_temp.q647_expect_eq('Q647-20 公開した版から作る次の下書きに、計上数量と販売単位（版の写し）を引き継ぐ。公開した版の行は変わらない',
+    '23.5000/㎡|㎡',
     coalesce((select bi.quantity::text || '/' || coalesce(bi.unit_snapshot, '(null)') from public.standard_estimate_revision_baseline_items bi
-               where bi.revision_id = v_rev2 and bi.option_id = r1), 'none'));
+               where bi.revision_id = v_rev2 and bi.option_id = r1), 'none') || '|' ||
+    coalesce((select bi.unit_snapshot from public.standard_estimate_revision_baseline_items bi where bi.revision_id = v_rev and bi.option_id = r1), 'none'));
+  set local session_replication_role = replica;
+  update public.options set price_unit = '㎡' where id = r1;
+  set local session_replication_role = origin;
   begin
     update public.standard_estimate_revision_baseline_items set unit_snapshot = 'm' where revision_id = v_rev and option_id = r1;
     v_out := 'updated';

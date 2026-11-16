@@ -136,6 +136,8 @@ describe('#647：お客様の選択に、選択枠の計上数量を掛ける（
     expect(v25SlotMeasure(view, option('r2', 'cat-roof', ' ㎡ '), null, [])).toBe('23.5000');
     expect(v25SlotMeasure(view, option('r3', 'cat-roof', '式'), null, [])).toBeNull();
     expect(v25SlotMeasure(view, option('f2', 'cat-floor', '㎡'), 'hall', [])).toBe(1);
+    // 公開した後に標準の商品のカテゴリーが変わっても、商品そのものの行で数える（DB と同じ）
+    expect(v25SlotMeasure(view, option('r1', 'cat-other', '㎡'), null, ['v-std'])).toBe('23.5000');
     const old = { ...view, baseline: view.baseline.map((item) => ({ ...item, measured: undefined })) };
     expect(v25SlotMeasure(old, option('r2', 'cat-roof', '㎡'), null, [])).toBe(1);
   });

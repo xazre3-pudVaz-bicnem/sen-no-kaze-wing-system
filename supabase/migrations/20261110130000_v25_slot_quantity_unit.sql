@@ -78,7 +78,9 @@ as $function$
 $function$;
 
 -- お客様の選択（商品・選択肢・カテゴリー・位置）に掛ける計上数量。掛ける枠が無い・枠の数量が 1 なら 1。
--- 版の枠と同じ「商品＋選択肢」は枠の数量。それ以外は、販売単位が枠の販売単位と同じときだけ枠の数量、違えば null（価格未確定）
+-- 版の枠と同じ「商品＋選択肢」は枠の数量。それ以外は、販売単位が枠の販売単位と同じときだけ枠の数量、違えば null（価格未確定）。
+-- カテゴリー単位の枠は、選んだ商品そのものの行を先に探し、無ければ選んだ商品のカテゴリーの行（公開した後に商品のカテゴリーが
+-- 変わっても、標準の商品は版の行のまま数える）
 create function public.standard_estimate_v25_slot_measure(p_revision_id uuid, p_option_id uuid, p_choice_ids uuid[], p_category_id uuid, p_slot_code text)
 returns numeric
 language sql
@@ -90,9 +92,10 @@ as $function$
       from public.standard_estimate_revision_baseline_items bi
      where bi.revision_id = p_revision_id
        and ((p_slot_code is not null and bi.slot_code = p_slot_code)
-            or (p_slot_code is null and bi.slot_code is null and bi.option_category_id = p_category_id))
-       and public.standard_estimate_v25_slot_measured(p_revision_id, p_slot_code, p_category_id)
-     order by bi.sort_order, bi.id
+            or (p_slot_code is null and bi.slot_code is null
+                and (bi.option_id = p_option_id or bi.option_category_id = p_category_id)))
+       and public.standard_estimate_v25_slot_measured(p_revision_id, bi.slot_code, bi.option_category_id)
+     order by (bi.option_id = p_option_id) desc, bi.sort_order, bi.id
      limit 1
   )
   select case

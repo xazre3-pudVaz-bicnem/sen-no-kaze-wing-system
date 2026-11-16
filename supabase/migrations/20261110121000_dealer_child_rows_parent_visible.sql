@@ -55,10 +55,14 @@ begin
     raise exception 'PRECONDITION: authenticated must be able to read options(id) and option_variant_groups';
   end if;
   -- 読み取りの条件から呼ぶ関数を、匿名・ログイン利用者が実行できること（できないと公開サイトの読み取りがエラーになる）
+  -- （匿名も、商品の読み取りの条件 options_admin・options_read の中で can_edit_catalog()・is_admin() を呼ぶ）
   if not (pg_catalog.has_function_privilege('anon', 'public.is_dealer()', 'EXECUTE')
           and pg_catalog.has_function_privilege('authenticated', 'public.is_dealer()', 'EXECUTE')
-          and pg_catalog.has_function_privilege('authenticated', 'public.can_edit_catalog()', 'EXECUTE')) then
-    raise exception 'PRECONDITION: anon/authenticated must be able to execute is_dealer() and can_edit_catalog()';
+          and pg_catalog.has_function_privilege('anon', 'public.can_edit_catalog()', 'EXECUTE')
+          and pg_catalog.has_function_privilege('authenticated', 'public.can_edit_catalog()', 'EXECUTE')
+          and pg_catalog.has_function_privilege('anon', 'public.is_admin()', 'EXECUTE')
+          and pg_catalog.has_function_privilege('authenticated', 'public.is_admin()', 'EXECUTE')) then
+    raise exception 'PRECONDITION: anon/authenticated must be able to execute is_dealer(), can_edit_catalog() and is_admin()';
   end if;
 end;
 $preflight$;
@@ -131,16 +135,27 @@ begin
     if v_and < 1 or v_all <> v_and or pg_catalog.strpos(v_qual, 'options') = 0 then
       raise exception 'POSTCONDITION: the read policy % must require a readable parent for dealers (%)', v_name, v_qual;
     end if;
-    -- 親との結び付け（結合の列の取り違えが無いこと）
+    -- 親との結び付け（結合の列の取り違えが無いこと）。結合の断片は、匿名・お客様の枝と代理店以上の枝の両方にあること（2 回以上）
     v_fragments := case v_name
       when 'option_variant_groups.variant_groups_read' then
-        array['o.id = option_variant_groups.option_id', 'o.status = ''published''::text']
+        array['o.id = option_variant_groups.option_id']
       when 'option_variant_choices.variant_choices_read' then
-        array['g.id = option_variant_choices.group_id', 'o.id = g.option_id', 'g.status = ''published''::text', 'o.status = ''published''::text']
+        array['g.id = option_variant_choices.group_id', 'o.id = g.option_id']
       when 'option_conflicts.option_conflicts_read' then
-        array['a.id = option_conflicts.option_id', 'b.id = option_conflicts.conflicts_with_option_id', 'a.status = ''published''::text', 'b.status = ''published''::text']
+        array['a.id = option_conflicts.option_id', 'b.id = option_conflicts.conflicts_with_option_id']
       else
-        array['a.id = option_dependencies.option_id', 'b.id = option_dependencies.requires_option_id', 'a.status = ''published''::text', 'b.status = ''published''::text']
+        array['a.id = option_dependencies.option_id', 'b.id = option_dependencies.requires_option_id']
+    end;
+    foreach v_fragment in array v_fragments loop
+      if (pg_catalog.length(v_qual) - pg_catalog.length(pg_catalog.replace(v_qual, v_fragment, ''))) / pg_catalog.length(v_fragment) < 2 then
+        raise exception 'POSTCONDITION: the read policy % must join the parent by % in both branches (%)', v_name, v_fragment, v_qual;
+      end if;
+    end loop;
+    -- 匿名・お客様の枝は、親（とグループ）が公開中であること
+    v_fragments := case v_name
+      when 'option_variant_groups.variant_groups_read' then array['o.status = ''published''::text']
+      when 'option_variant_choices.variant_choices_read' then array['g.status = ''published''::text', 'o.status = ''published''::text']
+      else array['a.status = ''published''::text', 'b.status = ''published''::text']
     end;
     foreach v_fragment in array v_fragments loop
       if pg_catalog.strpos(v_qual, v_fragment) = 0 then

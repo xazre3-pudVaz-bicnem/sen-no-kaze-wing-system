@@ -175,7 +175,8 @@ function useV25PageFloatingHeader(showCost: boolean) {
       const gridRect = grid.getBoundingClientRect();
       const headerHeight = sourceHead.getBoundingClientRect().height;
       // 明細に入ったときだけ表示し、明細の末尾で必ず解除して保存欄を隠さない。
-      const visible = gridRect.top < 0 && gridRect.bottom > headerHeight;
+      const nativeHeaderPassed = sourceHead.getBoundingClientRect().bottom <= 0;
+      const visible = nativeHeaderPassed && gridRect.bottom > headerHeight;
       overlay.style.display = visible ? 'block' : 'none';
       if (!visible) return;
 

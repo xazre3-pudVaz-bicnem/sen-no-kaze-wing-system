@@ -35,7 +35,8 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     expect(page).toContain('actions={headerActions} wide');
     expect(page).not.toContain('lg:max-h-[78vh] lg:overflow-y-auto');
     expect(adminPage).toContain('wide = false');
-    expect(workbench).toContain('overflow-x-auto rounded-b-md');
-    expect(workbench).not.toContain('max-h-[70vh]');
+    expect(workbench).toContain('max-h-[70vh] overflow-auto overscroll-contain rounded-b-md');
+    expect(workbench).toContain('sticky left-0 top-0 z-40');
+    expect(workbench).toContain('fixed z-[60]');
   });
 });

@@ -331,6 +331,12 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('変更候補1件');
     expect(html).toContain('data-testid="v25-wb-slot-position"');
     expect(html).not.toContain('data-testid="v25-wb-slot-position-editor"');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('target.option_id === candidate.id');
+    expect(source).toContain('setSlot(target.key, { variant_choices: { ...choices } })');
+    expect(source).toContain('removePositionOnConfirm');
+    expect(source).toContain('clearV25Position(state, positionFor)');
+    expect(source).not.toContain("updatePosition({ slot_code: '', slot_label: '', selectable_option_ids: [] })");
   });
 
   it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {

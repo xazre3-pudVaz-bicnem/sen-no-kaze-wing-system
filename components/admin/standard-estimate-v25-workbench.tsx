@@ -138,7 +138,7 @@ function WorkbenchBody({
   const [replacementDraft, setReplacementDraft] = useState<{
     slotKey: string; candidate: V25WorkbenchCandidate; choices: Record<string, string>; selectableIds: string[];
   } | null>(null);
-  const [jumpToKey, setJumpToKey] = useState<string | null>(null);
+  const [jumpToKey, setJumpToKey] = useState<{ key: string } | null>(null);
   const [selectableFor, setSelectableFor] = useState<string | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
@@ -207,11 +207,10 @@ function WorkbenchBody({
   // 案内から未設定行へ移動。折り畳まれていた場合は行を開いてから移動する。
   useEffect(() => {
     if (!jumpToKey) return;
-    const row = document.getElementById(`v25-position-row-${jumpToKey}`);
+    const row = document.getElementById(`v25-position-row-${jumpToKey.key}`);
     if (!row) return;
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     row.focus({ preventScroll: true });
-    setJumpToKey(null);
   }, [jumpToKey, collapsed]);
 
   const setSlot = (key: string, patch: Partial<V25SlotRow>) =>
@@ -358,7 +357,7 @@ function WorkbenchBody({
     if (!slot) return;
     const section = sectionOf(slot.option_id);
     if (section) setCollapsed((current) => { const next = new Set(current); next.delete(section); return next; });
-    setJumpToKey(key);
+    setJumpToKey({ key });
   };
   const selectableSlot = selectableFor ? (state.slots.find((slot) => slot.key === selectableFor) ?? null) : null;
   const selectableBase = selectableSlot ? candidateById.get(selectableSlot.option_id) : undefined;

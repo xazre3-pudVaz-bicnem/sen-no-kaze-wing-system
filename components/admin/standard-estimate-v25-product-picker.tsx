@@ -63,6 +63,14 @@ export function v25PickerEligibleCandidates(
   );
 }
 
+/** 固定した現在の商品をスクロール候補から除外する（新規追加では候補を変えない）。 */
+export function v25PickerReplacementCandidates(
+  eligibleCandidates: readonly V25WorkbenchCandidate[],
+  currentSlot: Pick<V25SlotRow, 'option_id'> | null,
+): V25WorkbenchCandidate[] {
+  return eligibleCandidates.filter((candidate) => !currentSlot || candidate.id !== currentSlot.option_id);
+}
+
 /**
  * 「商品選択→仕様選択→明細へ反映」を既存のポップアップ内で行う。
  * 検索・選択中はローカルstateのみ。確定まで親の明細stateに触れない。
@@ -89,18 +97,26 @@ export function StandardEstimateV25ProductPicker({
     () => v25PickerEligibleCandidates(candidates, section, currentSlot, originalProduct),
     [candidates, section, currentSlot, originalProduct]
   );
+  // 固定欄の元商品を、右側の仕様選択の対象としては引き続き利用可能にする。
+  const currentSelectable = currentSlot
+    ? eligibleCandidates.find((candidate) => candidate.id === currentSlot.option_id) ?? null
+    : null;
+  const replacements = useMemo(
+    () => v25PickerReplacementCandidates(eligibleCandidates, currentSlot),
+    [eligibleCandidates, currentSlot]
+  );
   const categories = useMemo(() => {
     const found = new Map<string, string>();
-    for (const candidate of eligibleCandidates) found.set(candidate.categoryId, candidate.categoryName);
+    for (const candidate of replacements) found.set(candidate.categoryId, candidate.categoryName);
     return [...found.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
-  }, [eligibleCandidates]);
+  }, [replacements]);
   const visible = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ja-JP');
-    return eligibleCandidates.filter((candidate) =>
+    return replacements.filter((candidate) =>
       (!categoryId || candidate.categoryId === categoryId) &&
       (!normalized || [candidate.name, candidate.manufacturer, candidate.modelNo, candidate.categoryName].join(' ').toLocaleLowerCase('ja-JP').includes(normalized))
     );
-  }, [eligibleCandidates, categoryId, query]);
+  }, [replacements, categoryId, query]);
 
   // 選択済みIDも許可候補の中だけで解決し、無関係な商品を明細へ反映させない。
   const selected = eligibleCandidates.find((candidate) => candidate.id === selectedId) ?? null;
@@ -128,12 +144,42 @@ export function StandardEstimateV25ProductPicker({
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="flex min-h-0 flex-col">
+          {currentSlot && (
+            <div data-testid="v25-wb-current-product" aria-label="現在の商品"
+              className="shrink-0 border-b border-emerald-200 bg-emerald-50 px-3 py-3">
+              <p className="mb-2 text-xs font-semibold text-emerald-900">現在の商品 <span className="font-normal">（見積明細に登録中）</span></p>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded bg-white text-[10px] text-muted">
+                  {current?.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={current.imageUrl} alt="" loading="lazy" className="size-full object-contain" />
+                  ) : '画像なし'}
+                </span>
+                <div className="min-w-0 flex-[1_1_12rem] text-sm">
+                  <p className="font-semibold text-ink">{current?.name ?? '登録中の商品（詳細不明）'}</p>
+                  <p className="text-xs text-muted">{[current?.categoryName, current?.manufacturer, current?.modelNo].filter(Boolean).join(' ／ ')}</p>
+                  <p className="mt-0.5 text-xs tabular-nums text-ink-soft">
+                    商品標準原価（税別） <span className="font-semibold">{v25PickerStandardCostLabel(productCosts[currentSlot.option_id])}</span>
+                  </p>
+                </div>
+                <Button type="button" variant="secondary" data-testid="v25-wb-current-variant"
+                  disabled={!currentSelectable}
+                  onClick={() => { if (currentSelectable) inspect(currentSelectable); }}>
+                  仕様を変更
+                </Button>
+              </div>
+              {!currentSelectable && !categoryUnknown && (
+                <p className="mt-2 text-xs text-amber-900">現在の商品は廃番・取扱終了などのため仕様変更できません。下の変更候補から選んでください。</p>
+              )}
+            </div>
+          )}
           {categoryUnknown && (
             <p role="alert" className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               現在の商品のカテゴリーを確認できないため変更できません。商品台帳の登録状態を確認してください。
             </p>
           )}
-          <div className="flex shrink-0 flex-wrap gap-2 border-b border-line px-3 py-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+            {currentSlot && <span className="text-xs font-semibold text-muted">変更候補</span>}
             {!currentSlot && (
               <Select aria-label="カテゴリー" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}
                 className="h-8 text-xs">
@@ -163,7 +209,6 @@ export function StandardEstimateV25ProductPicker({
                     <span className="mt-0.5 block text-xs tabular-nums text-ink-soft" data-testid="v25-wb-picker-list-cost">
                       商品標準原価（税別） <span className="font-semibold">{v25PickerStandardCostLabel(productCosts[candidate.id])}</span>
                     </span>
-                    {currentSlot?.option_id === candidate.id && <span className="mt-1 block text-xs font-semibold text-emerald-900">現在の商品</span>}
                   </span>
                   <span className="shrink-0 text-xs font-semibold text-navy">{selectedId === candidate.id ? '選択中' : '選ぶ'}</span>
                 </button>
@@ -179,7 +224,7 @@ export function StandardEstimateV25ProductPicker({
             {selected ? (
               <>
                 <div>
-                  <p className="text-xs font-semibold text-muted">選んだ商品と標準仕様</p>
+                  <p className="text-xs font-semibold text-muted">{selected.id === currentSlot?.option_id ? '現在の商品の仕様を確認' : '選んだ商品と標準仕様'}</p>
                   <p className="mt-1 font-semibold">{selected.name}</p>
                   <p className="text-xs text-muted">{[selected.manufacturer, selected.modelNo].filter(Boolean).join(' ／ ')}</p>
                 </div>
@@ -216,7 +261,7 @@ export function StandardEstimateV25ProductPicker({
                 {choicesValid && hasUnselectedChoices && <p className="text-xs text-muted">未選択の仕様があります。必要な場合は選択してください。</p>}
               </>
             ) : (
-              <p className="text-sm text-muted">左の商品を選ぶと、ここで色・サイズなどの仕様を確認できます。</p>
+              <p className="text-sm text-muted">左の{currentSlot ? '「仕様を変更」または変更候補の「選ぶ」' : '商品'}から、色・サイズなどの仕様を確認できます。</p>
             )}
           </div>
         </div>

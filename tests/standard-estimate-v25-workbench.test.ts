@@ -461,6 +461,34 @@ describe('Excel 風の画面（描画）', () => {
     expect(published).toContain('リビングの窓');
   });
 
+  it('位置名を直接編集中は保存・公開・原価更新・変更破棄を無効化し、理由を表示する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;');
+    expect(source).toContain('data-testid="v25-wb-position-edit-save-blocked"');
+    expect(source).toContain('位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。');
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} onClick={() => {');
+    expect(source).toContain('disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"');
+    expect(source).toContain('disabled={pending || blockers.length > 0 || positionInputActive}');
+    expect(source).toContain('const save = () => {\n    if (pending || positionInputActive) return;');
+    expect(source).toContain('const run = (task:');
+    expect(source).toContain('if (pending || positionInputActive) return;');
+  });
+
+  it('保存等の処理中は位置名Enter確定・複製モーダル・追加確定を止める', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('if (!positionLabelEditor || readOnly || pending) return;');
+    expect(source).toContain('if (!duplicateFor || readOnly || pending) return;');
+    expect(source).toContain('if (readOnly || pending || !positionFor || !positionDraft) return;');
+    expect(source).toContain('disabled={pending || positionInputActive}');
+    expect(source).toContain('if (pending || positionInputActive) return;');
+    expect(source).toContain('data-testid="v25-wb-duplicate-position-confirm" disabled={pending}');
+    expect(source).toContain('<V25PositionNameInput disabled={pending}');
+    expect(source).toContain('if (disabled) { event.preventDefault(); return; }');
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain('event.nativeEvent.isComposing');
+  });
+
   it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {
     const html = render(true, {
       initial: {

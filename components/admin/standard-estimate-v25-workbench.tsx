@@ -53,6 +53,10 @@ import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
 import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
+import {
+  v25DefaultMixedRowOrder, v25ReconcileMixedRowOrder, v25MoveMixedRow,
+  v25InsertMixedRow, v25MixedOrderEquals, v25MixedRowIdentity, type V25MixedRowRef,
+} from '@/lib/domain/standard-estimate-v25-row-order';
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
@@ -124,7 +128,7 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
   );
 }
 
-function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', compact = false, disabled = false }: { label: string; testId: string; children: ReactNode; triggerText?: string; compact?: boolean; disabled?: boolean }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
 
@@ -170,6 +174,7 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
   return (
     <details ref={menuRef} className="group relative inline-block" data-testid={testId}
       onToggle={(event) => {
+        if (disabled && event.currentTarget.open) { event.currentTarget.open = false; return; }
         if (!event.currentTarget.open) setPlacement(null);
         else if (!placement) {
           const summary = event.currentTarget.querySelector('summary');
@@ -177,11 +182,19 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
         }
       }}
       onKeyDown={(event) => {
+        if (disabled && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); }
       }}>
-      <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
-        aria-label={label} title="行の操作"
-        onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>⋯</summary>
+      <summary className={`flex ${compact ? 'size-5 text-xs' : 'size-6 text-sm'} cursor-pointer list-none items-center justify-center rounded font-bold text-slate-600 hover:bg-slate-100 aria-disabled:opacity-40 [&::-webkit-details-marker]:hidden`}
+        aria-label={label} title={label} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : 0}
+        onClick={(event) => {
+          if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
+          if (!menuRef.current?.open) place(event.currentTarget);
+        }}>{triggerText}</summary>
       {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
         onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />}
       <div className={'fixed z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg ' + (placement ? '' : 'invisible')}
@@ -378,7 +391,9 @@ function WorkbenchBody({
   const [showCost, setShowCost] = useState(true);
   const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(showCost);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
+  // 並び順の保存・読込仕様は業者確認中。これは明細表示だけの一時的な順序で、保存Payloadに混ぜない。
+  const [viewOrder, setViewOrder] = useState<V25MixedRowRef[]>([]);
+  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null; insertAfter?: V25MixedRowRef | null } | null>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
   const [variantEditor, setVariantEditor] = useState<{ slotKey: string; choices: V25SlotRow['variant_choices'] } | null>(null);
@@ -411,6 +426,17 @@ function WorkbenchBody({
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const sectionOf = (optionId: string) => candidateById.get(optionId)?.section;
+  const defaultOrder = useMemo(() => v25DefaultMixedRowOrder(state, (id) => candidateById.get(id)?.section), [state, candidateById]);
+  const mixedOrder = useMemo(() =>
+    v25ReconcileMixedRowOrder(viewOrder, state, (id) => candidateById.get(id)?.section),
+    [viewOrder, state, candidateById]);
+  const orderPreviewOnly = !v25MixedOrderEquals(mixedOrder, defaultOrder);
+  const moveViewRow = (row: V25MixedRowRef, direction: -1 | 1) => {
+    if (readOnly || positionActionsLocked) return;
+    setViewOrder((current) => v25MoveMixedRow(
+      v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section), row, direction
+    ));
+  };
   const calc = useMemo(
     () => calculateV25Workbench(rule, taxRule, state, baseLines, costs, (optionId) => candidateById.get(optionId)?.section),
     [rule, taxRule, state, baseLines, costs, candidateById]
@@ -456,6 +482,7 @@ function WorkbenchBody({
   );
   const blockers = [
     ...v25PublishBlockers(preview, dirty),
+    ...(orderPreviewOnly ? ['表示順は保存できません。並びを「表示順だけ戻す」で元に戻してから公開してください'] : []),
     ...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),
   ];
 
@@ -481,7 +508,7 @@ function WorkbenchBody({
 
   const choose = (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => {
     if (!picker) return;
-    // 確定経路でも区分・販売可否・元のカテゴリーを検証し、画面側の絞り込みのみに依存しない。
+    // 確定時も選択対象の区分・カテゴリー・販売可否を検証する。画面の絞り込みだけに依存しない。
     if (candidate.section !== picker.section || candidate.retired || candidate.unavailable || !candidate.categoryId.trim()) {
       onNotice({ tone: 'danger', text: 'この区分では選択できない商品です。商品台帳をご確認ください。' });
       return;
@@ -532,12 +559,17 @@ function WorkbenchBody({
           : {}),
       });
     } else {
+      const addedKey = newKey('slot');
+      setViewOrder((current) => v25InsertMixedRow(
+        v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section),
+        { kind: 'slot', key: addedKey, section: picker.section }, picker.insertAfter ?? null
+      ));
       setState((current) => ({
         ...current,
         slots: [
           ...current.slots,
           {
-            key: newKey('slot'),
+            key: addedKey,
             baseline_key: null,
             option_id: candidate.id,
             variant_choices: { ...choices },
@@ -623,11 +655,21 @@ function WorkbenchBody({
   };
   const confirmDuplicatePosition = () => {
     if (!duplicateFor || readOnly || pending) return;
-    const result = addV25PositionRow(state, duplicateFor.slotKey, newKey('slot'), duplicateFor.label, [],
+    const addedKey = newKey('slot');
+    const result = addV25PositionRow(state, duplicateFor.slotKey, addedKey, duplicateFor.label, [],
       (id) => candidateById.get(id));
     if (result.error) {
       setDuplicateFor((current) => current ? { ...current, error: result.error } : null);
       return;
+    }
+    const origin = state.slots.find((slot) => slot.key === duplicateFor.slotKey);
+    const section = origin ? sectionOf(origin.option_id) : undefined;
+    if (section) {
+      setViewOrder((current) => v25InsertMixedRow(
+        v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section),
+        { kind: 'slot', key: addedKey, section },
+        { kind: 'slot', key: duplicateFor.slotKey, section }
+      ));
     }
     setState(result.state);
     setDuplicateFor(null);
@@ -709,13 +751,19 @@ function WorkbenchBody({
     );
   }, [selectableOptions, selectableWindowType, selectableQuery]);
 
-  const addLine = (section: StandardLineSectionCode) =>
+  const addLine = (section: StandardLineSectionCode, insertAfter: V25MixedRowRef | null = null) => {
+    if (readOnly || positionActionsLocked) return;
+    const addedKey = newKey('line');
+    setViewOrder((current) => v25InsertMixedRow(
+      v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section),
+      { kind: 'line', key: addedKey, section }, insertAfter
+    ));
     setState((current) => ({
       ...current,
       lines: [
         ...current.lines,
         {
-          key: newKey('line'),
+          key: addedKey,
           line_key: null,
           section_code: section,
           group_label: '',
@@ -730,6 +778,7 @@ function WorkbenchBody({
         },
       ],
     }));
+  };
 
   const run = (task: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>) => {
     if (pending || positionInputActive) return;
@@ -781,7 +830,8 @@ function WorkbenchBody({
     if (next) { event.preventDefault(); next.focus(); next.select(); }
   };
 
-  const columnCount = showCost ? 10 : 7;
+  // 列配置: [↑↓＋][将来:カテゴリー・位置][品名]…[操作]。将来列を挿入するときは品名のsticky offsetを更新する。
+  const columnCount = showCost ? 11 : 8;
 
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
@@ -810,7 +860,7 @@ function WorkbenchBody({
     const result = sectionResult(code);
     return (
       <tr className="border-y-2 border-emerald-800 bg-emerald-50 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
-        <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">
+        <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right font-semibold">
           {label} 小計（税別）
           {result?.has_por && <span className="ml-2 text-amber-800">別途見積を含む</span>}
         </td>
@@ -869,11 +919,28 @@ function WorkbenchBody({
         <strong>標準見積明細（Excel風）</strong>
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
+      <div className="border-x border-amber-200 bg-amber-50 px-3 py-1 text-[11px] text-amber-900"
+        role="status" data-testid="v25-wb-order-preview-warning">
+        ↑ ↓ ＋ による混在順序は現在この画面だけの仮表示です。順序は保存・公開・再読込に反映されません（業者さんの保存仕様が確定後に対応）。
+        {orderPreviewOnly && (
+          <span className="ml-1">
+            <strong>表示順を変更中です。保存すると行の内容のみ反映され、順序は元に戻ります。</strong>
+            {!readOnly && (
+              <button type="button" data-testid="v25-wb-row-order-reset"
+                className="ml-2 font-semibold underline" onClick={() => setViewOrder([])}>
+                表示順だけ戻す
+              </button>
+            )}
+          </span>
+        )}
+      </div>
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
         <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
+              <th className="sticky left-0 top-0 z-40 w-16 border-b border-r border-slate-300 bg-slate-100 px-0 py-1 text-center font-medium" data-testid="v25-wb-order-column">移動・追加</th>
+              {/* 将来の「カテゴリー・位置」列は、この操作列と品名列の間に入れる。 */}
+              <th className="sticky left-16 top-0 z-40 w-[16rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
               <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量</th>
               <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位</th>
               {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価</th>}
@@ -893,7 +960,8 @@ function WorkbenchBody({
                 const display = v25DisplayedCostAndGross(result, line.quantity);
                 return (
                   <tr key={line.id} className="border-b border-slate-200 bg-slate-100 text-slate-700" data-testid="v25-wb-base-row">
-                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
+                    <td className="sticky left-0 z-20 w-16 border-r border-slate-200 bg-slate-100 px-0 py-px text-center text-slate-400" data-testid="v25-wb-base-order-cell">—</td>
+                    <td className="sticky left-16 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="max-w-[5rem] shrink-0 truncate text-[10px] text-slate-600" title={line.section}>{line.section}</span>
                         <span className="min-w-0 flex-1 truncate" title={line.name}>{line.name}</span>
@@ -916,6 +984,36 @@ function WorkbenchBody({
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
               const lines = state.lines.filter((line) => line.section_code === code);
+              const orderedSectionRows = mixedOrder.filter((row) => row.section === code);
+              const rowControls = (row: V25MixedRowRef, rowIndex: number) => (
+                <div className="flex w-full items-center justify-center gap-px" data-testid="v25-wb-row-order-actions">
+                  <button type="button" data-testid="v25-wb-row-up" aria-label="一行上へ移動" title="同じ区分の一行上へ"
+                    disabled={positionActionsLocked || rowIndex === 0}
+                    className="flex size-5 items-center justify-center rounded text-xs text-navy hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                    onClick={() => moveViewRow(row, -1)}>↑</button>
+                  <button type="button" data-testid="v25-wb-row-down" aria-label="一行下へ移動" title="同じ区分の一行下へ"
+                    disabled={positionActionsLocked || rowIndex === orderedSectionRows.length - 1}
+                    className="flex size-5 items-center justify-center rounded text-xs text-navy hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                    onClick={() => moveViewRow(row, 1)}>↓</button>
+                  <V25WorkbenchRowMenu testId="v25-wb-row-insert" label="この行の直下に追加" triggerText="＋" compact disabled={positionActionsLocked}>
+                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                      disabled={positionActionsLocked}
+                      onClick={(event) => {
+                        event.currentTarget.closest('details')?.removeAttribute('open');
+                        addLine(code, row);
+                      }}>直下に手入力明細を追加</button>
+                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                      disabled={positionActionsLocked}
+                      onClick={(event) => {
+                        if (positionActionsLocked) return;
+                        rememberRowMenuOpener(event.currentTarget);
+                        event.currentTarget.closest('details')?.removeAttribute('open');
+                        setPickerDirty(false);
+                        setPicker({ section: code, targetKey: null, insertAfter: row });
+                      }}>直下に商品台帳から追加</button>
+                  </V25WorkbenchRowMenu>
+                </div>
+              );
               return (
                 <Fragment key={code}>
                   {sectionHeader(
@@ -934,7 +1032,10 @@ function WorkbenchBody({
                     )
                   )}
                   {!collapsed.has(code) &&
-                    slots.map((slot) => {
+                    orderedSectionRows.map((rowRef, rowIndex) => {
+                      if (rowRef.kind === 'slot') {
+                      const slot = slots.find((item) => item.key === rowRef.key);
+                      if (!slot) return null;
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const display = v25DisplayedCostAndGross(result, slot.quantity);
@@ -947,9 +1048,12 @@ function WorkbenchBody({
                       const mixedUnset = !slotCode && positionMixes.some((mix) =>
                         mix.categoryId === candidate?.categoryId && mix.unsetKeys.includes(slot.key));
                       return (
-                        <Fragment key={slot.key}>
+                        <Fragment key={v25MixedRowIdentity(rowRef)}>
                         <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
-                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
+                          <td className="sticky left-0 z-20 focus-within:z-[70] w-16 border-r border-slate-200 bg-slate-100 px-0 py-px text-center" data-testid="v25-wb-slot-order-cell">
+                            {!readOnly && rowControls(rowRef, rowIndex)}
+                          </td>
+                          <td className="sticky left-16 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                             <div className="min-w-0">
                               <div className="flex min-w-0 flex-wrap items-center gap-1">
                                 <span className="max-w-[4.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
@@ -1125,13 +1229,16 @@ function WorkbenchBody({
                         </tr>
                         </Fragment>
                       );
-                    })}
-                  {!collapsed.has(code) &&
-                    lines.map((line) => {
+                      }
+                      const line = lines.find((item) => item.key === rowRef.key);
+                      if (!line) return null;
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
-                        <tr key={line.key} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
-                          <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                        <tr key={v25MixedRowIdentity(rowRef)} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
+                          <td className="sticky left-0 z-20 focus-within:z-[70] w-16 border-r border-slate-200 bg-slate-100 px-0 py-px text-center" data-testid="v25-wb-line-order-cell">
+                            {!readOnly && rowControls(rowRef, rowIndex)}
+                          </td>
+                          <td className={`sticky left-16 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
                               <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
                                 aria-label="グループ" placeholder="区分" title={line.group_label || '手入力明細のグループ'}
@@ -1217,24 +1324,24 @@ function WorkbenchBody({
           </tbody>
           <tfoot className="bg-slate-100 text-[11px]">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
+              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
               <td colSpan={showCost ? 3 : 2} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">調整額</td>
+              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right text-slate-600">調整額</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
               <td colSpan={showCost ? 3 : 2} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">消費税</td>
+              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right text-slate-600">消費税</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
               <td colSpan={showCost ? 3 : 2} />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
@@ -1299,6 +1406,7 @@ function WorkbenchBody({
             </Button>
             <Button type="button" variant="secondary" disabled={pending || !dirty || positionInputActive} onClick={() => {
               setState(initial);
+              setViewOrder([]);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>
               変更を破棄

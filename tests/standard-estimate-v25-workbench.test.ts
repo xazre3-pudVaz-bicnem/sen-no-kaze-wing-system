@@ -218,8 +218,8 @@ describe('Excel 風の画面（描画）', () => {
       expect(source).toContain(cls);
     }
     const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
-    expect((header.match(/<th /g) ?? []).length).toBe(10);
-    const order = ['品名', '数量', '単位', '原価単価', '原価金額', '売価単価', '売価金額', '粗利', '仕様・備考', '操作'];
+    expect((header.match(/<th /g) ?? []).length).toBe(11);
+    const order = ['移動・追加', '品名', '数量', '単位', '原価単価', '原価金額', '売価単価', '売価金額', '粗利', '仕様・備考', '操作'];
     let cursor = -1;
     for (const title of order) {
       const next = header.indexOf('>' + title + '</th>', cursor + 1);
@@ -242,7 +242,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('bg-slate-100');
     expect(html).toContain('bg-amber-50');
     expect(source).toContain('flex items-center justify-center gap-2');
-    expect(source).toContain('flex size-6 cursor-pointer');
+    expect(source).toContain("compact ? 'size-5 text-xs' : 'size-6 text-sm'");
     expect(source).toContain('flex size-6 shrink-0');
     expect(source).toContain('h-6 min-h-6!');
     expect(source).toContain('text-[11px]');
@@ -313,7 +313,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('>単位</th>');
     expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>売価金額</th>'));
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-full min-w-[52rem]'");
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={showCost ? 6 : 4}');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={showCost ? 7 : 5}');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
     expect(html).toContain('data-testid="v25-wb-publish"');
@@ -386,7 +386,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('見直し済みにする');
     expect(html).toContain('data-testid="v25-wb-slot-delete"');
     expect(html).toContain('data-testid="v25-wb-line-delete"');
-    expect(source).toContain('const columnCount = showCost ? 10 : 7;');
+    expect(source).toContain('const columnCount = showCost ? 11 : 8;');
     expect(source).toContain("code !== 'sitework' && slot.price_mode !== 'auto'");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'auto' })");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'manual' })");
@@ -406,7 +406,8 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('min-w-[69rem]');
     expect(html).toContain('w-full');
     const widths = [
-      ['w-[20rem]', 1], // 品名
+      ['w-16', 1], // 左端の移動・追加: 4rem
+      ['w-[16rem]', 1], // 品名: 幅縮小を維持するため左端4remを移した値
       ['w-14', 2], // 数量と単位
       ['w-[5.75rem]', 5], // 金額5列
       ['w-[8rem]', 1], // 仕様・備考
@@ -439,13 +440,49 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('data-v25-excel-col="note"');
   });
 
-  it('通常10列・原価非表示7列の旧画面順にし、入力状態表示を残す', () => {
+  it('PR #667の69rem/52rem圧縮を維持し、左4remを品名幅調整で吸収する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const html = render(false);
+    const head = source.slice(source.indexOf('<thead className='), source.indexOf('</thead>'));
+    const table = source.slice(source.indexOf('<table ref={tableRef}'), source.indexOf('<thead className='));
+    expect(table).toContain("showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'");
+    expect(html).toContain('min-w-[69rem]');
+    expect(html).toContain('w-full');
+    const widths = [
+      ['w-16', 1], // 左端↑↓＋
+      ['w-[16rem]', 1], // 品名: Aの20remから4remを振替
+      ['w-14', 2], // 数量・単位
+      ['w-[5.75rem]', 5], // 原価2、売価2、粗利1
+      ['w-[8rem]', 1], // 仕様・備考
+      ['w-[4.5rem]', 1], // 右端の従来操作
+    ] as const;
+    for (const [token, count] of widths) expect(head.split(token).length - 1).toBe(count);
+    expect((head.match(/<th /g) ?? []).length).toBe(11);
+    expect(4 + 16 + 3.5 * 2 + 5.75 * 5 + 8 + 4.5).toBeLessThanOrEqual(69);
+    expect(4 + 16 + 3.5 * 2 + 5.75 * 2 + 8 + 4.5).toBeLessThanOrEqual(52);
+    expect(head.indexOf('>移動・追加</th>')).toBeLessThan(head.indexOf('>品名</th>'));
+    expect(head.indexOf('>品名</th>')).toBeLessThan(head.indexOf('>操作</th>'));
+    expect(source).toContain('sticky left-16 top-0');
+    expect(source).toContain('sticky left-16 z-10');
+    expect(source).toContain('flex min-w-0 flex-wrap items-center gap-1');
+    expect(source).toContain("title={line.group_label || '手入力明細のグループ'}");
+    expect(source).toContain('title={line.remark}');
+    expect(source).toContain('const columnCount = showCost ? 11 : 8;');
+    expect(source).toContain('overlay.scrollLeft = grid.scrollLeft');
+    expect(source).toContain('const sourceCells = Array.from(sourceHead.rows[0]?.cells ?? [])');
+    for (const testId of ['v25-wb-slot-menu', 'v25-wb-slot-delete', 'v25-wb-line-menu', 'v25-wb-line-delete']) {
+      expect(html).toContain('data-testid="' + testId + '"');
+    }
+    expect(4.5 * 16).toBeGreaterThanOrEqual(24 * 2 + 8);
+  });
+
+  it('左端移動追加を含む通常11列・原価非表示8列の順にし、入力状態表示を残す', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
-    expect((header.match(/<th /g) ?? []).length).toBe(10);
-    expect(source).toContain('const columnCount = showCost ? 10 : 7;');
-    expect(source).toContain('w-[20rem]');
+    expect((header.match(/<th /g) ?? []).length).toBe(11);
+    expect(source).toContain('const columnCount = showCost ? 11 : 8;');
+    expect(source).toContain('w-[16rem]');
     expect(source).toContain('w-[4.5rem]');
     expect(source).toContain('className="h-6 min-h-6!');
     expect(source).toContain('data-v25-excel-col="qty"');
@@ -819,7 +856,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toMatch(/data-testid="v25-wb-show-cost"[^>]*checked=""/);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(source).toContain('const [showCost, setShowCost] = useState(true);');
-    expect(source).toContain('const columnCount = showCost ? 10 : 7;');
+    expect(source).toContain('const columnCount = showCost ? 11 : 8;');
     const headerSource = source.slice(source.indexOf('<thead className='), source.indexOf('</thead>'));
     expect((headerSource.match(/{showCost && <th /g) ?? []).length).toBe(3);
     expect(source).toContain("showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'");

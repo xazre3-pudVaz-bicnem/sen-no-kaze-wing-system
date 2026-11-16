@@ -1002,24 +1002,21 @@ function WorkbenchBody({
                             </div>
                           </td>
 
-                          <td className="border-r border-slate-200 px-0.5 py-0">
-                            <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-5 min-h-5! rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                          <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                            <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setSlot(slot.key, { quantity: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0 text-muted"
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"
                             data-testid="v25-wb-slot-unit"
                             title="商品台帳の販売単位です。単位を変更する場合は台帳の価格・換算条件も確認してください。">
                             {candidate?.priceUnit?.trim() || '—'}
                           </td>
-                          {showCost && (
-                            <td className="border-r border-slate-200 px-1 py-0 text-right tabular-nums">
-                              {slot.price_mode === 'auto' ? (missing ? '原価未設定' : yen(result?.cost_unit_price)) : '—'}
-                            </td>
-                          )}
-                          <td className="border-r border-slate-200 px-0.5 py-0 text-right" data-testid="v25-wb-slot-price-cell">
+                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
+                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-cost-amount">{yen(display.costAmount)}</td>}
+                          <td className={`border-r border-slate-200 px-0.5 py-px text-right ${slot.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-slot-price-cell">
                             {slot.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
-                                className="h-5 min-h-5! w-full rounded-sm border-0 bg-amber-50 px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setSlot(slot.key, { manual_unit_price: event.target.value })} />
                             ) : slot.price_mode === 'auto' ? (
                               <span className="block truncate px-1 tabular-nums" title={yen(result?.sale_unit_price)}>{yen(result?.sale_unit_price)}</span>
@@ -1027,7 +1024,7 @@ function WorkbenchBody({
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0 text-right tabular-nums">
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-sale-amount">
                             {slot.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
                             ) : unpricedKeys.has(slot.key) ? (
@@ -1038,7 +1035,8 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          <td className="border-r border-slate-200 px-1 py-0">
+                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-gross">{yen(display.gross)}</td>}
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="min-w-0 flex-1 truncate text-muted" title={v25VariantSummary(candidate, slot.variant_choices)} data-testid="v25-wb-variant-summary">
                                 {v25VariantSummary(candidate, slot.variant_choices)}
@@ -1050,9 +1048,9 @@ function WorkbenchBody({
                             </div>
                           </td>
 
-                          <td className="relative px-0.5 py-0 text-center">
+                          <td className="relative bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
-                              <div className="flex items-center justify-center gap-0.5">
+                              <div className="flex items-center justify-center gap-2">
                                 <V25WorkbenchRowMenu testId="v25-wb-slot-menu" label={(candidate?.name ?? '商品') + 'の操作'}>
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { rememberRowMenuOpener(event.currentTarget); event.currentTarget.closest('details')?.removeAttribute('open'); setPickerDirty(false); setPicker({ section: code, targetKey: slot.key });  }}>商品台帳から選択</button>

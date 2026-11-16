@@ -232,6 +232,11 @@ function WorkbenchBody({
     if (picker.targetKey) {
       const target = state.slots.find((slot) => slot.key === picker.targetKey);
       if (target?.slot_code.trim()) {
+        const previous = candidateById.get(target.option_id);
+        if (previous && previous.categoryId !== candidate.categoryId) {
+          onNotice({ tone: 'danger', text: '位置が設定された行は同じカテゴリーの商品へ入れ替えてください。別カテゴリーにする場合は位置を解除してください。' });
+          return;
+        }
         // 同じ位置の標準品入替は、候補の見直しまで確定操作を保留する。
         setReplacementDraft({ slotKey: target.key, candidate, choices: { ...choices }, selectableIds: [] });
         setPicker(null);
@@ -957,83 +962,164 @@ function WorkbenchBody({
       {positionSlot && positionDraft && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={closePosition}>
           <div role="dialog" aria-modal="true" aria-label="位置・選べる商品を設定" data-testid="v25-wb-slot-position-editor"
-            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            className="flex max-h-[82vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <p className="font-semibold">{positionCandidate?.name ?? '商品'}：位置・選べる商品を設定</p>
+              <div>
+                <p className="font-semibold">{positionCandidate?.name ?? '商品'}：位置別設定</p>
+                <p className="text-xs text-muted">{addPositionOnConfirm ? '同じ商品を別の位置に1行追加' : 'この商品の位置名と変更候補を設定'}</p>
+              </div>
               <button type="button" className="text-sm text-muted underline" onClick={closePosition}>閉じる</button>
             </div>
-            <div className="overflow-y-auto px-4 py-3">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
-                                <div className="space-y-1.5">
-                                  <p className="text-[0.7rem] font-semibold text-ink">位置・用途の選択枠</p>
-                                  <label className="block space-y-0.5">
-                                    <span className="text-[0.68rem] text-muted">識別子（英小文字・数字・ハイフン）</span>
-                                    <Input value={positionDraft.slot_code} disabled={readOnly} placeholder="例：living-sweep" className="h-7 font-mono text-xs" data-testid="v25-wb-slot-code"
-                                      onChange={(event) => updatePosition({ slot_code: event.target.value })} />
-                                  </label>
-                                  <label className="block space-y-0.5">
-                                    <span className="text-[0.68rem] text-muted">位置・用途の名前（お客様の画面に出ます）</span>
-                                    <Input value={positionDraft.slot_label} disabled={readOnly} placeholder="例：掃出し窓" className="h-7 text-xs" data-testid="v25-wb-slot-label"
-                                      onChange={(event) => updatePosition({ slot_label: event.target.value })} />
-                                  </label>
-                                  <p className="text-[0.68rem] leading-4 text-muted">
-                                    識別子は新しい版へ引き継ぎ、将来の平面図の位置と紐づけます。公開した後は変えないでください。位置の枠の数量は 1 です。
-                                  </p>
-                                </div>
-                                <div className="space-y-1.5">
-                                  <p className="text-[0.7rem] font-semibold text-ink">お客様が選べる商品（この位置で 1 つ選ぶ）</p>
-                                  <ul className="flex flex-wrap gap-1.5" data-testid="v25-wb-slot-selectables">
-                                    <li className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[0.7rem]">
-                                      <span className="mr-1 text-[0.62rem] font-semibold text-brown">標準</span>
-                                      {positionCandidate?.name ?? '（商品が見つかりません）'}
-                                      {positionCandidate?.windowTypeLabel ? `（${positionCandidate.windowTypeLabel}）` : ''}
-                                    </li>
-                                    {positionDraft.selectable_option_ids.map((id) => {
-                                      const alternative = candidateById.get(id);
-                                      const name = alternative?.name ?? '（選べない商品）';
-                                      return (
-                                        <li key={id} className="flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[0.7rem]">
-                                          {name}
-                                          {alternative?.windowTypeLabel ? `（${alternative.windowTypeLabel}）` : ''}
-                                          {!readOnly && (
-                                            <button type="button" className="text-muted hover:text-danger" aria-label={`${name}を選べる商品から外す`}
-                                              onClick={() => toggleSelectable(id)}>
-                                              ×
-                                            </button>
-                                          )}
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                  {!readOnly && (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <button type="button" className="btn-secondary btn-sm" disabled={!positionDraft.slot_code.trim()} data-testid="v25-wb-slot-selectable-open"
-                                        onClick={() => { setSelectableFor(positionSlot.key); setSelectableWindowType(''); setSelectableQuery(''); }}>
-                                        ＋ 選べる商品を選ぶ
-                                      </button>
-                                      {positionDraft.slot_code.trim() && (
-                                        <button type="button" className="btn-secondary btn-sm" data-testid="v25-wb-slot-add-position" onClick={() => setAddPositionOnConfirm((current) => !current)}>
-                                          {addPositionOnConfirm ? '位置追加を取り消す' : '＋ 同じ商品で位置を足す'}
-                                        </button>
-                                      )}
-                                      {(positionDraft.slot_code.trim() || positionDraft.slot_label.trim() || positionDraft.selectable_option_ids.length > 0) && (
-                                        <button type="button" className="text-[0.7rem] text-muted underline"
-                                          onClick={() => updatePosition({ slot_code: '', slot_label: '', selectable_option_ids: [] })}>
-                                          カテゴリー単位の選択枠に戻す
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-                                  {!positionDraft.slot_code.trim() && !readOnly && (
-                                    <p className="text-[0.68rem] leading-4 text-muted">識別子と名前を入れると、この位置でお客様が商品を選べるようになります。</p>
-                                  )}
-                                </div>
-                              </div>
-              {addPositionOnConfirm && !readOnly && <p className="mt-2 text-xs text-muted">確定時に同じ商品の行を直下へ追加します。新しい位置の識別子と名前は空欄です。</p>}
+            <div className="space-y-4 overflow-y-auto px-4 py-3">
+              {addPositionOnConfirm ? (
+                <label className="block space-y-1">
+                  <span className="text-xs font-semibold">追加する位置名（お客様に表示）</span>
+                  <Input value={addedPositionLabel} disabled={readOnly} maxLength={40} data-testid="v25-wb-slot-new-label"
+                    placeholder="例：寝室の窓" onChange={(event) => { setAddedPositionLabel(event.target.value); setPositionError(null); }} />
+                </label>
+              ) : (
+                <label className="block space-y-1">
+                  <span className="text-xs font-semibold">1. お客様に表示する位置名</span>
+                  <Input value={positionDraft.slot_label} disabled={readOnly} maxLength={40} data-testid="v25-wb-slot-label"
+                    placeholder="例：リビングの掃出し窓" onChange={(event) => updatePosition({ slot_label: event.target.value })} />
+                </label>
+              )}
+              <div className="space-y-1 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
+                <p className="font-semibold">{addPositionOnConfirm ? '追加行の標準品' : '2. この行の標準品'}</p>
+                <p>{positionCandidate?.name ?? '（商品が見つかりません）'}
+                  {positionCandidate?.windowTypeLabel ? `（${positionCandidate.windowTypeLabel}）` : ''}
+                </p>
+                <p className="text-muted">標準品はこの行の商品です。別の商品への入替は明細の商品選択から行います。</p>
+              </div>
+              {addPositionOnConfirm ? (
+                <div className="space-y-2 text-xs">
+                  <p className="font-semibold">追加する位置の変更候補</p>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={inheritCandidates} disabled={readOnly || positionSlot.selectable_option_ids.length === 0}
+                      onChange={(event) => { setInheritCandidates(event.target.checked); setInheritedCandidateIds([]); setPositionError(null); }} />
+                    元の行の変更候補から選ぶ（初期状態は引き継がない）
+                  </label>
+                  {inheritCandidates && (
+                    <div className="space-y-1 pl-5" data-testid="v25-wb-position-inherit-options">
+                      {positionSlot.selectable_option_ids.map((id) => {
+                        const alternative = candidateById.get(id);
+                        const eligible = Boolean(alternative && !alternative.retired && !alternative.unavailable &&
+                          alternative.categoryId === positionCandidate?.categoryId);
+                        return (
+                          <label key={id} className="flex items-center gap-2">
+                            <input type="checkbox" checked={inheritedCandidateIds.includes(id)} disabled={!eligible || readOnly}
+                              onChange={(event) => { setInheritedCandidateIds((current) => event.target.checked ? [...current, id] : current.filter((value) => value !== id)); setPositionError(null); }} />
+                            {alternative?.name ?? '（現在選択できない商品）'} {!eligible && '（引き継げません）'}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-muted">追加する場所の開口寸法・施工条件に使えるかは担当者が確認してください。選択可能な表示は適合を保証しません。</p>
+                  <p className="font-semibold">数量１で明細に追加され、見積金額に反映されます。</p>
+                  <p className="text-muted">元の行は変更せず、その直下に新しい行を追加します。</p>
+                </div>
+              ) : (
+                <div className="space-y-2 text-xs">
+                  <p className="font-semibold">3. 変更候補（標準品は含まない）</p>
+                  <ul className="flex flex-wrap gap-1.5" data-testid="v25-wb-slot-selectables">
+                    {positionDraft.selectable_option_ids.length === 0 && <li className="text-muted">変更候補なし（標準品のみ）</li>}
+                    {positionDraft.selectable_option_ids.map((id) => {
+                      const alternative = candidateById.get(id);
+                      const name = alternative?.name ?? '（選べない商品）';
+                      return (
+                        <li key={id} className="flex items-center gap-1 rounded border border-slate-300 px-2 py-1">
+                          {name} {alternative?.windowTypeLabel ? `（${alternative.windowTypeLabel}）` : ''}
+                          {!readOnly && <button type="button" className="text-muted hover:text-danger" aria-label={`${name}を変更候補から外す`} onClick={() => toggleSelectable(id)}>×</button>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {!readOnly && (
+                    <button type="button" className="btn-secondary btn-sm" disabled={!positionDraft.slot_label.trim()}
+                      data-testid="v25-wb-slot-selectable-open"
+                      onClick={() => { setSelectableFor(positionSlot.key); setSelectableWindowType(''); setSelectableQuery(''); }}>
+                      ＋ 変更候補を選ぶ
+                    </button>
+                  )}
+                  {positionSlot.slot_code.trim() && !readOnly && (
+                    <div className="space-y-1 border-t border-slate-200 pt-3">
+                      <p className="text-muted">位置設定を解除しても商品行は削除されません。</p>
+                      <button type="button" className="text-xs text-red-700 underline"
+                        onClick={() => updatePosition({ slot_code: '', slot_label: '', selectable_option_ids: [] })}>
+                        位置設定を解除
+                      </button>
+                      {!positionDraft.slot_label.trim() && positionDraft.selectable_option_ids.length === 0 &&
+                        <p className="font-medium text-amber-800">位置名と変更候補を外します。この商品行は残ります。</p>}
+                    </div>
+                  )}
+                </div>
+              )}
+              {!addPositionOnConfirm && positionSlot.slot_code.trim() && !readOnly && (
+                <button type="button" className="btn-secondary btn-sm" data-testid="v25-wb-slot-add-position"
+                  onClick={() => { setAddPositionOnConfirm(true); setAddedPositionLabel(''); setInheritCandidates(false); setInheritedCandidateIds([]); setPositionError(null); }}>
+                  ＋ 同じ商品を１行追加
+                </button>
+              )}
+              {addPositionOnConfirm && !readOnly && (
+                <button type="button" className="text-xs text-navy underline" onClick={() => { setAddPositionOnConfirm(false); setPositionError(null); }}>
+                  元の行の位置設定に戻る
+                </button>
+              )}
+              <p className="text-[0.68rem] leading-5 text-muted">
+                {positionSlot.slot_code.trim()
+                  ? `識別子：${positionSlot.slot_code}（位置名を変更しても変わりません）`
+                  : '識別子は位置名を反映すると自動発行します。'}
+                位置枠は数量１です。
+              </p>
+              {!addPositionOnConfirm && !positionSlot.slot_code.trim() && Number(positionSlot.quantity) !== 1 && (
+                <p className="text-xs font-medium text-amber-800">現在の数量は {positionSlot.quantity} です。新しく位置を設定するには数量１が必要です。自動変更はしません。</p>
+              )}
+              {positionError && <Alert tone="danger">{positionError}</Alert>}
+              <p className="text-xs text-muted">この操作は編集中の明細への反映です。下書きは保存されません。保存は「下書きを保存」で行います。</p>
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
               <Button type="button" variant="secondary" onClick={closePosition}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
-              {!readOnly && <Button type="button" data-testid="v25-wb-position-confirm" onClick={confirmPosition}>確定</Button>}
+              {!readOnly && <Button type="button" data-testid="v25-wb-position-confirm" onClick={confirmPosition} disabled={pending}>
+                {addPositionOnConfirm ? '１行追加' : 'この行に反映'}
+              </Button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {replacementDraft && replacementSource && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClick={() => setReplacementDraft(null)}>
+          <div role="dialog" aria-modal="true" aria-label="同じ位置の標準品を入れ替える" data-testid="v25-wb-position-replacement"
+            className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <p className="font-semibold">「{replacementSource.slot_label}」の標準品を入替</p>
+              <button type="button" className="text-sm text-muted underline" onClick={() => setReplacementDraft(null)}>閉じる</button>
+            </div>
+            <div className="space-y-3 overflow-y-auto px-4 py-3 text-xs">
+              <p>新しい標準品：<strong>{replacementDraft.candidate.name}</strong></p>
+              <p>位置名と識別子は引き継ぎます。変更候補は見直しが必要なため、初期状態では「新しい標準品のみ」です。</p>
+              <div className="space-y-1 rounded border border-slate-200 p-3">
+                <p className="font-semibold">新しい位置でも使える変更候補を選ぶ（任意）</p>
+                {replacementChoices.length === 0 && <p className="text-muted">引き継げる変更候補はありません。</p>}
+                {replacementChoices.map((candidate) => (
+                  <label key={candidate.id} className="flex items-center gap-2">
+                    <input type="checkbox" checked={replacementDraft.selectableIds.includes(candidate.id)}
+                      onChange={(event) => setReplacementDraft((current) => current ? {
+                        ...current, selectableIds: event.target.checked
+                          ? [...current.selectableIds, candidate.id]
+                          : current.selectableIds.filter((id) => id !== candidate.id),
+                      } : null)} />
+                    {candidate.name}
+                  </label>
+                ))}
+              </div>
+              <p className="text-muted">候補が選べることは開口寸法・現場条件への適合を保証しません。担当者が選び直してください。</p>
+              <p className="text-muted">確定後は編集中の明細と試算に反映されます。下書きはまだ保存されません。</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+              <Button type="button" variant="secondary" onClick={() => setReplacementDraft(null)}>キャンセル</Button>
+              <Button type="button" disabled={pending} data-testid="v25-wb-position-replace-confirm" onClick={confirmReplacement}>標準品と候補を反映</Button>
             </div>
           </div>
         </div>

@@ -96,7 +96,7 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
-    // 匿名・お客様に公開中の商品の子の行だけを返す（2026-11-13 の先方の依頼 A）
+    // 子の行の読み取りの条件：匿名・お客様は親が公開中の行だけ（依頼 A）、代理店以上は親が読める行だけ（H2-C ①）
     runtime = mergeRuntime(runtime, await runtimeAnonChildRows(client));
     printRuntime(runtime);
   }

@@ -489,6 +489,23 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('event.nativeEvent.isComposing');
   });
 
+  it('位置名を編集中は別行の編集開始を無効化し、Enter確定・Esc取消まで入力途中の内容を守る', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const labelButton = source.slice(
+      source.indexOf('data-testid="v25-wb-slot-position"'),
+      source.indexOf('data-testid="v25-wb-position-unset"')
+    );
+    expect(labelButton).toContain('disabled={pending || positionInputActive}');
+    expect(labelButton).toContain('if (pending || positionInputActive) return;');
+    expect(labelButton).toContain('setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null })');
+    expect(labelButton).toContain('編集中の位置名をEnterで確定するかEscで取り消してください');
+    // 同じ位置の入力部品は確定／取消まで維持し、他の行を開くことで置き換えられない。
+    expect(source).toContain('positionLabelEditor?.slotKey === slot.key && !readOnly');
+    expect(source).toContain('onConfirm={commitInlinePositionLabel}');
+    expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}');
+    expect(source).toContain('編集中は下書きを保存できず、別の位置名も編集できません。Enterで確定するかEscで取り消してください。');
+  });
+
   it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {
     const html = render(true, {
       initial: {

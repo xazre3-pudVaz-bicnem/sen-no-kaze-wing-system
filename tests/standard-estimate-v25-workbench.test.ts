@@ -23,7 +23,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench, v25VariantSummary } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -371,7 +371,9 @@ describe('Excel 風の画面（描画）', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(source).toContain("window.addEventListener('scroll', onScroll, true)");
     expect(source).toContain("window.addEventListener('resize', dismiss)");
-    expect(source).toContain("document.addEventListener('pointerdown', onOutside)");
+    expect(source).toContain("document.addEventListener('keydown', onEscape, true)");
+    expect(source).toContain('data-testid="v25-wb-menu-backdrop"');
+    expect(source).toContain("event.stopImmediatePropagation()");
     expect(source).toContain("event.key === 'Escape'");
     expect(source).toContain('maxHeight: Math.max(80');
     expect(source).toContain('target="_blank" rel="noopener noreferrer" prefetch={false}');
@@ -423,6 +425,117 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('removePositionOnConfirm');
     expect(source).toContain('clearV25Position(state, positionFor)');
     expect(source).not.toContain("updatePosition({ slot_code: '', slot_label: '', selectable_option_ids: [] })");
+  });
+
+  it('位置名直接編集・別位置複製は設定済みの編集行だけにあり、公開版は閲覧のみ', () => {
+    const positioned = render(false, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビングの窓', selectable_option_ids: ['p2'] }
+          : slot),
+      },
+    });
+    expect(positioned).toContain('data-testid="v25-wb-duplicate-position"');
+    expect(positioned).toContain('別の位置に複製');
+    expect(positioned).toContain('位置名を直接編集');
+    expect(positioned).toContain('位置別設定');
+    expect(positioned).toContain('この商品を台帳で編集');
+    expect(positioned).not.toContain('v25-wb-duplicate-position-dialog');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain('event.nativeEvent.isComposing');
+    expect(source).toContain('event.nativeEvent.keyCode');
+    expect(source).toContain('onCompositionStart=');
+    expect(source).toContain('onCompositionEnd=');
+    expect(source).toContain('v25PositionNameKeyAction(');
+    expect(source).toContain('renameV25Position(state, positionLabelEditor.slotKey');
+    expect(source).not.toContain('data-v25-excel-col="position"');
+    const published = render(true, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビングの窓' } : slot),
+      },
+    });
+    expect(published).not.toContain('v25-wb-duplicate-position');
+    expect(published).not.toContain('位置名を直接編集');
+    expect(published).toContain('リビングの窓');
+  });
+
+  it('位置名を直接編集中は保存・公開・原価更新・変更破棄を無効化し、理由を表示する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;');
+    expect(source).toContain('data-testid="v25-wb-position-edit-save-blocked"');
+    expect(source).toContain('位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。');
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} onClick={() => {');
+    expect(source).toContain('disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"');
+    expect(source).toContain('disabled={pending || blockers.length > 0 || positionInputActive}');
+    expect(source).toContain('const save = () => {\n    if (pending || positionInputActive) return;');
+    expect(source).toContain('const run = (task:');
+    expect(source).toContain('if (pending || positionInputActive) return;');
+  });
+
+  it('保存等の処理中は位置名Enter確定・複製モーダル・追加確定を止める', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('if (!positionLabelEditor || readOnly || pending) return;');
+    expect(source).toContain('if (!duplicateFor || readOnly || pending) return;');
+    expect(source).toContain('if (readOnly || pending || !positionFor || !positionDraft) return;');
+    expect(source).toContain('disabled={pending || positionInputActive}');
+    expect(source).toContain('if (pending || positionInputActive) return;');
+    expect(source).toContain('data-testid="v25-wb-duplicate-position-confirm" disabled={pending}');
+    expect(source).toContain('<V25PositionNameInput disabled={pending}');
+    expect(source).toContain('if (disabled) { event.preventDefault(); return; }');
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain('event.nativeEvent.isComposing');
+  });
+
+  it('位置名を編集中は別行の編集開始を無効化し、Enter確定・Esc取消まで入力途中の内容を守る', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const labelButton = source.slice(
+      source.indexOf('data-testid="v25-wb-slot-position"'),
+      source.indexOf('data-testid="v25-wb-position-unset"')
+    );
+    expect(labelButton).toContain('disabled={pending || positionInputActive}');
+    expect(labelButton).toContain('if (pending || positionInputActive) return;');
+    expect(labelButton).toContain('setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null })');
+    expect(labelButton).toContain('編集中の位置名をEnterで確定するかEscで取り消してください');
+    // 同じ位置の入力部品は確定／取消まで維持し、他の行を開くことで置き換えられない。
+    expect(source).toContain('positionLabelEditor?.slotKey === slot.key && !readOnly');
+    expect(source).toContain('onConfirm={commitInlinePositionLabel}');
+    expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}');
+    expect(source).toContain('編集中は保存・行削除・位置別設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。');
+  });
+
+  it('位置名編集中は行削除と位置別設定の両経路を無効化し、確定・取消後は再び操作・保存が可能', () => {
+    // pendingがない通常時は編集中だけロックし、Enter・Escで編集状態がnullに戻れば解除される。
+    expect(v25PositionActionsLocked(false, true)).toBe(true);
+    expect(v25PositionActionsLocked(false, false)).toBe(false); // Enter 確定後・Esc 取消後
+    expect(v25PositionActionsLocked(true, false)).toBe(true); // 保存などの処理中
+
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;');
+    expect(source).toContain('const positionActionsLocked = v25PositionActionsLocked(pending, positionInputActive);');
+    const openDetail = source.slice(source.indexOf('const openPosition ='), source.indexOf('const closePosition ='));
+    expect(openDetail).toContain('if (positionActionsLocked) return;');
+    const sashButton = source.slice(source.indexOf('data-testid="v25-wb-slot-position-toggle"'), source.indexOf('data-testid="v25-wb-slot-product-picker-icon"'));
+    expect(sashButton).toContain('disabled={positionActionsLocked}');
+    const menuButton = source.slice(source.indexOf('data-testid="v25-wb-slot-position-menu"'), source.indexOf('金額を入力する'));
+    expect(menuButton).toContain('disabled={positionActionsLocked}');
+    expect(menuButton).toContain('if (positionActionsLocked) return;');
+    const deleteButton = source.slice(source.indexOf('data-testid="v25-wb-slot-delete"'), source.indexOf('</V25WorkbenchRowMenu>'));
+    expect(deleteButton).toContain('disabled={positionActionsLocked}');
+    expect(deleteButton).toContain('if (positionActionsLocked) return;');
+    expect(source).toContain('setPositionLabelEditor(null);'); // Enterが成功したとき
+    expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}'); // Escのとき
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
+    expect(source).toContain('編集中は保存・行削除・位置別設定・別の位置名編集ができません。');
+    // 保存ボタンは dirty のままなら編集確定／取消で再び押せる。元から未変更なら無効のまま。
+    const canSave = (pending: boolean, dirty: boolean, editing: boolean) => !pending && dirty && !editing;
+    expect(canSave(false, true, true)).toBe(false);
+    expect(canSave(false, true, false)).toBe(true);
+    expect(canSave(false, false, false)).toBe(false);
   });
 
   it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {

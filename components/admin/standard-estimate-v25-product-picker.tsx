@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { formatYen } from '@/lib/domain/pricing';
 import type { V25WorkbenchCandidate, V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
@@ -15,6 +15,7 @@ type ProductPickerProps = {
   currentSlot: Pick<V25SlotRow, 'option_id' | 'variant_choices'> | null;
   onChoose: (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => void;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 /** 見積売価・メーカー参考価格とは区別し、Version未登録は0円にせず明示する。 */
@@ -39,12 +40,16 @@ export function v25PickerChoicesValid(
  * 検索・選択中はローカルstateのみ。確定まで親の明細stateに触れない。
  */
 export function StandardEstimateV25ProductPicker({
-  sectionLabel, candidates, productCosts, currentSlot, onChoose, onClose,
+  sectionLabel, candidates, productCosts, currentSlot, onChoose, onClose, onDirtyChange,
 }: ProductPickerProps) {
   const [categoryId, setCategoryId] = useState('');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, string>>({});
+
+  // 検索や商品・仕様選択を変更したまま閉じる際は、親ダイアログで破棄確認する。
+  const inputDirty = Boolean(categoryId || query || selectedId || Object.values(choices).some(Boolean));
+  useEffect(() => { onDirtyChange?.(inputDirty); }, [inputDirty, onDirtyChange]);
 
   const categories = useMemo(() => {
     const found = new Map<string, string>();
@@ -81,7 +86,7 @@ export function StandardEstimateV25ProductPicker({
           <h2 className="font-semibold">{sectionLabel}：{currentSlot ? '商品を変更' : '商品を追加'}</h2>
           {currentSlot && <p className="truncate text-xs text-muted" title={current?.name ?? ''}>現在：{current?.name ?? '登録中の商品'}</p>}
         </div>
-        <button type="button" className="shrink-0 text-sm text-muted underline" onClick={onClose}>閉じる</button>
+        <button type="button" data-v25-dialog-close aria-label="商品選択を閉じる" title="閉じる" className="shrink-0 text-xl text-muted" onClick={onClose}>×</button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="flex min-h-0 flex-col">

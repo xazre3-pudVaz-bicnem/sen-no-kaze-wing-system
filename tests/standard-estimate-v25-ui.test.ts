@@ -68,9 +68,9 @@ describe('標準見積 v2.5 の編集（PR-B1b の処理を「見積書管理 �
 
   it('保存は入力の確認の後、最新原価の取り込みは未保存の変更が無いときだけ、公開は確認ダイアログを通す', () => {
     expect(workbench).toContain('const problem = percentProblem(percents) ?? validateV25EditorState(state, sectionOf);');
-    expect(workbench).toContain('disabled={pending || dirty} data-testid="v25-wb-refresh"');
+    expect(workbench).toContain('disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"');
     expect(workbench).toContain('<ConfirmActionButton');
-    expect(workbench).toContain('disabled={pending || blockers.length > 0}');
+    expect(workbench).toContain('disabled={pending || blockers.length > 0 || positionInputActive}');
     expect(workbench).toContain('expected_lock_version: lockVersion');
   });
 

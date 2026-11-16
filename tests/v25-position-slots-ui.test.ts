@@ -379,9 +379,9 @@ describe('v2.5 PR-S2：本部の編集画面（位置の枠・行ごとの原価
     expect(slotCostForWorkbench(row(null), costs)).toEqual({ status: 'ok', standard_cost: 30000, variant_adjustment: 0, pinned: true });
   });
 
-  it('編集画面に位置の欄・選べる商品の選択・同じ商品で位置を足すボタンがある', () => {
+  it('編集画面に位置名・変更候補選択・確定前の1行追加と自動識別子の入口がある', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
-    for (const testId of ['v25-wb-slot-code', 'v25-wb-slot-label', 'v25-wb-slot-selectable-open', 'v25-wb-slot-add-position', 'v25-wb-selectable-window-type']) {
+    for (const testId of ['v25-wb-slot-new-label', 'v25-wb-slot-label', 'v25-wb-slot-selectable-open', 'v25-wb-slot-add-position', 'v25-wb-position-confirm', 'v25-wb-selectable-window-type']) {
       expect(source).toContain(`data-testid="${testId}"`);
     }
   });

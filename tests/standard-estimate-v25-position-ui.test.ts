@@ -3,7 +3,7 @@ import { buildV25SavePayload, validateV25EditorState, type V25EditorState } from
 import { calculateV25Workbench, type V25WorkbenchCandidate, type V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
 import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
 import {
-  addV25PositionRow, nextV25PositionCode, replaceV25PositionStandard,
+  addV25PositionRow, clearV25Position, nextV25PositionCode, replaceV25PositionStandard,
   updateV25Position, v25PositionMixes,
 } from '@/lib/domain/standard-estimate-v25-position-ui';
 
@@ -43,9 +43,22 @@ const total = (editor: V25EditorState) =>
   calculateV25Workbench(rule, taxRule, editor, [], costs, (id) => get(id)?.section).result?.total;
 
 describe('標準見積v2.5 位置別設定：編集中の原子的な操作', () => {
-  it('新規位置のコードは現行40字ルールに一致し、版内の既存コードを避ける', () => {
-    expect(nextV25PositionCode([row('one', { slot_code: 'position-1' }), row('two', { slot_code: 'position-3' })])).toBe('position-2');
-    expect(nextV25PositionCode([])).toBe('position-1');
+  it('識別子はUUID由来で、削除済みの連番を再利用せず40字以内の形式を守る', () => {
+    const deleted = 'position-1';
+    const newCode = nextV25PositionCode([row('one', { slot_code: 'living' })],
+      () => '12345678-1234-4123-8123-123456789abc');
+    expect(newCode).toBe('p-12345678123441238123123456789abc');
+    expect(newCode).not.toBe(deleted);
+    expect(newCode).toMatch(/^[a-z0-9][a-z0-9-]{0,39}$/);
+    expect(newCode.length).toBeLessThanOrEqual(40);
+    const duplicate = 'p-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const ids = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
+    const distinct = nextV25PositionCode([row('same', { slot_code: duplicate })], () => ids.shift()!);
+    expect(distinct).toBe('p-bbbbbbbbbbbb4bbb8bbbbbbbbbbbbbbb');
+    // 同じ残存行から発行しても連番と異なり、削除済みコードへの自動巻き戻りはない。
+    const fresh = nextV25PositionCode([]);
+    expect(fresh).toMatch(/^p-[a-f0-9]{32}$/);
+    expect(fresh).not.toBe(deleted);
   });
   it('既存行の位置付けと表示名の修正は1行のまま。商品・数量・価格・識別子は変わらない', () => {
     const before = state([row('a')]);
@@ -54,16 +67,16 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     expect(tagged.error).toBeNull();
     expect(tagged.state.slots).toHaveLength(1);
     expect(tagged.state.slots[0]).toMatchObject({
-      key: 'a', baseline_key: 'a', option_id: 's1', quantity: '1', slot_code: 'position-1',
+      key: 'a', baseline_key: 'a', option_id: 's1', quantity: '1', slot_code: expect.stringMatching(/^p-[a-f0-9]{32}$/),
       slot_label: 'リビングの掃出し窓', selectable_option_ids: ['s2'],
     });
     const renamed = updateV25Position(tagged.state, 'a', '居間の掃出し窓', ['s2'], get);
-    expect(renamed.state.slots[0].slot_code).toBe('position-1');
+    expect(renamed.state.slots[0].slot_code).toBe(tagged.state.slots[0].slot_code);
     expect(renamed.state.slots[0].variant_choices).toEqual(before.slots[0].variant_choices);
     expect(renamed.state.slots[0].price_mode).toBe(before.slots[0].price_mode);
     expect(total(tagged.state)).toBe(beforePrice);
     expect(total(renamed.state)).toBe(beforePrice);
-    expect(buildV25SavePayload(renamed.state).slots[0].slot_code).toBe('position-1');
+    expect(buildV25SavePayload(renamed.state).slots[0].slot_code).toBe(tagged.state.slots[0].slot_code);
     expect(validateV25EditorState(renamed.state, (id) => get(id)?.section)).toBeNull();
     expect(before.slots[0].slot_code).toBe('');
   });
@@ -85,7 +98,7 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     expect(added.error).toBeNull();
     expect(added.state.slots).toHaveLength(2);
     expect(added.state.slots[1]).toMatchObject({ key: 'new-row', baseline_key: null, option_id: 's1', quantity: '1',
-      slot_label: '洗面室の窓', slot_code: 'position-1', selectable_option_ids: [] });
+      slot_label: '洗面室の窓', slot_code: expect.stringMatching(/^p-[a-f0-9]{32}$/), selectable_option_ids: [] });
     expect(added.state.slots[0]).toEqual(before.slots[0]);
     expect(total(added.state)).toBeGreaterThan(price!);
     expect(buildV25SavePayload(added.state).slots).toHaveLength(2);
@@ -107,6 +120,14 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     expect(result.state.slots[0]).toMatchObject({ baseline_key: 'a', key: 'a', option_id: 's2',
       slot_code: 'living', slot_label: 'リビングの窓', selectable_option_ids: [] });
     expect(before.slots[0].option_id).toBe('s1');
+    // 同じ商品IDで色・仕様だけ選び直す場合は変更候補を保持する。
+    const same = replaceV25PositionStandard(before, 'a', get('s1')!, { color: 'white' }, [], get);
+    expect(same.error).toBeNull();
+    expect(same.state.slots[0]).toMatchObject({
+      option_id: 's1', slot_code: 'living', slot_label: 'リビングの窓',
+      selectable_option_ids: ['s2'], variant_choices: { color: 'white' },
+    });
+    expect(before.slots[0].variant_choices).toEqual({});
     const invalid = replaceV25PositionStandard(before, 'a', get('door')!, {}, [], get);
     expect(invalid.state).toBe(before);
     const options = replaceV25PositionStandard(before, 'a', get('s2')!, {}, ['s1'], get);
@@ -122,7 +143,13 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     ]);
     const fixed = updateV25Position(mixed, 'b', '洗面室の窓', [], get);
     expect(v25PositionMixes(fixed.state.slots, get)).toEqual([]);
-    const cleared = updateV25Position(fixed.state, 'a', '', [], get);
+    // 入力欄の空欄はエラーであり、解除操作を明示したときだけ消せる。
+    const blank = updateV25Position(fixed.state, 'a', '', [], get);
+    expect(blank.error).toContain('位置名');
+    expect(blank.state).toBe(fixed.state);
+    expect(blank.state.slots[0].slot_code).toBe('living');
+    const cleared = clearV25Position(fixed.state, 'a');
+    expect(cleared.error).toBeNull();
     expect(cleared.state.slots).toHaveLength(2);
     expect(cleared.state.slots[0]).toMatchObject({ option_id: 's1', slot_code: '', slot_label: '', selectable_option_ids: [] });
     expect(v25PositionMixes(cleared.state.slots, get)).toHaveLength(1);

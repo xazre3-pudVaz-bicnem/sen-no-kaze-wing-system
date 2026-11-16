@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package } from 'lucide-react';
 import {
@@ -139,6 +139,7 @@ function WorkbenchBody({
     slotKey: string; candidate: V25WorkbenchCandidate; choices: Record<string, string>; selectableIds: string[];
   } | null>(null);
   const [jumpToKey, setJumpToKey] = useState<{ key: string } | null>(null);
+  const lastNavigated = useRef<{ key: string } | null>(null);
   const [selectableFor, setSelectableFor] = useState<string | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
@@ -206,11 +207,12 @@ function WorkbenchBody({
 
   // 案内から未設定行へ移動。折り畳まれていた場合は行を開いてから移動する。
   useEffect(() => {
-    if (!jumpToKey) return;
+    if (!jumpToKey || lastNavigated.current === jumpToKey) return;
     const row = document.getElementById(`v25-position-row-${jumpToKey.key}`);
     if (!row) return;
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     row.focus({ preventScroll: true });
+    lastNavigated.current = jumpToKey;
   }, [jumpToKey, collapsed]);
 
   const setSlot = (key: string, patch: Partial<V25SlotRow>) =>

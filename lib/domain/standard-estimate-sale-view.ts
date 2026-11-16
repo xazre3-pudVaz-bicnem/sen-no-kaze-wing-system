@@ -110,6 +110,13 @@ export interface StandardEstimateSaleView {
     variant_extra: number;
     /** v2.5：版の選択枠の金額（未確定は null） */
     amount?: number | null;
+    /** #647：計上数量の単位（下書きの保存のときの商品台帳の販売単位。未設定・古い版は null） */
+    unit?: string | null;
+    /**
+     * #647：お客様の選択に、この選択枠の計上数量を掛ける枠か（位置・用途の枠と、1 つだけ選べるカテゴリーにその枠だけがあるカテゴリー単位の枠。
+     * DB の standard_estimate_v25_slot_measured が判定する。古い版・未取得は false）
+     */
+    measured?: boolean;
     /** v2.5 PR-S1：位置・用途の選択枠（null・未取得はカテゴリー単位の選択枠） */
     slot_code?: string | null;
     slot_label?: string | null;
@@ -147,6 +154,44 @@ export function v25PositionSlots(view: StandardEstimateSaleView | null | undefin
       selectable_option_ids:
         item.selectable_option_ids && item.selectable_option_ids.length > 0 ? item.selectable_option_ids : [item.option_id],
     }));
+}
+
+/** #647：お客様の選択に計上数量を掛ける選択枠（DB の standard_estimate_v25_slot_measured が判定した枠）。slotCode が null ならカテゴリー単位 */
+function v25MeasuredSlot(view: StandardEstimateSaleView, categoryId: string, slotCode: string | null) {
+  return slotCode
+    ? view.baseline.find((item) => item.slot_code === slotCode && item.measured === true)
+    : view.baseline.find((item) => !item.slot_code && item.measured === true && item.category_id === categoryId);
+}
+
+/** DB の nullif(btrim(price_unit), '') と同じ（前後の半角空白だけを外す） */
+function btrimUnit(value: string | null | undefined): string | null {
+  const unit = typeof value === 'string' ? value.replace(/^ +| +$/g, '') : '';
+  return unit || null;
+}
+
+/**
+ * #647：お客様の選択に掛ける選択枠の計上数量（DB の standard_estimate_v25_slot_measure と同じ決まり）。
+ * 掛ける枠が無い・枠の数量が 1 なら 1。版の枠と同じ「商品＋選択肢」は枠の数量。それ以外は、販売単位が枠の販売単位と同じときだけ
+ * 枠の数量、違えば null（価格未確定）。slotCode が null ならカテゴリー単位の選択（選んだ商品のカテゴリーの枠）
+ */
+export function v25SlotMeasure(
+  view: StandardEstimateSaleView,
+  option: Pick<ProductOption, 'id' | 'category_id' | 'price_unit'>,
+  slotCode: string | null,
+  choiceIds: string[]
+): string | number | null {
+  if (!isV25SaleView(view)) return 1;
+  const slot = v25MeasuredSlot(view, option.category_id, slotCode);
+  if (!slot || Number(slot.quantity) === 1) return 1;
+  const sameChoices = [...new Set(choiceIds)].sort().join(',') === [...slot.variant_choice_ids].sort().join(',');
+  if (slot.option_id === option.id && sameChoices) return slot.quantity;
+  const unit = btrimUnit(option.price_unit);
+  return slot.unit && unit === slot.unit ? slot.quantity : null;
+}
+
+/** #647：計上数量を掛けた金額（数量 1 はそのまま） */
+function measuredAmount(measure: string | number, unit: number): number {
+  return Number(measure) === 1 ? unit : truncQuantity(measure, unit);
 }
 
 /** 版の位置の枠を、すべて標準の商品・選択肢で選んだ状態（シミュレーターの標準構成の位置の分） */
@@ -378,6 +423,7 @@ export function withoutTemplatePrices(templates: EstimateTemplateBundle[]): Esti
 /**
  * 画面に出す商品価格・選択肢の差額を、v2.5 の売価から作る（原価は使わない）。
  * 商品価格：標準の選択肢での売価単価。選択肢の差額：同じ選択項目の標準の選択肢と入れ替えたときの売価単価の差（目安）。
+ * 計上数量を掛ける選択枠のカテゴリー（屋根 23.5㎡ など。#647）は、単価ではなく計上数量分の金額で示す（合計の差額と同じになる）。
  * 合計はこの値ではなく v25SelectionUnit で計算する（v2.5 の式は差額を足してから率を掛けるため、選択項目が 2 つ以上ある商品は数円ずれうる）。
  * view が無い（この仕様の v2.5 の標準見積が無い）ときは、すべて価格未確定にする
  */
@@ -410,19 +456,28 @@ export function v25DisplayCatalog(
     const unit = v25SelectionUnit(view, optionId, ids, lookup);
     return unit === undefined ? v25ApproxUnit(view, optionId, ids) : unit;
   };
+  // #647：選択枠の計上数量を掛けた金額（屋根 23.5㎡ なら 23.5㎡ 分。販売単位の違う商品は null＝価格未確定）
+  const optionById = new Map(options.map((option) => [option.id, option] as const));
+  const amountOf = (optionId: string, ids: string[]) => {
+    const unit = unitOf(optionId, ids);
+    const option = optionById.get(optionId);
+    if (unit === null || !option) return unit;
+    const measure = v25SlotMeasure(view, option, null, ids);
+    return measure === null ? null : measuredAmount(measure, unit);
+  };
   const displayOptions = options.map((option) => {
-    const unit = unitOf(option.id, defaults(option.id));
-    return { ...option, price: unit ?? 0, price_on_request: unit === null };
+    const amount = amountOf(option.id, defaults(option.id));
+    return { ...option, price: amount ?? 0, price_on_request: amount === null };
   });
   const displayChoices = choices.map((choice) => {
     const group = groupById.get(choice.group_id);
     if (!group) return { ...choice, extra_price: 0, price_on_request: true };
     const base = defaults(group.option_id);
-    const baseUnit = unitOf(group.option_id, base);
+    const baseAmount = amountOf(group.option_id, base);
     const swapped = [...base.filter((id) => groupOfChoice.get(id) !== group.id), choice.id];
-    const unit = unitOf(group.option_id, swapped);
-    if (unit === null) return { ...choice, extra_price: 0, price_on_request: true };
-    return { ...choice, extra_price: baseUnit === null ? 0 : unit - baseUnit, price_on_request: false };
+    const amount = amountOf(group.option_id, swapped);
+    if (amount === null) return { ...choice, extra_price: 0, price_on_request: true };
+    return { ...choice, extra_price: baseAmount === null ? 0 : amount - baseAmount, price_on_request: false };
   });
   return { options: displayOptions, choices: displayChoices };
 }
@@ -596,6 +651,10 @@ export function computeSaleViewPricing(
           ? 'interior_exterior'
           : 'option';
     const unit = unitOf(selection.option_id, selection.variant_choice_ids, selection.slot_code);
+    // #647：枠の計上数量を掛ける（販売単位の違う商品は価格未確定。位置の枠は今は数量 1 なので、そのまま）
+    const measure = unit === null ? 1 : v25SlotMeasure(view, option, selection.slot_code, selection.variant_choice_ids);
+    const priced = unit !== null && measure !== null;
+    const slotAmount = priced ? measuredAmount(measure, unit) : 0;
     slotLines.push({
       option_id: option.id,
       code: `${option.code}__slot_${selection.slot_code}`,
@@ -603,8 +662,8 @@ export function computeSaleViewPricing(
       category_name: category?.name ?? '',
       category_code: categoryCode,
       unit_price: unit ?? 0,
-      quantity: 1,
-      amount: unit ?? 0,
+      quantity: measure === null ? 1 : Number(measure),
+      amount: slotAmount,
       is_installation: option.is_installation,
       is_free_product: categoryCode === FREE_PRODUCT_CATEGORY_CODE,
       variants: selection.variant_choice_ids.flatMap((id) => {
@@ -612,14 +671,14 @@ export function computeSaleViewPricing(
         const group = choice ? slotGroupById.get(choice.group_id) : undefined;
         return choice && group ? [{ group: group.name, choice: choice.name, extra_price: 0 }] : [];
       }),
-      price_on_request: unit === null,
+      price_on_request: !priced,
       image_url: option.image_url,
     });
-    if (unit === null) {
+    if (!priced) {
       slotPor = true;
       continue;
     }
-    slotTotals.set(section, (slotTotals.get(section) ?? 0) + unit);
+    slotTotals.set(section, (slotTotals.get(section) ?? 0) + slotAmount);
   }
   const current = computePricing(
     model,
@@ -636,7 +695,19 @@ export function computeSaleViewPricing(
   // 防火の標準見積を使うときは、防火仕様の行（別途見積）は標準見積に含まれるので数えない
   const fireCategoryIds = new Set(bundle.categories.filter((category) => category.code === 'fireproof').map((category) => category.id));
   const optionById = new Map(bundle.options.map((option) => [option.id, option]));
-  const currentLines = current.lines.filter(
+  // #647：カテゴリー単位の選択枠が 1 つだけのカテゴリー（屋根 23.5㎡ など）は、選んだ商品に枠の計上数量を掛ける（DB の configuration_money と同じ）
+  const choiceIdsOf = (optionId: string) =>
+    variantChoiceIds.filter((id) => slotGroupById.get(slotChoiceById.get(id)?.group_id ?? '')?.option_id === optionId);
+  const measuredLines = current.lines.map((line) => {
+    const option = v25 && !line.price_on_request && line.quantity === 1 ? optionById.get(line.option_id) : undefined;
+    if (!option) return line;
+    const measure = v25SlotMeasure(view, option, null, choiceIdsOf(option.id));
+    if (measure === 1) return line;
+    if (measure === null) return { ...line, amount: 0, price_on_request: true };
+    const unit = v25MeasuredSlot(view, option.category_id, null)?.unit ?? null;
+    return { ...line, quantity: Number(measure), amount: measuredAmount(measure, line.unit_price), unit };
+  });
+  const currentLines = measuredLines.filter(
     (line) => !(view.fire_spec_code === 'fire' && fireCategoryIds.has(optionById.get(line.option_id)?.category_id ?? ''))
   );
   const currentTotal = (section: LineSection) =>
@@ -680,7 +751,7 @@ export function computeSaleViewPricing(
     base_expense: byCode('base').expense_amount,
     base_total: byCode('base').total,
     // 画像・別途見積の判定などのため、現在の商品選択を残す（金額の正本は区分の合計）。位置の枠の商品は位置ごとの行
-    lines: [...current.lines, ...slotLines],
+    lines: [...measuredLines, ...slotLines],
     option_subtotal: byCode('interior_exterior').line_subtotal + byCode('option').line_subtotal,
     option_expense: byCode('interior_exterior').expense_amount + byCode('option').expense_amount,
     option_total: byCode('interior_exterior').total + byCode('option').total,

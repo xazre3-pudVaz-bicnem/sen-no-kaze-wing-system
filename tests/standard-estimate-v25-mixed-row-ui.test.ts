@@ -52,7 +52,7 @@ describe('標準見積v2.5 混在表示 UI の接続（PR #664の配色・明細
     expect(workbench).toContain('v25-wb-slot-order-cell');
     expect(workbench).toContain('v25-wb-line-order-cell');
     expect(workbench).toContain('compact disabled={positionActionsLocked}');
-    expect((workbench.match(/focus-within:z-\\[70\\]/g) ?? [])).toHaveLength(2);
+    expect(workbench.split('focus-within:z-[70]').length - 1).toBe(2);
     expect(workbench).toContain('gap-px" data-testid="v25-wb-row-order-actions"');
     const slotCell = workbench.slice(workbench.indexOf('data-testid="v25-wb-slot-order-cell"'), workbench.indexOf('data-testid="v25-wb-slot-menu"'));
     expect(slotCell).toContain('rowControls(rowRef, rowIndex)');

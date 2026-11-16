@@ -219,7 +219,7 @@ function useV25PageFloatingHeader(showCost: boolean) {
 
 /** 位置名のEnter確定は日本語変換中／変換終了直後には実行しない。 */
 function V25PositionNameInput({
-  value, onChange, onConfirm, onCancel, testId, placeholder,
+  value, onChange, onConfirm, onCancel, testId, placeholder, disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -227,12 +227,13 @@ function V25PositionNameInput({
   onCancel: () => void;
   testId: string;
   placeholder: string;
+  disabled?: boolean;
 }) {
   const composing = useRef(false);
   const justComposed = useRef(false);
   return (
     <Input autoFocus value={value} maxLength={40} data-testid={testId}
-      aria-label="位置名" placeholder={placeholder}
+      disabled={disabled} aria-label="位置名" placeholder={placeholder}
       className="h-7 w-full rounded-sm border border-amber-400 bg-white px-1 text-[11px]"
       onChange={(event) => onChange(event.target.value)}
       onCompositionStart={() => { composing.current = true; justComposed.current = false; }}
@@ -241,6 +242,7 @@ function V25PositionNameInput({
         if (event.key !== 'Enter' && event.key !== 'Escape') return;
         // 明細の Enter＝下の行、グローバル Esc＝ダイアログ終了へ伝播させない。
         event.stopPropagation();
+        if (disabled) { event.preventDefault(); return; }
         const action = v25PositionNameKeyAction(
           event.key, composing.current || event.nativeEvent.isComposing,
           justComposed.current, event.nativeEvent.keyCode
@@ -337,6 +339,8 @@ function WorkbenchBody({
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
   const [pending, startTransition] = useTransition();
+  // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
+  const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const sectionOf = (optionId: string) => candidateById.get(optionId)?.section;
@@ -523,7 +527,7 @@ function WorkbenchBody({
   const positionSlot = positionFor ? state.slots.find((slot) => slot.key === positionFor) : null;
   const positionCandidate = positionSlot ? candidateById.get(positionSlot.option_id) : undefined;
   const confirmPosition = () => {
-    if (readOnly || !positionFor || !positionDraft) return;
+    if (readOnly || pending || !positionFor || !positionDraft) return;
     const candidateOf = (id: string) => candidateById.get(id);
     const result = removePositionOnConfirm
       ? clearV25Position(state, positionFor)
@@ -535,7 +539,7 @@ function WorkbenchBody({
   };
   // 明細上の位置名変更は位置ラベル以外の情報を変更しない。
   const commitInlinePositionLabel = () => {
-    if (!positionLabelEditor || readOnly) return;
+    if (!positionLabelEditor || readOnly || pending) return;
     const result = renameV25Position(state, positionLabelEditor.slotKey, positionLabelEditor.label,
       (id) => candidateById.get(id));
     if (result.error) {
@@ -546,7 +550,7 @@ function WorkbenchBody({
     setPositionLabelEditor(null);
   };
   const confirmDuplicatePosition = () => {
-    if (!duplicateFor || readOnly) return;
+    if (!duplicateFor || readOnly || pending) return;
     const result = addV25PositionRow(state, duplicateFor.slotKey, newKey('slot'), duplicateFor.label, [],
       (id) => candidateById.get(id));
     if (result.error) {
@@ -631,14 +635,17 @@ function WorkbenchBody({
       ],
     }));
 
-  const run = (task: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>) =>
+  const run = (task: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>) => {
+    if (pending || positionInputActive) return;
     startTransition(async () => {
       const result = await task();
       onNotice(result.ok ? { tone: 'success', text: result.message } : { tone: 'danger', text: result.error });
       if (result.ok) router.refresh();
     });
+  };
 
   const save = () => {
+    if (pending || positionInputActive) return;
     // 率は % で入力する。読めない入力は % の文で案内する（範囲は validateV25EditorState・DB で確かめる）
     const problem = percentProblem(percents) ?? validateV25EditorState(state, sectionOf);
     if (problem) {
@@ -855,7 +862,7 @@ function WorkbenchBody({
                               </div>
                               {slotCode && (positionLabelEditor?.slotKey === slot.key && !readOnly ? (
                                 <div className="space-y-0.5" data-testid="v25-wb-inline-position-editor">
-                                  <V25PositionNameInput
+                                  <V25PositionNameInput disabled={pending}
                                     testId="v25-wb-inline-position-input"
                                     value={positionLabelEditor.label} placeholder="例：寝室の窓"
                                     onChange={(label) => {
@@ -867,10 +874,12 @@ function WorkbenchBody({
                                   />
                                   {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
                                   <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
+                                  <p className="text-[10px] text-amber-800">編集中は下書きを保存できません。確定または取消をしてください。</p>
                                 </div>
                               ) : (
                                 <button type="button" className="block max-w-full truncate text-left text-[10px] text-navy underline"
                                   data-testid="v25-wb-slot-position"
+                                  disabled={pending}
                                   aria-label={readOnly ? '位置・選べる商品を設定' : '位置名を直接編集'}
                                   title={`${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
                                   onClick={() => {
@@ -951,8 +960,10 @@ function WorkbenchBody({
                                   )}
                                   {positionAllowed && slotCode && (
                                     <button type="button" data-testid="v25-wb-duplicate-position"
-                                      className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                                      disabled={pending || positionInputActive}
+                                      className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-50"
                                       onClick={(event) => {
+                                        if (pending || positionInputActive) return;
                                         event.currentTarget.closest('details')?.removeAttribute('open');
                                         setDuplicateFor({ slotKey: slot.key, label: '', error: null });
                                       }}>別の位置に複製</button>
@@ -1134,6 +1145,11 @@ function WorkbenchBody({
 
       {!readOnly && (
         <div ref={saveAreaRef} className="space-y-3 rounded-lg border border-slate-300 bg-white p-3">
+          {positionInputActive && (
+            <p role="status" data-testid="v25-wb-position-edit-save-blocked" className="text-sm font-medium text-amber-800">
+              位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。
+            </p>
+          )}
           {blockers.length > 0 && (
             <Alert tone="warn">
               <p className="font-semibold">公開できない理由</p>
@@ -1143,23 +1159,23 @@ function WorkbenchBody({
             </Alert>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={save} disabled={pending || !dirty} data-testid="v25-wb-save">
+            <Button type="button" onClick={save} disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save">
               {pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !dirty} onClick={() => {
+            <Button type="button" variant="secondary" disabled={pending || !dirty || positionInputActive} onClick={() => {
               setState(initial);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>
               変更を破棄
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || dirty} data-testid="v25-wb-refresh"
+            <Button type="button" variant="secondary" disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"
               title={dirty ? '保存してから取り込んでください' : undefined}
               onClick={() => run(() => refreshStandardEstimateV25CostsAction({ revision_id: revisionId, expected_lock_version: lockVersion }))}>
               最新原価を取り込む
             </Button>
             <ConfirmActionButton
               className="btn-primary"
-              disabled={pending || blockers.length > 0}
+              disabled={pending || blockers.length > 0 || positionInputActive}
               dialogTitle="この内容で公開しますか？"
               message="公開すると、この標準見積の現在の版になり、前の版は置き換わります。公開した金額は変わりません。"
               confirmLabel="公開する"
@@ -1220,7 +1236,7 @@ function WorkbenchBody({
             <div className="space-y-2 px-4 py-3">
               <label className="block space-y-1 text-xs">
                 <span className="font-semibold">新しい位置名</span>
-                <V25PositionNameInput
+                <V25PositionNameInput disabled={pending}
                   testId="v25-wb-duplicate-position-input" value={duplicateFor.label}
                   placeholder="例：寝室の窓"
                   onChange={(label) => setDuplicateFor((current) => current ? { ...current, label, error: null } : null)}
@@ -1230,11 +1246,12 @@ function WorkbenchBody({
               </label>
               {duplicateFor.error && <p role="alert" className="text-xs text-red-700">{duplicateFor.error}</p>}
               <p className="text-xs text-muted">変更候補は引き継ぎません。新しい位置識別子・行IDを自動発行します。</p>
-              <p className="text-xs text-muted">明細への反映のみです。下書き保存は別操作です。</p>
+              <p className="text-xs text-muted">明細への反映のみです。下書き保存は別操作です。位置名を確定・取消するまでは保存できません。</p>
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
               <Button type="button" variant="secondary" onClick={() => setDuplicateFor(null)}>キャンセル</Button>
-              <Button type="button" data-testid="v25-wb-duplicate-position-confirm" onClick={confirmDuplicatePosition}>１行追加</Button>
+              <Button type="button" data-testid="v25-wb-duplicate-position-confirm" disabled={pending}
+                onClick={confirmDuplicatePosition}>１行追加</Button>
             </div>
           </div>
         </div>

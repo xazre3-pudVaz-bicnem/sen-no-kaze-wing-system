@@ -353,6 +353,35 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('原価更新あり');
   });
 
+  it('明細セル内の全入力欄だけ、共通inputの48px最小高さを20pxで上書きし、文字サイズは維持する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const globals = read('app/globals.css');
+    const grid = source.slice(source.indexOf('<tbody>'), source.indexOf('</tbody>'));
+    const excelInputs = Array.from(grid.matchAll(/<Input data-v25-excel-col="[^"]+"[\\s\\S]*?className="([^"]+)"/g));
+    expect(excelInputs).toHaveLength(8);
+    for (const match of excelInputs) {
+      const classes = match[1].split(/\\s+/);
+      expect(classes).toContain('h-5');
+      expect(classes).toContain('min-h-5!'); // Tailwind v4 important で .input の min-h-12 を上書き
+      expect(classes).toContain('text-[11px]'); // 文字サイズは変更しない
+      expect(classes).not.toContain('text-[10px]');
+    }
+    expect(globals).toContain('@utility input {');
+    expect(globals).toContain('min-h-12');
+    const nonGrid = source.slice(source.indexOf('</tbody>'));
+    expect(nonGrid).not.toContain('min-h-5!');
+    // 標準見積の外の共通Inputやモーダル入力には同じ上書きを適用しない。
+    const beforeGrid = source.slice(0, source.indexOf('<tbody>'));
+    expect(beforeGrid).not.toContain('className="h-5 min-h-5!');
+    const html = render(false);
+    const renderedInputs = Array.from(html.matchAll(/<input\\b[^>]*data-v25-excel-col="[^"]+"[^>]*>/g));
+    expect(renderedInputs).toHaveLength(8);
+    for (const input of renderedInputs) {
+      expect(input[0]).toContain('min-h-5!');
+      expect(input[0]).toContain('text-[11px]');
+    }
+  });
+
   it('確認なしの即削除を撤去し、品名を示す確認ダイアログの確定時だけ対象行を削除する', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');

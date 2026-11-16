@@ -312,7 +312,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('>数量</th>');
     expect(html).toContain('>単位</th>');
     expect(html.indexOf('>仕様・備考</th>')).toBeGreaterThan(html.indexOf('>売価金額</th>'));
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-[64rem] min-w-[64rem]'");
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain("'w-full min-w-[52rem]'");
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={showCost ? 6 : 4}');
     expect(html).toContain('data-testid="v25-wb-save"');
     expect(html).toContain('data-testid="v25-wb-refresh"');
@@ -396,14 +396,57 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('payload: buildV25SavePayload(state)');
   });
 
+  it('幅の過大な列を圧縮し、広い画面では表全体を可変幅で表示する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const html = render(false);
+    const headerSource = source.slice(source.indexOf('<thead className='), source.indexOf('</thead>'));
+    const tableSource = source.slice(source.indexOf('<table ref={tableRef}'), source.indexOf('<thead className='));
+    expect(tableSource).toContain("showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'");
+    expect(html).toContain('data-testid="v25-workbench-grid"');
+    expect(html).toContain('min-w-[69rem]');
+    expect(html).toContain('w-full');
+    const widths = [
+      ['w-[20rem]', 1], // 品名
+      ['w-14', 2], // 数量と単位
+      ['w-[5.75rem]', 5], // 金額5列
+      ['w-[8rem]', 1], // 仕様・備考
+      ['w-[4.5rem]', 1], // 操作
+    ] as const;
+    for (const [width, expectedCount] of widths) {
+      expect(headerSource.split(width).length - 1).toBe(expectedCount);
+    }
+    const previousCostOn = 85 * 16;
+    const currentCostOn = 69 * 16;
+    const previousCostOff = 64 * 16;
+    const currentCostOff = 52 * 16;
+    expect(currentCostOn).toBe(1104);
+    expect(currentCostOff).toBe(832);
+    expect(previousCostOn - currentCostOn).toBe(256);
+    expect(previousCostOff - currentCostOff).toBe(192);
+    // 操作ボタンを押し分けられる幅（24px×2＋8px間隔）を確保。
+    expect(4.5 * 16).toBeGreaterThanOrEqual(24 * 2 + 8);
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).toContain('data-testid="v25-wb-slot-delete"');
+    expect(html).toContain('data-testid="v25-wb-line-menu"');
+    expect(html).toContain('data-testid="v25-wb-line-delete"');
+    // 位置名・カテゴリー・品名・備考は省略表示でも元データを保持している。
+    expect(source).toContain('title={line.section}');
+    expect(source).toContain('title={candidate?.categoryName ??');
+    expect(source).toContain('flex min-w-0 flex-wrap items-center gap-1');
+    expect(source).toContain('title={line.remark}');
+    expect(source).toContain("title={line.group_label || '手入力明細のグループ'}");
+    expect(source).toContain('data-v25-excel-col="name"');
+    expect(source).toContain('data-v25-excel-col="note"');
+  });
+
   it('通常10列・原価非表示7列の旧画面順にし、入力状態表示を残す', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
     expect((header.match(/<th /g) ?? []).length).toBe(10);
     expect(source).toContain('const columnCount = showCost ? 10 : 7;');
-    expect(source).toContain('w-[24rem]');
-    expect(source).toContain('w-[5.5rem]');
+    expect(source).toContain('w-[20rem]');
+    expect(source).toContain('w-[4.5rem]');
     expect(source).toContain('className="h-6 min-h-6!');
     expect(source).toContain('data-v25-excel-col="qty"');
     expect(source).toContain('data-v25-excel-col="unit"');
@@ -779,7 +822,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('const columnCount = showCost ? 10 : 7;');
     const headerSource = source.slice(source.indexOf('<thead className='), source.indexOf('</thead>'));
     expect((headerSource.match(/{showCost && <th /g) ?? []).length).toBe(3);
-    expect(source).toContain("showCost ? 'w-[85rem] min-w-[85rem]' : 'w-[64rem] min-w-[64rem]'");
+    expect(source).toContain("showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'");
     expect(source).toContain("}, [showCost]);");
     expect(source).toContain("overlay.scrollLeft = grid.scrollLeft");
     expect(source).toContain("columns[index].style.width =");

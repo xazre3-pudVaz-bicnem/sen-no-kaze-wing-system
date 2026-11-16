@@ -870,19 +870,19 @@ function WorkbenchBody({
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[85rem] min-w-[85rem]' : 'w-[64rem] min-w-[64rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 top-0 z-40 w-[24rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
-              <th className="sticky top-0 z-30 w-16 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量</th>
-              <th className="sticky top-0 z-30 w-16 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位</th>
-              {showCost && <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価</th>}
-              {showCost && <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額</th>}
-              <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価</th>
-              <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額</th>
-              {showCost && <th className="sticky top-0 z-30 w-28 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利</th>}
-              <th className="sticky top-0 z-30 w-[12rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考</th>
-              <th className="sticky top-0 z-30 w-[5.5rem] border-b border-slate-300 bg-slate-200 px-1 py-1 text-center font-medium">操作</th>
+              <th className="sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
+              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量</th>
+              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位</th>
+              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価</th>}
+              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額</th>}
+              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価</th>
+              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額</th>
+              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利</th>}
+              <th className="sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考</th>
+              <th className="sticky top-0 z-30 w-[4.5rem] border-b border-slate-300 bg-slate-200 px-1 py-1 text-center font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -895,7 +895,7 @@ function WorkbenchBody({
                   <tr key={line.id} className="border-b border-slate-200 bg-slate-100 text-slate-700" data-testid="v25-wb-base-row">
                     <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="max-w-[7rem] shrink-0 truncate text-[10px] text-slate-600" title={line.section}>{line.section}</span>
+                        <span className="max-w-[5rem] shrink-0 truncate text-[10px] text-slate-600" title={line.section}>{line.section}</span>
                         <span className="min-w-0 flex-1 truncate" title={line.name}>{line.name}</span>
                       </div>
                     </td>
@@ -951,8 +951,8 @@ function WorkbenchBody({
                         <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
                           <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-1">
-                                <span className="max-w-[5.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
+                              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                                <span className="max-w-[4.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                                 <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
                                 {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
                                 {isSash && positionAllowed && !readOnly && (
@@ -1134,8 +1134,8 @@ function WorkbenchBody({
                           <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
                               <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
-                                aria-label="グループ" placeholder="区分" title="手入力明細のグループ"
-                                className="h-6 min-h-6! w-[5.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
+                                aria-label="グループ" placeholder="区分" title={line.group_label || '手入力明細のグループ'}
+                                className="h-6 min-h-6! w-[4.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"

@@ -219,12 +219,17 @@ describe('Excel 風の画面（描画）', () => {
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(state)');
   });
 
-  it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
+  it('旧Excel型の表示密度・固定列・明細内縦横スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);
     expect(html).toContain('data-testid="v25-excel-toolbar"');
     expect(html).toContain('data-testid="v25-excel-grid-scroll"');
-    expect(html).toContain('overflow-x-auto');
-    expect(html).not.toContain('max-h-[70vh]');
+    expect(html).toContain('max-h-[70vh] overflow-auto overscroll-contain');
+    expect(html).toContain('sticky left-0 top-0 z-40');
+    expect(html).toContain('sticky left-7 top-0 z-40');
+    expect(html).toContain('sticky left-[8rem] top-0 z-40');
+    expect(html).toContain('sticky top-0 z-30 bg-slate-200');
+    expect(html).toContain('data-testid="v25-wb-menu-panel"');
+    expect(html).toContain('fixed z-[60]');
     expect(html).toContain('sticky left-[8rem]');
     expect(html).toContain('bg-emerald-900');
     expect(html).toContain('data-v25-excel-col="group"');
@@ -290,6 +295,51 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('onChoose={choose}');
     expect(html).toContain('data-testid="v25-wb-slot-menu"');
     expect(html).toContain('商品台帳から選択');
+  });
+
+  it('採用済みの現行商品だけ、行の「…」から商品台帳を別タブで編集できる', () => {
+    const html = render(false);
+    const links = html.match(/data-testid="v25-wb-slot-edit-catalog"/g) ?? [];
+    expect(links).toHaveLength(initial.slots.length);
+    expect(html).toContain('この商品を台帳で編集 ↗');
+    expect(html).toContain('href="/admin/options/p1"');
+    expect(html).toContain('href="/admin/options/p2"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain('商品台帳から選択');
+    expect(html).toContain('仕様を変更');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain("encodeURIComponent(slot.option_id)");
+    expect(source).toContain('candidate.id === slot.option_id');
+    expect(source).not.toContain('onClick={() => save()}');
+  });
+
+  it('販売停止・対象外・存在しない商品、手入力明細と公開版には台帳編集リンクを出さない', () => {
+    const unavailable = render(false, {
+      candidates: candidates.map((candidate) => candidate.id === 'p2'
+        ? { ...candidate, unavailable: true } : candidate.id === 'p3'
+          ? { ...candidate, retired: true } : candidate),
+    });
+    expect(unavailable.match(/data-testid="v25-wb-slot-edit-catalog"/g) ?? []).toHaveLength(1);
+    expect(unavailable).toContain('href="/admin/options/p1"');
+    expect(unavailable).not.toContain('href="/admin/options/p2"');
+    expect(unavailable).not.toContain('href="/admin/options/p3"');
+    const missing = render(false, { candidates: candidates.filter((candidate) => candidate.id !== 'p2') });
+    expect(missing).not.toContain('href="/admin/options/p2"');
+    // 手入力明細のメニューには Link が無く、選択枠の数だけ編集リンクがある。
+    expect(render(false).match(/data-testid="v25-wb-slot-edit-catalog"/g) ?? []).toHaveLength(initial.slots.length);
+    expect(render(true)).not.toContain('v25-wb-slot-edit-catalog');
+  });
+
+  it('固定メニューはスクロール領域の外へ切り出して表示し、画面移動時は閉じる', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain("window.addEventListener('scroll', onScroll, true)");
+    expect(source).toContain("window.addEventListener('resize', dismiss)");
+    expect(source).toContain("document.addEventListener('pointerdown', onOutside)");
+    expect(source).toContain("event.key === 'Escape'");
+    expect(source).toContain('maxHeight: Math.max(80');
+    expect(source).toContain('target="_blank" rel="noopener noreferrer" prefetch={false}');
+    expect(source).toContain('clearV25Position(state, positionFor)');
   });
 
   it('公開中の版では右端の変更メニューを表示しない', () => {

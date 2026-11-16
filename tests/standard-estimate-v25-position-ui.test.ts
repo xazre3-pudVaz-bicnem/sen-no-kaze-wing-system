@@ -51,7 +51,7 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     expect(newCode).not.toBe(deleted);
     expect(newCode).toMatch(/^[a-z0-9][a-z0-9-]{0,39}$/);
     expect(newCode.length).toBeLessThanOrEqual(40);
-    const duplicate = 'p-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const duplicate = 'p-aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa';
     const ids = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
     const distinct = nextV25PositionCode([row('same', { slot_code: duplicate })], () => ids.shift()!);
     expect(distinct).toBe('p-bbbbbbbbbbbb4bbb8bbbbbbbbbbbbbbb');

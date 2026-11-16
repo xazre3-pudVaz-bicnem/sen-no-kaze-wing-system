@@ -66,6 +66,9 @@ const NO_WINDOW_TYPE = '__none';
 
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
 
+/** 位置名の編集中や保存などの処理中は、行削除と位置別設定を保護する。 */
+export const v25PositionActionsLocked = (pending: boolean, editingPosition: boolean) => pending || editingPosition;
+
 type Notice = { tone: 'success' | 'danger'; text: string };
 type V25MenuPlacement = { left: number; top?: number; bottom?: number; maxHeight: number };
 
@@ -341,6 +344,7 @@ function WorkbenchBody({
   const [pending, startTransition] = useTransition();
   // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
   const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
+  const positionActionsLocked = v25PositionActionsLocked(pending, positionInputActive);
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const sectionOf = (optionId: string) => candidateById.get(optionId)?.section;
@@ -497,6 +501,7 @@ function WorkbenchBody({
 
   // 位置名と候補は一時編集し、確定時だけ既存の行へ反映する。
   const openPosition = (slot: V25SlotRow) => {
+    if (positionActionsLocked) return;
     setPositionFor(slot.key);
     setPositionDraft({ slot_code: slot.slot_code, slot_label: slot.slot_label, selectable_option_ids: [...slot.selectable_option_ids] });
     setRemovePositionOnConfirm(false);
@@ -838,7 +843,9 @@ function WorkbenchBody({
                             <div className="flex min-w-0 items-center gap-1">
                               <span className="min-w-0 flex-1 truncate" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                               {isSash && positionAllowed && !readOnly && (
-                                <button type="button" className="shrink-0 text-[10px] text-navy underline" data-testid="v25-wb-slot-position-toggle"
+                                <button type="button" className="shrink-0 text-[10px] text-navy underline disabled:opacity-50" data-testid="v25-wb-slot-position-toggle"
+                                  disabled={positionActionsLocked}
+                                  title={positionActionsLocked ? '位置名をEnterで確定するかEscで取り消してください' : undefined}
                                   aria-label="位置・選べる商品を設定" onClick={() => openPosition(slot)}>位置別設定</button>
                               )}
                             </div>
@@ -874,7 +881,7 @@ function WorkbenchBody({
                                   />
                                   {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
                                   <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
-                                  <p className="text-[10px] text-amber-800">編集中は下書きを保存できず、別の位置名も編集できません。Enterで確定するかEscで取り消してください。</p>
+                                  <p className="text-[10px] text-amber-800">編集中は保存・行削除・位置別設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。</p>
                                 </div>
                               ) : (
                                 <button type="button" className="block max-w-full truncate text-left text-[10px] text-navy underline"
@@ -973,8 +980,14 @@ function WorkbenchBody({
                                       }}>別の位置に複製</button>
                                   )}
                                   {positionAllowed && (!isSash || Boolean(slotCode)) && (
-                                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                      onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); openPosition(slot); }}>位置別設定</button>
+                                    <button type="button" data-testid="v25-wb-slot-position-menu"
+                                      disabled={positionActionsLocked}
+                                      className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-50"
+                                      onClick={(event) => {
+                                        if (positionActionsLocked) return;
+                                        event.currentTarget.closest('details')?.removeAttribute('open');
+                                        openPosition(slot);
+                                      }}>位置別設定</button>
                                   )}
                                   {slot.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
@@ -988,8 +1001,14 @@ function WorkbenchBody({
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'auto' }); }}>自動計算に戻す</button>
                                   )}
-                                  <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) })); }}>行を削除</button>
+                                  <button type="button" data-testid="v25-wb-slot-delete"
+                                    disabled={positionActionsLocked}
+                                    className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                    onClick={(event) => {
+                                      if (positionActionsLocked) return;
+                                      event.currentTarget.closest('details')?.removeAttribute('open');
+                                      setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) }));
+                                    }}>行を削除</button>
                                 </V25WorkbenchRowMenu>
                             )}
                           </td>

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Package } from 'lucide-react';
 import {
   publishStandardEstimateV25RevisionAction,
@@ -64,6 +65,74 @@ const NO_WINDOW_TYPE = '__none';
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
 
 type Notice = { tone: 'success' | 'danger'; text: string };
+type V25MenuPlacement = { left: number; top?: number; bottom?: number; maxHeight: number };
+
+/**
+ * スクロール可能な明細内でも操作メニューを切らさないため、viewport基準で表示する。
+ * メニューを開いたまま表／画面がスクロールしたら閉じ、誤った行での操作を防ぐ。
+ */
+function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
+
+  const place = (summary: HTMLElement) => {
+    const rect = summary.getBoundingClientRect();
+    const margin = 8;
+    const menuWidth = Math.min(224, window.innerWidth - margin * 2);
+    const availableBelow = window.innerHeight - rect.bottom - margin;
+    const availableAbove = rect.top - margin;
+    const above = availableBelow < 230 && availableAbove > availableBelow;
+    setPlacement({
+      left: Math.max(margin, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - margin)),
+      ...(above ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
+      maxHeight: Math.max(80, (above ? availableAbove : availableBelow) - 4),
+    });
+  };
+
+  useEffect(() => {
+    const details = menuRef.current;
+    if (!placement || !details?.open) return;
+    const dismiss = () => { details.open = false; };
+    const onScroll = (event: Event) => {
+      if (details.contains(event.target as Node)) return;
+      dismiss();
+    };
+    const onOutside = (event: PointerEvent) => {
+      if (!details.contains(event.target as Node)) dismiss();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', dismiss);
+    document.addEventListener('pointerdown', onOutside);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', dismiss);
+      document.removeEventListener('pointerdown', onOutside);
+    };
+  }, [placement]);
+
+  return (
+    <details ref={menuRef} className="group relative inline-block" data-testid={testId}
+      onToggle={(event) => {
+        if (!event.currentTarget.open) setPlacement(null);
+        else if (!placement) {
+          const summary = event.currentTarget.querySelector('summary');
+          if (summary instanceof HTMLElement) place(summary);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); }
+      }}>
+      <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+        aria-label={label} title="行の操作"
+        onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>⋯</summary>
+      <div className={'fixed z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg ' + (placement ? '' : 'invisible')}
+        style={placement ?? undefined} data-testid="v25-wb-menu-panel">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 
 /** 表示用要約のみ。variant choice ID と保存 payload は変更しない。 */
 export function v25VariantSummary(candidate: Pick<V25WorkbenchCandidate, 'variantGroups'> | undefined, choices: V25SlotRow['variant_choices']): string {
@@ -544,21 +613,21 @@ function WorkbenchBody({
         <strong>標準見積明細（Excel風）</strong>
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
       </div>
-      <div className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
+      <div className="max-h-[70vh] overflow-auto overscroll-contain rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
         <table className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-[68rem] min-w-[68rem]' : 'w-[62rem] min-w-[62rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
-          <thead className="sticky top-0 z-20 bg-slate-200 text-[10px] text-slate-600">
+          <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 z-30 w-7 border-b border-r border-slate-300 bg-slate-100 px-0.5 py-0.5 text-center font-normal">#</th>
-              <th className="sticky left-7 z-30 w-[6.25rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">グループ</th>
-              <th className="sticky left-[8rem] z-30 w-[15rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">品名</th>
-              <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
-              <th className="w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
-              {showCost && <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
-              <th className="w-28 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
-              <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
-              <th className="w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
-              <th className="w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
-              <th className="w-10 border-b border-slate-300 px-0.5 py-0.5 text-center font-medium">操作</th>
+              <th className="sticky left-0 top-0 z-40 w-7 border-b border-r border-slate-300 bg-slate-100 px-0.5 py-0.5 text-center font-normal">#</th>
+              <th className="sticky left-7 top-0 z-40 w-[6.25rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">グループ</th>
+              <th className="sticky left-[8rem] top-0 z-40 w-[15rem] border-b border-r border-slate-300 bg-slate-100 px-1 py-0.5 text-left font-medium">品名</th>
+              <th className="sticky top-0 z-30 bg-slate-200 w-16 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">数量</th>
+              <th className="sticky top-0 z-30 bg-slate-200 w-16 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">単位</th>
+              {showCost && <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">原価単価</th>}
+              <th className="sticky top-0 z-30 bg-slate-200 w-28 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">売価単価</th>
+              <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-right font-medium">金額（税別）</th>
+              <th className="sticky top-0 z-30 bg-slate-200 w-24 border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">状態</th>
+              <th className="sticky top-0 z-30 bg-slate-200 w-[9rem] border-b border-r border-slate-300 px-1 py-0.5 text-left font-medium">仕様・備考</th>
+              <th className="sticky top-0 z-30 bg-slate-200 w-10 border-b border-slate-300 px-0.5 py-0.5 text-center font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -712,13 +781,18 @@ function WorkbenchBody({
 
                           <td className="relative px-0.5 py-0.5 text-center">
                             {!readOnly && (
-                              <details className="group relative inline-block" data-testid="v25-wb-slot-menu"
-                                onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); } }}>
-                                <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
-                                  aria-label={(candidate?.name ?? '商品') + 'の操作'} title="行の操作">⋯</summary>
-                                <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
+                              <V25WorkbenchRowMenu testId="v25-wb-slot-menu" label={(candidate?.name ?? '商品') + 'の操作'}>
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setPicker({ section: code, targetKey: slot.key });  }}>商品台帳から選択</button>
+                                  {candidate && candidate.id === slot.option_id && !candidate.retired && !candidate.unavailable && (
+                                    <Link href={'/admin/options/' + encodeURIComponent(slot.option_id)}
+                                      target="_blank" rel="noopener noreferrer" prefetch={false}
+                                      data-testid="v25-wb-slot-edit-catalog"
+                                      className="block w-full px-3 py-1.5 text-left text-navy hover:bg-slate-50"
+                                      onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); }}>
+                                      この商品を台帳で編集 ↗
+                                    </Link>
+                                  )}
                                   {positionAllowed && !isSash && !slotCode && (
                                     <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                       onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); openPosition(slot); }}>位置別設定</button>
@@ -737,8 +811,7 @@ function WorkbenchBody({
                                   )}
                                   <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setState((current) => ({ ...current, slots: current.slots.filter((row) => row.key !== slot.key) })); }}>行を削除</button>
-                                </div>
-                              </details>
+                                </V25WorkbenchRowMenu>
                             )}
                           </td>
                         </tr>
@@ -798,11 +871,7 @@ function WorkbenchBody({
 
                           <td className="relative px-0.5 py-0.5 text-center">
                             {!readOnly && (
-                              <details className="group relative inline-block" data-testid="v25-wb-line-menu"
-                                onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); } }}>
-                                <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
-                                  aria-label={(line.name || '明細') + 'の操作'} title="行の操作">⋯</summary>
-                                <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
+                              <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
                                   {line.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { price_mode: 'manual' }); }}>金額を入力する</button>
@@ -818,8 +887,7 @@ function WorkbenchBody({
                                   )}
                                   <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setState((current) => ({ ...current, lines: current.lines.filter((row) => row.key !== line.key) })); }}>行を削除</button>
-                                </div>
-                              </details>
+                                </V25WorkbenchRowMenu>
                             )}
                           </td>
                         </tr>

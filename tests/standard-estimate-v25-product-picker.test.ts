@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { StandardEstimateV25ProductPicker, v25PickerChoicesValid, v25PickerStandardCostLabel } from '@/components/admin/standard-estimate-v25-product-picker';
+import { StandardEstimateV25ProductPicker, v25PickerChoicesValid, v25PickerEligibleCandidates, v25PickerStandardCostLabel } from '@/components/admin/standard-estimate-v25-product-picker';
 import { readFileSync } from 'node:fs';
 import type { V25WorkbenchCandidate } from '@/lib/domain/standard-estimate-v25-workbench';
 
@@ -16,7 +16,7 @@ const sample: V25WorkbenchCandidate = {
 describe('v2.5商品選択のUI', () => {
   it('商品画像・メーカー・型番と、選択→仕様確認→明細反映の領域を示す', () => {
     const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
-      sectionLabel: 'オプション', candidates: [sample], productCosts: { sample: 480000 },
+      sectionLabel: 'オプション', section: 'option', candidates: [sample], productCosts: { sample: 480000 },
       currentSlot: null, onChoose: () => {}, onClose: () => {},
     }));
     expect(html).toContain('data-testid="v25-wb-product-picker"');
@@ -33,7 +33,7 @@ describe('v2.5商品選択のUI', () => {
 
   it('同じ商品への切替では既存の仕様を保持する設計', () => {
     const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
-      sectionLabel: 'オプション', candidates: [sample], productCosts: { sample: 480000 },
+      sectionLabel: 'オプション', section: 'option', candidates: [sample], productCosts: { sample: 480000 },
       currentSlot: { option_id: sample.id, variant_choices: { color: 'black' } },
       onChoose: () => {}, onClose: () => {},
     }));
@@ -48,7 +48,7 @@ describe('v2.5商品選択のUI', () => {
     expect(v25PickerStandardCostLabel(0)).toBe('¥0');
     expect(v25PickerStandardCostLabel(480000)).toBe('¥480,000');
     const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
-      sectionLabel: 'オプション', candidates: [{ ...sample, id: 'not-priced' }],
+      sectionLabel: 'オプション', section: 'option', candidates: [{ ...sample, id: 'not-priced' }],
       productCosts: {}, currentSlot: null, onChoose: () => {}, onClose: () => {},
     }));
     expect(html).toContain('原価未設定');
@@ -73,5 +73,77 @@ describe('v2.5商品選択のUI', () => {
     expect(v25PickerChoicesValid(sample, { color: '' })).toBe(true);
     expect(v25PickerChoicesValid(sample, { color: 'invalid' })).toBe(false);
     expect(v25PickerChoicesValid({ variantGroups: [] }, {})).toBe(true);
+  });
+});
+
+describe('v2.5商品選択のカテゴリーと区分の保護', () => {
+  const aircon = { ...sample, id: 'air-1', name: 'エアコン標準品', categoryId: 'air', categoryName: '空調' };
+  const secondAircon = { ...aircon, id: 'air-2', name: 'エアコン変更品' };
+  const toilet = { ...sample, id: 'toilet-1', name: 'トイレ商品', categoryId: 'toilet', categoryName: 'トイレ' };
+  const sitework = { ...sample, id: 'site-1', name: '現場工事', categoryId: 'site', categoryName: '施工', section: 'sitework' as const };
+  const retired = { ...aircon, id: 'air-old', name: '廃番エアコン', retired: true };
+  const unavailable = { ...aircon, id: 'air-unavailable', name: '選択不可エアコン', unavailable: true };
+  const catalog = [aircon, secondAircon, toilet, sitework, retired, unavailable];
+
+  it('変更では元商品のカテゴリー以外を候補にせず、カテゴリー選択を表示しない', () => {
+    const slot = { option_id: aircon.id };
+    expect(v25PickerEligibleCandidates(catalog, 'option', slot, aircon).map((item) => item.id))
+      .toEqual(['air-1', 'air-2']);
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
+      sectionLabel: 'オプション', section: 'option', candidates: catalog, productCosts: {},
+      currentSlot: { ...slot, variant_choices: {} }, originalProduct: aircon,
+      onChoose: () => {}, onClose: () => {},
+    }));
+    expect(html).toContain('エアコン変更品');
+    expect(html).not.toContain('トイレ商品');
+    expect(html).not.toContain('現場工事');
+    expect(html).not.toContain('廃番エアコン');
+    expect(html).not.toContain('選択不可エアコン');
+    expect(html).not.toContain('aria-label="カテゴリー"');
+    expect(html).toContain('aria-label="商品を検索"');
+  });
+
+  it('廃番でも正確なカテゴリーIDがあれば同じカテゴリーだけを変更候補にできる', () => {
+    expect(v25PickerEligibleCandidates(catalog, 'option', { option_id: retired.id }, retired).map((item) => item.id))
+      .toEqual(['air-1', 'air-2']);
+  });
+
+  it('旧スナップショットなどで元商品のカテゴリー不明なら、別カテゴリーへの変更を遮断する', () => {
+    const snapshot = { ...retired, id: 'missing', name: '旧商品', categoryId: '', unavailable: true };
+    expect(v25PickerEligibleCandidates(catalog, 'option', { option_id: snapshot.id }, snapshot)).toEqual([]);
+    expect(v25PickerEligibleCandidates(catalog, 'option', { option_id: 'missing' })).toEqual([]);
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
+      sectionLabel: 'オプション', section: 'option', candidates: catalog, productCosts: {},
+      currentSlot: { option_id: snapshot.id, variant_choices: {} }, originalProduct: snapshot,
+      onChoose: () => {}, onClose: () => {},
+    }));
+    expect(html).toContain('現在：旧商品');
+    expect(html).toContain('現在の商品のカテゴリーを確認できないため変更できません');
+    expect(html).not.toContain('data-testid="v25-wb-picker-candidate"');
+    expect(html).toContain('disabled=""');
+  });
+
+  it('新規追加はその区分で選択可能なカテゴリーと商品を表示し、販売停止・他区分を除く', () => {
+    expect(v25PickerEligibleCandidates(catalog, 'option', null).map((item) => item.id))
+      .toEqual(['air-1', 'air-2', 'toilet-1']);
+    const html = renderToStaticMarkup(createElement(StandardEstimateV25ProductPicker, {
+      sectionLabel: 'オプション', section: 'option', candidates: catalog, productCosts: {},
+      currentSlot: null, onChoose: () => {}, onClose: () => {},
+    }));
+    expect(html).toContain('aria-label="カテゴリー"');
+    expect(html).toContain('空調');
+    expect(html).toContain('トイレ');
+    expect(html).not.toContain('現場工事');
+    expect(html).not.toContain('廃番エアコン');
+    expect(html).not.toContain('選択不可エアコン');
+    expect(v25PickerEligibleCandidates(catalog, 'sitework', null).map((item) => item.id)).toEqual(['site-1']);
+  });
+
+  it('確定経路でも別カテゴリー・別区分・選択不可品を拒否する', () => {
+    const workbench = readFileSync('components/admin/standard-estimate-v25-workbench.tsx', 'utf8');
+    expect(workbench).toContain('candidate.section !== picker.section || candidate.retired || candidate.unavailable');
+    expect(workbench).toContain('original.categoryId !== candidate.categoryId');
+    expect(workbench).toContain('originalProduct={picker.targetKey');
+    expect(workbench).toContain('onChoose={choose}');
   });
 });

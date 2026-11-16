@@ -5,14 +5,18 @@ import Link from 'next/link';
 import { formatYen } from '@/lib/domain/pricing';
 import type { V25WorkbenchCandidate, V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
 import type { V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
+import type { StandardLineSectionCode } from '@/lib/domain/standard-estimate-view';
 import { Button, Input, Select } from '@/components/ui';
 
 type ProductPickerProps = {
   sectionLabel: string;
+  section: StandardLineSectionCode;
   candidates: V25WorkbenchCandidate[];
   /** DBで記録された現在の商品の標準原価Version。原価が無い場合はマップに載せない。 */
   productCosts: V25WorkbenchCosts['currentProduct'];
   currentSlot: Pick<V25SlotRow, 'option_id' | 'variant_choices'> | null;
+  /** 廃番・取扱終了でもカテゴリーが残っていれば、同じカテゴリーへの変更だけを許可する。 */
+  originalProduct?: V25WorkbenchCandidate | null;
   onChoose: (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => void;
   onClose: () => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -35,12 +39,36 @@ export function v25PickerChoicesValid(
   );
 }
 
+/** 商品追加は区分内の販売可能品、変更は元商品と同じカテゴリーの販売可能品だけ。カテゴリー不明は安全側で拒否。 */
+export function v25PickerEligibleCandidates(
+  candidates: readonly V25WorkbenchCandidate[],
+  section: StandardLineSectionCode,
+  currentSlot: Pick<V25SlotRow, 'option_id'> | null,
+  originalProduct?: V25WorkbenchCandidate | null,
+): V25WorkbenchCandidate[] {
+  const original = currentSlot
+    ? (originalProduct?.id === currentSlot.option_id
+        ? originalProduct
+        : candidates.find((candidate) => candidate.id === currentSlot.option_id))
+    : null;
+  const originalCategory = currentSlot && original?.section === section ? original.categoryId.trim() : '';
+  if (currentSlot && !originalCategory) return [];
+
+  return candidates.filter((candidate) =>
+    candidate.section === section &&
+    Boolean(candidate.categoryId.trim()) &&
+    !candidate.retired &&
+    !candidate.unavailable &&
+    (!currentSlot || candidate.categoryId === originalCategory)
+  );
+}
+
 /**
  * 「商品選択→仕様選択→明細へ反映」を既存のポップアップ内で行う。
  * 検索・選択中はローカルstateのみ。確定まで親の明細stateに触れない。
  */
 export function StandardEstimateV25ProductPicker({
-  sectionLabel, candidates, productCosts, currentSlot, onChoose, onClose, onDirtyChange,
+  sectionLabel, section, candidates, productCosts, currentSlot, originalProduct, onChoose, onClose, onDirtyChange,
 }: ProductPickerProps) {
   const [categoryId, setCategoryId] = useState('');
   const [query, setQuery] = useState('');
@@ -51,21 +79,31 @@ export function StandardEstimateV25ProductPicker({
   const inputDirty = Boolean(categoryId || query || selectedId || Object.values(choices).some(Boolean));
   useEffect(() => { onDirtyChange?.(inputDirty); }, [inputDirty, onDirtyChange]);
 
+  const current = currentSlot
+    ? (originalProduct?.id === currentSlot.option_id
+        ? originalProduct
+        : candidates.find((candidate) => candidate.id === currentSlot.option_id)) ?? null
+    : null;
+  const categoryUnknown = Boolean(currentSlot && (!current?.categoryId?.trim() || current.section !== section));
+  const eligibleCandidates = useMemo(
+    () => v25PickerEligibleCandidates(candidates, section, currentSlot, originalProduct),
+    [candidates, section, currentSlot, originalProduct]
+  );
   const categories = useMemo(() => {
     const found = new Map<string, string>();
-    for (const candidate of candidates) found.set(candidate.categoryId, candidate.categoryName);
+    for (const candidate of eligibleCandidates) found.set(candidate.categoryId, candidate.categoryName);
     return [...found.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
-  }, [candidates]);
+  }, [eligibleCandidates]);
   const visible = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ja-JP');
-    return candidates.filter((candidate) =>
+    return eligibleCandidates.filter((candidate) =>
       (!categoryId || candidate.categoryId === categoryId) &&
       (!normalized || [candidate.name, candidate.manufacturer, candidate.modelNo, candidate.categoryName].join(' ').toLocaleLowerCase('ja-JP').includes(normalized))
     );
-  }, [candidates, categoryId, query]);
+  }, [eligibleCandidates, categoryId, query]);
 
-  const selected = candidates.find((candidate) => candidate.id === selectedId) ?? null;
-  const current = currentSlot ? candidates.find((candidate) => candidate.id === currentSlot.option_id) ?? null : null;
+  // 選択済みIDも許可候補の中だけで解決し、無関係な商品を明細へ反映させない。
+  const selected = eligibleCandidates.find((candidate) => candidate.id === selectedId) ?? null;
   const choicesValid = selected ? v25PickerChoicesValid(selected, choices) : false;
   const hasUnselectedChoices = selected?.variantGroups.some((group) => !choices[group.id]) ?? false;
 
@@ -90,12 +128,19 @@ export function StandardEstimateV25ProductPicker({
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="flex min-h-0 flex-col">
+          {categoryUnknown && (
+            <p role="alert" className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              現在の商品のカテゴリーを確認できないため変更できません。商品台帳の登録状態を確認してください。
+            </p>
+          )}
           <div className="flex shrink-0 flex-wrap gap-2 border-b border-line px-3 py-2">
-            <Select aria-label="カテゴリー" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}
-              className="h-8 text-xs">
-              <option value="">すべてのカテゴリー</option>
-              {categories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-            </Select>
+            {!currentSlot && (
+              <Select aria-label="カテゴリー" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}
+                className="h-8 text-xs">
+                <option value="">すべてのカテゴリー</option>
+                {categories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </Select>
+            )}
             <Input aria-label="商品を検索" value={query} onChange={(event) => setQuery(event.target.value)}
               placeholder="商品名・メーカー・型番" className="h-8 min-w-[10rem] flex-1 text-xs" />
           </div>

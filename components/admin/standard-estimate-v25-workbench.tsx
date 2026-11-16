@@ -481,6 +481,19 @@ function WorkbenchBody({
 
   const choose = (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => {
     if (!picker) return;
+    // 確定経路でも区分・販売可否・元のカテゴリーを検証し、画面側の絞り込みのみに依存しない。
+    if (candidate.section !== picker.section || candidate.retired || candidate.unavailable || !candidate.categoryId.trim()) {
+      onNotice({ tone: 'danger', text: 'この区分では選択できない商品です。商品台帳をご確認ください。' });
+      return;
+    }
+    if (picker.targetKey) {
+      const target = state.slots.find((slot) => slot.key === picker.targetKey);
+      const original = target ? candidateById.get(target.option_id) : null;
+      if (!original?.categoryId.trim() || original.section !== picker.section || original.categoryId !== candidate.categoryId) {
+        onNotice({ tone: 'danger', text: '元の商品のカテゴリーを確認できないか、異なるカテゴリーの商品です。同じカテゴリーの商品を選択してください。' });
+        return;
+      }
+    }
     // 別途工事は販売費・経費・掛率を掛けない（自動にできない）。Web では金額を確定しないので別途見積にする
     const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';
     // 選択枠の数量は、外壁は 4（面）、それ以外は 1（シミュレーターと連携する選択枠の決まり）
@@ -1517,9 +1530,13 @@ function WorkbenchBody({
           {(requestClose) => (
           <StandardEstimateV25ProductPicker
             sectionLabel={STANDARD_SECTION_LABEL[picker.section]}
-            candidates={candidates.filter((candidate) => candidate.section === picker.section && !candidate.retired)}
+            section={picker.section}
+            candidates={candidates.filter((candidate) => candidate.section === picker.section && !candidate.retired && !candidate.unavailable)}
             productCosts={costs.currentProduct}
             currentSlot={picker.targetKey ? state.slots.find((slot) => slot.key === picker.targetKey) ?? null : null}
+            originalProduct={picker.targetKey
+              ? candidateById.get(state.slots.find((slot) => slot.key === picker.targetKey)?.option_id ?? '') ?? null
+              : null}
             onChoose={choose}
             onClose={requestClose}
             onDirtyChange={setPickerDirty}

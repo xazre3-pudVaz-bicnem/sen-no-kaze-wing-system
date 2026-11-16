@@ -64,7 +64,7 @@ export function updateV25Position(
   }
   const label = labelInput.trim();
   // 位置解除は行を消さない。必ず候補も解除する。
-  if (!label && selectableIds.length === 0) {
+  if (!label && selectableIds.length === 0 && source.slot_code.trim()) {
     return { state: { ...state, slots: state.slots.map((slot) =>
       slot.key === key ? { ...slot, slot_code: '', slot_label: '', selectable_option_ids: [] } : slot) }, error: null };
   }
@@ -97,7 +97,7 @@ export function addV25PositionRow(
   if (state.slots.length >= 200) return { state, error: '商品は200件までです' };
   if (state.slots.some((slot) => slot.key === newKey)) return { state, error: '追加する行IDが重複しています' };
   const label = labelInput.trim();
-  const problem = labelProblem(state.slots, sourceKey, label, candidate, candidateOf) ??
+  const problem = labelProblem(state.slots, '', label, candidate, candidateOf) ??
     (selectableIds.some((id) => !source.selectable_option_ids.includes(id)) ? '引き継ぐ変更候補は元の行の候補から選んでください' : null) ??
     v25ValidPositionAlternatives(selectableIds, candidate, candidateOf);
   if (problem) return { state, error: problem };

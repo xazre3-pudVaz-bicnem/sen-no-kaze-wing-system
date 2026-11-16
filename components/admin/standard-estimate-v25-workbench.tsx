@@ -41,6 +41,7 @@ import {
 } from '@/lib/domain/standard-estimate-v25-workbench';
 import {
   addV25PositionRow,
+  clearV25Position,
   replaceV25PositionStandard,
   updateV25Position,
   v25PositionMixes,
@@ -131,6 +132,7 @@ function WorkbenchBody({
   const [positionFor, setPositionFor] = useState<string | null>(null);
   const [positionDraft, setPositionDraft] = useState<Pick<V25SlotRow, 'slot_code' | 'slot_label' | 'selectable_option_ids'> | null>(null);
   const [addPositionOnConfirm, setAddPositionOnConfirm] = useState(false);
+  const [removePositionOnConfirm, setRemovePositionOnConfirm] = useState(false);
   const [addedPositionLabel, setAddedPositionLabel] = useState('');
   const [inheritCandidates, setInheritCandidates] = useState(false);
   const [inheritedCandidateIds, setInheritedCandidateIds] = useState<string[]>([]);
@@ -233,6 +235,12 @@ function WorkbenchBody({
     if (picker.targetKey) {
       const target = state.slots.find((slot) => slot.key === picker.targetKey);
       if (target?.slot_code.trim()) {
+        // 色やサイズだけの変更では位置の変更候補を落とさない。
+        if (target.option_id === candidate.id) {
+          setSlot(target.key, { variant_choices: { ...choices } });
+          setPicker(null);
+          return;
+        }
         const previous = candidateById.get(target.option_id);
         if (previous && previous.categoryId !== candidate.categoryId) {
           onNotice({ tone: 'danger', text: '位置が設定された行は同じカテゴリーの商品へ入れ替えてください。別カテゴリーにする場合は位置を解除してください。' });
@@ -296,6 +304,7 @@ function WorkbenchBody({
     setPositionFor(slot.key);
     setPositionDraft({ slot_code: slot.slot_code, slot_label: slot.slot_label, selectable_option_ids: [...slot.selectable_option_ids] });
     setAddPositionOnConfirm(false);
+    setRemovePositionOnConfirm(false);
     setAddedPositionLabel('');
     setInheritCandidates(false);
     setInheritedCandidateIds([]);
@@ -306,22 +315,27 @@ function WorkbenchBody({
     setPositionFor(null);
     setPositionDraft(null);
     setAddPositionOnConfirm(false);
+    setRemovePositionOnConfirm(false);
     setAddedPositionLabel('');
     setInheritCandidates(false);
     setInheritedCandidateIds([]);
     setPositionError(null);
   };
   const updatePosition = (patch: Partial<Pick<V25SlotRow, 'slot_code' | 'slot_label' | 'selectable_option_ids'>>) => {
+    setRemovePositionOnConfirm(false);
     setPositionError(null);
     setPositionDraft((current) => current ? { ...current, ...patch } : null);
   };
-  const toggleSelectable = (optionId: string) =>
+  const toggleSelectable = (optionId: string) => {
+    setRemovePositionOnConfirm(false);
+    setPositionError(null);
     setPositionDraft((current) => current ? {
       ...current,
       selectable_option_ids: current.selectable_option_ids.includes(optionId)
         ? current.selectable_option_ids.filter((id) => id !== optionId)
         : [...current.selectable_option_ids, optionId],
     } : null);
+  };
   const positionSlot = positionFor ? state.slots.find((slot) => slot.key === positionFor) : null;
   const positionCandidate = positionSlot ? candidateById.get(positionSlot.option_id) : undefined;
   const confirmPosition = () => {
@@ -330,8 +344,10 @@ function WorkbenchBody({
     const result = addPositionOnConfirm
       ? addV25PositionRow(state, positionFor, newKey('slot'), addedPositionLabel,
         inheritCandidates ? inheritedCandidateIds : [], candidateOf)
-      : updateV25Position(state, positionFor, positionDraft.slot_label,
-        positionDraft.selectable_option_ids, candidateOf);
+      : removePositionOnConfirm
+        ? clearV25Position(state, positionFor)
+        : updateV25Position(state, positionFor, positionDraft.slot_label,
+          positionDraft.selectable_option_ids, candidateOf);
     if (result.error) { setPositionError(result.error); return; }
     setState(result.state);
     closePosition();
@@ -1047,11 +1063,17 @@ function WorkbenchBody({
                     <div className="space-y-1 border-t border-slate-200 pt-3">
                       <p className="text-muted">位置設定を解除しても商品行は削除されません。</p>
                       <button type="button" className="text-xs text-red-700 underline"
-                        onClick={() => updatePosition({ slot_code: '', slot_label: '', selectable_option_ids: [] })}>
+                        onClick={() => {
+                          setRemovePositionOnConfirm(true);
+                          setPositionDraft((current) => current
+                            ? { ...current, slot_label: '', selectable_option_ids: [] }
+                            : null);
+                          setPositionError(null);
+                        }}>
                         位置設定を解除
                       </button>
-                      {!positionDraft.slot_label.trim() && positionDraft.selectable_option_ids.length === 0 &&
-                        <p className="font-medium text-amber-800">位置名と変更候補を外します。この商品行は残ります。</p>}
+                      {removePositionOnConfirm &&
+                        <p className="font-medium text-amber-800">位置名と変更候補を外します。この商品行は残ります。確定前ならキャンセルできます。</p>}
                     </div>
                   )}
                 </div>
@@ -1082,7 +1104,7 @@ function WorkbenchBody({
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
               <Button type="button" variant="secondary" onClick={closePosition}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
               {!readOnly && <Button type="button" data-testid="v25-wb-position-confirm" onClick={confirmPosition} disabled={pending}>
-                {addPositionOnConfirm ? '１行追加' : 'この行に反映'}
+                {addPositionOnConfirm ? '１行追加' : removePositionOnConfirm ? '位置設定を解除する' : 'この行に反映'}
               </Button>}
             </div>
           </div>

@@ -924,19 +924,51 @@ function WorkbenchBody({
           setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
       </div>
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
+          style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}
+          data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
-              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量</th>
-              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位</th>
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価</th>}
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額</th>}
-              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価</th>
-              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額</th>
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利</th>}
-              <th className="sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考</th>
-              <th className="sticky top-0 z-30 w-[4.5rem] border-b border-slate-300 bg-slate-200 px-1 py-1 text-center font-medium">操作</th>
+              <th data-v25-column="name" style={{ width: columnPrefs.prefs.widths.name }} className="relative sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名
+                <V25WidthHandle id="name" width={columnPrefs.prefs.widths.name}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              <th data-v25-column="quantity" style={{ width: columnPrefs.prefs.widths.quantity }} className="relative sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量
+                <V25WidthHandle id="quantity" width={columnPrefs.prefs.widths.quantity}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              <th data-v25-column="unit" style={{ width: columnPrefs.prefs.widths.unit }} className="relative sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位
+                <V25WidthHandle id="unit" width={columnPrefs.prefs.widths.unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              {visible.cost_unit && <th data-v25-column="cost_unit" style={{ width: columnPrefs.prefs.widths.cost_unit }} className="relative sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価
+                <V25WidthHandle id="cost_unit" width={columnPrefs.prefs.widths.cost_unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.cost_amount && <th data-v25-column="cost_amount" style={{ width: columnPrefs.prefs.widths.cost_amount }} className="relative sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額
+                <V25WidthHandle id="cost_amount" width={columnPrefs.prefs.widths.cost_amount}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.sale_unit && <th data-v25-column="sale_unit" style={{ width: columnPrefs.prefs.widths.sale_unit }} className="relative sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価
+                <V25WidthHandle id="sale_unit" width={columnPrefs.prefs.widths.sale_unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              <th data-v25-column="sale_amount" style={{ width: columnPrefs.prefs.widths.sale_amount }} className="relative sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額
+                <V25WidthHandle id="sale_amount" width={columnPrefs.prefs.widths.sale_amount}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              {visible.gross && <th data-v25-column="gross" style={{ width: columnPrefs.prefs.widths.gross }} className="relative sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利
+                <V25WidthHandle id="gross" width={columnPrefs.prefs.widths.gross}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.note && <th data-v25-column="note" style={{ width: columnPrefs.prefs.widths.note }} className="relative sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考
+                <V25WidthHandle id="note" width={columnPrefs.prefs.widths.note}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              <th data-v25-column="actions" style={{ width: columnPrefs.prefs.widths.actions }} className="relative sticky right-0 top-0 z-40 w-[4.5rem] border-b border-l border-slate-300 bg-slate-100 px-1 py-1 text-center font-medium">操作
+                <V25WidthHandle id="actions" width={columnPrefs.prefs.widths.actions}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
             </tr>
           </thead>
           <tbody>

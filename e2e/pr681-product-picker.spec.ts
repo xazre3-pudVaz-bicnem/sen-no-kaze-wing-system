@@ -94,8 +94,6 @@ test('位置別商品：テスト用の位置枠があれば表示・選択状�
   const dialog = page.getByTestId('option-picker');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('product-list')).toBeVisible();
-  const selected = dialog.locator('[data-testid^="product-card-current-"]');
-  await expect(selected.first()).toBeVisible();
-  await expect(dialog.getByTestId('product-list').locator('li').first())
-    .toContainText((await selected.first().locator('..').locator('..').textContent())?.trim().slice(0,8) ?? '');
+  await expect(dialog.getByTestId('product-list').locator('li').first()
+    .locator('[data-testid^="product-card-current-"]')).toBeVisible();
 });

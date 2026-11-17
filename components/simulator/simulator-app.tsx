@@ -79,6 +79,7 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
+import { latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, validSimulatorDraftId, workSimulatorDraftKey, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
@@ -144,6 +145,10 @@ interface Props {
   initial: SimulatorInitial | null;
   loadError: string | null;
   resume: boolean;
+  /** Explicit, local-only work copy. Unrelated to saved DB configuration IDs. */
+  draftId?: string | null;
+  /** A saved configuration or temporary URL plan is already being opened. */
+  explicitEntry?: boolean;
   user: { id: string; name: string } | null;
   /** ログインなしの一時保存（URL）から開いたときの有効期限 */
   guestPlanExpiresAt?: string | null;
@@ -169,8 +174,6 @@ interface Draft {
   pending: 'save' | 'quote' | null;
   savedAt: number;
 }
-
-const storageKey = (slug: string) => `wing:sim:${slug}`;
 
 const sameSelection = (a: string[], b: string[]) => {
   const aa = [...new Set(a)].sort();
@@ -203,6 +206,8 @@ export function SimulatorApp({
   initial,
   loadError,
   resume,
+  draftId = null,
+  explicitEntry = false,
   user,
   guestPlanExpiresAt = null,
 }: Props) {
@@ -457,6 +462,12 @@ export function SimulatorApp({
   const [view, setView] = useState<ViewKey>('exterior');
   const [hydrated, setHydrated] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [resumeCandidate, setResumeCandidate] = useState<ResumeCandidate | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState(false);
+  const [restoreIssues, setRestoreIssues] = useState<string[]>([]);
+  const [draftSaveFailed, setDraftSaveFailed] = useState(false);
+  /** Only the active editing session is writable; restored snapshots are read-only until copied. */
+  const activeWorkDraftId = useRef<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dialog, setDialog] = useState<null | 'save' | 'quote'>(null);
   /** 未ログインの「見積を保存する」：マイページに保存（ログイン）か、ログインなしの一時保存（URL）かを選ぶ */
@@ -564,9 +575,20 @@ export function SimulatorApp({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const raw = window.localStorage.getItem(storageKey(model.slug));
-      const draft: Draft | null = raw ? JSON.parse(raw) : null;
-      if (!initial && !loadError && draft && canRestoreSimulatorSelection(draft, user?.id ?? null, resume, standardPreview)) {
+      const storage = window.localStorage;
+      const workDraft = validSimulatorDraftId(draftId)
+        ? readBrowserDraft(storage, workSimulatorDraftKey(model.slug, draftId))
+        : null;
+      const legacyDraft = resume && !draftId ? readBrowserDraft(storage, legacySimulatorDraftKey(model.slug)) : null;
+      const draft = (workDraft ?? legacyDraft) as Draft | null;
+      // A work URL is explicit; a bare customer entrance is never an implicit restore.
+      // When editing ?c=, the authoritative DB ID must agree with the local draft.
+      const workAllowed = workDraft && !loadError &&
+        canRestoreSimulatorSelection(workDraft, user?.id ?? null, true, standardPreview) &&
+        (!initial || (initial.status === 'draft' && (initial.id ?? null) === (workDraft.configId ?? null)));
+      const legacyAllowed = legacyDraft && !initial && !loadError &&
+        canRestoreSimulatorSelection(legacyDraft, user?.id ?? null, true, standardPreview);
+      if (draft && (workAllowed || legacyAllowed)) {
         const hasInvalidSpec =
           Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
         const restoredSpec =
@@ -659,7 +681,20 @@ export function SimulatorApp({
               normalizedVariantIds
             )
           );
+          // Do not silently hide a discontinued or now-disallowed selection.
+          const unavailable = draft.selected.filter((id) => !restoredSelection.includes(id));
+          const missingChoices = (draft.variantIds ?? []).filter((id) => !normalizedVariantIds.includes(id));
+          if (unavailable.length || missingChoices.length) {
+            const labels = unavailable.slice(0, 5).map((id) => bundle.options.find((item) => item.id === id)?.name ?? '取扱対象外の商品');
+            setRestoreIssues([
+              ...(labels.length ? [`現在選べない・条件に合わない商品：${labels.join('・')}`] : []),
+              ...(missingChoices.length ? [`現在使えない商品仕様が${missingChoices.length}件あります`] : []),
+            ]);
+          }
+        } else {
+          setRestoreIssues(['以前の仕様は現在選択できないため、標準構成を表示しています。']);
         }
+        setRestoreNotice(true);
 
         setSiteLocationUndecided(Boolean(draft.siteLocationUndecided));
         setSitePrefecture(draft.siteLocationUndecided ? null : (draft.sitePrefecture ?? null));
@@ -670,22 +705,25 @@ export function SimulatorApp({
         if (resume && !standardPreview && user && draft.pending && !resumed.current) {
           resumed.current = true;
           setDialog(draft.pending);
-          draft.pending = null;
-          window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
+          // Legacy snapshots are immutable; do not clear pending in their storage.
         }
       }
+      if (!standardPreview && !resume && !draftId && !explicitEntry && !loadError) {
+        setResumeCandidate(latestResumableBrowserDraft(storage, model.slug, user?.id ?? null));
+      }
     } catch {
-      /* ignore */
+      /* Storage may be unavailable. Never delete or overwrite old data on failure. */
     }
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  /** New browser work is copy-on-write: neither old wing:sim keys nor resumed work copies are overwritten. */
   const persistDraft = useCallback(
-    (patch: Partial<Draft> = {}) => {
-      // 本部プレビューで元のブラウザ下書きを上書きしない（削除もしない）。
-      if (typeof window === 'undefined' || standardPreview) return;
+    (patch: Partial<Draft> = {}): string | null => {
+      if (typeof window === 'undefined' || standardPreview) return null;
+      const id = activeWorkDraftId.current ?? window.crypto.randomUUID();
       const draft: Draft = {
         selected,
         variantIds,
@@ -704,14 +742,29 @@ export function SimulatorApp({
         savedAt: Date.now(),
         ...patch,
       };
-      window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
+      try {
+        // Write succeeds before the URL points to the new snapshot. On quota/security
+        // errors, keep both previous storage and the current page unchanged.
+        window.localStorage.setItem(workSimulatorDraftKey(model.slug, id), JSON.stringify(draft));
+        activeWorkDraftId.current = id;
+        const url = new URL(window.location.href);
+        url.searchParams.set('draft', id);
+        url.searchParams.delete('resume');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        setDraftSaveFailed(false);
+        return id;
+      } catch {
+        setDraftSaveFailed(true);
+        return null;
+      }
     },
     [selected, variantIds, exteriorFaces, slotSelections, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug, standardPreview]
   );
 
   useEffect(() => {
-    if (hydrated && !standardPreview) persistDraft();
-  }, [hydrated, persistDraft, standardPreview]);
+    // Merely opening a new, saved or URL-specified plan must never write a draft.
+    if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();
+  }, [hydrated, dirty, readOnly, loadError, persistDraft, standardPreview]);
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(() => {

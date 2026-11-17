@@ -134,7 +134,7 @@ export function StandardEstimateV25Selector({ entries, selectedId }: {
       ))}
       {entries.some((entry) => entry.published?.hasPor) && (
         <p className="px-1 text-xs leading-5 text-slate-600" data-testid="v25-selector-por-note">
-          ※「＋別途見積」の費用は、表示した公開価格（税込）に含まれません。
+          ※別途見積の費用は上記価格に含まれません。
         </p>
       )}
     </nav>

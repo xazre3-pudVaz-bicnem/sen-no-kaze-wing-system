@@ -1,10 +1,12 @@
 'use client';
 
 import { CirclePlus, Pencil } from 'lucide-react';
+import { formatYen } from '@/lib/domain/pricing';
+import { equipmentCategoryPriceState } from '@/lib/domain/equipment-price-display';
 import type { SimulatorCardDelta, SimulatorCardTarget } from '@/lib/domain/simulator-card-price-delta';
 import { simulatorCardPricePresentation } from '@/lib/domain/simulator-card-price-presentation';
 import { isSimulatorSelectableProduct, productLedgerState } from '@/lib/domain/product-lifecycle';
-import type { OptionCategory, ProductOption } from '@/lib/domain/types';
+import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +20,9 @@ export interface EquipmentSlotTile {
   option: ProductOption | null;
   /** 選んだ選択肢の名前 */
   variantNames: string[];
+  /** 本部画面の既存表示。お客様は正式税込差額評価器を使用。 */
+  state?: 'standard' | 'changed' | 'price-on-request';
+  deltaLabel?: string | null;
 }
 
 interface Props {
@@ -25,12 +30,16 @@ interface Props {
   options: ProductOption[];
   selected: string[];
   baselineSelected: string[];
+  selectedVariantIds?: string[];
+  baselineVariantIds?: string[];
+  variantGroups?: OptionVariantGroup[];
+  variantChoices?: OptionVariantChoice[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
   slotTiles?: EquipmentSlotTile[];
   onPickSlot?: (slotCode: string) => void;
   /** 正式な見積総額の差による表示専用の税込影響額（PR #680）。 */
-  getCardDelta: (target: SimulatorCardTarget) => SimulatorCardDelta;
+  getCardDelta?: (target: SimulatorCardTarget) => SimulatorCardDelta;
 }
 
 const INTERIOR_EXTERIOR_CATEGORY_ORDER = [
@@ -99,6 +108,10 @@ export function EquipmentBoard({
   options,
   selected,
   baselineSelected,
+  selectedVariantIds = [],
+  baselineVariantIds = [],
+  variantGroups = [],
+  variantChoices = [],
   readOnly,
   onPickCategory,
   slotTiles = [],
@@ -120,14 +133,15 @@ export function EquipmentBoard({
     tone === 'increase' ? 'text-red-700' : tone === 'decrease' ? 'text-blue-700' : 'text-muted';
 
   const slotTile = (cat: OptionCategory, tile: EquipmentSlotTile) => {
-    const delta = getCardDelta({ kind: 'slot', slotCode: tile.slotCode });
-    const display = simulatorCardPricePresentation(delta);
+    const delta = getCardDelta?.({ kind: 'slot', slotCode: tile.slotCode });
+    const display = delta ? simulatorCardPricePresentation(delta) : null;
+    const state = delta ? delta.kind : tile.state;
     const badge =
-      delta.kind === 'standard'
+      state === 'standard'
         ? { label: '標準', className: 'border-gold/45 bg-sand/70 text-brown' }
-        : delta.kind === 'changed'
+        : state === 'changed'
           ? { label: '変更済', className: 'border-brown/35 bg-ivory text-brown' }
-          : { label: '要確認', className: 'border-line bg-white text-ink-soft' };
+          : { label: delta ? '要確認' : '別途見積', className: 'border-line bg-white text-ink-soft' };
     const main = tile.option;
     return (
       <li key={`slot-${tile.slotCode}`} className="bg-white">
@@ -138,7 +152,7 @@ export function EquipmentBoard({
           title={main?.description ?? cat.description ?? undefined}
           className={cn(
             'group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed',
-            delta.kind === 'changed' && 'bg-ivory/35'
+            state === 'changed' && 'bg-ivory/35'
           )}
           data-testid={`equip-slot-${tile.slotCode}`}
         >
@@ -176,13 +190,19 @@ export function EquipmentBoard({
             {tile.variantNames.length > 0 && (
               <span className="mt-0.5 block truncate text-[0.62rem] text-muted">{tile.variantNames.join('・')}</span>
             )}
-            <span
-              className={cn('mt-0.5 block text-[0.72rem] font-semibold tabular-nums', priceTone(display.tone))}
-              data-testid={`equip-slot-price-${tile.slotCode}`}
-              data-price-tone={display.tone}
-            >
-              {display.label}
-            </span>
+            {display ? (
+              <span
+                className={cn('mt-0.5 block break-words text-[0.72rem] font-semibold tabular-nums', priceTone(display.tone))}
+                data-testid={`equip-slot-price-${tile.slotCode}`}
+                data-price-tone={display.tone}
+              >
+                {display.label}
+              </span>
+            ) : tile.state === 'changed' && tile.deltaLabel ? (
+              <span className="mt-0.5 block text-[0.72rem] font-semibold text-brown" data-testid={`equip-slot-price-${tile.slotCode}`}>
+                {tile.deltaLabel}
+              </span>
+            ) : null}
           </span>
         </button>
       </li>
@@ -196,8 +216,8 @@ export function EquipmentBoard({
     const chosen = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
     const main = chosen[0] ?? null;
     const extraCount = chosen.length - 1;
-    const delta = getCardDelta({ kind: 'category', categoryId: cat.id });
-    const display = simulatorCardPricePresentation(delta);
+    const delta = getCardDelta?.({ kind: 'category', categoryId: cat.id });
+    const display = delta ? simulatorCardPricePresentation(delta) : null;
 
     if (!main) {
       return (
@@ -216,7 +236,7 @@ export function EquipmentBoard({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[0.65rem] font-semibold text-muted">{cat.name}</span>
               <span className="mt-0.5 block text-xs font-semibold text-muted">選択なし</span>
-              {delta.kind !== 'standard' && (
+              {delta && delta.kind !== 'standard' && display && (
                 <span
                   className={cn('mt-0.5 block text-[0.72rem] font-semibold tabular-nums', priceTone(display.tone))}
                   data-testid={`equip-price-${cat.code}`}
@@ -235,6 +255,36 @@ export function EquipmentBoard({
     }
 
 
+    // 本部画面だけ従来の差額計算を維持。お客様は税込の見積総額差を表示する。
+    const priceState = delta ? null : equipmentCategoryPriceState({
+      categoryId: cat.id,
+      options,
+      selectedIds: selected,
+      baselineIds: baselineSelected,
+      selectedVariantIds,
+      baselineVariantIds,
+      variantGroups,
+      variantChoices,
+    });
+    const selectedVariantPriceOnRequest = selectedVariantIds.some((choiceId) => {
+      const choice = variantChoices.find((row) => row.id === choiceId);
+      if (!choice?.price_on_request) return false;
+      const group = variantGroups.find((row) => row.id === choice.group_id);
+      return Boolean(group && chosen.some((option) => option.id === group.option_id));
+    });
+    const currentPriceOnRequest = chosen.some((option) => option.price_on_request) || selectedVariantPriceOnRequest;
+    const legacyState =
+      currentPriceOnRequest || priceState?.kind === 'price-on-request'
+        ? 'price-on-request'
+        : priceState?.kind === 'standard'
+          ? 'standard'
+          : 'changed';
+    const state = delta ? delta.kind : legacyState;
+    const deltaLabel =
+      priceState?.kind === 'delta'
+        ? priceState.delta > 0 ? `+${formatYen(priceState.delta)}` : formatYen(priceState.delta)
+        : priceState?.kind === 'no-change' ? '追加費用なし' : null;
+
     // 保存済みの選択として残っている、新しくは選べない商品（販売停止・廃番・シミュレーター非表示）。標準構成の非表示の商品は標準として扱う
     const retained = chosen.find((option) => !isSimulatorSelectableProduct(option) && !baselineSelected.includes(option.id)) ?? null;
     const retainedLabel = retained
@@ -244,11 +294,11 @@ export function EquipmentBoard({
       : null;
 
     const badge =
-      delta.kind === 'standard'
+      state === 'standard'
         ? { label: '標準', className: 'border-gold/45 bg-sand/70 text-brown' }
-        : delta.kind === 'changed'
+        : state === 'changed'
           ? { label: '変更済', className: 'border-brown/35 bg-ivory text-brown' }
-          : { label: '要確認', className: 'border-line bg-white text-ink-soft' };
+          : { label: delta ? '要確認' : '別途見積', className: 'border-line bg-white text-ink-soft' };
 
     return (
       <li key={cat.id} className="bg-white">
@@ -259,7 +309,7 @@ export function EquipmentBoard({
           title={main?.description ?? cat.description ?? undefined}
           className={cn(
             'group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed',
-            delta.kind === 'changed' && 'bg-ivory/35'
+            state === 'changed' && 'bg-ivory/35'
           )}
           data-testid={`equip-${cat.code}`}
         >
@@ -305,13 +355,19 @@ export function EquipmentBoard({
                 {retainedLabel}
               </span>
             )}
-            <span
-              className={cn('mt-0.5 block text-[0.72rem] font-semibold tabular-nums', priceTone(display.tone))}
-              data-testid={`equip-price-${cat.code}`}
-              data-price-tone={display.tone}
-            >
-              {display.label}
-            </span>
+            {display ? (
+              <span
+                className={cn('mt-0.5 block break-words text-[0.72rem] font-semibold tabular-nums', priceTone(display.tone))}
+                data-testid={`equip-price-${cat.code}`}
+                data-price-tone={display.tone}
+              >
+                {display.label}
+              </span>
+            ) : state === 'changed' && deltaLabel ? (
+              <span className="mt-0.5 block text-[0.72rem] font-semibold text-brown" data-testid={`equip-price-${cat.code}`}>
+                {deltaLabel}
+              </span>
+            ) : null}
           </span>
         </button>
       </li>
@@ -366,9 +422,11 @@ export function EquipmentBoard({
           emptyState
         )}
       </section>
-      <p className="px-1 text-[0.7rem] leading-relaxed text-muted" data-testid="equipment-price-impact-note">
-        ※差額は、ほかの選択を維持してこの商品だけを標準に戻した場合との、税込見積総額の差です。各商品の差額は単純合計できない場合があります。
-      </p>
+      {getCardDelta && (
+        <p className="px-1 text-[0.7rem] leading-relaxed text-muted" data-testid="equipment-price-impact-note">
+          ※差額は、ほかの選択を維持してこの商品だけを標準に戻した場合との、税込見積総額の差です。各商品の差額は単純合計できない場合があります。
+        </p>
+      )}
     </div>
   );
 }

@@ -83,6 +83,29 @@ test('外壁4面：選択・面切替・4面コピー・プラン反映を維持
   await expect(page.locator('button[data-testid^="elevation-"]').first()).toContainText('木板');
 });
 
+test('長い品名・型番・寸法の折り返しと同じ行のカード高さ', async ({ page }) => {
+  test.setTimeout(150_000);
+  await openFreshSimulator(page);
+  await openPicker(page, 'equip-furniture');
+  const list = page.getByTestId('product-list');
+  const cards = list.locator('li');
+  expect(await cards.count()).toBeGreaterThanOrEqual(2);
+  const [first, second] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
+  expect(first && second).toBeTruthy();
+  if (Math.abs(first!.y - second!.y) < 8) {
+    expect(Math.abs(first!.height - second!.height)).toBeLessThanOrEqual(3);
+  }
+  for (const card of await cards.all()) {
+    const widthOverflow = await card.evaluate(el => el.scrollWidth - el.clientWidth);
+    expect(widthOverflow, 'product card must not overflow horizontally').toBeLessThanOrEqual(2);
+    const title = card.locator('h3');
+    expect(await title.evaluate(el => getComputedStyle(el).overflowWrap)).toBe('anywhere');
+    for (const value of await card.locator('dd').all()) {
+      expect(await value.evaluate(el => getComputedStyle(el).overflowWrap)).toBe('anywhere');
+    }
+  }
+});
+
 test('位置別商品：テスト用の位置枠があれば表示・選択状態を確認', async ({ page }) => {
   test.setTimeout(150_000);
   await openFreshSimulator(page);

@@ -39,7 +39,7 @@ export function v25WorkItemForCategory(categoryCode: string | null | undefined):
  * それ以外の記号や語尾は削らないため、屋根補修工事等の別工事項目を誤って統合しない。
  */
 function comparableWorkName(value: string): string {
-  return value.normalize('NFKC').replace(/[・･·\\s]/gu, '');
+  return value.normalize('NFKC').replace(/[・･·\s]/gu, '');
 }
 
 /**
@@ -51,7 +51,7 @@ export function v25WorkItemForManual(groupLabel: string): DisplayGroupIdentity {
   if (!label) return { key: 'manual:empty', label: '工事項目未設定（手入力）', order: 101 };
   const normalized = label.normalize('NFKC').trim();
   // 「1. 名称」「１．名称」「1、名称」「1 名称」は許す。番号なしの文字列は別途扱う。
-  const numbered = normalized.match(/^([1-4])(?:[.、]\\s*|\\s+)(.+)$/u);
+  const numbered = normalized.match(/^([1-4])(?:[.、]\s*|\s+)(.+)$/u);
   const name = numbered ? numbered[2] : normalized;
   const index = V25_DISPLAY_WORK_ITEMS.findIndex((item, i) =>
     (!numbered || Number(numbered[1]) === i + 1) && comparableWorkName(name) === comparableWorkName(item.name));

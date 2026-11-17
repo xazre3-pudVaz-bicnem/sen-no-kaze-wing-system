@@ -63,7 +63,7 @@ describe('標準見積v2.5：旧画面の金額内訳を現行の計算結果か
     const html = render(calculated(), { readOnly: false, adjustmentValue: '-17', onAdjustmentChange: () => {} });
     expect(html).toContain('data-testid="v25-amount-breakdown-adjustment"');
     expect(html).toContain('value="-17"');
-    expect(html).toContain('inputmode="numeric"');
+    expect(html.toLowerCase()).toContain('inputmode="numeric"');
     expect(html).toContain('保存済み税込合計（DB）');
     const blank = render(null, { readOnly: false, adjustmentValue: '', onAdjustmentChange: () => {} });
     expect(blank).toContain('data-testid="v25-amount-breakdown-adjustment"');

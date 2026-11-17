@@ -37,10 +37,18 @@ export function readBrowserDraft(storage: Pick<DraftStorageReader, 'getItem'>, k
     if (record.ownerId != null && typeof record.ownerId !== 'string') return null;
     if (record.configId != null && typeof record.configId !== 'string') return null;
     if (record.variantIds != null && (!Array.isArray(record.variantIds) || !record.variantIds.every((id) => typeof id === 'string'))) return null;
-    if (record.exteriorFaces != null && !Array.isArray(record.exteriorFaces)) return null;
+    if (record.exteriorFaces != null && (!Array.isArray(record.exteriorFaces) ||
+      !record.exteriorFaces.every((face) => face && typeof face === 'object' &&
+        typeof face.face_code === 'string' && typeof face.option_id === 'string' &&
+        (face.variant_choice_ids == null || (Array.isArray(face.variant_choice_ids) &&
+          face.variant_choice_ids.every((id: unknown) => typeof id === 'string')))))) return null;
     if (record.slotSelections != null && !Array.isArray(record.slotSelections)) return null;
     if (record.spec != null && typeof record.spec !== 'string') return null;
     if (record.name != null && typeof record.name !== 'string') return null;
+    if (record.sitePrefecture != null && typeof record.sitePrefecture !== 'string') return null;
+    if (record.siteMunicipality != null && typeof record.siteMunicipality !== 'string') return null;
+    if (record.siteLocationUndecided != null && typeof record.siteLocationUndecided !== 'boolean') return null;
+    if (record.pending != null && record.pending !== 'save' && record.pending !== 'quote') return null;
     return record;
   } catch {
     return null;

@@ -76,6 +76,12 @@ const NO_WINDOW_TYPE = '__none';
 
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
 
+/** 金額を変更せず、計算済み粗利の符号だけで表示色を選ぶ。 */
+export function v25GrossToneClass(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || !Number.isFinite(amount) || amount === 0) return 'font-medium text-slate-500';
+  return amount > 0 ? 'font-semibold text-emerald-800' : 'font-semibold text-red-700';
+}
+
 /**
  * v2.5の計算結果「見積用原価単価・売価金額」をそのまま使う表示専用の内訳。
  * 原価金額は確定済み原価単価×数量の端数切捨て。DBの計算・保存値は変更しない。
@@ -133,7 +139,7 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
   );
 }
 
-function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯' }: { label: string; testId: string; children: ReactNode; triggerText?: string }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
 
@@ -188,9 +194,11 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
       onKeyDown={(event) => {
         if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); }
       }}>
-      <summary className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
-        aria-label={label} title="行の操作"
-        onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>⋯</summary>
+      <summary className={triggerText === '⋯'
+        ? 'flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden'
+        : 'flex h-6 cursor-pointer list-none items-center justify-center rounded border border-emerald-400/70 px-2 text-[10px] font-semibold text-white hover:bg-emerald-800 [&::-webkit-details-marker]:hidden'}
+        aria-label={label} title={label}
+        onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>{triggerText}</summary>
       {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
         onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />}
       <div className={'fixed z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg ' + (placement ? '' : 'invisible')}
@@ -478,7 +486,8 @@ function WorkbenchBody({
   // 案内から未設定行へ移動。折り畳まれていた場合は行を開いてから移動する。
   useEffect(() => {
     if (!jumpToKey || lastNavigated.current === jumpToKey) return;
-    const row = document.getElementById(`v25-position-row-${jumpToKey.key}`);
+    const row = document.getElementById(`v25-position-row-${jumpToKey.key}`) ??
+      document.getElementById(`v25-manual-row-${jumpToKey.key}`);
     if (!row) return;
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     row.focus({ preventScroll: true });
@@ -489,6 +498,16 @@ function WorkbenchBody({
     setState((current) => ({ ...current, slots: current.slots.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)) }));
   const setLine = (key: string, patch: Partial<V25LineRow>) =>
     setState((current) => ({ ...current, lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)) }));
+  // 追加が確定した場合だけ対象区分を開く。商品選択のキャンセル時には呼ばない。
+  const revealAddedRow = (section: StandardLineSectionCode, key: string) => {
+    setCollapsed((current) => {
+      if (!current.has(section)) return current;
+      const next = new Set(current);
+      next.delete(section);
+      return next;
+    });
+    setJumpToKey({ key });
+  };
   const setRate = (key: keyof typeof RATE_LABEL, value: string) => {
     setPercents((current) => ({ ...current, [key]: value }));
     setState((current) => ({ ...current, [key]: percentToRate(value) }));
@@ -570,12 +589,13 @@ function WorkbenchBody({
           : {}),
       });
     } else {
+      const addedKey = newKey('slot');
       setState((current) => ({
         ...current,
         slots: [
           ...current.slots,
           {
-            key: newKey('slot'),
+            key: addedKey,
             baseline_key: null,
             option_id: candidate.id,
             variant_choices: { ...choices },
@@ -589,6 +609,7 @@ function WorkbenchBody({
           },
         ],
       }));
+      revealAddedRow(picker.section, addedKey);
     }
     setPicker(null);
   };
@@ -747,13 +768,14 @@ function WorkbenchBody({
     );
   }, [selectableOptions, selectableWindowType, selectableQuery]);
 
-  const addLine = (section: StandardLineSectionCode) =>
+  const addLine = (section: StandardLineSectionCode) => {
+    const addedKey = newKey('line');
     setState((current) => ({
       ...current,
       lines: [
         ...current.lines,
         {
-          key: newKey('line'),
+          key: addedKey,
           line_key: null,
           section_code: section,
           group_label: '',
@@ -768,6 +790,8 @@ function WorkbenchBody({
         },
       ],
     }));
+    revealAddedRow(section, addedKey);
+  };
 
   const run = (task: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>) => {
     if (pending || positionInputActive) return;
@@ -824,17 +848,27 @@ function WorkbenchBody({
     return (
       <tr className="bg-emerald-900 text-white" data-testid={`v25-section-${code}`}>
         <td colSpan={columnCount} className="border-y border-emerald-800 px-2 py-0.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="flex items-center gap-1.5 text-left text-[11px] font-semibold text-white" onClick={() => toggleSection(code)} aria-expanded={!collapsed.has(code)}>
-              <span aria-hidden="true">{collapsed.has(code) ? '▸' : '▾'}</span>
-              {label}
-              <span className="font-normal text-emerald-100">
-                小計 {result?.subtotal !== null && result?.subtotal !== undefined ? yen(result.subtotal) : result ? `${yen(result.priced_subtotal)}＋未確定` : '—'}
-                {result?.expense_target ? `・経費 ${result.expense !== null ? yen(result.expense) : '未確定'}` : ''}
-              </span>
-              {result?.has_por && <Badge tone="warn">別途見積を含む</Badge>}
-            </button>
-            {actions}
+          <div className="flex min-w-0 items-center justify-between gap-2 text-[11px]" data-testid={`v25-wb-section-heading-${code}`}>
+            <div className="flex min-w-0 items-center gap-2">
+              <button type="button" className="flex shrink-0 items-center gap-1.5 text-left text-[11px] font-semibold text-white"
+                onClick={() => toggleSection(code)} aria-expanded={!collapsed.has(code)}>
+                <span aria-hidden="true">{collapsed.has(code) ? '▸' : '▾'}</span>
+                {label}
+              </button>
+              {actions}
+              {result?.has_por && <span className="hidden text-[10px] text-amber-100 sm:inline">別途見積を含む</span>}
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap tabular-nums" data-testid={`v25-wb-section-money-${code}`}>
+              <span className="text-emerald-200">小計</span>
+              <strong className="font-bold text-white">{result?.subtotal !== null && result?.subtotal !== undefined
+                ? yen(result.subtotal) : result ? `${yen(result.priced_subtotal)}＋未確定` : '—'}</strong>
+              {result?.expense_target && (
+                <>
+                  <span className="border-l border-emerald-600 pl-2 text-emerald-200">経費</span>
+                  <strong className="font-bold text-white">{result.expense !== null ? yen(result.expense) : '未確定'}</strong>
+                </>
+              )}
+            </div>
           </div>
         </td>
       </tr>
@@ -915,14 +949,13 @@ function WorkbenchBody({
             className="h-7 min-h-7! min-w-0 flex-1 rounded-sm text-[11px]"
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
         </div>
+        <div className="ml-auto shrink-0" data-testid="v25-wb-column-display-position">
+          <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
+            setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-x border-slate-300 bg-slate-100 px-2 py-1 text-[10px] text-slate-600" data-testid="v25-excel-toolbar">
-        <strong>標準見積明細（Excel風）</strong>
-        <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
-        <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
-          setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
-      </div>
+
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
         <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
           style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}
@@ -987,17 +1020,17 @@ function WorkbenchBody({
                     </td>
                     <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">{line.unit ?? ''}</td>
-                    {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
-                    {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.costAmount)}</td>}
+                    {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500">{yen(result?.cost_unit_price)}</td>}
+                    {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500">{yen(display.costAmount)}</td>}
                     {visible.sale_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.sale_unit_price)}</td>}
-                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-base-sale-amount">{yen(result?.amount)}</td>
-                    {visible.gross && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.gross)}</td>}
+                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums font-semibold text-slate-900" data-testid="v25-wb-base-sale-amount">{yen(result?.amount)}</td>
+                    {visible.gross && <td className={`border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums ${v25GrossToneClass(display.gross)}`}>{yen(display.gross)}</td>}
                     {visible.note && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>}
                     <td className="sticky right-0 z-10 bg-slate-100 px-1 py-px text-center text-slate-500">参照</td>
                   </tr>
                 );
               })}
-            {sectionSubtotal('base', '本体')}
+            {!collapsed.has('base') && sectionSubtotal('base', '本体')}
 
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
@@ -1008,15 +1041,20 @@ function WorkbenchBody({
                     code,
                     STANDARD_SECTION_LABEL[code],
                     readOnly ? undefined : (
-                      <div className="flex gap-2">
-                        <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-product-${code}`}
-                          onClick={(event) => { rememberDialogOpener(event.currentTarget); setPickerDirty(false); setPicker({ section: code, targetKey: null });  }}>
-                          ＋ 商品台帳から追加
-                        </button>
-                        <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-line-${code}`} onClick={() => addLine(code)}>
-                          ＋ 明細（工事費など）
-                        </button>
-                      </div>
+                      <V25WorkbenchRowMenu testId={`v25-wb-add-row-${code}`}
+                        label={`${STANDARD_SECTION_LABEL[code]}へ行を追加`} triggerText="＋ 行を追加">
+                        <button type="button" className="block w-full px-3 py-1.5 text-left text-ink hover:bg-slate-50"
+                          onClick={(event) => {
+                            rememberRowMenuOpener(event.currentTarget);
+                            event.currentTarget.closest('details')?.removeAttribute('open');
+                            setPickerDirty(false); setPicker({ section: code, targetKey: null });
+                          }}>商品台帳から追加</button>
+                        <button type="button" className="block w-full px-3 py-1.5 text-left text-ink hover:bg-slate-50"
+                          onClick={(event) => {
+                            event.currentTarget.closest('details')?.removeAttribute('open');
+                            addLine(code);
+                          }}>直接入力</button>
+                      </V25WorkbenchRowMenu>
                     )
                   )}
                   {!collapsed.has(code) &&
@@ -1105,14 +1143,14 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setSlot(slot.key, { quantity: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-slate-800"
                             data-testid="v25-wb-slot-unit"
                             title="商品台帳の販売単位です。単位を変更する場合は台帳の価格・換算条件も確認してください。">
                             {candidate?.priceUnit?.trim() || '—'}
                           </td>
-                          {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
-                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-cost-amount">{yen(display.costAmount)}</td>}
-                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right ${slot.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-slot-price-cell">
+                          {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500">{yen(result?.cost_unit_price)}</td>}
+                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500" data-testid="v25-wb-slot-cost-amount">{yen(display.costAmount)}</td>}
+                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${slot.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-slot-price-cell">
                             {slot.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
                                 className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
@@ -1123,7 +1161,7 @@ function WorkbenchBody({
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
                           </td>}
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-sale-amount">
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums font-semibold text-slate-900" data-testid="v25-wb-slot-sale-amount">
                             {slot.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
                             ) : unpricedKeys.has(slot.key) ? (
@@ -1134,7 +1172,7 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          {visible.gross && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-gross">{yen(display.gross)}</td>}
+                          {visible.gross && <td className={`border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums ${v25GrossToneClass(display.gross)}`} data-testid="v25-wb-slot-gross">{yen(display.gross)}</td>}
                           {visible.note && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="min-w-0 flex-1 truncate text-muted" title={v25VariantSummary(candidate, slot.variant_choices)} data-testid="v25-wb-variant-summary">
@@ -1216,7 +1254,9 @@ function WorkbenchBody({
                     lines.map((line) => {
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
-                        <tr key={line.key} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
+                        <tr key={line.key} id={`v25-manual-row-${line.key}`} tabIndex={-1}
+                          className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500"
+                          data-testid="v25-wb-line">
                           <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
                               <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
@@ -1240,7 +1280,7 @@ function WorkbenchBody({
                           </td>
                           {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
                           {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
+                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
                             {line.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
                                 className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
@@ -1249,7 +1289,7 @@ function WorkbenchBody({
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
                           </td>}
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-line-sale-amount">
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums font-semibold text-slate-900" data-testid="v25-wb-line-sale-amount">
                             {line.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
                             ) : unpricedKeys.has(line.key) ? (
@@ -1296,7 +1336,7 @@ function WorkbenchBody({
                         </tr>
                       );
                     })}
-                  {sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}
+                  {!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}
                 </Fragment>
               );
             })}

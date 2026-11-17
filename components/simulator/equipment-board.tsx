@@ -4,12 +4,7 @@ import { CirclePlus, Pencil } from 'lucide-react';
 import type { SimulatorCardDelta, SimulatorCardTarget } from '@/lib/domain/simulator-card-price-delta';
 import { simulatorCardPricePresentation } from '@/lib/domain/simulator-card-price-presentation';
 import { isSimulatorSelectableProduct, productLedgerState } from '@/lib/domain/product-lifecycle';
-import type {
-  OptionCategory,
-  OptionVariantChoice,
-  OptionVariantGroup,
-  ProductOption,
-} from '@/lib/domain/types';
+import type { OptionCategory, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
 
@@ -30,10 +25,6 @@ interface Props {
   options: ProductOption[];
   selected: string[];
   baselineSelected: string[];
-  selectedVariantIds: string[];
-  baselineVariantIds: string[];
-  variantGroups: OptionVariantGroup[];
-  variantChoices: OptionVariantChoice[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
   slotTiles?: EquipmentSlotTile[];
@@ -108,10 +99,6 @@ export function EquipmentBoard({
   options,
   selected,
   baselineSelected,
-  selectedVariantIds,
-  baselineVariantIds,
-  variantGroups,
-  variantChoices,
   readOnly,
   onPickCategory,
   slotTiles = [],

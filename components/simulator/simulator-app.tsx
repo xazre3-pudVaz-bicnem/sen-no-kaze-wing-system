@@ -79,7 +79,7 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
-import { activeSimulatorWorkSessionKey, latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, validSimulatorDraftId, workSimulatorDraftKey, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
+import { activeSimulatorWorkSessionKey, latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, restoredDraftFinishLevel, validSimulatorDraftId, workSimulatorDraftKey, writeBrowserWorkDraft, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
@@ -617,7 +617,7 @@ export function SimulatorApp({
             : defaultSpecCode;
 
         if (!hasInvalidSpec) {
-          const restoredLevel = finishLevelForEstimateSpec(restoredSpec);
+          const restoredLevel = restoredDraftFinishLevel(draft.finishLevel, finishLevelForEstimateSpec(restoredSpec));
           const restoredCtx = ruleContextForSpec(ctx, restoredSpec, model.slug);
           const allowedOptionIds = new Set(restoredCtx.options.map((option) => option.id));
           const standardIds =
@@ -769,7 +769,9 @@ export function SimulatorApp({
       try {
         // Write succeeds before the URL points to the new snapshot. On quota/security
         // errors, keep both previous storage and the current page unchanged.
-        window.localStorage.setItem(workSimulatorDraftKey(model.slug, id), JSON.stringify(draft));
+        if (!writeBrowserWorkDraft(window.localStorage, model.slug, id, draft)) {
+          throw new Error('ブラウザ下書きの保存に失敗しました');
+        }
         activeWorkDraftId.current = id;
         try {
           window.sessionStorage.setItem(activeSimulatorWorkSessionKey(model.slug), id);

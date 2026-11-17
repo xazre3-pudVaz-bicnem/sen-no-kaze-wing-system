@@ -107,6 +107,12 @@ describe('商品選択ポップアップ：表示のみのUI結線・回帰', ()
     expect(list).toContain('orderPickerProducts(options, selectedIds, baselineSelectedIds)');
     expect(list).toContain('product-card-current-');
     expect(list).toContain('product-card-baseline-');
+    // 同じ「基本プランの商品」がバッジと金額欄の両方に出る場合のみ隠す。
+    // 別途見積や金額（getPriceLabel結果）はそのまま表示する。
+    expect(list).toContain("isBaseline && displayPrice === '基本プランの商品'");
+    expect(list).toContain('{!redundantBasicPlanText && <p');
+    expect(list).toContain('const displayPrice = getPriceLabel(option);');
+    expect(list).toContain('[overflow-wrap:anywhere]');
     expect(list).toContain('現在選択中');
     expect(list).toContain('基本プランの商品');
     expect(list).not.toContain('is_default');

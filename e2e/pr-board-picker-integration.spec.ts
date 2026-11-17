@@ -15,7 +15,7 @@ test('候補商品・詳細・適用後カードの正式税込差額が一致�
   const board = fixture.getByTestId('equip-price-toilet');
   await expect(board).toHaveText('基本プランに含む');
 
-  await fixture.getByTestId('integrated-open-picker').click();
+  await fixture.getByTestId('equip-toilet').click();
   const picker = page.getByTestId('option-picker');
   await expect(picker.getByTestId('product-card-price-toilet-up')).toHaveText('＋98,670円（税込）');
   await expect(picker.getByTestId('product-card-price-toilet-down')).toHaveText('−136,620円（税込）');
@@ -37,7 +37,7 @@ test('候補商品・詳細・適用後カードの正式税込差額が一致�
   await expect(board).toHaveText('＋98,670円（税込）');
   await expect(board).toHaveAttribute('data-price-tone', 'increase');
 
-  await fixture.getByTestId('integrated-open-picker').click();
+  await fixture.getByTestId('equip-toilet').click();
   await expect(picker.getByTestId('product-card-price-toilet-down')).toHaveText('−136,620円（税込）');
   await picker.getByTestId('product-card-open-toilet-down').click();
   await expect(footer).toContainText('−136,620円（税込）');

@@ -743,6 +743,10 @@ export function SimulatorApp({
   const persistDraft = useCallback(
     (patch: Partial<Draft> = {}): string | null => {
       if (typeof window === 'undefined' || standardPreview) return null;
+      if (!activeWorkDraftId.current && typeof window.crypto?.randomUUID !== 'function') {
+        setDraftSaveFailed(true);
+        return null;
+      }
       const id = activeWorkDraftId.current ?? window.crypto.randomUUID();
       const draft: Draft = {
         selected,
@@ -775,7 +779,11 @@ export function SimulatorApp({
         const url = new URL(window.location.href);
         url.searchParams.set('draft', id);
         url.searchParams.delete('resume');
-        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        const nextLocation = `${url.pathname}${url.search}${url.hash}`;
+        const currentLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (nextLocation !== currentLocation) {
+          window.history.replaceState(window.history.state, '', nextLocation);
+        }
         setDraftSaveFailed(false);
         return id;
       } catch {

@@ -17,26 +17,52 @@ import { resolve } from 'node:path';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('標準見積v2.5 比率スピナー（画面操作のみ）', () => {
-  it('小数2桁を維持したまま1%ずつ増減し、0%未満にはしない', () => {
-    expect(v25StepPercent('15', 1)).toBe('16');
-    expect(v25StepPercent('15.25', 1)).toBe('16.25');
-    expect(v25StepPercent('15.25', -1)).toBe('14.25');
-    expect(v25StepPercent('0.25', -1)).toBe('0');
-    expect(v25StepPercent('0', -1)).toBe('0');
-    expect(v25StepPercent('150', 1)).toBe('151');
-    expect(v25StepPercent('1.05', -1)).toBe('0.05');
+  it('小数2桁を保ち、許容範囲内だけ1ポイント動かす', () => {
+    expect(v25StepPercent('15', 1, 'expense_rate')).toBe('16');
+    expect(v25StepPercent('15.25', 1, 'expense_rate')).toBe('16.25');
+    expect(v25StepPercent('15.25', -1, 'expense_rate')).toBe('14.25');
+    expect(v25StepPercent('150', 1, 'markup_rate')).toBe('151');
+    expect(v25StepPercent('1.05', -1, 'expense_rate')).toBe('0.05');
+    expect(v25StepPercent('100.25', 1, 'sales_fee_rate')).toBe('101.25');
+    expect(v25StepPercent('249', 1, 'markup_rate')).toBe('250');
   });
-  it('入力途中の空欄や範囲外の精度を勝手に書き換えない', () => {
-    expect(v25StepPercent('', 1)).toBe('');
-    expect(v25StepPercent('15.', 1)).toBe('15.');
-    expect(v25StepPercent('15.123', 1)).toBe('15.123');
-    expect(v25StepPercent('-1', 1)).toBe('-1');
+
+  it.each([
+    ['sales_fee_rate', '100', '150', '100.50', '149.50', '101', '149'],
+    ['expense_rate', '0', '30', '0.50', '29.50', '1', '29'],
+    ['markup_rate', '100', '250', '100.50', '249.50', '101', '249'],
+  ] as const)('%sの下限・上限と端数を超えて操作しない', (key, min, max, nearMin, nearMax, justAboveMin, justBelowMax) => {
+    // Exceeding the limit leaves the value untouched, rather than clamping away its fraction.
+    expect(v25StepPercent(min, -1, key)).toBe(min);
+    expect(v25StepPercent(max, 1, key)).toBe(max);
+    expect(v25StepPercent(nearMin, -1, key)).toBe(nearMin);
+    expect(v25StepPercent(nearMax, 1, key)).toBe(nearMax);
+    expect(v25StepPercent(justAboveMin, -1, key)).toBe(min);
+    expect(v25StepPercent(justBelowMax, 1, key)).toBe(max);
   });
-  it('設定は既存の%→率変換だけを使い、キーボードと▲▼で同じ操作を呼ぶ', () => {
+
+  it('未確定の直接入力と小数精度を変更せず、操作で範囲外値を作らない', () => {
+    expect(v25StepPercent('', 1, 'expense_rate')).toBe('');
+    expect(v25StepPercent('15.', 1, 'expense_rate')).toBe('15.');
+    expect(v25StepPercent('15.123', 1, 'expense_rate')).toBe('15.123');
+    expect(v25StepPercent('-1', 1, 'expense_rate')).toBe('-1');
+    expect(v25StepPercent('151', 1, 'sales_fee_rate')).toBe('151');
+    expect(v25StepPercent('151', -1, 'sales_fee_rate')).toBe('150');
+    expect(v25StepPercent('30.01', 1, 'expense_rate')).toBe('30.01');
+  });
+
+  it('既存の保存時許容範囲を唯一の参照元とし、入力と↑↓・▲▼に共通で適用する', () => {
+    const stepSource = read('lib/domain/standard-estimate-v25-rate-step.ts');
     const src = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(stepSource).toContain("import { V25_RATE_RULES } from './standard-estimate-v25-view'");
+    expect(stepSource).toContain('const lower = Math.round(rule.min * 10000)');
+    expect(stepSource).toContain('const upper = Math.round(rule.max * 10000)');
     expect(src).toContain('stepRate(key, event.key ===');
     expect(src).toContain('stepRate(key, 1)');
     expect(src).toContain('stepRate(key, -1)');
+    expect(src).toContain('v25StepPercent(percents[key], direction, key)');
+    expect(src).toContain('v25StepPercent(percents[key], 1, key) === percents[key]');
+    expect(src).toContain('v25StepPercent(percents[key], -1, key) === percents[key]');
     expect(src).toContain('percentToRate(value)');
     expect(src).toContain('data-testid="v25-wb-compact-settings"');
     expect(src).toContain('v25-wb-adjustment-reason');

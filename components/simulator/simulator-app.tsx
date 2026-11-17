@@ -79,7 +79,7 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
-import { latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, validSimulatorDraftId, workSimulatorDraftKey, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
+import { activeSimulatorWorkSessionKey, latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, validSimulatorDraftId, workSimulatorDraftKey, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
@@ -592,6 +592,18 @@ export function SimulatorApp({
       if ((draftId || resume) && (!draft || !(workAllowed || legacyAllowed))) {
         setDraftRestoreFailed(true);
       }
+      // Reuse only the work that this same tab was already editing. Opening a
+      // previously saved draft from the banner is always a read-only source
+      // until the first edit makes a separate copy.
+      if (workAllowed && draftId && !standardPreview) {
+        try {
+          if (window.sessionStorage.getItem(activeSimulatorWorkSessionKey(model.slug)) === draftId) {
+            activeWorkDraftId.current = draftId;
+          }
+        } catch {
+          // Private browsing may forbid sessionStorage. Copy-on-write still protects drafts.
+        }
+      }
       if (draft && (workAllowed || legacyAllowed)) {
         const hasInvalidSpec =
           Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
@@ -751,6 +763,11 @@ export function SimulatorApp({
         // errors, keep both previous storage and the current page unchanged.
         window.localStorage.setItem(workSimulatorDraftKey(model.slug, id), JSON.stringify(draft));
         activeWorkDraftId.current = id;
+        try {
+          window.sessionStorage.setItem(activeSimulatorWorkSessionKey(model.slug), id);
+        } catch {
+          // Session marker is optional; each later edit will use another protected copy.
+        }
         const url = new URL(window.location.href);
         url.searchParams.set('draft', id);
         url.searchParams.delete('resume');
@@ -1816,9 +1833,16 @@ export function SimulatorApp({
             <button
               type="button"
               className="rounded-full border border-gold/60 px-4 py-2 text-sm font-medium text-ink hover:border-gold"
-              onClick={() => router.push(resumeCandidate.kind === 'legacy'
-                ? `/simulator/${model.slug}?resume=1`
-                : `/simulator/${model.slug}?draft=${resumeCandidate.id}`)}
+              onClick={() => {
+                try {
+                  window.sessionStorage.removeItem(activeSimulatorWorkSessionKey(model.slug));
+                } catch {
+                  // Not required to read the protected source.
+                }
+                router.push(resumeCandidate.kind === 'legacy'
+                  ? `/simulator/${model.slug}?resume=1`
+                  : `/simulator/${model.slug}?draft=${resumeCandidate.id}`);
+              }}
               data-testid="resume-previous-draft"
             >
               以前のプランを再開する

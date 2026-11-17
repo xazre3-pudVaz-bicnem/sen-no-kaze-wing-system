@@ -56,6 +56,7 @@ import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-es
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-position-label-suggestions';
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
+import { v25WorkGroupsForDisplay } from '@/components/admin/standard-estimate-v25-work-groups';
 import {
   V25ColumnDisplayMenu,
   V25WidthHandle,
@@ -877,19 +878,21 @@ function WorkbenchBody({
     );
   };
 
-  // 区分の明細の末尾に、正式なv2.5試算の小計だけを表示する（区分の経費は既存見出しに保持）。
+  // 区分末尾の小計は全列結合。可視列や列幅によって金額が別の列へずれない。
+  // 数字は従来のv2.5計算結果をそのまま表示し、区分の経費は既存見出し側で扱う。
   const sectionSubtotal = (code: string, label: string) => {
     const result = sectionResult(code);
     return (
-      <tr className="border-y-2 border-emerald-800 bg-emerald-50 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
-        <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right font-semibold">
-          {label} 小計（税別）
-          {result?.has_por && <span className="ml-2 text-amber-800">別途見積を含む</span>}
+      <tr className="border-y-2 border-emerald-800 bg-lime-100 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
+        <td colSpan={columnCount} className="px-2 py-1">
+          <div className="flex w-full items-center justify-end gap-3 text-right tabular-nums" data-testid={`v25-section-subtotal-layout-${code}`}>
+            <span className="font-semibold whitespace-nowrap">{label} 小計（税別）</span>
+            {result?.has_por && <span className="text-amber-800">別途見積を含む</span>}
+            <strong className="min-w-[7rem] text-right font-semibold whitespace-nowrap" data-testid={`v25-section-subtotal-value-${code}`}>
+              {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
+            </strong>
+          </div>
         </td>
-        <td className="border-l border-emerald-200 px-2 py-1 text-right font-semibold tabular-nums" data-testid={`v25-section-subtotal-value-${code}`}>
-          {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
-        </td>
-        <td colSpan={afterSaleAmount} />
       </tr>
     );
   };
@@ -1037,6 +1040,9 @@ function WorkbenchBody({
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
               const lines = state.lines.filter((line) => line.section_code === code);
+              // 商品のカテゴリーと、手入力明細の既存group_labelから表示用の小見出しを作る。
+              // 保存済みのsection_code・行順序・group_labelは書き換えない。
+              const workGroups = v25WorkGroupsForDisplay(slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode);
               return (
                 <Fragment key={code}>
                   {sectionHeader(
@@ -1059,8 +1065,15 @@ function WorkbenchBody({
                       </V25WorkbenchRowMenu>
                     )
                   )}
-                  {!collapsed.has(code) &&
-                    slots.map((slot) => {
+                  {!collapsed.has(code) && workGroups.map((workGroup) => (
+                    <Fragment key={workGroup.key}>
+                      <tr className="border-y border-emerald-200 bg-emerald-100 text-slate-800"
+                        data-testid="v25-work-item-heading" data-work-item={workGroup.key}>
+                        <td colSpan={columnCount} className="px-3 py-1 text-[11px] font-semibold">
+                          {workGroup.label}
+                        </td>
+                      </tr>
+                      {workGroup.slots.map((slot) => {
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const display = v25DisplayedCostAndGross(result, slot.quantity);
@@ -1252,8 +1265,7 @@ function WorkbenchBody({
                         </Fragment>
                       );
                     })}
-                  {!collapsed.has(code) &&
-                    lines.map((line) => {
+                      {workGroup.lines.map((line) => {
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
                         <tr key={line.key} id={`v25-manual-row-${line.key}`} tabIndex={-1}
@@ -1338,6 +1350,8 @@ function WorkbenchBody({
                         </tr>
                       );
                     })}
+                    </Fragment>
+                  ))}
                   {!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}
                 </Fragment>
               );

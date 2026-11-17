@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import type { StandardEstimateWorkspaceEntry } from '@/lib/data/standard-estimate-workspace';
 
@@ -64,18 +66,25 @@ function SelectorEntry({ row, active }: { row: V25SelectorRow; active: boolean }
     <Link
       href={`/admin/estimate-templates?master=${entry.masterId}`}
       aria-current={active ? 'page' : undefined}
+      onClick={(event) => {
+        // Next.jsの仕様切替はクライアント遷移。beforeunloadに頼らず未保存の入力を保護する。
+        if (!active && document.querySelector('[data-testid="v25-wb-unsaved-position"]') &&
+          !window.confirm('下書きに保存していない変更があります。保存せずに仕様を変更しますか？')) {
+          event.preventDefault();
+        }
+      }}
       data-testid="v25-selector-entry"
       className={`block min-w-0 rounded border px-2 py-1.5 text-xs ${active
-        ? 'border-navy bg-blue-50 font-semibold text-navy ring-1 ring-navy'
+        ? 'border-emerald-800 bg-emerald-50 font-semibold text-emerald-950 ring-1 ring-emerald-800'
         : 'border-slate-200 bg-white text-ink hover:border-slate-400 hover:bg-slate-50'}`}
       title={entry.identity}
     >
       <span className="flex flex-wrap items-center gap-1.5">
         <span className="font-semibold">{row.fire}</span>
-        {active && <span className="rounded bg-navy px-1 text-[10px] text-white">選択中</span>}
+        {active && <span className="rounded bg-emerald-800 px-1 text-[10px] text-white">選択中</span>}
       </span>
       <span className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px]">
-        <span className={active ? 'text-navy' : 'text-slate-600'}>
+        <span className={active ? 'text-emerald-900' : 'text-slate-600'}>
           {entry.published ? `公開中 第${entry.published.version}版` : '未公開'}
         </span>
         {entry.draft && <span className="font-medium text-amber-800">下書き 第{entry.draft.version}版</span>}
@@ -91,7 +100,7 @@ export function StandardEstimateV25Selector({ entries, selectedId }: {
 }) {
   const groups = groupV25Selector(entries);
   return (
-    <nav aria-label="標準見積の一覧" className="space-y-3 rounded-lg border border-line bg-white p-2"
+    <nav aria-label="標準見積の一覧" className="max-w-[42rem] space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2"
       data-testid="standard-estimate-selector">
       {entries.length === 0 && (
         <p className="px-2 py-4 text-sm text-muted">

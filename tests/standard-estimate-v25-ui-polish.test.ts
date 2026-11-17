@@ -116,8 +116,11 @@ describe('v2.5 区分見出し・明細の一行表示', () => {
     expect(source).toContain('addLine(code)');
     expect(source).not.toContain('data-testid={`v25-wb-add-product-${code}`}');
     expect(source).not.toContain('data-testid={`v25-wb-add-line-${code}`}');
-    // 本体は追加メニューを持たず参照のまま
-    expect(source).toContain("sectionHeader('base', '本体（本体マスター）')");
+    // 本体は参照リンクだけで、行追加・直接編集の導線を持たない
+    expect(source).toContain("sectionHeader('base', '本体（本体マスター）', (");
+    expect(source).toContain('data-testid="v25-wb-base-reference"');
+    expect(source).toContain('data-testid="v25-wb-base-master-link"');
+    expect(source).toContain('参照専用');
     expect(source).toContain('data-testid="v25-wb-base-row"');
   });
 });

@@ -16,11 +16,14 @@ export function canRestoreSimulatorDraft(
  * 通常のシミュレーター入口は新しいプランとして開く。
  * ブラウザ内の保存済み ID を新規画面へ復元しない（既存プランは ?c= からサーバーで取得する）。
  * ログイン後の明示的な ?resume=1 は選択内容だけを復元できる。
+ * 本部の新規価格プレビューでは暗黙の復元を禁止する。明示的な再開だけ例外とする。
  */
 export function canRestoreSimulatorSelection(
   draft: { ownerId?: string | null; configId?: string | null },
   viewerId: string | null,
-  resume: boolean
+  resume: boolean,
+  standardPreview = false
 ): boolean {
+  if (standardPreview && !resume) return false;
   return canRestoreSimulatorDraft(draft, viewerId) && (!draft.configId || resume);
 }

@@ -130,6 +130,8 @@ interface Props {
    * 保存・見積依頼はできない（DB 側はスイッチが入るまでこれまでの計算のため、保存すると金額が食い違う）。
    */
   pricingPreview?: boolean;
+  /** 本部管理者の明示的な新価格プレビュー。ブラウザの自動下書き復元・書込みを抑止する。 */
+  standardPreview?: boolean;
   /**
    * v2.5 の標準見積の売価を使う（v2.5 PR-C1）。カタログの商品価格の列（原価）は受け取らず、
    * 画面に出す商品価格・選択肢の差額は売価の表から作る。v2.5 の標準見積が無い仕様は価格を準備中として出す
@@ -194,6 +196,7 @@ export function SimulatorApp({
   estimateTemplates,
   saleViews = [],
   pricingPreview = false,
+  standardPreview = false,
   v25Pricing = false,
   models,
   elevations,
@@ -563,7 +566,7 @@ export function SimulatorApp({
     try {
       const raw = window.localStorage.getItem(storageKey(model.slug));
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
-      if (!initial && !loadError && draft && canRestoreSimulatorSelection(draft, user?.id ?? null, resume)) {
+      if (!initial && !loadError && draft && canRestoreSimulatorSelection(draft, user?.id ?? null, resume, standardPreview)) {
         const hasInvalidSpec =
           Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
         const restoredSpec =
@@ -664,7 +667,7 @@ export function SimulatorApp({
         if (draft.name) setName(draft.name);
         // ブラウザ内の保存済み ID・版は復元しない。
         // 既存プランの編集は ?c= によりサーバーで状態・権限を確認した場合だけ行う。
-        if (resume && user && draft.pending && !resumed.current) {
+        if (resume && !standardPreview && user && draft.pending && !resumed.current) {
           resumed.current = true;
           setDialog(draft.pending);
           draft.pending = null;
@@ -681,7 +684,8 @@ export function SimulatorApp({
 
   const persistDraft = useCallback(
     (patch: Partial<Draft> = {}) => {
-      if (typeof window === 'undefined') return;
+      // 本部プレビューで元のブラウザ下書きを上書きしない（削除もしない）。
+      if (typeof window === 'undefined' || standardPreview) return;
       const draft: Draft = {
         selected,
         variantIds,
@@ -702,12 +706,12 @@ export function SimulatorApp({
       };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, variantIds, exteriorFaces, slotSelections, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug]
+    [selected, variantIds, exteriorFaces, slotSelections, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug, standardPreview]
   );
 
   useEffect(() => {
-    if (hydrated) persistDraft();
-  }, [hydrated, persistDraft]);
+    if (hydrated && !standardPreview) persistDraft();
+  }, [hydrated, persistDraft, standardPreview]);
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(() => {

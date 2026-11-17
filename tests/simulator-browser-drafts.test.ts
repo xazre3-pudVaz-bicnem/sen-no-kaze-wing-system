@@ -7,6 +7,8 @@ import {
   workSimulatorDraftKey,
   latestResumableBrowserDraft,
   readBrowserDraft,
+  restoredDraftFinishLevel,
+  writeBrowserWorkDraft,
   validSimulatorDraftId,
   type DraftStorageReader,
 } from '@/lib/domain/simulator-browser-drafts';
@@ -67,10 +69,42 @@ describe('お客様向けシミュレーター：下書きの独立と明示再�
     expect(readBrowserDraft({ getItem() { throw new Error('storage disabled'); } }, workA)).toBeNull();
   });
 
+  it('注文範囲を以前の下書きどおり復元し、未知の値だけ現在の既定値へ戻す', () => {
+    expect(restoredDraftFinishLevel('shell', 'full')).toBe('shell');
+    expect(restoredDraftFinishLevel('equipment', 'full')).toBe('equipment');
+    expect(restoredDraftFinishLevel('full', 'equipment')).toBe('full');
+    expect(restoredDraftFinishLevel('removed-scope', 'full')).toBe('full');
+    expect(restoredDraftFinishLevel(undefined, 'equipment')).toBe('equipment');
+    const app = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
+    expect(app).toContain('restoredDraftFinishLevel(draft.finishLevel, finishLevelForEstimateSpec(restoredSpec))');
+  });
+
+  it('最新の編集スナップショットを新しい保存先へ書き、旧形式と再開元を変更しない', () => {
+    const original = record('user-a', 100);
+    const former = record('user-a', 200);
+    const records = new Map([[legacy, original], [workA, former]]);
+    const store = { setItem(key: string, value: string) { records.set(key, value); } };
+    const fresh = (option: string) => ({ selected: [option], ownerId: 'user-a', configId: null, savedAt: 300 });
+    expect(writeBrowserWorkDraft(store, 'wing-01', second, fresh('changed-first'))).toBe(true);
+    expect(writeBrowserWorkDraft(store, 'wing-01', second, fresh('changed-latest'))).toBe(true);
+    expect(records.get(legacy)).toBe(original);
+    expect(records.get(workA)).toBe(former);
+    expect(JSON.parse(records.get(workB) ?? '{}').selected).toEqual(['changed-latest']);
+  });
+
+  it('ブラウザ保存失敗・不正作業IDの際、旧データを変更しない', () => {
+    const original = record('user-a', 100);
+    const records = new Map([[legacy, original]]);
+    const rejected = { setItem() { throw new Error('QuotaExceededError'); } };
+    expect(writeBrowserWorkDraft(rejected, 'wing-01', first, { selected: ['new'] })).toBe(false);
+    expect(writeBrowserWorkDraft({ setItem() { throw new Error('unexpected call'); } }, 'wing-01', 'bad-id', { selected: ['new'] })).toBe(false);
+    expect(records.get(legacy)).toBe(original);
+  });
+
   it('新規開始・仕様指定・保存プラン表示は旧保存先へ書かない', () => {
     const app = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
     const page = fs.readFileSync(path.join(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'), 'utf8');
-    expect(app).toContain('workSimulatorDraftKey(model.slug, id)');
+    expect(app).toContain('writeBrowserWorkDraft(window.localStorage, model.slug, id, draft)');
     expect(app).toContain('window.sessionStorage.setItem(activeSimulatorWorkSessionKey(model.slug), id)');
     expect(app).toContain('window.sessionStorage.removeItem(activeSimulatorWorkSessionKey(model.slug))');
     expect(app).toContain('activeWorkDraftId.current ?? window.crypto.randomUUID()');

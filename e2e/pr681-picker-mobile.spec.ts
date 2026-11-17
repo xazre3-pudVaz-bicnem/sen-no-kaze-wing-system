@@ -57,3 +57,31 @@ test('スマホ：洗面セットのカードと外壁4面切替', async ({ page
   await faces.getByRole('button', { name: 'キャンセル' }).click();
   await expect(faces).toBeHidden();
 });
+
+test('スマホ：隔離位置枠の基本プランと選択中を実表示して変更・反映', async ({ page }) => {
+  test.setTimeout(150_000);
+  await page.goto('/__e2e_pr681_picker');
+  await expect(page.getByTestId('pr681-local-fixture')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.getByTestId('fixture-open-bedroom-fix').click();
+  const dialog = page.getByTestId('option-picker');
+  const baselineCard = dialog.getByTestId('product-card-sash-standard');
+  await expect(baselineCard.getByTestId('product-card-baseline-sash-standard')).toBeVisible();
+  await expect(baselineCard.getByTestId('product-card-current-sash-standard')).toBeVisible();
+  await expect(baselineCard.getByText('基本プランの商品', { exact: true })).toHaveCount(1);
+  await expect(baselineCard.getByTestId('product-card-price-sash-standard')).toHaveCount(0);
+  const cardBounds = await baselineCard.boundingBox();
+  const dialogBounds = await dialog.boundingBox();
+  expect(cardBounds && dialogBounds).toBeTruthy();
+  expect(cardBounds!.x).toBeGreaterThanOrEqual(dialogBounds!.x - 2);
+  expect(cardBounds!.x + cardBounds!.width).toBeLessThanOrEqual(dialogBounds!.x + dialogBounds!.width + 2);
+  await openProductDetail(page, 'sash-resin');
+  await expect(dialog.getByTestId('product-detail')).toBeVisible();
+  await dialog.getByTestId('product-detail-apply').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId('fixture-current-bedroom-fix')).toContainText('樹脂サッシ');
+  await page.getByTestId('fixture-open-bedroom-fix').click();
+  await expect(dialog.getByTestId('product-card-current-sash-resin')).toBeVisible();
+  await expect(dialog.getByTestId('product-card-baseline-sash-standard')).toBeVisible();
+  await expect(dialog.getByTestId('product-list').locator('li').first()).toContainText('樹脂サッシ');
+});

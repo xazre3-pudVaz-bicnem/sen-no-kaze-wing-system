@@ -37,7 +37,7 @@ describe('シミュレーターの保存下書き・アカウント分離', () =
     expect(canRestoreSimulatorSelection(saved, null, true)).toBe(false);
 
     const unsaved = { ownerId: 'customer-a', configId: null };
-    expect(canRestoreSimulatorSelection(unsaved, 'customer-a', false)).toBe(true);
+    expect(canRestoreSimulatorSelection(unsaved, 'customer-a', false)).toBe(false);
     expect(canRestoreSimulatorSelection({ ownerId: null, configId: null }, 'customer-a', true)).toBe(true);
     expect(canRestoreSimulatorSelection({ configId: 'legacy-id' }, 'customer-a', true)).toBe(false);
   });
@@ -51,8 +51,8 @@ describe('シミュレーターの保存下書き・アカウント分離', () =
     // 意図して ?resume=1 を指定した場合だけ選択の復元を許す（所有者検証は維持）。
     expect(canRestoreSimulatorSelection(saved, 'headquarters', true, true)).toBe(true);
     expect(canRestoreSimulatorSelection(saved, 'other-user', true, true)).toBe(false);
-    // 通常シミュレーターと保存済みプランの復元を変えない。
-    expect(canRestoreSimulatorSelection(guest, 'headquarters', false)).toBe(true);
+    // お客様の新規開始でも暗黙に復元しない。明示再開のみ維持。
+    expect(canRestoreSimulatorSelection(guest, 'headquarters', false)).toBe(false);
     expect(canRestoreSimulatorSelection(saved, 'headquarters', true)).toBe(true);
   });
 
@@ -61,10 +61,10 @@ describe('シミュレーターの保存下書き・アカウント分離', () =
     const page = fs.readFileSync(path.join(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'), 'utf8');
     expect(page).toContain("const previewRequested = preview === 'standard' && user?.role === 'admin';");
     expect(page).toContain('standardPreview={previewRequested}');
-    expect(page).toContain("key={`${previewRequested ? 'standard-preview:' : ''}${simulatorRouteKey}`}");
-    expect(app).toContain('canRestoreSimulatorSelection(draft, user?.id ?? null, resume, standardPreview)');
-    expect(app).toContain("if (typeof window === 'undefined' || standardPreview) return;");
-    expect(app).toContain('if (hydrated && !standardPreview) persistDraft();');
+    expect(page).toContain("key={`${previewRequested ? 'standard-preview:' : ''}${workRouteKey}`}");
+    expect(app).toContain('canRestoreSimulatorSelection(workDraft, user?.id ?? null, true, standardPreview)');
+    expect(app).toContain("if (typeof window === 'undefined' || standardPreview) return null;");
+    expect(app).toContain('if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();');
     expect(app).toContain('if (resume && !standardPreview && user && draft.pending && !resumed.current)');
     expect(app).toContain('if (pricingPreview) return;');
     expect(app).toContain("pushToast('本部プレビュー中は見積依頼できません");
@@ -76,12 +76,12 @@ describe('シミュレーターの保存下書き・アカウント分離', () =
 
   it('画面側がアカウントを照合し、保存済みIDをブラウザから復元しない', () => {
     const app = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
-    expect(app).toContain('canRestoreSimulatorSelection(draft, user?.id ?? null, resume, standardPreview)');
+    expect(app).toContain('canRestoreSimulatorSelection(legacyDraft, user?.id ?? null, true, standardPreview)');
     expect(app).not.toContain('setConfigId(draft.configId)');
     expect(app).toContain('!loadError');
     expect(app).toContain('ownerId: user?.id ?? null,');
     // 未ログインの見積依頼→ログイン画面→ログイン後の再開は残す
-    expect(app).toContain("persistDraft({ pending });");
+    expect(app).toContain("const id = persistDraft({ pending });");
     expect(app).toContain('if (resume && !standardPreview && user && draft.pending && !resumed.current)');
     const page = fs.readFileSync(path.join(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'), 'utf8');
     expect(page).toContain('const simulatorRouteKey = c ? `configuration:${c}`');

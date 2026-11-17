@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ArrowRight, Save } from 'lucide-react';
 import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-configurations';
 import { fetchSimulatorV25UnitsAction } from '@/lib/actions/simulator-v25-units';
@@ -79,6 +79,7 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
+import { latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, restoredDraftFinishLevel, validSimulatorDraftId, workSimulatorDraftKey, writeBrowserWorkDraft, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
@@ -144,6 +145,10 @@ interface Props {
   initial: SimulatorInitial | null;
   loadError: string | null;
   resume: boolean;
+  /** Explicit, local-only work copy. Unrelated to saved DB configuration IDs. */
+  draftId?: string | null;
+  /** A saved configuration or temporary URL plan is already being opened. */
+  explicitEntry?: boolean;
   user: { id: string; name: string } | null;
   /** ログインなしの一時保存（URL）から開いたときの有効期限 */
   guestPlanExpiresAt?: string | null;
@@ -169,8 +174,6 @@ interface Draft {
   pending: 'save' | 'quote' | null;
   savedAt: number;
 }
-
-const storageKey = (slug: string) => `wing:sim:${slug}`;
 
 const sameSelection = (a: string[], b: string[]) => {
   const aa = [...new Set(a)].sort();
@@ -203,6 +206,8 @@ export function SimulatorApp({
   initial,
   loadError,
   resume,
+  draftId = null,
+  explicitEntry = false,
   user,
   guestPlanExpiresAt = null,
 }: Props) {
@@ -457,6 +462,13 @@ export function SimulatorApp({
   const [view, setView] = useState<ViewKey>('exterior');
   const [hydrated, setHydrated] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [resumeCandidate, setResumeCandidate] = useState<ResumeCandidate | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState(false);
+  const [restoreIssues, setRestoreIssues] = useState<string[]>([]);
+  const [draftSaveFailed, setDraftSaveFailed] = useState(false);
+  const [draftRestoreFailed, setDraftRestoreFailed] = useState(false);
+  /** Only this mounted page may update its own copy; source drafts and other tabs remain immutable. */
+  const activeWorkDraftId = useRef<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dialog, setDialog] = useState<null | 'save' | 'quote'>(null);
   /** 未ログインの「見積を保存する」：マイページに保存（ログイン）か、ログインなしの一時保存（URL）かを選ぶ */
@@ -564,9 +576,31 @@ export function SimulatorApp({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const raw = window.localStorage.getItem(storageKey(model.slug));
-      const draft: Draft | null = raw ? JSON.parse(raw) : null;
-      if (!initial && !loadError && draft && canRestoreSimulatorSelection(draft, user?.id ?? null, resume, standardPreview)) {
+      const storage = window.localStorage;
+      const workDraft = validSimulatorDraftId(draftId)
+        ? readBrowserDraft(storage, workSimulatorDraftKey(model.slug, draftId))
+        : null;
+      const legacyDraft = resume && !draftId ? readBrowserDraft(storage, legacySimulatorDraftKey(model.slug)) : null;
+      const draft = (workDraft ?? legacyDraft) as Draft | null;
+      // A work URL is explicit; a bare customer entrance is never an implicit restore.
+      // When editing ?c=, the authoritative DB ID must agree with the local draft.
+      const workAllowed = workDraft && !loadError &&
+        canRestoreSimulatorSelection(workDraft, user?.id ?? null, true, standardPreview) &&
+        (!initial || (initial.status === 'draft' &&
+          (initial.id ?? null) === (workDraft.configId ?? null) &&
+          // A local edit based on an older DB revision must not be applied over
+          // an updated saved configuration using the newer lock version.
+          (!initial.id || (workDraft.lockVersion ?? null) === (initial.lock_version ?? null))));
+      const legacyAllowed = legacyDraft && !initial && !loadError &&
+        canRestoreSimulatorSelection(legacyDraft, user?.id ?? null, true, standardPreview);
+      if ((draftId || resume) && (!draft || !(workAllowed || legacyAllowed))) {
+        setDraftRestoreFailed(true);
+      }
+      // Every page load / tab is a new editing session. Even duplicated tabs may
+      // clone sessionStorage: never reuse the source draft ID as the writable ID.
+      // The first edit creates a unique copy; later edits in this mounted page
+      // update only its own copy.
+      if (draft && (workAllowed || legacyAllowed)) {
         const hasInvalidSpec =
           Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
         const restoredSpec =
@@ -575,7 +609,7 @@ export function SimulatorApp({
             : defaultSpecCode;
 
         if (!hasInvalidSpec) {
-          const restoredLevel = finishLevelForEstimateSpec(restoredSpec);
+          const restoredLevel = restoredDraftFinishLevel(draft.finishLevel, finishLevelForEstimateSpec(restoredSpec));
           const restoredCtx = ruleContextForSpec(ctx, restoredSpec, model.slug);
           const allowedOptionIds = new Set(restoredCtx.options.map((option) => option.id));
           const standardIds =
@@ -659,7 +693,20 @@ export function SimulatorApp({
               normalizedVariantIds
             )
           );
+          // Do not silently hide a discontinued or now-disallowed selection.
+          const unavailable = draft.selected.filter((id) => !restoredSelection.includes(id));
+          const missingChoices = (draft.variantIds ?? []).filter((id) => !normalizedVariantIds.includes(id));
+          if (unavailable.length || missingChoices.length) {
+            const labels = unavailable.slice(0, 5).map((id) => bundle.options.find((item) => item.id === id)?.name ?? '取扱対象外の商品');
+            setRestoreIssues([
+              ...(labels.length ? [`現在選べない・条件に合わない商品：${labels.join('・')}`] : []),
+              ...(missingChoices.length ? [`現在使えない商品仕様が${missingChoices.length}件あります`] : []),
+            ]);
+          }
+        } else {
+          setRestoreIssues(['以前の仕様は現在選択できないため、標準構成を表示しています。']);
         }
+        setRestoreNotice(true);
 
         setSiteLocationUndecided(Boolean(draft.siteLocationUndecided));
         setSitePrefecture(draft.siteLocationUndecided ? null : (draft.sitePrefecture ?? null));
@@ -670,22 +717,29 @@ export function SimulatorApp({
         if (resume && !standardPreview && user && draft.pending && !resumed.current) {
           resumed.current = true;
           setDialog(draft.pending);
-          draft.pending = null;
-          window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
+          // Legacy snapshots are immutable; do not clear pending in their storage.
         }
       }
+      if (!standardPreview && !resume && !draftId && !explicitEntry && !loadError) {
+        setResumeCandidate(latestResumableBrowserDraft(storage, model.slug, user?.id ?? null));
+      }
     } catch {
-      /* ignore */
+      /* Storage may be unavailable. Never delete or overwrite old data on failure. */
     }
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  /** New browser work is copy-on-write: neither old wing:sim keys nor resumed work copies are overwritten. */
   const persistDraft = useCallback(
-    (patch: Partial<Draft> = {}) => {
-      // 本部プレビューで元のブラウザ下書きを上書きしない（削除もしない）。
-      if (typeof window === 'undefined' || standardPreview) return;
+    (patch: Partial<Draft> = {}): string | null => {
+      if (typeof window === 'undefined' || standardPreview) return null;
+      if (!activeWorkDraftId.current && typeof window.crypto?.randomUUID !== 'function') {
+        setDraftSaveFailed(true);
+        return null;
+      }
+      const id = activeWorkDraftId.current ?? window.crypto.randomUUID();
       const draft: Draft = {
         selected,
         variantIds,
@@ -704,14 +758,41 @@ export function SimulatorApp({
         savedAt: Date.now(),
         ...patch,
       };
-      window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
+      try {
+        // Write succeeds before the URL points to the new snapshot. On quota/security
+        // errors, keep both previous storage and the current page unchanged.
+        if (!writeBrowserWorkDraft(window.localStorage, model.slug, id, draft)) {
+          throw new Error('ブラウザ下書きの保存に失敗しました');
+        }
+        activeWorkDraftId.current = id;
+        const url = new URL(window.location.href);
+        url.searchParams.set('draft', id);
+        url.searchParams.delete('resume');
+        const nextLocation = `${url.pathname}${url.search}${url.hash}`;
+        const currentLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (nextLocation !== currentLocation) {
+          window.history.replaceState(window.history.state, '', nextLocation);
+        }
+        setDraftSaveFailed(false);
+        return id;
+      } catch {
+        setDraftSaveFailed(true);
+        return null;
+      }
     },
     [selected, variantIds, exteriorFaces, slotSelections, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug, standardPreview]
   );
 
-  useEffect(() => {
-    if (hydrated && !standardPreview) persistDraft();
-  }, [hydrated, persistDraft, standardPreview]);
+  // Synchronization with external browser storage is intentional. persistDraft
+  // reports storage failures to the UI only after the browser write has finished.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useLayoutEffect(() => {
+    // Run after React commits the latest selected/slot/site state but before
+    // the browser paints: fast reload after a product click must not snapshot
+    // the previous render's selection. No write occurs on initial display.
+    if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();
+  }, [hydrated, dirty, readOnly, loadError, persistDraft, standardPreview]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(() => {
@@ -1108,6 +1189,10 @@ export function SimulatorApp({
 
   const applyPreset = (code: string) => {
     if (!hydrated || readOnly) return;
+    if (code === specCode && !dirty && !restoreNotice) return;
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('仕様を切り替えると、現在の選択がその仕様の標準構成に変わります。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
     const choice = simulatorSpecChoices.find((row) => row.code === code);
     // v2.5 の売価を使う間は、今の防火の条件の標準構成を読み込む（旧来は防火で変わらない）
     const next = standardStateFor(code, fireSelected);
@@ -1129,6 +1214,9 @@ export function SimulatorApp({
    * 標準構成から変えていれば、変えた内容を残して防火仕様だけを入れ替える（金額は v2.5 のルールで計算する）
    */
   const changeFireSpec = (fireproofCategoryId: string, nextId: string) => {
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('防火仕様を切り替えると、標準構成や一部の選択が変わる場合があります。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
     const nextFire = bundle.options.find((option) => option.id === nextId)?.code === FIRE_PROOF_OPTION_CODE;
     if (v25Pricing && hydrated && !readOnly && nextFire !== fireSelected) {
       const current = standardStateFor(specCode, fireSelected);
@@ -1165,6 +1253,9 @@ export function SimulatorApp({
    */
   const changeFinishLevel = (level: FinishLevel) => {
     if (readOnly || level === finishLevel) return;
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('注文範囲を変えると、範囲外の商品が選択から外れる場合があります。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
     const widening = finishLevelRank(level) > finishLevelRank(finishLevel);
     if (widening) {
       const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
@@ -1271,6 +1362,14 @@ export function SimulatorApp({
       notices.push(`「${positionCategoryNames.join('・')}」は位置ごとに選びます。設備の一覧の位置のタイルから選んでください`);
     }
 
+    // A dependency or scope change may also remove products outside the chosen
+    // category. Ask before committing such a loss; the picker itself is intentional.
+    const automaticallyRemoved = selected.filter((id) => !cur.includes(id) && !inCategory.includes(id));
+    if (automaticallyRemoved.length > 0) {
+      const names = automaticallyRemoved.slice(0, 4).map((id) => optionById.get(id)?.name ?? '商品');
+      if (!window.confirm(`この変更により、ほかの商品（${names.join('・')}）も選択から外れます。続けますか？`)) return;
+      if (dirty && !persistDraft()) return;
+    }
     setSelected(cur);
     // このカテゴリーの商品に紐づく選択肢を入れ替える（そろえて外した商品の選択肢も外し、足した商品は標準の選択肢）
     const catOptionIds = new Set(inCategory);
@@ -1379,9 +1478,21 @@ export function SimulatorApp({
   };
 
   // ---- 保存・見積依頼 ----
-  const requireLogin = (pending: 'save' | 'quote') => {
-    persistDraft({ pending });
-    router.push(`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`);
+  const requireLogin = (pending: 'save' | 'quote' | null) => {
+    const id = persistDraft({ pending });
+    if (!id) {
+      pushToast('作業内容をブラウザへ保存できないため、ログイン画面への移動を中止しました', 'warn');
+      return;
+    }
+    router.push(`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1&draft=${id}`)}`);
+  };
+
+  const changeModel = (nextSlug: string) => {
+    if (nextSlug === model.slug) return;
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('本体を切り替えます。現在の選択は新しい本体に引き継がれません。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
+    router.push(`/simulator/${nextSlug}`);
   };
 
   /** 保存する選択肢：選んでいる商品の選択項目のものだけ（外した商品の選択肢は DB が受け付けない） */
@@ -1500,9 +1611,9 @@ export function SimulatorApp({
                     {m.slug === model.slug ? (
                       <span className="font-semibold text-danger">{m.name}</span>
                     ) : (
-                      <Link href={`/simulator/${m.slug}`} className="hover:text-ink hover:underline">
+                      <button type="button" onClick={() => changeModel(m.slug)} className="hover:text-ink hover:underline">
                         {m.name}
-                      </Link>
+                      </button>
                     )}
                   </span>
                 ))}
@@ -1562,7 +1673,7 @@ export function SimulatorApp({
                         </span>
                         <select
                           value={model.slug}
-                          onChange={(e) => router.push(`/simulator/${e.target.value}`)}
+                          onChange={(e) => changeModel(e.target.value)}
                           className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
                           aria-label="本体（モデル）を切り替える"
                           data-testid="model-switcher"
@@ -1687,9 +1798,9 @@ export function SimulatorApp({
                 </div>
                 {!user && (
                   <p className="mt-1 text-right text-[0.7rem] leading-snug text-muted/80">
-                    <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">
+                    <button type="button" onClick={() => requireLogin(null)} className="underline underline-offset-4">
                       ログイン
-                    </Link>
+                    </button>
                     するとマイページに保存できます。ログインせずに一時保存（URL）もできます
                   </p>
                 )}
@@ -1730,6 +1841,42 @@ export function SimulatorApp({
           <Alert tone="warn" className="mt-4">
             {loadError}
           </Alert>
+        )}
+        {!standardPreview && !explicitEntry && !resume && !draftId && resumeCandidate && !dirty && !loadError && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-3" data-testid="previous-draft-banner">
+            <p className="text-sm text-ink-soft">以前の作業途中のプランがあります</p>
+            <button
+              type="button"
+              className="rounded-full border border-gold/60 px-4 py-2 text-sm font-medium text-ink hover:border-gold"
+              onClick={() => router.push(resumeCandidate.kind === 'legacy'
+                ? `/simulator/${model.slug}?resume=1`
+                : `/simulator/${model.slug}?draft=${resumeCandidate.id}`)}
+              data-testid="resume-previous-draft"
+            >
+              以前のプランを再開する
+            </button>
+          </div>
+        )}
+        {restoreNotice && (
+          <div className="mt-4" data-testid="restored-draft-notice">
+            <Alert tone="info">
+              以前の選択内容を再表示しています。商品価格や取扱状況が変わっている場合があります。
+              金額は現在の条件で再計算しています。
+              {restoreIssues.length > 0 && (
+                <span className="mt-1 block">内容を確認してください：{restoreIssues.join('。')}</span>
+              )}
+            </Alert>
+          </div>
+        )}
+        {draftRestoreFailed && (
+          <div className="mt-4" data-testid="draft-restore-error">
+            <Alert tone="warn">指定された下書きを読み込めませんでした。現在の標準構成を表示しています。以前のブラウザ保存情報は変更していません。</Alert>
+          </div>
+        )}
+        {draftSaveFailed && (
+          <div className="mt-4" data-testid="draft-save-error">
+            <Alert tone="warn">作業内容をこのブラウザに保存できませんでした。ページを閉じる前に保存設定を確認してください。以前の下書きは変更していません。</Alert>
+          </div>
         )}
         {!readOnly && (positionNotice || revertedSlotLabels.length > 0) && (
           <div className="mt-4" data-testid="position-slot-notice">

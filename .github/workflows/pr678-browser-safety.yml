@@ -1,0 +1,65 @@
+name: PR 678 Local Browser Safety
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/simulator/simulator-app.tsx'
+      - 'lib/domain/simulator-browser-drafts.ts'
+      - 'e2e/pr678-browser-draft-safety.spec.ts'
+      - '.github/workflows/pr678-browser-safety.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr678-browser-safety-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  local-browser-draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout disposable PR merge
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install isolated Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Reject external database and browser endpoints
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+
+      - name: Test customer drafts in real browser (local mode only)
+        run: npx playwright test e2e/pr678-browser-draft-safety.spec.ts --project=desktop
+
+      - name: Upload only Playwright test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr678-browser-safety
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

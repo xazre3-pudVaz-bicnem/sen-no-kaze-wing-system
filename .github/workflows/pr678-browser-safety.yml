@@ -8,6 +8,7 @@ on:
       - 'lib/domain/simulator-browser-drafts.ts'
       - 'e2e/pr678-browser-draft-safety.spec.ts'
       - 'e2e/pr682-board-price.spec.ts'
+      - 'e2e/pr682-exact-pricing-fixture.spec.ts'
       - 'e2e/pr682-board-price.mobile.spec.ts'
       - '.github/workflows/pr678-browser-safety.yml'
 
@@ -61,6 +62,10 @@ jobs:
       - name: Test PR 682 customer cards on desktop Chromium
         if: github.event.pull_request.number == 682
         run: npx playwright test e2e/pr682-board-price.spec.ts --project=desktop
+
+      - name: Test PR 682 exact legacy and v2.5 card prices in desktop Chromium (synthetic fixtures)
+        if: github.event.pull_request.number == 682
+        run: npx playwright test e2e/pr682-exact-pricing-fixture.spec.ts --project=desktop
 
       - name: Test PR 682 customer cards on mobile Chromium
         if: github.event.pull_request.number == 682

@@ -1987,10 +1987,6 @@ export function SimulatorApp({
           options={displayScopedOptions}
           selected={selected}
           baselineSelected={activeSpecSelection}
-          selectedVariantIds={variantIds}
-          baselineVariantIds={baselineVariantIds}
-          variantGroups={bundle.variantGroups}
-          variantChoices={displayVariantChoices}
           readOnly={readOnly}
           onPickCategory={openPicker}
           slotTiles={slotTiles}

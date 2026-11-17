@@ -135,7 +135,7 @@ export function ProductList({
                       {attributes.map((item) => (
                         <div key={`${item.label}-${item.value}`} className="grid grid-cols-[4rem_1fr] gap-1.5">
                           <dt className="text-muted">{item.label}</dt>
-                          <dd className="min-w-0 break-words text-ink-soft">{item.value}</dd>
+                          <dd className="min-w-0 text-ink-soft [overflow-wrap:anywhere]">{item.value}</dd>
                         </div>
                       ))}
                     </dl>

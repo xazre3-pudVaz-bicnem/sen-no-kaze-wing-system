@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { V25LineRow, V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
+import { buildV25SavePayload, type V25EditorState, type V25LineRow, type V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
 import {
   V25_DISPLAY_WORK_ITEMS,
+  v25MoveManualLineWithinWorkGroup,
   v25WorkGroupsForDisplay,
   v25WorkItemForCategory,
   v25WorkItemForManual,
@@ -51,6 +52,100 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
     expect(v25WorkItemForManual('屋根工事（追加）').label).toBe('屋根工事（追加）');
     expect(v25WorkItemForManual('電気設備工事').label).toBe('電気設備工事');
     expect(v25WorkItemForManual('  ').label).toBe('工事項目未設定（手入力）');
+  });
+
+  it('中黒・番号後の空白・全角半角だけを統合し、見出しは正式名称に統一', () => {
+    const variants: Record<string, string[]> = {
+      '1. サッシ・木製建具工事': [
+        '1. サッシ木製建具工事', '１．サッシ木製建具工事',
+        '1．サッシ・木製建具工事', '1.サッシ･木製建具工事',
+        '1、サッシ 木製建具工事', '１　サッシ・木製建具工事',
+        'サッシ木製建具工事',
+      ],
+      '2. 屋根工事': ['２．屋根工事', '2. 屋根 工事', '2、屋根工事', '屋根工事'],
+      '3. 外壁工事': ['３．外壁工事', '3.外壁工事', '外壁 工事'],
+      '4. 内装仕上げ': ['４．内装仕上げ', '4. 内装 仕上げ', '内装仕上げ'],
+    };
+    for (const [official, examples] of Object.entries(variants)) {
+      for (const input of examples) {
+        expect(v25WorkItemForManual(input).label).toBe(official);
+      }
+    }
+    const lineA = line('a', '1. サッシ・木製建具工事');
+    const lineB = line('b', '１．サッシ木製建具工事');
+    const groups = v25WorkGroupsForDisplay([slot('s', 'sash-product')], [lineA, lineB], id => id === 'sash-product' ? 'sash' : null);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe('1. サッシ・木製建具工事');
+    expect(groups[0].lines).toEqual([lineA, lineB]);
+    expect(lineB.group_label).toBe('１．サッシ木製建具工事'); // 保存値はそのまま
+  });
+
+  it('番号違い・別工程・その他の記号を憶測で統合しない', () => {
+    for (const label of [
+      '2. サッシ木製建具工事', '1. 屋根工事',
+      '3. 屋根工事', '4. 外壁工事',
+      '1. サッシ木製建具工事（追加）', '1. サッシアルミ建具工事',
+      '2. 屋根補修工事', '3. 外壁工事・補修', '4. 内装下地工事',
+      '1.サッシ-木製建具工事', '5. サッシ木製建具工事',
+      '特殊工事',
+    ]) {
+      expect(v25WorkItemForManual(label).key.startsWith('manual:')).toBe(true);
+      expect(v25WorkItemForManual(label).label).toBe(label);
+    }
+  });
+
+  it('自由入力だけを同一区分・同一表示グループ内で上下1行移動する', () => {
+    const rows = [
+      line('roof-a', '2. 屋根工事'),
+      line('other-a', '電気工事'),
+      line('sash-a', '1. サッシ木製建具工事'),
+      line('roof-b', '２．屋根工事'),
+      line('sash-b', '１．サッシ・木製建具工事'),
+      { ...line('roof-other-section', '2. 屋根工事'), section_code: 'option' as const },
+      line('sash-c', 'サッシ・木製建具工事'),
+      line('other-b', '電気工事'),
+    ];
+    const original = JSON.stringify(rows);
+    const moved = v25MoveManualLineWithinWorkGroup(rows, 'sash-c', -1);
+    expect(moved.map(x => x.key)).toEqual([
+      'roof-a', 'other-a', 'sash-a', 'roof-b', 'sash-c', 'roof-other-section', 'sash-b', 'other-b',
+    ]);
+    expect(moved[0]).toBe(rows[0]);
+    expect(moved[1]).toBe(rows[1]);
+    expect(moved[3]).toBe(rows[3]);
+    expect(moved[5]).toBe(rows[5]);
+    expect(moved[7]).toBe(rows[7]);
+    expect(JSON.stringify(rows)).toBe(original);
+    const reversed = v25MoveManualLineWithinWorkGroup(moved, 'sash-c', 1);
+    expect(reversed.map(x => x.key)).toEqual(rows.map(x => x.key));
+    expect(v25MoveManualLineWithinWorkGroup(rows, 'roof-a', -1)).toBe(rows);
+    expect(v25MoveManualLineWithinWorkGroup(rows, 'sash-c', 1)).toBe(rows);
+    expect(v25MoveManualLineWithinWorkGroup(rows, 'unknown', 1)).toBe(rows);
+    expect(v25MoveManualLineWithinWorkGroup(rows, 'roof-other-section', 1)).toBe(rows);
+  });
+
+  it('行ID・数量・価格・グループ名は変更せず、保存payloadの配列順だけ変える', () => {
+    const rows = [
+      { ...line('one', '1. サッシ木製建具工事'), line_key: 'uuid-one', quantity: '2.5', price_mode: 'manual' as const, unit_price: '5000' },
+      { ...line('other', '2. 屋根工事'), line_key: 'uuid-other', quantity: '1', price_mode: 'manual' as const, unit_price: '1000' },
+      { ...line('two', '１．サッシ・木製建具工事'), line_key: 'uuid-two', quantity: '3', price_mode: 'manual' as const, unit_price: '2300' },
+    ];
+    const state: V25EditorState = {
+      sales_fee_rate: '1.07', expense_rate: '0.15', markup_rate: '1.5',
+      adjustment: '0', adjustment_reason: '', slots: [], lines: rows,
+    };
+    const moved = v25MoveManualLineWithinWorkGroup(state.lines, 'two', -1);
+    const payload = buildV25SavePayload({ ...state, lines: moved });
+    expect(payload.lines.map(x => x.line_key)).toEqual(['uuid-two', 'uuid-other', 'uuid-one']);
+    expect(payload.lines[0].group_label).toBe('１．サッシ・木製建具工事');
+    const originalByKey = new Map(rows.map(row => [row.line_key, row]));
+    for (const row of moved) expect(row).toBe(originalByKey.get(row.line_key));
+    // RPCの既存sort_order=v_indexと同じ順に保存・再読込しても並びは復元する
+    const persisted = payload.lines.map((entry, index) => ({ ...entry, sort_order: index + 1 }));
+    const reloaded = [...persisted].sort((a,b) => a.sort_order - b.sort_order);
+    expect(reloaded.map(x => x.line_key)).toEqual(payload.lines.map(x => x.line_key));
+    expect(payload.lines.map(x => [x.line_key, x.quantity, x.unit_price]))
+      .toEqual([['uuid-two', '3', 2300], ['uuid-other', '1', 1000], ['uuid-one', '2.5', 5000]]);
   });
 
   it('商品行と手入力行が同じ見出しに入り、未分類や既存の自由なグループを保持する', () => {
@@ -181,6 +276,40 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(row).toContain(': null;');
     expect(source).toContain('if (!target) return;');
     expect(source).toContain('if (input && document.activeElement !== input)');
+  });
+
+  it('上下ボタンは自由入力行だけに表示し、端では無効・列数もそのまま', () => {
+    const manual = source.slice(source.indexOf('{workGroup.lines.map('), source.indexOf('</tbody>',source.indexOf('{workGroup.lines.map(')));
+    expect(manual).toContain('data-testid="v25-wb-manual-move-up"');
+    expect(manual).toContain('data-testid="v25-wb-manual-move-down"');
+    expect(manual).toContain('disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === 0}');
+    expect(manual).toContain('disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === workGroup.lines.length - 1}');
+    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1)');
+    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1)');
+    const product = source.slice(source.indexOf('{workGroup.slots.map('), source.indexOf('{workGroup.lines.map('));
+    expect(product).not.toContain('v25-wb-manual-move-up');
+    expect(manual).toContain('data-testid="v25-wb-line-delete"');
+    expect(manual).toContain('data-v25-excel-col="name"');
+    expect(manual).toContain('pendingWorkGroupFocus.current');
+    expect(source).toContain('data-v25-column="actions"');
+    expect(source).toContain('style={{ width: columnPrefs.prefs.widths.actions }}');
+  });
+
+  it('現行RPCと読込・公開後の見積出力は配列順を使用し、DB変更不要', () => {
+    const rpc = readFileSync(resolve(process.cwd(), 'supabase/migrations/20261102100000_v25_position_slots.sql'), 'utf8');
+    const loader = readFileSync(resolve(process.cwd(), 'lib/data/standard-estimate-v25.ts'), 'utf8');
+    const view = readFileSync(resolve(process.cwd(), 'lib/domain/standard-estimate-v25-view.ts'), 'utf8');
+    expect(rpc).toContain("for item in select x.value from pg_catalog.jsonb_array_elements(p_payload -> 'lines') x loop");
+    expect(rpc).toContain('v_index := v_index + 1;');
+    expect(rpc).toContain('coalesce((item ->> \'review_required\')::boolean, false), v_index');
+    expect(loader).toContain(".from('standard_estimate_revision_v25_lines')");
+    expect(loader).toContain(".order('sort_order')");
+    expect(loader).toContain('lines: lines.map((line) => ({');
+    expect(view).toContain('lines: state.lines.map((line) => ({');
+    expect(rpc).toContain("pg_catalog.lpad((100000 + l.sort_order)::text, 6, '0') || '-b'");
+    expect(rpc).toContain("pg_catalog.jsonb_agg(x.line order by x.sort_key)");
+    expect(rpc).toContain("jsonb_array_elements(v_view -> 'lines') with ordinality as l(value, ordinality)");
+    expect(rpc).toContain("v_base_sort + l.ordinality::integer");
   });
 
   it('列の表示/非表示と幅調整、固定見出し、保存のpayloadは既存のまま', () => {

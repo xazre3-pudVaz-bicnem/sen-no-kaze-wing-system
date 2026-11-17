@@ -154,9 +154,11 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
 
   it('Enter・Shift+Enter・Tabで別行へ移った場合は、再分類後に同じ入力先を復元する', () => {
     const row = source.slice(source.indexOf('id={`v25-manual-row-${line.key}`}'), source.indexOf('data-v25-excel-col="group"', source.indexOf('id={`v25-manual-row-${line.key}`}')));
-    expect(row).toContain('const nextRowId = next instanceof HTMLInputElement ? next.closest(\'tr\')?.id : null;');
-    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && next.dataset.v25ExcelCol');
-    expect(row).toContain('{ rowId: nextRowId, column: next.dataset.v25ExcelCol }');
+    expect(row).toContain('const nextInput = event.relatedTarget instanceof HTMLInputElement ? event.relatedTarget : null;');
+    expect(row).toContain("const nextRowId = nextInput?.closest('tr')?.id;");
+    expect(row).toContain('const nextColumn = nextInput?.dataset.v25ExcelCol;');
+    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && nextColumn');
+    expect(row).toContain('{ rowId: nextRowId, column: nextColumn }');
     expect(row).toContain('setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current)');
     expect(source).toContain("event.key === 'Enter'");
     expect(source).toContain('event.shiftKey ? -1 : 1');
@@ -175,7 +177,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
 
   it('グループ以外の操作へ移る場合は入力先復元をしない', () => {
     const row = source.slice(source.indexOf('id={`v25-manual-row-${line.key}`}'), source.indexOf('data-v25-excel-col="group"', source.indexOf('id={`v25-manual-row-${line.key}`}')));
-    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && next.dataset.v25ExcelCol');
+    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && nextColumn');
     expect(row).toContain(': null;');
     expect(source).toContain('if (!target) return;');
     expect(source).toContain('if (input && document.activeElement !== input)');

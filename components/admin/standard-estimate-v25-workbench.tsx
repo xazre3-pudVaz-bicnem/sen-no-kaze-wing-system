@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Package, Trash2 } from 'lucide-react';
@@ -425,6 +425,21 @@ function WorkbenchBody({
   // グループ名の入力中に見出しを移動するとinputが再マウントされるため、フォーカス中だけ旧所属へ表示する。
   // 保存・数量・価格などのstateとは独立した表示専用の固定情報。
   const [editingWorkGroup, setEditingWorkGroup] = useState<{ lineKey: string; originalLabel: string } | null>(null);
+  // グループ変更で行が別の見出しに移動しても、Tab/Enterで移った入力欄へフォーカスを戻す。
+  // 表示だけの管理。保存データ・金額・並び順は変更しない。
+  const pendingWorkGroupFocus = useRef<{ rowId: string; column: string } | null>(null);
+  useLayoutEffect(() => {
+    const target = pendingWorkGroupFocus.current;
+    pendingWorkGroupFocus.current = null;
+    if (!target) return;
+    const row = document.getElementById(target.rowId);
+    const input = Array.from(row?.querySelectorAll<HTMLInputElement>('input[data-v25-excel-col]') ?? [])
+      .find((element) => element.dataset.v25ExcelCol === target.column && !element.disabled);
+    if (input && document.activeElement !== input) {
+      input.focus({ preventScroll: true });
+      input.select();
+    }
+  }, [editingWorkGroup]);
   const [pending, startTransition] = useTransition();
   // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
   const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
@@ -1276,14 +1291,25 @@ function WorkbenchBody({
                       return (
                         <tr key={line.key} id={`v25-manual-row-${line.key}`} tabIndex={-1}
                           className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500"
-                          data-testid="v25-wb-line">
+                          data-testid="v25-wb-line"
+                          onBlur={(event) => {
+                            if (editingWorkGroup?.lineKey !== line.key) return;
+                            // Tabで「グループ→品名→数量…」と同じ行内を進む間は、行の所属を動かさない。
+                            if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;
+                            // 別行へEnter/Tabで移る場合は、再分類で入力欄が再マウントされても復元できるよう保存。
+                            const next = event.relatedTarget;
+                            const nextRowId = next instanceof HTMLInputElement ? next.closest('tr')?.id : null;
+                            pendingWorkGroupFocus.current = nextRowId && next.dataset.v25ExcelCol
+                              ? { rowId: nextRowId, column: next.dataset.v25ExcelCol }
+                              : null;
+                            setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current);
+                          }}>
                           <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
                               <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
                                 aria-label="グループ" placeholder="区分" title={line.group_label || '手入力明細のグループ'}
                                 className="h-6 min-h-6! w-[4.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                                 onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}
-                                onBlur={() => setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current)}
                                 onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"

@@ -145,6 +145,8 @@ export interface StandardEstimateWorkspace {
     initial: V25EditorState;
     preview: V25Preview | null;
     baseLines: V25WorkbenchBaseLine[];
+    /** 既存見積が参照する本体マスターの固定Revision（取得できた場合のみ表示用）。 */
+    baseMasterReference: { masterId: string; revisionVersion: number } | null;
     candidates: V25WorkbenchCandidate[];
     costs: V25WorkbenchCosts;
     rule: PricingCalculationRule;
@@ -202,6 +204,19 @@ export async function loadStandardEstimateWorkspace(
     // 窓タイプの名前（v2.5 PR-S2。候補の表示と、位置の枠の選べる商品の絞り込みだけに使う。読めなければ名前なしで続ける）
     supabase.from('window_types').select('code, label'),
   ]);
+  // 既存の固定参照Revisionからのみ読み取る。現在の公開版を参照先と誤認しない。
+  // 参照情報が取得できなくても編集・保存の可否や計算には影響させない。
+  const baseReferenceResult = revision.base_master_revision_id
+    ? await supabase.from('base_master_revisions')
+      .select('base_master_id, version')
+      .eq('id', revision.base_master_revision_id)
+      .maybeSingle()
+    : null;
+  const baseMasterReference = baseReferenceResult?.data && !baseReferenceResult.error &&
+    typeof baseReferenceResult.data.base_master_id === 'string' &&
+    typeof baseReferenceResult.data.version === 'number'
+    ? { masterId: baseReferenceResult.data.base_master_id, revisionVersion: baseReferenceResult.data.version }
+    : null;
   for (const result of [baseResult, savedResult, ruleResult, taxResult]) {
     if (result.error) throw new Error(`標準見積の編集に必要な内容を取得できませんでした: ${result.error.code ?? 'unknown'}`);
   }
@@ -363,6 +378,7 @@ export async function loadStandardEstimateWorkspace(
     v25: {
       initial: v25.initial,
       preview: v25.preview,
+      baseMasterReference,
       baseLines: ((baseResult.data ?? []) as { id: string; section: string; name: string; quantity: number | string; unit: string | null; unit_price: number }[]).map(
         (line) => ({ id: line.id, section: line.section, name: line.name, quantity: String(Number(line.quantity)), unit: line.unit, standard_cost: Number(line.unit_price) })
       ),

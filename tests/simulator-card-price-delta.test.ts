@@ -265,6 +265,101 @@ describe('商品カード：v2.5売価・数量・位置別の安全性', () => 
     expect(simulatorCardDelta(v25Input(v25Standard), { kind: 'slot', slotCode: 'window-1' })).toEqual({ kind: 'standard' });
   });
 
+  it('公開版にある別の位置の欠落は、対象商品の税込差額にも「標準」の表示にも使わせない', () => {
+    const second = {
+      ...v25View.baseline[1],
+      slot_code: 'window-2',
+      slot_label: '窓②',
+    };
+    const view: StandardEstimateSaleView = { ...v25View, baseline: [...v25View.baseline, second] };
+    const current = plan(['roof2'], [], [], v25Slots);
+    const input = v25Input(current, view);
+    // 価格計算自体は欠落した枠を黙って無視できる。表示層で先に遮断する。
+    expect(computeSaleViewPricing(withoutCatalogCosts(v25Bundle), view,
+      current.optionIds, [], [], undefined, v25Slots).pricing.has_price_on_request).toBe(false);
+    expect(simulatorCardDelta(input, categoryTarget('roof'))).toEqual({
+      kind: 'pending', reason: 'incomplete-selection',
+    });
+    expect(simulatorCardDelta(input, { kind: 'slot', slotCode: 'window-1' })).toEqual({
+      kind: 'pending', reason: 'incomplete-selection',
+    });
+    expect(simulatorCardDelta(v25Input(v25Standard, view), categoryTarget('roof'))).toEqual({
+      kind: 'pending', reason: 'incomplete-selection',
+    });
+    const allSlots = [...v25Slots, { slot_code: 'window-2', option_id: 'sash1', variant_choice_ids: [] }];
+    expect(simulatorCardDelta(v25Input(plan(['roof2'], [], [], allSlots), view), categoryTarget('roof')).kind).toBe('changed');
+    expect(simulatorCardDelta(v25Input(plan(['roof1'], ['white'], [], allSlots), view), categoryTarget('roof'))).toEqual({
+      kind: 'standard',
+    });
+  });
+
+  it('公開版・現在の枠コードの重複、未知の位置、公開版にない位置を遮断する', () => {
+    const duplicatedView: StandardEstimateSaleView = {
+      ...v25View,
+      baseline: [...v25View.baseline, { ...v25View.baseline[1], option_id: 'sash2' }],
+    };
+    expect(simulatorCardDelta(v25Input(plan(['roof2'], [], [], v25Slots), duplicatedView), categoryTarget('roof'))).toEqual({
+      kind: 'pending', reason: 'incomplete-selection',
+    });
+    for (const slots of [
+      [...v25Slots, v25Slots[0]],
+      [{ slot_code: 'unknown-window', option_id: 'sash1', variant_choice_ids: [] }],
+      [...v25Slots, { slot_code: 'unknown-window', option_id: 'sash1', variant_choice_ids: [] }],
+    ]) {
+      expect(simulatorCardDelta(v25Input(plan(['roof2'], [], [], slots)), categoryTarget('roof'))).toEqual({
+        kind: 'pending', reason: 'incomplete-selection',
+      });
+    }
+  });
+
+  it('指定枠で選べない商品・カテゴリー違い・不正な仕様・二重計上の状態を遮断する', () => {
+    const invalidSelections = [
+      { slot_code: 'window-1', option_id: 'roof2', variant_choice_ids: [] }, // カテゴリー違い
+      { slot_code: 'window-1', option_id: 'sash1', variant_choice_ids: ['white'] }, // 別商品の選択肢
+      { slot_code: 'window-1', option_id: 'sash2', variant_choice_ids: ['white', 'white'] }, // 重複・不適切な選択肢
+      { slot_code: 'window-1', option_id: 'unknown', variant_choice_ids: [] }, // 不明な商品
+    ];
+    for (const selection of invalidSelections) {
+      const input = v25Input(plan(['roof2'], [], [], [selection]));
+      expect(simulatorCardDelta(input, categoryTarget('roof'))).toEqual({
+        kind: 'pending', reason: 'incomplete-selection',
+      });
+      expect(simulatorCardDelta(input, { kind: 'slot', slotCode: 'window-1' })).toEqual({
+        kind: 'pending', reason: 'incomplete-selection',
+      });
+    }
+    // 版の対象位置を持つカテゴリーを、カテゴリー単位でも選んではいけない。
+    expect(simulatorCardDelta(v25Input(plan(['roof2', 'sash1'], [], [], v25Slots)), categoryTarget('roof'))).toEqual({
+      kind: 'pending', reason: 'incomplete-selection',
+    });
+    const restrictedView: StandardEstimateSaleView = {
+      ...v25View,
+      baseline: v25View.baseline.map((item) => item.slot_code === 'window-1'
+        ? { ...item, selectable_option_ids: ['sash1'] } : item),
+    };
+    expect(simulatorCardDelta(v25Input(
+      plan(['roof2'], [], [], [{ slot_code: 'window-1', option_id: 'sash2', variant_choice_ids: [] }]), restrictedView
+    ), categoryTarget('roof'))).toEqual({ kind: 'pending', reason: 'incomplete-selection' });
+  });
+
+  it('注文範囲の外の枠は、公開版から作成した activeSlotCodes に限り除外できる', () => {
+    const view: StandardEstimateSaleView = {
+      ...v25View,
+      baseline: [...v25View.baseline, { ...v25View.baseline[1], slot_code: 'window-2' }],
+    };
+    const changed = plan(['roof2'], [], [], v25Slots);
+    const source = { kind: 'sale-view' as const, view, activeSlotCodes: ['window-1'] };
+    expect(simulatorCardDelta({ ...v25Input(changed, view), source }, categoryTarget('roof')).kind).toBe('changed');
+    expect(simulatorCardDelta({
+      ...v25Input(changed, view),
+      source: { ...source, activeSlotCodes: ['window-1', 'unknown'] },
+    }, categoryTarget('roof'))).toEqual({ kind: 'pending', reason: 'incomplete-selection' });
+    expect(simulatorCardDelta({
+      ...v25Input(changed, view),
+      source: { ...source, activeSlotCodes: ['window-1', 'window-1'] },
+    }, categoryTarget('roof'))).toEqual({ kind: 'pending', reason: 'incomplete-selection' });
+  });
+
   it('数量の販売単位相違では価格未確定とし、数値を返さない', () => {
     const changed = plan(['roofBadUnit'], [], [], v25Slots);
     const official = computeSaleViewPricing(withoutCatalogCosts(v25Bundle), v25View, changed.optionIds, [], [], undefined, v25Slots);

@@ -466,6 +466,7 @@ export function SimulatorApp({
   const [restoreNotice, setRestoreNotice] = useState(false);
   const [restoreIssues, setRestoreIssues] = useState<string[]>([]);
   const [draftSaveFailed, setDraftSaveFailed] = useState(false);
+  const [draftRestoreFailed, setDraftRestoreFailed] = useState(false);
   /** Only the active editing session is writable; restored snapshots are read-only until copied. */
   const activeWorkDraftId = useRef<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -588,6 +589,9 @@ export function SimulatorApp({
         (!initial || (initial.status === 'draft' && (initial.id ?? null) === (workDraft.configId ?? null)));
       const legacyAllowed = legacyDraft && !initial && !loadError &&
         canRestoreSimulatorSelection(legacyDraft, user?.id ?? null, true, standardPreview);
+      if ((draftId || resume) && (!draft || !(workAllowed || legacyAllowed))) {
+        setDraftRestoreFailed(true);
+      }
       if (draft && (workAllowed || legacyAllowed)) {
         const hasInvalidSpec =
           Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
@@ -1830,6 +1834,11 @@ export function SimulatorApp({
                 <span className="mt-1 block">内容を確認してください：{restoreIssues.join('。')}</span>
               )}
             </Alert>
+          </div>
+        )}
+        {draftRestoreFailed && (
+          <div className="mt-4" data-testid="draft-restore-error">
+            <Alert tone="warn">指定された下書きを読み込めませんでした。現在の標準構成を表示しています。以前のブラウザ保存情報は変更していません。</Alert>
           </div>
         )}
         {draftSaveFailed && (

@@ -29,7 +29,6 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
       SUPABASE_SERVICE_ROLE_KEY: ''
       NEXT_PUBLIC_SITE_URL: ''
-      BASE_URL: ''
     steps:
       - name: Checkout PR and current main combination
         uses: actions/checkout@v4
@@ -52,7 +51,7 @@ jobs:
           test -z "$NEXT_PUBLIC_SUPABASE_URL"
           test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
           test -z "$SUPABASE_SERVICE_ROLE_KEY"
-          test -z "$BASE_URL"
+          test -z "${BASE_URL:-}"
 
       - name: Create temporary visual fixture route (runner only)
         run: |

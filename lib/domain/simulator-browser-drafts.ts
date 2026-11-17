@@ -36,6 +36,11 @@ export function readBrowserDraft(storage: Pick<DraftStorageReader, 'getItem'>, k
     if (!Array.isArray(record.selected) || !record.selected.every((id) => typeof id === 'string')) return null;
     if (record.ownerId != null && typeof record.ownerId !== 'string') return null;
     if (record.configId != null && typeof record.configId !== 'string') return null;
+    if (record.variantIds != null && (!Array.isArray(record.variantIds) || !record.variantIds.every((id) => typeof id === 'string'))) return null;
+    if (record.exteriorFaces != null && !Array.isArray(record.exteriorFaces)) return null;
+    if (record.slotSelections != null && !Array.isArray(record.slotSelections)) return null;
+    if (record.spec != null && typeof record.spec !== 'string') return null;
+    if (record.name != null && typeof record.name !== 'string') return null;
     return record;
   } catch {
     return null;

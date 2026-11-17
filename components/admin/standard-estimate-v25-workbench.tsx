@@ -54,6 +54,15 @@ import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
 import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
+import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
+import {
+  V25ColumnDisplayMenu,
+  V25WidthHandle,
+  V25_GRID_COLUMNS,
+  v25GridWidth,
+  useV25GridPreferences,
+  type V25GridColumnId,
+} from '@/components/admin/v25-grid-preferences';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -200,7 +209,7 @@ function V25WorkbenchRowMenu({ label, testId, children }: { label: string; testI
  * 幅は元表の各 th から測定し、横スクロールは同じ scrollLeft を使う。
  * 複製は aria-hidden / pointer-events-none とし、編集や保存には一切関与しない。
  */
-function useV25PageFloatingHeader(showCost: boolean) {
+function useV25PageFloatingHeader(headerLayoutKey: string) {
   const gridRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const saveAreaRef = useRef<HTMLDivElement>(null);
@@ -269,7 +278,7 @@ function useV25PageFloatingHeader(showCost: boolean) {
       resizeObserver?.disconnect();
       overlay.remove();
     };
-  }, [showCost]);
+  }, [headerLayoutKey]);
 
   return { gridRef, tableRef, saveAreaRef };
 }
@@ -375,8 +384,14 @@ function WorkbenchBody({
     expense_rate: rateToPercent(initial.expense_rate),
     markup_rate: rateToPercent(initial.markup_rate),
   }));
-  const [showCost, setShowCost] = useState(true);
-  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(showCost);
+  const columnPrefs = useV25GridPreferences();
+  const visible = columnPrefs.prefs.visible;
+  const displayedColumns = V25_GRID_COLUMNS.filter((col) => visible[col.id]);
+  const columnCount = displayedColumns.length;
+  const beforeSaleAmount = 3 + Number(visible.cost_unit) + Number(visible.cost_amount) + Number(visible.sale_unit);
+  const afterSaleAmount = Number(visible.gross) + Number(visible.note) + 1;
+  const headerLayoutKey = displayedColumns.map((col) => `${col.id}:${columnPrefs.prefs.widths[col.id]}`).join('|');
+  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(headerLayoutKey);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
@@ -477,6 +492,29 @@ function WorkbenchBody({
   const setRate = (key: keyof typeof RATE_LABEL, value: string) => {
     setPercents((current) => ({ ...current, [key]: value }));
     setState((current) => ({ ...current, [key]: percentToRate(value) }));
+  };
+  const stepRate = (key: keyof typeof RATE_LABEL, direction: -1 | 1) => {
+    const next = v25StepPercent(percents[key], direction, key);
+    if (next !== percents[key]) setRate(key, next);
+  };
+  const autoWidth = (id: V25GridColumnId) => {
+    const table = tableRef.current;
+    const header = Array.from(table?.tHead?.rows[0]?.cells ?? []);
+    const index = header.findIndex((cell) => cell.getAttribute('data-v25-column') === id);
+    if (!table || index < 0) return;
+    let desired = header[index].scrollWidth + 10;
+    for (const tbody of Array.from(table.tBodies)) {
+      for (const row of Array.from(tbody.rows)) {
+        if (row.cells.length !== header.length) continue;
+        const cell = row.cells[index];
+        if (!cell || cell.colSpan !== 1) continue;
+        desired = Math.max(desired, cell.scrollWidth + 10);
+        for (const child of Array.from(cell.querySelectorAll<HTMLElement>('[title], input, button'))) {
+          desired = Math.max(desired, child.scrollWidth + 14);
+        }
+      }
+    }
+    columnPrefs.setWidth(id, desired);
   };
 
   const choose = (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => {
@@ -781,8 +819,6 @@ function WorkbenchBody({
     if (next) { event.preventDefault(); next.focus(); next.select(); }
   };
 
-  const columnCount = showCost ? 10 : 7;
-
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
     return (
@@ -810,14 +846,14 @@ function WorkbenchBody({
     const result = sectionResult(code);
     return (
       <tr className="border-y-2 border-emerald-800 bg-emerald-50 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
-        <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">
+        <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right font-semibold">
           {label} 小計（税別）
           {result?.has_por && <span className="ml-2 text-amber-800">別途見積を含む</span>}
         </td>
         <td className="border-l border-emerald-200 px-2 py-1 text-right font-semibold tabular-nums" data-testid={`v25-section-subtotal-value-${code}`}>
           {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
         </td>
-        <td colSpan={showCost ? 3 : 2} />
+        <td colSpan={afterSaleAmount} />
       </tr>
     );
   };
@@ -841,48 +877,98 @@ function WorkbenchBody({
         </div>
       )}
 
-      <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-t-md border border-slate-300 bg-white px-2 py-1.5 text-[11px]" data-testid="v25-wb-compact-settings">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
-          <label key={key} className="space-y-1">
-            <span className="text-muted">{RATE_LABEL[key]}（%）</span>
-            <Input value={percents[key]} disabled={readOnly} inputMode="decimal" className="h-8 text-right" data-testid={`v25-wb-${key}`}
-              onChange={(event) => setRate(key, event.target.value)} />
-          </label>
+          <div key={key} className="flex items-center gap-1.5">
+            <label htmlFor={`v25-wb-rate-${key}`} className="whitespace-nowrap text-slate-600">{RATE_LABEL[key]}（%）</label>
+            <div className="relative">
+              <Input id={`v25-wb-rate-${key}`} value={percents[key]} disabled={readOnly} inputMode="decimal"
+                className="h-7 min-h-7! w-[5rem] rounded-sm pr-5 text-right text-[11px]" data-testid={`v25-wb-${key}`}
+                onChange={(event) => setRate(key, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    stepRate(key, event.key === 'ArrowUp' ? 1 : -1);
+                  }
+                }} />
+              <span className="absolute inset-y-0 right-0 flex w-[18px] flex-col border-l border-slate-300" aria-label={`${RATE_LABEL[key]}の増減`}>
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%増やす`} title="1%増やす" disabled={readOnly || v25StepPercent(percents[key], 1, key) === percents[key]}
+                  className="flex h-1/2 items-center justify-center rounded-tr-sm text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => stepRate(key, 1)}>▲</button>
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%減らす`} title="1%減らす" disabled={readOnly || v25StepPercent(percents[key], -1, key) === percents[key]}
+                  className="flex h-1/2 items-center justify-center rounded-br-sm border-t border-slate-200 text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => stepRate(key, -1)}>▼</button>
+              </span>
+            </div>
+          </div>
         ))}
-        <label className="space-y-1">
-          <span className="text-muted">調整額（税別・円）</span>
-          <Input value={state.adjustment} disabled={readOnly} inputMode="numeric" className="h-8 text-right" data-testid="v25-wb-adjustment"
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="v25-wb-adjustment" className="whitespace-nowrap text-slate-600">調整額（税別・円）</label>
+          <Input id="v25-wb-adjustment" value={state.adjustment} disabled={readOnly} inputMode="numeric"
+            className="h-7 min-h-7! w-[7rem] rounded-sm text-right text-[11px]" data-testid="v25-wb-adjustment"
             onChange={(event) => setState((current) => ({ ...current, adjustment: event.target.value }))} />
-        </label>
-        <label className="space-y-1">
-          <span className="text-muted">調整額の理由</span>
-          <Input value={state.adjustment_reason} disabled={readOnly} className="h-8"
+        </div>
+        <div className="flex min-w-[11rem] flex-1 items-center gap-1.5">
+          <label htmlFor="v25-wb-adjustment-reason" className="shrink-0 whitespace-nowrap text-slate-600">調整理由</label>
+          <Input id="v25-wb-adjustment-reason" value={state.adjustment_reason} disabled={readOnly}
+            className="h-7 min-h-7! min-w-0 flex-1 rounded-sm text-[11px]"
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
-        </label>
-        <label className="flex items-center gap-2 pb-1.5 text-ink-soft">
-          <input type="checkbox" checked={showCost} onChange={(event) => setShowCost(event.target.checked)} data-testid="v25-wb-show-cost" />
-          原価を表示
-        </label>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-x border-slate-300 bg-slate-100 px-2 py-1 text-[10px] text-slate-600" data-testid="v25-excel-toolbar">
         <strong>標準見積明細（Excel風）</strong>
         <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
+        <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
+          setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
       </div>
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
+          style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}
+          data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
-              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量</th>
-              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位</th>
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価</th>}
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額</th>}
-              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価</th>
-              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額</th>
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利</th>}
-              <th className="sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考</th>
-              <th className="sticky top-0 z-30 w-[4.5rem] border-b border-slate-300 bg-slate-200 px-1 py-1 text-center font-medium">操作</th>
+              <th data-v25-column="name" style={{ width: columnPrefs.prefs.widths.name }} className="sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名
+                <V25WidthHandle id="name" width={columnPrefs.prefs.widths.name}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              <th data-v25-column="quantity" style={{ width: columnPrefs.prefs.widths.quantity }} className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量
+                <V25WidthHandle id="quantity" width={columnPrefs.prefs.widths.quantity}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              <th data-v25-column="unit" style={{ width: columnPrefs.prefs.widths.unit }} className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位
+                <V25WidthHandle id="unit" width={columnPrefs.prefs.widths.unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              {visible.cost_unit && <th data-v25-column="cost_unit" style={{ width: columnPrefs.prefs.widths.cost_unit }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価
+                <V25WidthHandle id="cost_unit" width={columnPrefs.prefs.widths.cost_unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.cost_amount && <th data-v25-column="cost_amount" style={{ width: columnPrefs.prefs.widths.cost_amount }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額
+                <V25WidthHandle id="cost_amount" width={columnPrefs.prefs.widths.cost_amount}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.sale_unit && <th data-v25-column="sale_unit" style={{ width: columnPrefs.prefs.widths.sale_unit }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価
+                <V25WidthHandle id="sale_unit" width={columnPrefs.prefs.widths.sale_unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              <th data-v25-column="sale_amount" style={{ width: columnPrefs.prefs.widths.sale_amount }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額
+                <V25WidthHandle id="sale_amount" width={columnPrefs.prefs.widths.sale_amount}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              {visible.gross && <th data-v25-column="gross" style={{ width: columnPrefs.prefs.widths.gross }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利
+                <V25WidthHandle id="gross" width={columnPrefs.prefs.widths.gross}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.note && <th data-v25-column="note" style={{ width: columnPrefs.prefs.widths.note }} className="sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考
+                <V25WidthHandle id="note" width={columnPrefs.prefs.widths.note}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              <th data-v25-column="actions" style={{ width: columnPrefs.prefs.widths.actions }} className="sticky right-0 top-0 z-40 w-[4.5rem] border-b border-l border-slate-300 bg-slate-100 px-1 py-1 text-center font-medium">操作
+                <V25WidthHandle id="actions" width={columnPrefs.prefs.widths.actions}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -901,13 +987,13 @@ function WorkbenchBody({
                     </td>
                     <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">{line.unit ?? ''}</td>
-                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
-                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.costAmount)}</td>}
-                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.sale_unit_price)}</td>
+                    {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
+                    {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.costAmount)}</td>}
+                    {visible.sale_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.sale_unit_price)}</td>}
                     <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-base-sale-amount">{yen(result?.amount)}</td>
-                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.gross)}</td>}
-                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
-                    <td className="bg-slate-100 px-1 py-px text-center text-slate-500">参照</td>
+                    {visible.gross && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.gross)}</td>}
+                    {visible.note && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>}
+                    <td className="sticky right-0 z-10 bg-slate-100 px-1 py-px text-center text-slate-500">参照</td>
                   </tr>
                 );
               })}
@@ -1024,9 +1110,9 @@ function WorkbenchBody({
                             title="商品台帳の販売単位です。単位を変更する場合は台帳の価格・換算条件も確認してください。">
                             {candidate?.priceUnit?.trim() || '—'}
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-cost-amount">{yen(display.costAmount)}</td>}
-                          <td className={`border-r border-slate-200 px-0.5 py-px text-right ${slot.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-slot-price-cell">
+                          {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
+                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-cost-amount">{yen(display.costAmount)}</td>}
+                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right ${slot.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-slot-price-cell">
                             {slot.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
                                 className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
@@ -1036,7 +1122,7 @@ function WorkbenchBody({
                             ) : (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
-                          </td>
+                          </td>}
                           <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-sale-amount">
                             {slot.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
@@ -1048,8 +1134,8 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-gross">{yen(display.gross)}</td>}
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">
+                          {visible.gross && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-gross">{yen(display.gross)}</td>}
+                          {visible.note && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="min-w-0 flex-1 truncate text-muted" title={v25VariantSummary(candidate, slot.variant_choices)} data-testid="v25-wb-variant-summary">
                                 {v25VariantSummary(candidate, slot.variant_choices)}
@@ -1059,9 +1145,9 @@ function WorkbenchBody({
                                   onClick={(event) => { rememberDialogOpener(event.currentTarget); openVariant(slot); }}>{readOnly ? '仕様を確認' : '仕様を変更'}</button>
                               )}
                             </div>
-                          </td>
+                          </td>}
 
-                          <td className="relative bg-slate-100 px-0.5 py-px text-center">
+                          <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-2">
                                 <V25WorkbenchRowMenu testId="v25-wb-slot-menu" label={(candidate?.name ?? '商品') + 'の操作'}>
@@ -1152,9 +1238,9 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          <td className={`border-r border-slate-200 px-0.5 py-px text-right ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
+                          {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
                             {line.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
                                 className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
@@ -1162,7 +1248,7 @@ function WorkbenchBody({
                             ) : (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
-                          </td>
+                          </td>}
                           <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-line-sale-amount">
                             {line.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
@@ -1172,13 +1258,13 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                          {visible.gross && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {visible.note && <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
-                          </td>
+                          </td>}
 
-                          <td className="relative bg-slate-100 px-0.5 py-px text-center">
+                          <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-2">
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
@@ -1217,28 +1303,28 @@ function WorkbenchBody({
           </tbody>
           <tfoot className="bg-slate-100 text-[11px]">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">調整額</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">調整額</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right text-slate-600">消費税</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">消費税</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={showCost ? 6 : 4} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
-              <td colSpan={showCost ? 3 : 2} className="px-2 py-1 text-right text-[0.68rem] text-slate-500">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
+              <td colSpan={afterSaleAmount} className="px-2 py-1 text-right text-[0.68rem] text-slate-500">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
             </tr>
           </tfoot>
         </table>

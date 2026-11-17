@@ -62,7 +62,8 @@ test('スマホ：隔離位置枠の基本プランと選択中を実表示し�
   test.setTimeout(150_000);
   await page.goto('/pr681-e2e-picker');
   await expect(page.getByTestId('pr681-local-fixture')).toBeVisible();
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  // Next dev が画面外に出す警告ではなく、テスト専用の不足警告のみを判定する。
+  await expect(page.getByTestId('pr681-local-fixture').getByRole('alert')).toHaveCount(0);
   await page.getByTestId('fixture-open-bedroom-fix').click();
   const dialog = page.getByTestId('option-picker');
   const baselineCard = dialog.getByTestId('product-card-sash-standard');

@@ -78,7 +78,8 @@ import {
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
-import { createSimulatorCardDeltaEvaluator, type SimulatorCardDelta, type SimulatorCardPriceSource, type SimulatorCardTarget } from '@/lib/domain/simulator-card-price-delta';
+import { createSimulatorCardDeltaEvaluator, type SimulatorCardDelta, type SimulatorCardPriceInput, type SimulatorCardPriceSource, type SimulatorCardTarget } from '@/lib/domain/simulator-card-price-delta';
+import { simulatePickerCategoryCandidate, simulatorCandidatePriceDelta } from '@/lib/domain/simulator-candidate-price-delta';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
 import { latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, restoredDraftFinishLevel, validSimulatorDraftId, workSimulatorDraftKey, writeBrowserWorkDraft, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
@@ -1059,7 +1060,7 @@ export function SimulatorApp({
    * 同じ価格計算経路で「対象だけを標準に戻した税込総額」と比較する（PR #680）。
    * 注文範囲内の位置コードは現在の選択からではなく、公開版の枠から求める。
    */
-  const cardDeltaEvaluator = useMemo(() => {
+  const cardDeltaContext = useMemo(() => {
     const source: SimulatorCardPriceSource = v25PricePending
       ? { kind: 'v25-pending' }
       : activeSaleView
@@ -1080,7 +1081,7 @@ export function SimulatorApp({
       activeSpecSelection,
       baselineVariantIds
     );
-    return createSimulatorCardDeltaEvaluator({
+    const priceInput: SimulatorCardPriceInput = {
       bundle,
       source,
       current: {
@@ -1095,7 +1096,8 @@ export function SimulatorApp({
         exteriorFaces: baselineFaces,
         slotSelections: standardSlotSelectionsFor(finishLevel),
       },
-    });
+    };
+    return { priceInput, evaluator: createSimulatorCardDeltaEvaluator(priceInput) };
   }, [
     activeEstimateTemplate, activeSaleView, activeSlotSelections, activeSpecCtx.options,
     activeSpecSelection, baseOverride, baselineVariantIds, bundle, exteriorFaces,
@@ -1104,8 +1106,69 @@ export function SimulatorApp({
   ]);
   const getCardDelta = useCallback((target: SimulatorCardTarget): SimulatorCardDelta =>
     // 公開済み価格がない場合は、たとえ商品の選択が標準と同じでも価格未確定とする。
-    v25PricePending ? { kind: 'pending', reason: 'no-published-price' } : cardDeltaEvaluator.evaluate(target),
-  [cardDeltaEvaluator, v25PricePending]);
+    v25PricePending ? { kind: 'pending', reason: 'no-published-price' } : cardDeltaContext.evaluator.evaluate(target),
+  [cardDeltaContext, v25PricePending]);
+
+
+  /** 商品候補をクリックした場合の正式な税込総額。現在カードの差額は使い回さない。 */
+  const getPickerCandidateDelta = useCallback((
+    categoryId: string, nextInCategory: string[], nextVariants: string[]
+  ): SimulatorCardDelta => {
+    if (v25PricePending) return { kind: 'pending', reason: 'no-published-price' };
+    const candidate = simulatePickerCategoryCandidate({
+      bundle, ruleContext: activeSpecCtx, current: cardDeltaContext.priceInput.current,
+      categoryId, nextInCategory, nextVariants, positionCategoryIds,
+    });
+    if (!candidate) return { kind: 'pending', reason: 'incomplete-selection' };
+    return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
+      { kind: 'category', categoryId }, candidate);
+  }, [activeSpecCtx, bundle, cardDeltaContext, positionCategoryIds, v25PricePending]);
+
+  const getSlotCandidateDelta = useCallback((
+    slotCode: string, nextIds: string[], nextVariants: string[]
+  ): SimulatorCardDelta => {
+    if (v25PricePending) return { kind: 'pending', reason: 'no-published-price' };
+    const optionId = nextIds.length === 1 ? nextIds[0] : null;
+    const slot = positionSlots.find((row) => row.slot_code === slotCode);
+    if (!optionId || !slot?.selectable_option_ids.includes(optionId)) {
+      return { kind: 'pending', reason: 'incomplete-selection' };
+    }
+    const groupIds = new Set(bundle.variantGroups.filter((group) => group.option_id === optionId).map((group) => group.id));
+    const choices = nextVariants.filter((id) => groupIds.has(bundle.variantChoices.find((choice) => choice.id === id)?.group_id ?? ''));
+    const current = cardDeltaContext.priceInput.current;
+    const candidate = {
+      ...current,
+      slotSelections: [
+        ...(current.slotSelections ?? []).filter((row) => row.slot_code !== slotCode),
+        { slot_code: slotCode, option_id: optionId, variant_choice_ids: choices },
+      ],
+    };
+    return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
+      { kind: 'slot', slotCode }, candidate);
+  }, [bundle.variantChoices, bundle.variantGroups, cardDeltaContext, positionSlots, v25PricePending]);
+
+  const getExteriorFaceCandidateDelta = useCallback((
+    faceCode: ExteriorFaceCode, nextFaces: ExteriorFaceSelection[]
+  ): SimulatorCardDelta => {
+    if (v25PricePending) return { kind: 'pending', reason: 'no-published-price' };
+    // Legacy one-item exterior-wall plans cannot be converted to four priced faces for a preview.
+    if (exteriorFaces.length !== 4 || nextFaces.length !== 4 || !exteriorWallCat) {
+      return { kind: 'pending', reason: 'incomplete-selection' };
+    }
+    const front = nextFaces.find((row) => row.face_code === 'front');
+    if (!front) return { kind: 'pending', reason: 'incomplete-selection' };
+    const wallIds = new Set(bundle.options.filter((row) => row.category_id === exteriorWallCat.id).map((row) => row.id));
+    const groupIds = new Set(bundle.variantGroups.filter((row) => wallIds.has(row.option_id)).map((row) => row.id));
+    const current = cardDeltaContext.priceInput.current;
+    const candidate = {
+      ...current,
+      exteriorFaces: nextFaces,
+      optionIds: [...current.optionIds.filter((id) => !wallIds.has(id)), front.option_id],
+      variantChoiceIds: [...current.variantChoiceIds.filter((id) => !groupIds.has(bundle.variantChoices.find((choice) => choice.id === id)?.group_id ?? '')), ...front.variant_choice_ids],
+    };
+    return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
+      { kind: 'exterior-face', faceCode }, candidate);
+  }, [bundle.options, bundle.variantGroups, bundle.variantChoices, cardDeltaContext, exteriorFaces.length, exteriorWallCat, v25PricePending]);
 
   /** 位置ごとの商品画像・商品名。金額判定は EquipmentBoard が共通評価器で行う。 */
   const slotTiles = useMemo<EquipmentSlotTile[]>(
@@ -2061,6 +2124,7 @@ export function SimulatorApp({
           selectedVariantIds={variantIds}
           baselineVariantIds={baselineVariantIds}
           onClose={() => setPicker(null)}
+          getCandidateDelta={(next, nextVariants) => getPickerCandidateDelta(picker, next, nextVariants)}
           onApply={(next, nextVariants) => applyPicker(picker, next, nextVariants)}
         />
       )}
@@ -2077,6 +2141,7 @@ export function SimulatorApp({
           selectedVariantIds={slotPickerRow.selection.variant_choice_ids}
           baselineVariantIds={slotPickerRow.standard.variant_choice_ids}
           onClose={() => setSlotPicker(null)}
+          getCandidateDelta={(next, nextVariants) => getSlotCandidateDelta(slotPickerRow.slot.slot_code, next, nextVariants)}
           onApply={(next, nextVariants) => applySlotPicker(slotPickerRow.slot.slot_code, next, nextVariants)}
         />
       )}
@@ -2093,6 +2158,7 @@ export function SimulatorApp({
           current={exteriorFaces}
           initialFace={exteriorFacePicker}
           onClose={() => setExteriorFacePicker(null)}
+          getCandidateFaceDelta={getExteriorFaceCandidateDelta}
           onApply={applyExteriorFaces}
         />
       )}

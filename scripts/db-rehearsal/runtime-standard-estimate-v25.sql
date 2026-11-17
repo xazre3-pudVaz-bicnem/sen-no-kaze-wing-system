@@ -549,7 +549,7 @@ begin
   perform pg_temp.sev_expect_eq('再保存後も行IDは保持される', 'true/true/true',
     (select string_agg((l.line_key::text = (v_lines -> (l.sort_order - 1) ->> 'line_key'))::text, '/' order by l.sort_order)
        from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2));
-  perform pg_temp.sev_expect_eq('再保存後も数量・単価・名称の対応は変わらない', '順序試験C:1:3000/順序試験B:1:2000/順序試験A:1:1000',
+  perform pg_temp.sev_expect_eq('再保存後も数量・単価・名称の対応は変わらない', '順序試験C:1.0000:3000/順序試験B:1.0000:2000/順序試験A:1.0000:1000',
     (select string_agg(l.name || ':' || l.quantity::text || ':' || l.unit_price::text, '/' order by l.sort_order)
        from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2));
   perform pg_temp.sev_expect_eq('自由入力行の並べ替えでは税込合計は変わらない', v_order_total::text,

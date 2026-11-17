@@ -1034,7 +1034,10 @@ export function SimulatorApp({
     () => explainBlocked(activeSpecCtx, [...selected, ...slotOptionIdsInUse]),
     [activeSpecCtx, selected, slotOptionIdsInUse]
   );
-  const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
+  const activeSpecSelection = useMemo(
+    () => specSelections.find((row) => row.code === specCode)?.ids ?? [],
+    [specSelections, specCode]
+  );
   const baselineVariantIds = useMemo(
     () => standardVariantIdsFor(specCode, activeSpecSelection),
     [activeSpecSelection, specCode, standardVariantIdsFor]

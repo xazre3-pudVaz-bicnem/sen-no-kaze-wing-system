@@ -347,6 +347,9 @@ export function v25VariantSummary(candidate: Pick<V25WorkbenchCandidate, 'varian
 }
 
 type WorkbenchProps = {
+  /** 見積の選択モデルと仕様。工事項目見出しの表示だけに使う。 */
+  modelSlug?: string | null;
+  specCode?: string | null;
   revisionId: string;
   lockVersion: number;
   readOnly: boolean;
@@ -375,6 +378,8 @@ export function StandardEstimateV25Workbench({ resetKey, ...props }: WorkbenchPr
 }
 
 function WorkbenchBody({
+  modelSlug,
+  specCode,
   revisionId,
   lockVersion,
   readOnly,
@@ -1093,6 +1098,7 @@ function WorkbenchBody({
               // 保存済みのsection_code・行順序・group_labelは書き換えない。
               const workGroups = v25WorkGroupsForDisplay(
                 slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode,
+                (line) => line.group_label, { modelSlug, specCode, sectionCode: code },
               );
               return (
                 <Fragment key={code}>
@@ -1388,14 +1394,14 @@ function WorkbenchBody({
                                     className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
                                     disabled={positionActionsLocked || groupEditor !== null || lineIndex === 0}
                                     onClick={() => setState((current) => ({
-                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1),
+                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1, { modelSlug, specCode }),
                                     }))}>▲</button>
                                   <button type="button" aria-label={`${line.name || '明細'}を下へ移動`} title="同じ工事項目内で下へ"
                                     data-testid="v25-wb-manual-move-down"
                                     className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
                                     disabled={positionActionsLocked || groupEditor !== null || lineIndex === workGroup.lines.length - 1}
                                     onClick={() => setState((current) => ({
-                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1),
+                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1, { modelSlug, specCode }),
                                     }))}>▼</button>
                                 </span>
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>

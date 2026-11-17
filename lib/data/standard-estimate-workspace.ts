@@ -142,6 +142,8 @@ export interface StandardEstimateWorkspace {
   };
   /** v2.5 の Revision のときだけ（v2.5 以前・未適用の DB では null） */
   v25: {
+    /** 表示用分類に必要な商品モデル。価格・保存の判定には使用しない。 */
+    modelSlug: string | null;
     initial: V25EditorState;
     preview: V25Preview | null;
     baseLines: V25WorkbenchBaseLine[];
@@ -376,6 +378,7 @@ export async function loadStandardEstimateWorkspace(
   return {
     revision: summary,
     v25: {
+      modelSlug: model?.slug ?? null,
       initial: v25.initial,
       preview: v25.preview,
       baseMasterReference,

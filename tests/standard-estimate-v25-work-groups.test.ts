@@ -8,6 +8,7 @@ import {
   v25WorkGroupsForDisplay,
   v25WorkItemForCategory,
   v25WorkItemForManual,
+  v25OptionWorkItems,
 } from '@/components/admin/standard-estimate-v25-work-groups';
 
 const slot = (key: string, option_id: string): V25SlotRow => ({
@@ -25,7 +26,7 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
     expect(V25_DISPLAY_WORK_ITEMS.map(x => x.label)).toEqual([
       '1. サッシ・木製建具工事', '2. 屋根工事', '3. 外壁工事', '4. 内装仕上げ',
     ]);
-    for (const code of ['sash', 'interior-door']) {
+    for (const code of ['sash', 'interior-door', 'entrance-door', 'service-door']) {
       expect(v25WorkItemForCategory(code)?.key).toBe('work:sash_wood');
     }
     expect(v25WorkItemForCategory('roof')?.label).toBe('2. 屋根工事');
@@ -36,7 +37,7 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
   });
 
   it('根拠のない商品カテゴリーを工事項目へ推測で振り分けない', () => {
-    for (const code of ['entrance-door', 'carpentry', 'insulation', 'ub', 'lighting', 'furniture', 'sitework', 'sash-frame', '', null, undefined]) {
+    for (const code of ['carpentry', 'insulation', 'insulation-floor', 'insulation-wall', 'insulation-ceiling', 'ub', 'lighting', 'furniture', 'sitework', 'sash-frame', '', null, undefined]) {
       expect(v25WorkItemForCategory(code)).toBeNull();
     }
   });
@@ -158,7 +159,7 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
       line('l4', '2. 屋根工事'), line('l5', 'サッシ・木製建具工事'),
     ];
     const codes: Record<string,string> = {
-      'roof-product': 'roof', 'sash-product': 'sash', 'unknown-product': 'entrance-door',
+      'roof-product': 'roof', 'sash-product': 'sash', 'unknown-product': 'lighting',
       'floor-product': 'floor', 'wall-product': 'wall-ceiling', 'exterior-product': 'exterior-wall',
     };
     const before = JSON.stringify({ slots, lines });
@@ -197,6 +198,114 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
 
   it('区分内が空なら空の見出し行を表示しない', () => {
     expect(v25WorkGroupsForDisplay([], [], () => null)).toEqual([]);
+  });
+});
+
+describe('標準見積v2.5：モデル仕様ごとのExcel分類（表示のみ）', () => {
+  const inExterior = (modelSlug: string, specCode: string) =>
+    ({ sectionCode: 'interior_exterior' as const, modelSlug, specCode });
+  const inOption = (modelSlug: string, specCode: string) =>
+    ({ sectionCode: 'option' as const, modelSlug, specCode });
+
+  it('Wing・BOX・Flatは内外装の4項目を同一の番号・名称で使用', () => {
+    for (const [modelSlug, specCode] of [
+      ['wing-01', 'hotel'], ['wing-01', 'residence'], ['wing-01', 'office'],
+      ['box', 'hotel'], ['box', 'water-kit'], ['flat', 'office'],
+    ]) {
+      const context = inExterior(modelSlug, specCode);
+      const groups = v25WorkGroupsForDisplay(
+        [slot('door','door'), slot('service','service'), slot('sash','sash'),
+         slot('roof','roof'), slot('exterior','exterior'), slot('floor','floor'), slot('wall','wall')],
+        [line('oldRoof','2. 屋根工事'), line('oldExterior','２．外壁工事'), line('oldInterior','３．内装仕上げ')],
+        (id) => ({
+          door:'entrance-door', service:'service-door', sash:'sash',
+          roof:'roof', exterior:'exterior-wall', floor:'floor', wall:'wall-ceiling',
+        } as Record<string,string>)[id],
+        (row) => row.group_label, context,
+      );
+      expect(groups.map(group=>group.label)).toEqual(V25_DISPLAY_WORK_ITEMS.map(item=>item.label));
+      expect(groups.map(group=>group.slots.length)).toEqual([3,1,1,2]);
+      expect(groups[2].lines[0].group_label).toBe('２．外壁工事');
+      expect(groups[3].lines[0].group_label).toBe('３．内装仕上げ');
+    }
+  });
+
+  it('WingホテルUBで既存の未分類9商品を原本の1.設備機器と内外装に振り分ける', () => {
+    const categories: Record<string,string> = {
+      entrance:'entrance-door', service:'service-door',
+      bath:'ub', toilet:'toilet', wash:'washbasin', boiler:'boiler',
+      aircon:'aircon', shoe:'entrance-storage', bed:'bed',
+    };
+    const slots = Object.keys(categories).map(id=>slot(id,id));
+    const old = JSON.stringify(slots);
+    const outer = v25WorkGroupsForDisplay(
+      slots.filter(s=>['entrance','service'].includes(s.option_id)), [line('wood','1. サッシ木製建具工事')],
+      id=>categories[id], row=>row.group_label, inExterior('wing-01','hotel'),
+    );
+    expect(outer.map(g=>g.label)).toEqual(['1. サッシ・木製建具工事']);
+    expect(outer[0].slots.map(s=>s.option_id)).toEqual(['entrance','service']);
+    expect(outer[0].lines.map(l=>l.key)).toEqual(['wood']);
+    const equipment = v25WorkGroupsForDisplay(
+      slots.filter(s=>!['entrance','service'].includes(s.option_id)), [ {...line('fixture','１．設備機器'),section_code:'option' as const} ],
+      id=>categories[id], row=>row.group_label, inOption('wing-01','hotel'),
+    );
+    expect(equipment).toHaveLength(1);
+    expect(equipment[0].label).toBe('1. 設備機器');
+    expect(equipment[0].slots).toHaveLength(7);
+    expect(equipment[0].lines[0].group_label).toBe('１．設備機器');
+    expect(JSON.stringify(slots)).toBe(old);
+  });
+
+  it('Wing/BOX/Flatのオプション見出し番号はExcel仕様ごとで変わる', () => {
+    for (const [modelSlug,specCode,expected] of [
+      ['wing-01','hotel','1. 設備機器'], ['wing-01','residence','1. 設備機器'],
+      ['box','hotel','1. 設備機器'], ['box','water-kit','2. 設備機器'],
+      ['flat','office','2. 設備機器'],
+    ]) {
+      const context = inOption(modelSlug,specCode);
+      const mapped = v25WorkItemForCategory('ub',context);
+      expect(mapped?.label).toBe(expected);
+      expect(v25WorkItemForManual(expected,context).key).toBe(mapped?.key);
+    }
+    expect(v25OptionWorkItems(inOption('flat','office')).map(item=>item.label)).toEqual([
+      '2. 設備機器','3. 造作工事','4. 各種養生（床養生マット、壁ビニールシート等）',
+    ]);
+    expect(v25WorkItemForCategory('carpentry',inOption('flat','office'))?.label).toBe('3. 造作工事');
+    // 実際にはcarpentryは内外装に属するため、表示だけでオプションへ移動させない。
+    expect(v25WorkItemForCategory('carpentry',inExterior('flat','office'))).toBeNull();
+    expect(v25WorkItemForCategory('ub',inOption('flat','unknown'))).toBeNull();
+  });
+
+  it('断熱4種・施工費と不明商品は移動せず未分類。モデル不明のオプションは推測しない', () => {
+    const categories = ['insulation','insulation-floor','insulation-wall','insulation-ceiling'];
+    for(const [modelSlug,specCode] of [['wing-01','hotel'],['box','hotel'],['flat','office']]){
+      for(const sectionCode of ['interior_exterior','option','sitework'] as const){
+        const context = {modelSlug,specCode,sectionCode};
+        for(const category of categories)expect(v25WorkItemForCategory(category,context)).toBeNull();
+      }
+    }
+    for(const category of ['lighting','exterior-parts','carpentry','sitework','free-product','fireproof','closet','furniture']) {
+      expect(v25WorkItemForCategory(category,inOption('wing-01','hotel'))).toBeNull();
+    }
+    expect(v25WorkItemForCategory('ub',{sectionCode:'option'})).toBeNull();
+    expect(v25WorkItemForCategory('roof',{sectionCode:'sitework',modelSlug:'flat',specCode:'office'})).toBeNull();
+    expect(v25WorkItemForManual('2. 屋根外壁工事',inExterior('box','hotel')).key).toBe('manual:2. 屋根外壁工事');
+  });
+
+  it('分類のみでは既存商品・手入力・保存payloadの数量・行順・金額を変えない', () => {
+    const context = inOption('wing-01','hotel');
+    const slots = [slot('ub','u'),slot('boiler','b'),slot('unknown','x')];
+    const lines = [{...line('equipment','1. 設備機器'),section_code:'option' as const,unit_price:'6000',price_mode:'manual' as const}];
+    const original = JSON.stringify({slots,lines});
+    const display = v25WorkGroupsForDisplay(slots,lines,id=>({u:'ub',b:'boiler',x:'lighting'} as Record<string,string>)[id], l=>l.group_label,context);
+    expect(display.map(g=>g.label)).toEqual(['1. 設備機器','工事項目未分類の商品']);
+    expect(display[0].slots.map(s=>s.key)).toEqual(['ub','boiler']);
+    const state: V25EditorState = {sales_fee_rate:'1',expense_rate:'0.15',markup_rate:'1.5',adjustment:'0',adjustment_reason:'',slots,lines};
+    const payloadBefore = buildV25SavePayload(state);
+    void v25WorkGroupsForDisplay(slots,lines,id=>({u:'ub',b:'boiler',x:'lighting'} as Record<string,string>)[id],l=>l.group_label,context);
+    expect(buildV25SavePayload(state)).toEqual(payloadBefore);
+    expect(JSON.stringify({slots,lines})).toBe(original);
+    expect(source).toContain('modelSlug, specCode, sectionCode: code');
   });
 });
 
@@ -270,8 +379,8 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(manual).toContain('data-testid="v25-wb-manual-move-down"');
     expect(manual).toContain('disabled={positionActionsLocked || groupEditor !== null || lineIndex === 0}');
     expect(manual).toContain('disabled={positionActionsLocked || groupEditor !== null || lineIndex === workGroup.lines.length - 1}');
-    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1)');
-    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1)');
+    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1, { modelSlug, specCode })');
+    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1, { modelSlug, specCode })');
     const product = source.slice(source.indexOf('{workGroup.slots.map('), source.indexOf('{workGroup.lines.map('));
     expect(product).not.toContain('v25-wb-manual-move-up');
     expect(manual).toContain('testId="v25-wb-line-delete"');

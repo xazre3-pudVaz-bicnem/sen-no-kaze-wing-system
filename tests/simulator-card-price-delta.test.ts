@@ -502,7 +502,7 @@ describe('統合ポップアップ：候補を選んだ仮プランの正式税�
     const o = [option('standard', 'toilet', 10000), option('candidate', 'toilet', 12000), option('supply', 'supply', 3000)];
     const data = bundle([c, other], o);
     const context = { options: o, categories: [c, other],
-      dependencies: [{ option_id: 'candidate', requires_option_id: 'supply' }],
+      dependencies: [{ id: 'dep-1', option_id: 'candidate', requires_option_id: 'supply', message: null }],
       conflicts: [], canSelectNew: () => true };
     const start = plan(['standard']);
     const candidate = simulatePickerCategoryCandidate({

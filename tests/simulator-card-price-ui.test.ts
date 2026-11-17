@@ -38,6 +38,7 @@ const slotTiles: EquipmentSlotTile[] = [{
 
 function renderBoard(evaluate: (target: SimulatorCardTarget) => SimulatorCardDelta = (target) => {
   if (target.kind === 'slot') return { kind: 'changed', deltaIncludingTax: 0 };
+  if (target.kind !== 'category') return { kind: 'pending', reason: 'incomplete-selection' };
   if (target.categoryId === 'cat-roof') return { kind: 'changed', deltaIncludingTax: 22_000 };
   if (target.categoryId === 'cat-toilet') return { kind: 'standard' };
   if (target.categoryId === 'cat-bed') return { kind: 'changed', deltaIncludingTax: -8_800 };
@@ -88,7 +89,7 @@ describe('プランボードの税込変更影響額表示', () => {
 
   it('位置の未確定や選択ゼロでも、見積単価を推定して表示しない', () => {
     const html = renderBoard((target) => {
-      if (target.kind === 'slot') return { kind: 'pending', reason: 'incomplete-selection' };
+      if (target.kind !== 'category') return { kind: 'pending', reason: 'incomplete-selection' };
       if (target.categoryId === 'cat-kitchen') return { kind: 'pending', reason: 'price-on-request' };
       return { kind: 'standard' };
     });
@@ -113,7 +114,7 @@ describe('プランボードの税込変更影響額表示', () => {
     expect(app).toContain('kind: \'v25-pending\'');
     expect(app).toContain('kind: \'legacy\', baseOverride');
     expect(app).toContain('getCardDelta={getCardDelta}');
-    expect(board).not.toContain('equipmentCategoryPriceState');
-    expect(board).not.toContain('priceState.delta');
+    expect(board).toContain('const priceState = delta ? null : equipmentCategoryPriceState');
+    expect(board).toContain('getCardDelta && (');
   });
 });

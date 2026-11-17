@@ -279,13 +279,15 @@ export function ProductDetail({
               )}
             </div>
 
-            {option.highlight && !(isWashbasinStandardSet(option) && option.highlight === '標準') && (
-              <p
-                className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-ink-soft"
-                data-testid="product-detail-highlight"
-              >
-                {option.highlight}
-              </p>
+            {option.highlight && (
+              !(isWashbasinStandardSet(option) && option.highlight === '標準') && (
+                <p
+                  className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-ink-soft"
+                  data-testid="product-detail-highlight"
+                >
+                  {option.highlight}
+                </p>
+              )
             )}
 
             {option.description && (

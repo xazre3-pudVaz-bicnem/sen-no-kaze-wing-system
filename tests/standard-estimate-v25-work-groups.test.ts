@@ -129,9 +129,56 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('{!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}');
     expect(source).toContain('setLine(line.key, { group_label: event.target.value })');
     expect(source).toContain('onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}');
-    expect(source).toContain('onBlur={() => setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current)}');
+    expect(source).toContain('onBlur={(event) => {');
+    expect(source).toContain('if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;');
+    expect(source).toContain('setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current);');
     expect(source).toContain('setSlot(slot.key, { quantity: event.target.value })');
     expect(source).toContain('id={`v25-manual-row-${line.key}`}');
+  });
+
+  it('Tabでグループから同じ行の品名・数量へ移る間は再分類を保留する', () => {
+    const row = source.slice(
+      source.indexOf('id={`v25-manual-row-${line.key}`}'),
+      source.indexOf('data-v25-excel-col="name"', source.indexOf('id={`v25-manual-row-${line.key}`}')),
+    );
+    expect(row).toContain('onBlur={(event) => {');
+    expect(row).toContain('event.currentTarget.contains(event.relatedTarget)');
+    expect(row.indexOf('event.currentTarget.contains(event.relatedTarget)')).toBeLessThan(row.indexOf('setEditingWorkGroup((current)'));
+    expect(row).toContain('data-v25-excel-col="group"');
+    expect(source).toContain('const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {');
+    expect(source).toContain("event.key === 'Tab'");
+    expect(source).toContain('next.focus(); next.select();');
+    // グループ入力単体のonBlurでは再分類をしない
+    expect(row).not.toContain('onBlur={() => setEditingWorkGroup');
+  });
+
+  it('Enter・Shift+Enter・Tabで別行へ移った場合は、再分類後に同じ入力先を復元する', () => {
+    const row = source.slice(source.indexOf('id={`v25-manual-row-${line.key}`}'), source.indexOf('data-v25-excel-col="group"', source.indexOf('id={`v25-manual-row-${line.key}`}')));
+    expect(row).toContain('const nextRowId = next instanceof HTMLInputElement ? next.closest(\'tr\')?.id : null;');
+    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && next.dataset.v25ExcelCol');
+    expect(row).toContain('{ rowId: nextRowId, column: next.dataset.v25ExcelCol }');
+    expect(row).toContain('setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current)');
+    expect(source).toContain("event.key === 'Enter'");
+    expect(source).toContain('event.shiftKey ? -1 : 1');
+    expect(source).toContain("event.key === 'Tab'");
+    expect(source).toContain('const [editingWorkGroup, setEditingWorkGroup] = useState');
+    expect(source).toContain('useLayoutEffect(() => {');
+    expect(source).toContain('const target = pendingWorkGroupFocus.current;');
+    expect(source).toContain('pendingWorkGroupFocus.current = null;');
+    expect(source).toContain('document.getElementById(target.rowId)');
+    expect(source).toContain("element.dataset.v25ExcelCol === target.column && !element.disabled");
+    expect(source).toContain('document.activeElement !== input');
+    expect(source).toContain('input.focus({ preventScroll: true });');
+    expect(source).toContain('input.select();');
+    expect(source).toContain('}, [editingWorkGroup]);');
+  });
+
+  it('グループ以外の操作へ移る場合は入力先復元をしない', () => {
+    const row = source.slice(source.indexOf('id={`v25-manual-row-${line.key}`}'), source.indexOf('data-v25-excel-col="group"', source.indexOf('id={`v25-manual-row-${line.key}`}')));
+    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && next.dataset.v25ExcelCol');
+    expect(row).toContain(': null;');
+    expect(source).toContain('if (!target) return;');
+    expect(source).toContain('if (input && document.activeElement !== input)');
   });
 
   it('列の表示/非表示と幅調整、固定見出し、保存のpayloadは既存のまま', () => {

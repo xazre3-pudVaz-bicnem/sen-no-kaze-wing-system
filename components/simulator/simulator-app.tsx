@@ -794,10 +794,14 @@ export function SimulatorApp({
     [selected, variantIds, exteriorFaces, slotSelections, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug, standardPreview]
   );
 
+  // Synchronization with external browser storage is intentional. persistDraft
+  // reports storage failures to the UI only after the browser write has finished.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     // Merely opening a new, saved or URL-specified plan must never write a draft.
     if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();
   }, [hydrated, dirty, readOnly, loadError, persistDraft, standardPreview]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(() => {

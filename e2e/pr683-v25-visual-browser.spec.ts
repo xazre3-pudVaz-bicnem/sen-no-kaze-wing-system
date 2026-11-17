@@ -63,7 +63,7 @@ test('PC｜10仕様の高さ・3列・公開価格と6件の別途見積・折�
   await expect(page.locator(SELECTOR).locator('[data-testid="v25-selector-product"]')).toHaveCount(3);
   await expect(page.locator(cardSelector).filter({ hasText: '＋別途見積' })).toHaveCount(6);
   await expect(page.getByTestId('v25-selector-por-note'))
-    .toContainText('表示した公開価格（税込）に含まれません');
+    .toContainText('上記価格に含まれません');
   const first = page.locator(cardSelector).first();
   await expect(first).toContainText('¥6,939,959');
   await expect(first).toContainText('公開 第2版');

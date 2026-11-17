@@ -84,6 +84,8 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
                   )}
                   <StandardEstimateV25Workbench
                     resetKey={`${workspace.revision.id}:${workspace.revision.lockVersion}`}
+                    modelSlug={workspace.v25.modelSlug}
+                    specCode={selected.specCode}
                     revisionId={workspace.revision.id}
                     lockVersion={workspace.revision.lockVersion}
                     readOnly={workspace.revision.status !== 'draft'}

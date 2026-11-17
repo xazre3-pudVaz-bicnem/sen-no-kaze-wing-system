@@ -6,7 +6,7 @@ import { seedCategories, seedOptions } from '@/lib/seed/catalog';
 
 /**
  * PR #681 受入検証専用：CI が WING_LOCAL_MODE=1 の使い捨て Next dev にだけ
- * app/__e2e_pr681_picker/page.tsx としてコピーする。公開アプリの route には存在しない。
+ * app/pr681-e2e-picker/page.tsx としてコピーする。公開アプリの route には存在しない。
  * 公開 Revision・DB・価格スイッチ・見積データは一切読み書きしない。
  *
  * 商品・カテゴリーは本体の seed カタログを再利用し、位置枠だけテスト用。

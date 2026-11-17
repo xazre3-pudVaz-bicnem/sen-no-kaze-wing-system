@@ -3,6 +3,7 @@
 import { Check, ImageOff } from 'lucide-react';
 import type { OptionCategory, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
+import { orderPickerProducts } from '@/lib/domain/simulator-product-choice-guide';
 import { cn } from '@/lib/utils';
 
 export interface ProductListAttribute {
@@ -14,6 +15,7 @@ interface Props {
   category: OptionCategory;
   options: ProductOption[];
   selectedIds: string[];
+  baselineSelectedIds: string[];
   getPriceLabel: (option: ProductOption) => string;
   getAttributes?: (category: OptionCategory, option: ProductOption) => ProductListAttribute[];
   onOpenProduct: (option: ProductOption) => void;
@@ -33,6 +35,7 @@ export function ProductList({
   category,
   options,
   selectedIds,
+  baselineSelectedIds,
   getPriceLabel,
   getAttributes = defaultProductListAttributes,
   onOpenProduct,
@@ -41,6 +44,8 @@ export function ProductList({
   actionLabel = '詳しく見る',
 }: Props) {
   const selected = new Set(selectedIds);
+  const baseline = new Set(baselineSelectedIds);
+  const orderedOptions = orderPickerProducts(options, selectedIds, baselineSelectedIds);
 
   if (options.length === 0) {
     return (
@@ -52,16 +57,13 @@ export function ProductList({
 
   return (
     <ul className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" data-testid="product-list">
-      {options.map((option) => {
+      {orderedOptions.map((option) => {
         const checked = selected.has(option.id);
+        const isBaseline = baseline.has(option.id);
         const disabledReason = checked ? null : getDisabledReason?.(option) ?? null;
         const attributes = getAttributes(category, option).filter(
           (item) => item.label.trim().length > 0 && item.value.trim().length > 0
         );
-        const containImage = ['ub', 'toilet', 'washbasin', 'kitchen', 'boiler', 'aircon', 'lighting'].includes(
-          category.code
-        );
-
         return (
           <li key={option.id}>
             <article
@@ -93,7 +95,7 @@ export function ProductList({
                       alt={option.name}
                       fill
                       sizes="(min-width: 1024px) 13rem, (min-width: 768px) 30vw, (min-width: 480px) 45vw, 92vw"
-                      className={containImage ? 'object-contain' : 'object-cover'}
+                      className="object-contain p-2"
                     />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-1 text-[0.65rem] text-muted">
@@ -102,12 +104,19 @@ export function ProductList({
                     </div>
                   )}
 
-                  {checked && (
-                    <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-brown px-1.5 py-0.5 text-[0.65rem] font-semibold text-white">
-                      <Check className="size-3" aria-hidden="true" />
-                      選択中
-                    </span>
-                  )}
+                  <div className="absolute top-1.5 left-1.5 flex max-w-[calc(100%-0.75rem)] flex-col items-start gap-1">
+                    {checked && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brown px-2 py-0.5 text-[0.65rem] font-semibold text-white" data-testid={`product-card-current-${option.code}`}>
+                        <Check className="size-3 shrink-0" aria-hidden="true" />
+                        現在選択中
+                      </span>
+                    )}
+                    {isBaseline && (
+                      <span className="inline-flex items-center rounded-full border border-brown/25 bg-white/95 px-2 py-0.5 text-[0.65rem] font-semibold text-brown" data-testid={`product-card-baseline-${option.code}`}>
+                        基本プランの商品
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-1 flex-col p-2.5 sm:p-3">
@@ -162,18 +171,21 @@ export function defaultProductListAttributes(
   category: OptionCategory,
   option: ProductOption
 ): ProductListAttribute[] {
-  if (!option.size_note) return [];
+  const attributes: ProductListAttribute[] = [];
+  if (option.model_no?.trim()) attributes.push({ label: '型番', value: option.model_no.trim() });
 
   const labelByCategory: Record<string, string> = {
     ub: 'サイズ',
     washbasin: '間口',
     kitchen: '間口',
     boiler: 'サイズ・設置',
-    aircon: '適用畳数',
+    aircon: 'サイズ・仕様',
     sash: 'サイズ・呼称',
     furniture: '寸法',
   };
 
-  const label = labelByCategory[category.code];
-  return label ? [{ label, value: option.size_note }] : [];
+  if (option.size_note?.trim()) {
+    attributes.push({ label: labelByCategory[category.code] ?? 'サイズ・仕様', value: option.size_note.trim() });
+  }
+  return attributes;
 }

@@ -213,10 +213,12 @@ describe('Excel 風の画面（描画）', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const legacy = read('components/admin/estimate-template-workbench.tsx');
-    for (const cls of ['bg-amber-50', 'bg-slate-100', 'bg-emerald-900', 'bg-emerald-50']) {
+    for (const cls of ['bg-amber-50', 'bg-slate-100', 'bg-emerald-900']) {
       expect(legacy).toContain(cls);
       expect(source).toContain(cls);
     }
+    expect(legacy).toContain('bg-emerald-50');
+    expect(source).toContain('bg-lime-100');
     const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
     expect((header.match(/<th /g) ?? []).length).toBe(10);
     const order = ['name', 'quantity', 'unit', 'cost_unit', 'cost_amount', 'sale_unit', 'sale_amount', 'gross', 'note', 'actions'];
@@ -260,7 +262,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(v25DisplayedCostAndGross(line, 'abc')).toEqual({ costAmount: null, gross: null });
     expect(v25DisplayedCostAndGross(undefined, '2')).toEqual({ costAmount: null, gross: null });
     const html = render(false);
-    expect(html).toContain(`data-testid="v25-section-subtotal-value-option">${formatYen(385200)}</td>`);
+    expect(html).toContain(`data-testid="v25-section-subtotal-value-option">${formatYen(385200)}</strong>`);
     expect(html).toContain('data-testid="v25-wb-slot-cost-amount"');
     expect(html).toContain('data-testid="v25-wb-slot-gross"');
     expect(html).toContain('data-testid="v25-wb-slot-sale-amount"');

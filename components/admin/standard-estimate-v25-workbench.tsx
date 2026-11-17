@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Package, Trash2 } from 'lucide-react';
@@ -56,6 +56,7 @@ import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-es
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-position-label-suggestions';
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
+import { v25WorkGroupsForDisplay } from '@/components/admin/standard-estimate-v25-work-groups';
 import {
   V25ColumnDisplayMenu,
   V25WidthHandle,
@@ -421,6 +422,24 @@ function WorkbenchBody({
   const [selectableDraftIds, setSelectableDraftIds] = useState<string[] | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
+  // グループ名の入力中に見出しを移動するとinputが再マウントされるため、フォーカス中だけ旧所属へ表示する。
+  // 保存・数量・価格などのstateとは独立した表示専用の固定情報。
+  const [editingWorkGroup, setEditingWorkGroup] = useState<{ lineKey: string; originalLabel: string } | null>(null);
+  // グループ変更で行が別の見出しに移動しても、Tab/Enterで移った入力欄へフォーカスを戻す。
+  // 表示だけの管理。保存データ・金額・並び順は変更しない。
+  const pendingWorkGroupFocus = useRef<{ rowId: string; column: string } | null>(null);
+  useLayoutEffect(() => {
+    const target = pendingWorkGroupFocus.current;
+    pendingWorkGroupFocus.current = null;
+    if (!target) return;
+    const row = document.getElementById(target.rowId);
+    const input = Array.from(row?.querySelectorAll<HTMLInputElement>('input[data-v25-excel-col]') ?? [])
+      .find((element) => element.dataset.v25ExcelCol === target.column && !element.disabled);
+    if (input && document.activeElement !== input) {
+      input.focus({ preventScroll: true });
+      input.select();
+    }
+  }, [editingWorkGroup]);
   const [pending, startTransition] = useTransition();
   // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
   const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
@@ -877,19 +896,21 @@ function WorkbenchBody({
     );
   };
 
-  // 区分の明細の末尾に、正式なv2.5試算の小計だけを表示する（区分の経費は既存見出しに保持）。
+  // 区分末尾の小計は全列結合。可視列や列幅によって金額が別の列へずれない。
+  // 数字は従来のv2.5計算結果をそのまま表示し、区分の経費は既存見出し側で扱う。
   const sectionSubtotal = (code: string, label: string) => {
     const result = sectionResult(code);
     return (
-      <tr className="border-y-2 border-emerald-800 bg-emerald-50 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
-        <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right font-semibold">
-          {label} 小計（税別）
-          {result?.has_por && <span className="ml-2 text-amber-800">別途見積を含む</span>}
+      <tr className="border-y-2 border-emerald-800 bg-lime-100 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
+        <td colSpan={columnCount} className="px-2 py-1">
+          <div className="flex w-full items-center justify-end gap-3 text-right tabular-nums" data-testid={`v25-section-subtotal-layout-${code}`}>
+            <span className="font-semibold whitespace-nowrap">{label} 小計（税別）</span>
+            {result?.has_por && <span className="text-amber-800">別途見積を含む</span>}
+            <strong className="min-w-[7rem] text-right font-semibold whitespace-nowrap" data-testid={`v25-section-subtotal-value-${code}`}>
+              {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
+            </strong>
+          </div>
         </td>
-        <td className="border-l border-emerald-200 px-2 py-1 text-right font-semibold tabular-nums" data-testid={`v25-section-subtotal-value-${code}`}>
-          {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
-        </td>
-        <td colSpan={afterSaleAmount} />
       </tr>
     );
   };
@@ -1037,6 +1058,12 @@ function WorkbenchBody({
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
               const lines = state.lines.filter((line) => line.section_code === code);
+              // 商品のカテゴリーと、手入力明細の既存group_labelから表示用の小見出しを作る。
+              // 保存済みのsection_code・行順序・group_labelは書き換えない。
+              const workGroups = v25WorkGroupsForDisplay(
+                slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode,
+                (line) => editingWorkGroup?.lineKey === line.key ? editingWorkGroup.originalLabel : line.group_label,
+              );
               return (
                 <Fragment key={code}>
                   {sectionHeader(
@@ -1059,8 +1086,15 @@ function WorkbenchBody({
                       </V25WorkbenchRowMenu>
                     )
                   )}
-                  {!collapsed.has(code) &&
-                    slots.map((slot) => {
+                  {!collapsed.has(code) && workGroups.map((workGroup) => (
+                    <Fragment key={workGroup.key}>
+                      <tr className="border-y border-emerald-200 bg-emerald-100 text-slate-800"
+                        data-testid="v25-work-item-heading" data-work-item={workGroup.key}>
+                        <td colSpan={columnCount} className="px-3 py-1 text-[11px] font-semibold">
+                          {workGroup.label}
+                        </td>
+                      </tr>
+                      {workGroup.slots.map((slot) => {
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const display = v25DisplayedCostAndGross(result, slot.quantity);
@@ -1252,18 +1286,31 @@ function WorkbenchBody({
                         </Fragment>
                       );
                     })}
-                  {!collapsed.has(code) &&
-                    lines.map((line) => {
+                      {workGroup.lines.map((line) => {
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
                         <tr key={line.key} id={`v25-manual-row-${line.key}`} tabIndex={-1}
                           className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500"
-                          data-testid="v25-wb-line">
+                          data-testid="v25-wb-line"
+                          onBlur={(event) => {
+                            if (editingWorkGroup?.lineKey !== line.key) return;
+                            // Tabで「グループ→品名→数量…」と同じ行内を進む間は、行の所属を動かさない。
+                            if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;
+                            // 別行へEnter/Tabで移る場合は、再分類で入力欄が再マウントされても復元できるよう保存。
+                            const nextInput = event.relatedTarget instanceof HTMLInputElement ? event.relatedTarget : null;
+                            const nextRowId = nextInput?.closest('tr')?.id;
+                            const nextColumn = nextInput?.dataset.v25ExcelCol;
+                            pendingWorkGroupFocus.current = nextRowId && nextColumn
+                              ? { rowId: nextRowId, column: nextColumn }
+                              : null;
+                            setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current);
+                          }}>
                           <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
                               <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
                                 aria-label="グループ" placeholder="区分" title={line.group_label || '手入力明細のグループ'}
                                 className="h-6 min-h-6! w-[4.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
+                                onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}
                                 onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
@@ -1338,6 +1385,8 @@ function WorkbenchBody({
                         </tr>
                       );
                     })}
+                    </Fragment>
+                  ))}
                   {!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}
                 </Fragment>
               );

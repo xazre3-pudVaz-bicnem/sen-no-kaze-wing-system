@@ -1161,6 +1161,10 @@ export function SimulatorApp({
 
   const applyPreset = (code: string) => {
     if (!hydrated || readOnly) return;
+    if (code === specCode && !dirty && !restoreNotice) return;
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('仕様を切り替えると、現在の選択がその仕様の標準構成に変わります。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
     const choice = simulatorSpecChoices.find((row) => row.code === code);
     // v2.5 の売価を使う間は、今の防火の条件の標準構成を読み込む（旧来は防火で変わらない）
     const next = standardStateFor(code, fireSelected);
@@ -1182,6 +1186,9 @@ export function SimulatorApp({
    * 標準構成から変えていれば、変えた内容を残して防火仕様だけを入れ替える（金額は v2.5 のルールで計算する）
    */
   const changeFireSpec = (fireproofCategoryId: string, nextId: string) => {
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('防火仕様を切り替えると、標準構成や一部の選択が変わる場合があります。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
     const nextFire = bundle.options.find((option) => option.id === nextId)?.code === FIRE_PROOF_OPTION_CODE;
     if (v25Pricing && hydrated && !readOnly && nextFire !== fireSelected) {
       const current = standardStateFor(specCode, fireSelected);
@@ -1218,6 +1225,9 @@ export function SimulatorApp({
    */
   const changeFinishLevel = (level: FinishLevel) => {
     if (readOnly || level === finishLevel) return;
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('注文範囲を変えると、範囲外の商品が選択から外れる場合があります。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
     const widening = finishLevelRank(level) > finishLevelRank(finishLevel);
     if (widening) {
       const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
@@ -1432,9 +1442,21 @@ export function SimulatorApp({
   };
 
   // ---- 保存・見積依頼 ----
-  const requireLogin = (pending: 'save' | 'quote') => {
-    persistDraft({ pending });
-    router.push(`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`);
+  const requireLogin = (pending: 'save' | 'quote' | null) => {
+    const id = persistDraft({ pending });
+    if (!id) {
+      pushToast('作業内容をブラウザへ保存できないため、ログイン画面への移動を中止しました', 'warn');
+      return;
+    }
+    router.push(`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1&draft=${id}`)}`);
+  };
+
+  const changeModel = (nextSlug: string) => {
+    if (nextSlug === model.slug) return;
+    if ((dirty || restoreNotice || Boolean(initial)) &&
+        !window.confirm('本体を切り替えます。現在の選択は新しい本体に引き継がれません。続けますか？')) return;
+    if (dirty && !persistDraft()) return;
+    router.push(`/simulator/${nextSlug}`);
   };
 
   /** 保存する選択肢：選んでいる商品の選択項目のものだけ（外した商品の選択肢は DB が受け付けない） */
@@ -1553,9 +1575,9 @@ export function SimulatorApp({
                     {m.slug === model.slug ? (
                       <span className="font-semibold text-danger">{m.name}</span>
                     ) : (
-                      <Link href={`/simulator/${m.slug}`} className="hover:text-ink hover:underline">
+                      <button type="button" onClick={() => changeModel(m.slug)} className="hover:text-ink hover:underline">
                         {m.name}
-                      </Link>
+                      </button>
                     )}
                   </span>
                 ))}
@@ -1615,7 +1637,7 @@ export function SimulatorApp({
                         </span>
                         <select
                           value={model.slug}
-                          onChange={(e) => router.push(`/simulator/${e.target.value}`)}
+                          onChange={(e) => changeModel(e.target.value)}
                           className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
                           aria-label="本体（モデル）を切り替える"
                           data-testid="model-switcher"
@@ -1740,9 +1762,9 @@ export function SimulatorApp({
                 </div>
                 {!user && (
                   <p className="mt-1 text-right text-[0.7rem] leading-snug text-muted/80">
-                    <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">
+                    <button type="button" onClick={() => requireLogin(null)} className="underline underline-offset-4">
                       ログイン
-                    </Link>
+                    </button>
                     するとマイページに保存できます。ログインせずに一時保存（URL）もできます
                   </p>
                 )}
@@ -1783,6 +1805,37 @@ export function SimulatorApp({
           <Alert tone="warn" className="mt-4">
             {loadError}
           </Alert>
+        )}
+        {!standardPreview && !explicitEntry && !resume && !draftId && resumeCandidate && !dirty && !loadError && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-3" data-testid="previous-draft-banner">
+            <p className="text-sm text-ink-soft">以前の作業途中のプランがあります</p>
+            <button
+              type="button"
+              className="rounded-full border border-gold/60 px-4 py-2 text-sm font-medium text-ink hover:border-gold"
+              onClick={() => router.push(resumeCandidate.kind === 'legacy'
+                ? `/simulator/${model.slug}?resume=1`
+                : `/simulator/${model.slug}?draft=${resumeCandidate.id}`)}
+              data-testid="resume-previous-draft"
+            >
+              以前のプランを再開する
+            </button>
+          </div>
+        )}
+        {restoreNotice && (
+          <div className="mt-4" data-testid="restored-draft-notice">
+            <Alert tone="info">
+              以前の選択内容を再表示しています。商品価格や取扱状況が変わっている場合があります。
+              金額は現在の条件で再計算しています。
+              {restoreIssues.length > 0 && (
+                <span className="mt-1 block">内容を確認してください：{restoreIssues.join('。')}</span>
+              )}
+            </Alert>
+          </div>
+        )}
+        {draftSaveFailed && (
+          <div className="mt-4" data-testid="draft-save-error">
+            <Alert tone="warn">作業内容をこのブラウザに保存できませんでした。ページを閉じる前に保存設定を確認してください。以前の下書きは変更していません。</Alert>
+          </div>
         )}
         {!readOnly && (positionNotice || revertedSlotLabels.length > 0) && (
           <div className="mt-4" data-testid="position-slot-notice">

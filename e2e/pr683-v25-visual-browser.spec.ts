@@ -80,6 +80,7 @@ test('PC｜10仕様の高さ・3列・公開価格と6件の別途見積・折�
   expect(topToSheet).toBeLessThan(1050);
 
   await mkdir('e2e/artifacts', { recursive: true });
+  await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
   await page.screenshot({ path: 'e2e/artifacts/pr683-pc-1440.png', fullPage: true });
 
   await toggle.click();
@@ -145,6 +146,7 @@ test('スマートフォン｜1列・価格と版情報の重なりなし・全1
       fullPageHeight: await page.evaluate(() => document.documentElement.scrollHeight),
     }));
     await mkdir('e2e/artifacts', { recursive: true });
+    await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
     await page.screenshot({ path: 'e2e/artifacts/pr683-mobile-pixel7.png', fullPage: true });
 
     await page.getByTestId('standard-estimate-selector-toggle').click();

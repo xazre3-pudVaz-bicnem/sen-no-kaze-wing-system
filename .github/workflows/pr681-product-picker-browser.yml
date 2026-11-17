@@ -63,8 +63,8 @@ jobs:
           test -z "$NEXT_PUBLIC_SUPABASE_URL"
           test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
           test -z "$SUPABASE_SERVICE_ROLE_KEY"
-          mkdir -p app/__e2e_pr681_picker
-          cp e2e/fixtures/pr681-local-picker-page.tsx app/__e2e_pr681_picker/page.tsx
+          mkdir -p app/pr681-e2e-picker
+          cp e2e/fixtures/pr681-local-picker-page.tsx app/pr681-e2e-picker/page.tsx
 
       - name: Test PR 681 picker on disposable desktop/mobile Chromium
         run: npx playwright test e2e/pr681-product-picker.spec.ts e2e/pr681-picker-mobile.spec.ts --project=desktop --project=mobile

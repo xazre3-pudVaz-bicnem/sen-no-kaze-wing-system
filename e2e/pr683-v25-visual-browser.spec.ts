@@ -101,7 +101,16 @@ test('PC｜10仕様の高さ・3列・公開価格と6件の別途見積・折�
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator(cardSelector).nth(1).click();
-  await expect(page).toHaveURL(/master=pr683-spec-1/);
+  // The actual card targets the admin page, which correctly requires login.
+  // Verify the chosen master survives the redirect without attempting login.
+  await expect(page).toHaveURL(/\/login\?next=/);
+  expect(new URL(page.url()).searchParams.get('next'))
+    .toBe('/admin/estimate-templates?master=pr683-spec-1');
+
+  // Test selected-state rendering independently on this disposable fixture.
+  // This is NOT an authenticated admin navigation acceptance test.
+  await page.goto(FIXTURE + '?master=pr683-spec-1');
+  await expand(page);
   await expect(page.locator(cardSelector).nth(1)).toHaveAttribute('aria-current', 'page');
 
   await page.setViewportSize({ width: 820, height: 1024 });

@@ -257,7 +257,7 @@ export function ProductDetail({
 
         <section className="min-h-0 min-w-0 md:overflow-y-auto md:pr-2">
           <div className="border-b border-line pb-3">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 {option.manufacturer && <p className="text-xs font-semibold text-brown">{option.manufacturer}</p>}
                 <h3 className="mt-0.5 text-lg font-semibold leading-snug text-ink">{option.name}</h3>

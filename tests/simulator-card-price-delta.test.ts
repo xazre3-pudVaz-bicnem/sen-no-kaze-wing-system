@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 import { computePricing } from '@/lib/domain/pricing';
+import { simulatePickerCategoryCandidate, simulatorCandidatePriceDelta } from '@/lib/domain/simulator-candidate-price-delta';
 import { computeStandardEstimatePricing } from '@/lib/domain/standard-estimate-pricing';
 import {
   computeSaleViewPricing,
@@ -441,5 +442,75 @@ describe('商品カード：v2.5売価・数量・位置別の安全性', () => 
     // CI の処理能力による揺れを考慮した緩い上限。計算結果のキャッシュを検査する。
     expect(elapsedMs).toBeLessThan(10_000);
     console.info('simulator-card-delta: 40 categories + 4,000 cached reads = ' + Math.round(elapsedMs) + 'ms');
+  });
+});
+
+
+describe('統合ポップアップ：候補を選んだ仮プランの正式税込総額差', () => {
+  it('v2.5 屋根23.5㎡の候補は実際の税込見積総額で比較し、数量1に縮めない', () => {
+    const data = withoutCatalogCosts(v25Bundle);
+    const candidate = plan(['roof2'], [], [], v25Slots);
+    const current = computeSaleViewPricing(data, v25View, candidate.optionIds, candidate.variantChoiceIds, [], undefined, v25Slots);
+    const standard = computeSaleViewPricing(data, v25View, v25Standard.optionIds, v25Standard.variantChoiceIds, [], undefined, v25Slots);
+    expect(current.missing_units).toHaveLength(0);
+    expect(standard.missing_units).toHaveLength(0);
+    expect(simulatorCandidatePriceDelta(v25Input(v25Standard), categoryTarget('roof'), candidate)).toEqual({
+      kind: 'changed', deltaIncludingTax: current.pricing.total - standard.pricing.total,
+    });
+  });
+
+  it('v2.5 位置別サッシの候補はその枠だけ変更し、他の数量・枠を保つ', () => {
+    const data = withoutCatalogCosts(v25Bundle);
+    const candidateSlot = [{ slot_code: 'window-1', option_id: 'sash2', variant_choice_ids: [] }];
+    const candidate = plan(['roof1'], ['white'], [], candidateSlot);
+    const current = computeSaleViewPricing(data, v25View, candidate.optionIds, candidate.variantChoiceIds, [], undefined, candidateSlot);
+    const standard = computeSaleViewPricing(data, v25View, v25Standard.optionIds, v25Standard.variantChoiceIds, [], undefined, v25Slots);
+    expect(current.missing_units).toHaveLength(0);
+    expect(simulatorCandidatePriceDelta(v25Input(v25Standard), { kind: 'slot', slotCode: 'window-1' }, candidate)).toEqual({
+      kind: 'changed', deltaIncludingTax: current.pricing.total - standard.pricing.total,
+    });
+  });
+
+  it('位置候補の別途見積・必要単価未取得は数値を出さない', () => {
+    const candidate = plan(['roof1'], ['white'], [], [
+      { slot_code: 'window-1', option_id: 'sash2', variant_choice_ids: [] },
+    ]);
+    const pendingView: StandardEstimateSaleView = {
+      ...v25View, prices: { ...v25View.prices, sash2: { por: true } },
+    };
+    expect(simulatorCandidatePriceDelta(v25Input(v25Standard, pendingView),
+      { kind: 'slot', slotCode: 'window-1' }, candidate).kind).toBe('pending');
+  });
+
+  it('外壁4面の候補は対象面だけ標準と比較し、他面は変更したまま保持', () => {
+    const data = bundle([category('wall', 'exterior-wall')], [
+      option('wall-standard', 'wall', 0), option('wall-up', 'wall', 2000),
+    ]);
+    const standardFaces = (['front', 'right', 'back', 'left'] as const).map((face_code) => ({
+      face_code, option_id: 'wall-standard', variant_choice_ids: [],
+    }));
+    const candidateFaces = standardFaces.map((face) =>
+      face.face_code === 'right' ? { ...face, option_id: 'wall-up' } : face);
+    const input = legacy(data, plan(['wall-standard'], [], standardFaces), plan(['wall-standard'], [], standardFaces));
+    expect(simulatorCandidatePriceDelta(input, { kind: 'exterior-face', faceCode: 'right' },
+      plan(['wall-standard'], [], candidateFaces))).toEqual({ kind: 'changed', deltaIncludingTax: 2200 });
+  });
+
+  it('選択依存で対象外の商品の変更が必要な候補は未確定にし、保存しない', () => {
+    const c = category('toilet');
+    const other = category('supply');
+    const o = [option('standard', 'toilet', 10000), option('candidate', 'toilet', 12000), option('supply', 'supply', 3000)];
+    const data = bundle([c, other], o);
+    const context = { options: o, categories: [c, other],
+      dependencies: [{ option_id: 'candidate', requires_option_id: 'supply' }],
+      conflicts: [], canSelectNew: () => true };
+    const start = plan(['standard']);
+    const candidate = simulatePickerCategoryCandidate({
+      bundle: data, ruleContext: context, current: start,
+      categoryId: 'toilet', nextInCategory: ['candidate'],
+      nextVariants: [], positionCategoryIds: new Set(),
+    });
+    expect(candidate).toBeNull();
+    expect(start.optionIds).toEqual(['standard']);
   });
 });

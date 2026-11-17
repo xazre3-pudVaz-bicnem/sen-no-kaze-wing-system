@@ -20,24 +20,24 @@ export function StandardEstimateWorkspaceLayout({ sidebar, children, selectedNam
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="btn-secondary btn-sm"
+          className="btn-secondary btn-sm border-emerald-700 text-emerald-900"
           aria-controls="standard-estimate-selector-panel"
           aria-expanded={selectorOpen}
           onClick={() => setSelectorOpen((open) => !open)}
           data-testid="standard-estimate-selector-toggle"
         >
-          {selectorOpen ? '仕様一覧を閉じる' : '仕様一覧を開く'}
+          {selectorOpen ? '仕様の選択を閉じる' : '仕様を変更'}
         </button>
         {selectedName && (
-          <span className="min-w-0 truncate text-xs text-muted" title={selectedName}>
-            選択中：{selectedName}
+          <span className="min-w-0 rounded-md border border-emerald-700 bg-emerald-50 px-2 py-1 text-xs text-emerald-950" title={selectedName} data-testid="v25-selected-spec-summary">
+            <span className="font-semibold">現在の仕様：</span>{selectedName}
           </span>
         )}
       </div>
       <div className="min-w-0 space-y-3">
         <div
           id="standard-estimate-selector-panel"
-          className={selectorOpen ? 'min-w-0' : 'hidden'}
+          className={selectorOpen ? 'min-w-0 max-w-[42rem]' : 'hidden'}
         >
           {sidebar}
         </div>

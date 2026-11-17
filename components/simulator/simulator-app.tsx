@@ -2043,6 +2043,7 @@ export function SimulatorApp({
           variantGroups={bundle.variantGroups}
           variantChoices={displayVariantChoices}
           selectedOptionIds={selected}
+          baselineSelectedIds={activeSpecSelection}
           selectedVariantIds={variantIds}
           current={exteriorFaces}
           initialFace={exteriorFacePicker}

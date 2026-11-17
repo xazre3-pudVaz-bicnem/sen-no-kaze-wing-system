@@ -1,0 +1,61 @@
+name: Simulator Card Price Browser (isolated)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/simulator/simulator-app.tsx'
+      - 'components/simulator/equipment-board.tsx'
+      - 'lib/domain/simulator-card-price-delta.ts'
+      - 'lib/domain/simulator-card-price-presentation.ts'
+      - 'e2e/pr682-*.spec.ts'
+      - '.github/workflows/simulator-card-price-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: card-price-browser-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-card-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout disposable PR merge
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install isolated Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Reject external database and browser endpoints
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+      - name: Test customer cards desktop, mobile and synthetic official totals on localhost
+        run: npx playwright test e2e/pr682-board-price.spec.ts e2e/pr682-board-price.mobile.spec.ts e2e/pr682-exact-pricing-fixture.spec.ts
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-card-price-browser
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

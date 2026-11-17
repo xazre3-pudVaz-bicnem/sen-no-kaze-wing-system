@@ -32,7 +32,7 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     expect(selector).toContain('data-testid="standard-estimate-selector"');
     expect(selector).toContain('grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3');
     expect(selector).toContain('entry.published.total');
-    expect(layout).toContain("selectedName && !selectorOpen");
+    expect(source("components/admin/standard-estimate-workspace-layout.tsx")).toContain("selectedName && !selectorOpen");
     const layout = source('components/admin/standard-estimate-workspace-layout.tsx');
     expect(layout).toContain('min-w-0 space-y-3');
     expect(layout).not.toContain('lg:grid-cols-[15rem_minmax(0,1fr)]');

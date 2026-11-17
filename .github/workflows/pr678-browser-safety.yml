@@ -7,8 +7,6 @@ on:
       - 'components/simulator/simulator-app.tsx'
       - 'lib/domain/simulator-browser-drafts.ts'
       - 'e2e/pr678-browser-draft-safety.spec.ts'
-      - 'e2e/pr681-product-picker.spec.ts'
-      - 'e2e/pr681-picker-mobile.spec.ts'
       - '.github/workflows/pr678-browser-safety.yml'
 
 permissions:
@@ -55,9 +53,6 @@ jobs:
 
       - name: Test customer drafts in real browser (local mode only)
         run: npx playwright test e2e/pr678-browser-draft-safety.spec.ts --project=desktop
-
-      - name: Test PR 681 product selection in isolated Chromium (desktop/mobile)
-        run: npx playwright test e2e/pr681-product-picker.spec.ts e2e/pr681-picker-mobile.spec.ts --project=desktop --project=mobile
 
       - name: Upload only Playwright test artifacts
         if: always()

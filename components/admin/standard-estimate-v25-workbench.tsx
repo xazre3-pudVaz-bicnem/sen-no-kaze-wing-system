@@ -494,7 +494,7 @@ function WorkbenchBody({
     setState((current) => ({ ...current, [key]: percentToRate(value) }));
   };
   const stepRate = (key: keyof typeof RATE_LABEL, direction: -1 | 1) => {
-    const next = v25StepPercent(percents[key], direction);
+    const next = v25StepPercent(percents[key], direction, key);
     if (next !== percents[key]) setRate(key, next);
   };
   const autoWidth = (id: V25GridColumnId) => {
@@ -893,10 +893,10 @@ function WorkbenchBody({
                   }
                 }} />
               <span className="absolute inset-y-0 right-0 flex w-[18px] flex-col border-l border-slate-300" aria-label={`${RATE_LABEL[key]}の増減`}>
-                <button type="button" aria-label={`${RATE_LABEL[key]}を1%増やす`} title="1%増やす" disabled={readOnly}
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%増やす`} title="1%増やす" disabled={readOnly || v25StepPercent(percents[key], 1, key) === percents[key]}
                   className="flex h-1/2 items-center justify-center rounded-tr-sm text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
                   onClick={() => stepRate(key, 1)}>▲</button>
-                <button type="button" aria-label={`${RATE_LABEL[key]}を1%減らす`} title="1%減らす" disabled={readOnly}
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%減らす`} title="1%減らす" disabled={readOnly || v25StepPercent(percents[key], -1, key) === percents[key]}
                   className="flex h-1/2 items-center justify-center rounded-br-sm border-t border-slate-200 text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
                   onClick={() => stepRate(key, -1)}>▼</button>
               </span>

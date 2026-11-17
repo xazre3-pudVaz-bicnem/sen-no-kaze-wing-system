@@ -16,8 +16,8 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     expect(html).toContain('data-testid="standard-estimate-workspace-layout"');
     expect(html).toContain('data-testid="standard-estimate-selector-toggle"');
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('仕様一覧を開く');
-    expect(html).toContain('選択中：Wing ホテル仕様・非防火');
+    expect(html).toContain('仕様を変更');
+    expect(html).toContain('現在の仕様：</span>Wing ホテル仕様・非防火');
     expect(html).toContain('id="standard-estimate-selector-panel" class="hidden"');
     expect(html).toContain('編集サンプル');
   });

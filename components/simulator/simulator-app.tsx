@@ -79,7 +79,7 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
-import { activeSimulatorWorkSessionKey, latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, restoredDraftFinishLevel, validSimulatorDraftId, workSimulatorDraftKey, writeBrowserWorkDraft, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
+import { activeSimulatorWorkSessionKey, latestResumableBrowserDraft, legacySimulatorDraftKey, mayReuseActiveBrowserWork, readBrowserDraft, restoredDraftFinishLevel, validSimulatorDraftId, workSimulatorDraftKey, writeBrowserWorkDraft, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
@@ -601,7 +601,7 @@ export function SimulatorApp({
       // until the first edit makes a separate copy.
       if (workAllowed && draftId && !standardPreview) {
         try {
-          if (window.sessionStorage.getItem(activeSimulatorWorkSessionKey(model.slug)) === draftId) {
+          if (mayReuseActiveBrowserWork(draftId, window.sessionStorage.getItem(activeSimulatorWorkSessionKey(model.slug)), workDraft.ownerId, user?.id ?? null)) {
             activeWorkDraftId.current = draftId;
           }
         } catch {

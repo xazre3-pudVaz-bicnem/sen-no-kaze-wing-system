@@ -139,7 +139,7 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
     expect(payload.lines.map(x => x.line_key)).toEqual(['uuid-two', 'uuid-other', 'uuid-one']);
     expect(payload.lines[0].group_label).toBe('１．サッシ・木製建具工事');
     const originalByKey = new Map(rows.map(row => [row.line_key, row]));
-    for (const row of moved) expect(row).toBe(originalByKey.get(row.line_key));
+    for (const row of moved) expect(row).toBe(originalByKey.get(row.line_key ?? ''));
     // RPCの既存sort_order=v_indexと同じ順に保存・再読込しても並びは復元する
     const persisted = payload.lines.map((entry, index) => ({ ...entry, sort_order: index + 1 }));
     const reloaded = [...persisted].sort((a,b) => a.sort_order - b.sort_order);

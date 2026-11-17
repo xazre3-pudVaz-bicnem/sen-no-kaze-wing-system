@@ -121,6 +121,7 @@ describe('お客様向けシミュレーター：下書きの独立と明示再�
     const page = fs.readFileSync(path.join(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'), 'utf8');
     expect(app).toContain('writeBrowserWorkDraft(window.localStorage, model.slug, id, draft)');
     expect(app).toContain('activeWorkDraftId.current ?? window.crypto.randomUUID()');
+    expect(app).toContain('useLayoutEffect(() => {');
     expect(app).toContain('if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();');
     expect(app).not.toContain('localStorage.setItem(legacySimulatorDraftKey');
     expect(app).toContain('data-testid="previous-draft-banner"');

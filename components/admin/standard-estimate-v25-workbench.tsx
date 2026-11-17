@@ -1297,10 +1297,11 @@ function WorkbenchBody({
                             // Tabで「グループ→品名→数量…」と同じ行内を進む間は、行の所属を動かさない。
                             if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;
                             // 別行へEnter/Tabで移る場合は、再分類で入力欄が再マウントされても復元できるよう保存。
-                            const next = event.relatedTarget;
-                            const nextRowId = next instanceof HTMLInputElement ? next.closest('tr')?.id : null;
-                            pendingWorkGroupFocus.current = nextRowId && next.dataset.v25ExcelCol
-                              ? { rowId: nextRowId, column: next.dataset.v25ExcelCol }
+                            const nextInput = event.relatedTarget instanceof HTMLInputElement ? event.relatedTarget : null;
+                            const nextRowId = nextInput?.closest('tr')?.id;
+                            const nextColumn = nextInput?.dataset.v25ExcelCol;
+                            pendingWorkGroupFocus.current = nextRowId && nextColumn
+                              ? { rowId: nextRowId, column: nextColumn }
                               : null;
                             setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current);
                           }}>

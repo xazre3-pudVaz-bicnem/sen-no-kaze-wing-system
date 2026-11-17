@@ -422,6 +422,9 @@ function WorkbenchBody({
   const [selectableDraftIds, setSelectableDraftIds] = useState<string[] | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
+  // グループ名の入力中に見出しを移動するとinputが再マウントされるため、フォーカス中だけ旧所属へ表示する。
+  // 保存・数量・価格などのstateとは独立した表示専用の固定情報。
+  const [editingWorkGroup, setEditingWorkGroup] = useState<{ lineKey: string; originalLabel: string } | null>(null);
   const [pending, startTransition] = useTransition();
   // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
   const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
@@ -1042,7 +1045,10 @@ function WorkbenchBody({
               const lines = state.lines.filter((line) => line.section_code === code);
               // 商品のカテゴリーと、手入力明細の既存group_labelから表示用の小見出しを作る。
               // 保存済みのsection_code・行順序・group_labelは書き換えない。
-              const workGroups = v25WorkGroupsForDisplay(slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode);
+              const workGroups = v25WorkGroupsForDisplay(
+                slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode,
+                (line) => editingWorkGroup?.lineKey === line.key ? editingWorkGroup.originalLabel : line.group_label,
+              );
               return (
                 <Fragment key={code}>
                   {sectionHeader(
@@ -1276,6 +1282,8 @@ function WorkbenchBody({
                               <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
                                 aria-label="グループ" placeholder="区分" title={line.group_label || '手入力明細のグループ'}
                                 className="h-6 min-h-6! w-[4.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
+                                onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}
+                                onBlur={() => setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current)}
                                 onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"

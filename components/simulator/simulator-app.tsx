@@ -586,7 +586,11 @@ export function SimulatorApp({
       // When editing ?c=, the authoritative DB ID must agree with the local draft.
       const workAllowed = workDraft && !loadError &&
         canRestoreSimulatorSelection(workDraft, user?.id ?? null, true, standardPreview) &&
-        (!initial || (initial.status === 'draft' && (initial.id ?? null) === (workDraft.configId ?? null)));
+        (!initial || (initial.status === 'draft' &&
+          (initial.id ?? null) === (workDraft.configId ?? null) &&
+          // A local edit based on an older DB revision must not be applied over
+          // an updated saved configuration using the newer lock version.
+          (!initial.id || (workDraft.lockVersion ?? null) === (initial.lock_version ?? null))));
       const legacyAllowed = legacyDraft && !initial && !loadError &&
         canRestoreSimulatorSelection(legacyDraft, user?.id ?? null, true, standardPreview);
       if ((draftId || resume) && (!draft || !(workAllowed || legacyAllowed))) {

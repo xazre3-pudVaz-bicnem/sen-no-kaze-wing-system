@@ -60,7 +60,7 @@ test('スマホ：洗面セットのカードと外壁4面切替', async ({ page
 
 test('スマホ：隔離位置枠の基本プランと選択中を実表示して変更・反映', async ({ page }) => {
   test.setTimeout(150_000);
-  await page.goto('/__e2e_pr681_picker');
+  await page.goto('/pr681-e2e-picker');
   await expect(page.getByTestId('pr681-local-fixture')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.getByTestId('fixture-open-bedroom-fix').click();

@@ -28,4 +28,6 @@ test('スマートフォン：基本プラン・価格確認中・レスポン�
   await expect(page.getByTestId('equip-price-exterior-parts')).toHaveText('金額確認中');
   expect(await readTotal(page)).toBeGreaterThan(before);
   await expect(page.getByTestId('equipment-price-impact-note')).toBeVisible();
+  // Pixel 7 相当の実ブラウザ画像をlocalhost隔離試験の証跡として残す。
+  await page.screenshot({ path: 'test-results/pr682-mobile-equipment-board.png', fullPage: true });
 });

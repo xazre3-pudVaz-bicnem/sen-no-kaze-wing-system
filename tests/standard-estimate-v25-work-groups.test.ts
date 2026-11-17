@@ -220,7 +220,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('data-testid="v25-work-item-heading"');
     expect(source).toContain('data-work-item={workGroup.key}');
     expect(source).toContain('{workGroup.slots.map((slot) => {');
-    expect(source).toContain('{workGroup.lines.map((line) => {');
+    expect(source).toContain('{workGroup.lines.map((line, lineIndex) => {');
     expect(source).toContain('{!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}');
     expect(source).toContain('setLine(line.key, { group_label: event.target.value })');
     expect(source).toContain('onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}');
@@ -288,7 +288,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1)');
     const product = source.slice(source.indexOf('{workGroup.slots.map('), source.indexOf('{workGroup.lines.map('));
     expect(product).not.toContain('v25-wb-manual-move-up');
-    expect(manual).toContain('data-testid="v25-wb-line-delete"');
+    expect(manual).toContain('testId="v25-wb-line-delete"');
     expect(manual).toContain('data-v25-excel-col="name"');
     expect(manual).toContain('pendingWorkGroupFocus.current');
     expect(source).toContain('data-v25-column="actions"');

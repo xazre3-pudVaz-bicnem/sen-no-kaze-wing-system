@@ -29,6 +29,18 @@ export interface DraftStorageReader {
 }
 export type ResumeCandidate = { kind: 'legacy' | 'work'; id: string | null; savedAt: number };
 
+/** Login changes the editor identity, so a guest work copy must not be overwritten. */
+export function mayReuseActiveBrowserWork(
+  openedDraftId: string | null,
+  sessionDraftId: string | null,
+  workOwnerId: string | null | undefined,
+  viewerId: string | null
+): boolean {
+  return validSimulatorDraftId(openedDraftId) &&
+    sessionDraftId === openedDraftId &&
+    (workOwnerId ?? null) === viewerId;
+}
+
 /** Preserve the user's original scope instead of resetting every draft to its spec's default. */
 export function restoredDraftFinishLevel(saved: unknown, fallback: FinishLevel): FinishLevel {
   return typeof saved === 'string' && FINISH_LEVELS.some((level) => level === saved)

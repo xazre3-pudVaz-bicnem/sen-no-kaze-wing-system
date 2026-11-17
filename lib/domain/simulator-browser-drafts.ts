@@ -53,7 +53,7 @@ export function writeBrowserWorkDraft(
   storage: { setItem(key: string, value: string): void },
   slug: string,
   id: string,
-  snapshot: BrowserDraftRecord
+  snapshot: { selected: string[] }
 ): boolean {
   if (!validSimulatorDraftId(id)) return false;
   try {

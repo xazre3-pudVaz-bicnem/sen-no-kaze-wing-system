@@ -56,7 +56,7 @@ import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-es
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-position-label-suggestions';
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
-import { v25WorkGroupsForDisplay } from '@/components/admin/standard-estimate-v25-work-groups';
+import { v25MoveManualLineWithinWorkGroup, v25WorkGroupsForDisplay } from '@/components/admin/standard-estimate-v25-work-groups';
 import {
   V25ColumnDisplayMenu,
   V25WidthHandle,
@@ -1317,7 +1317,7 @@ function WorkbenchBody({
                         </Fragment>
                       );
                     })}
-                      {workGroup.lines.map((line) => {
+                      {workGroup.lines.map((line, lineIndex) => {
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
                         <tr key={line.key} id={`v25-manual-row-${line.key}`} tabIndex={-1}
@@ -1386,7 +1386,23 @@ function WorkbenchBody({
 
                           <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
-                              <div className="flex items-center justify-center gap-2">
+                              <div className="flex items-center justify-center gap-0.5">
+                                <span className="flex w-4 shrink-0 flex-col" data-testid="v25-wb-manual-reorder">
+                                  <button type="button" aria-label={`${line.name || '明細'}を上へ移動`} title="同じ工事項目内で上へ"
+                                    data-testid="v25-wb-manual-move-up"
+                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+                                    disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === 0}
+                                    onClick={() => setState((current) => ({
+                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1),
+                                    }))}>▲</button>
+                                  <button type="button" aria-label={`${line.name || '明細'}を下へ移動`} title="同じ工事項目内で下へ"
+                                    data-testid="v25-wb-manual-move-down"
+                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+                                    disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === workGroup.lines.length - 1}
+                                    onClick={() => setState((current) => ({
+                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1),
+                                    }))}>▼</button>
+                                </span>
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
                                   {line.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"

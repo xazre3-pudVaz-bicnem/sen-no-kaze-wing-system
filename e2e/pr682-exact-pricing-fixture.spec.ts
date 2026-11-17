@@ -1,4 +1,6 @@
-import { createElement } from 'react';
+import { createRequire } from 'node:module';
+// Playwright's JSX transform uses serialized component objects; use actual React for SSR.
+const realCreateElement = createRequire(process.cwd() + '/package.json')('react').createElement as typeof import('react').createElement;
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test, type Page } from '@playwright/test';
 import { EquipmentBoard, type EquipmentSlotTile } from '../components/simulator/equipment-board';
@@ -76,7 +78,7 @@ test('Chromium表示：現行価格の正式見積総額から得た増額・減
   if (roof.kind !== 'changed' || toilet.kind !== 'changed') throw Error('exact prices expected');
   expect(roof.deltaIncludingTax).toBeGreaterThan(0);
   expect(toilet.deltaIncludingTax).toBeLessThan(0);
-  const html = renderToStaticMarkup(createElement(EquipmentBoard, {
+  const html = renderToStaticMarkup(realCreateElement(EquipmentBoard, {
     categories: cats, options: opts, selected: current, baselineSelected: baseline,
     readOnly: true, onPickCategory: () => {}, getCardDelta: evaluator.evaluate,
   }));
@@ -154,7 +156,7 @@ test('Chromium表示：v2.5の屋根23.5㎡と位置別サッシを正式税込�
   const tiles: EquipmentSlotTile[] = [{
     slotCode: 'window-1', categoryId: 'sash', label: '窓①', option: opts[3], variantNames: [],
   }];
-  const html = renderToStaticMarkup(createElement(EquipmentBoard, {
+  const html = renderToStaticMarkup(realCreateElement(EquipmentBoard, {
     categories: cats, options: opts, selected: ['roof2'], baselineSelected: ['roof1'],
     slotTiles: tiles, readOnly: true, onPickCategory: () => {}, getCardDelta: evaluator.evaluate,
   }));

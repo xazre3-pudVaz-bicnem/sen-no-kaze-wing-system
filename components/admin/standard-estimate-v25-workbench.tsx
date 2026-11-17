@@ -351,6 +351,8 @@ type WorkbenchProps = {
   lockVersion: number;
   readOnly: boolean;
   baseLines: V25WorkbenchBaseLine[];
+  /** 現在の標準見積が参照する本体Revision。確認できた場合のみ版番号・直リンクを表示。 */
+  baseMasterReference?: { masterId: string; revisionVersion: number } | null;
   candidates: V25WorkbenchCandidate[];
   initial: V25EditorState;
   costs: V25WorkbenchCosts;
@@ -377,6 +379,7 @@ function WorkbenchBody({
   lockVersion,
   readOnly,
   baseLines,
+  baseMasterReference,
   candidates,
   initial,
   costs,
@@ -934,13 +937,13 @@ function WorkbenchBody({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-t-md border border-slate-300 bg-white px-2 py-1.5 text-[11px]" data-testid="v25-wb-compact-settings">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-t-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px]" data-testid="v25-wb-compact-settings">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
           <div key={key} className="flex items-center gap-1.5">
             <label htmlFor={`v25-wb-rate-${key}`} className="whitespace-nowrap text-slate-600">{RATE_LABEL[key]}（%）</label>
             <div className="relative">
               <Input id={`v25-wb-rate-${key}`} value={percents[key]} disabled={readOnly} inputMode="decimal"
-                className="h-7 min-h-7! w-[5rem] rounded-sm pr-5 text-right text-[11px]" data-testid={`v25-wb-${key}`}
+                className="h-7 min-h-7! w-[5rem] rounded border-slate-300 bg-white pr-5 text-right text-[11px]" data-testid={`v25-wb-${key}`}
                 onChange={(event) => setRate(key, event.target.value)}
                 onKeyDown={(event) => {
                   if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -963,13 +966,13 @@ function WorkbenchBody({
         <div className="flex items-center gap-1.5">
           <label htmlFor="v25-wb-adjustment" className="whitespace-nowrap text-slate-600">調整額（税別・円）</label>
           <Input id="v25-wb-adjustment" value={state.adjustment} disabled={readOnly} inputMode="numeric"
-            className="h-7 min-h-7! w-[7rem] rounded-sm text-right text-[11px]" data-testid="v25-wb-adjustment"
+            className="h-7 min-h-7! w-[7rem] rounded border-slate-300 bg-white text-right text-[11px]" data-testid="v25-wb-adjustment"
             onChange={(event) => setState((current) => ({ ...current, adjustment: event.target.value }))} />
         </div>
-        <div className="flex min-w-[11rem] flex-1 items-center gap-1.5">
+        <div className="flex min-w-[13rem] flex-[2_1_16rem] items-center gap-1.5">
           <label htmlFor="v25-wb-adjustment-reason" className="shrink-0 whitespace-nowrap text-slate-600">調整理由</label>
           <Input id="v25-wb-adjustment-reason" value={state.adjustment_reason} disabled={readOnly}
-            className="h-7 min-h-7! min-w-0 flex-1 rounded-sm text-[11px]"
+            className="h-7 min-h-7! min-w-0 flex-1 rounded border-slate-300 bg-white text-[11px]"
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
         </div>
         <div className="ml-auto shrink-0" data-testid="v25-wb-column-display-position">
@@ -1028,7 +1031,21 @@ function WorkbenchBody({
             </tr>
           </thead>
           <tbody>
-            {sectionHeader('base', '本体（本体マスター）')}
+            {sectionHeader('base', '本体（本体マスター）', (
+              <span className="flex flex-wrap items-center gap-2 text-[10px]" data-testid="v25-wb-base-reference">
+                <span className="rounded border border-emerald-700 px-1 py-0.5 text-emerald-100">参照専用</span>
+                {baseMasterReference ? (
+                  <Link href={`/admin/base-masters/${encodeURIComponent(baseMasterReference.masterId)}`}
+                    className="font-medium text-white underline underline-offset-2" data-testid="v25-wb-base-master-link"
+                    title="参照中の本体マスター。現在の公開版と異なる可能性があります">
+                    本体マスターを開く（参照版：第{baseMasterReference.revisionVersion}版）
+                  </Link>
+                ) : (
+                  <Link href="/admin/base-masters" className="text-emerald-100 underline underline-offset-2"
+                    data-testid="v25-wb-base-master-fallback">本体マスター一覧（参照元の版番号は未取得）</Link>
+                )}
+              </span>
+            ))}
             {!collapsed.has('base') &&
               baseLines.map((line) => {
                 const result = resultByKey.get(`base:${line.id}`);
@@ -1104,6 +1121,7 @@ function WorkbenchBody({
                       const slotCode = slot.slot_code.trim();
                       const positionAllowed = Boolean(candidate && !candidate.unavailable && canUsePositionSlot(candidate.categoryCode));
                       const isSash = candidate?.categoryCode === 'sash';
+                      const isLighting = candidate?.categoryCode === 'lighting';
                       const mixedUnset = !slotCode && positionMixes.some((mix) =>
                         mix.categoryId === candidate?.categoryId && mix.unsetKeys.includes(slot.key));
                       return (
@@ -1115,7 +1133,7 @@ function WorkbenchBody({
                                 <span className="max-w-[4.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                                 <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
                                 {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
-                                {isSash && positionAllowed && !readOnly && (
+                                {(isSash || isLighting) && positionAllowed && (
                                   <button type="button" className="shrink-0 text-[10px] text-navy underline disabled:opacity-50" data-testid="v25-wb-slot-position-toggle"
                                     disabled={positionActionsLocked}
                                     title={positionActionsLocked ? '位置名をEnterで確定するかEscで取り消してください' : undefined}
@@ -1133,39 +1151,52 @@ function WorkbenchBody({
                                 )}
                                 {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</span>}
                               </div>
-                              {slotCode && (positionLabelEditor?.slotKey === slot.key && !readOnly ? (
-                                <div className="space-y-0.5" data-testid="v25-wb-inline-position-editor">
-                                  <V25PositionNameInput disabled={pending}
-                                    testId="v25-wb-inline-position-input"
-                                    value={positionLabelEditor.label} placeholder="例：寝室の窓"
-                                    onChange={(label) => {
-                                      const error = renameV25Position(state, slot.key, label, (id) => candidateById.get(id)).error;
-                                      setPositionLabelEditor((current) => current ? { ...current, label, error } : null);
-                                    }}
-                                    onConfirm={commitInlinePositionLabel}
-                                    onCancel={() => setPositionLabelEditor(null)}
-                                  />
-                                  {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
-                                  <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
-                                  <p className="text-[10px] text-amber-800">編集中は保存・行削除・位置設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。</p>
+                              {(slotCode || isSash || isLighting) && (
+                                <div className="mt-px min-w-0 text-[10px] text-slate-600" data-testid="v25-wb-position-summary">
+                                  {slotCode && positionLabelEditor?.slotKey === slot.key && !readOnly ? (
+                                    <div className="space-y-0.5" data-testid="v25-wb-inline-position-editor">
+                                      <span>設置位置：</span>
+                                      <V25PositionNameInput disabled={pending}
+                                        testId="v25-wb-inline-position-input"
+                                        value={positionLabelEditor.label} placeholder="例：寝室の窓"
+                                        onChange={(label) => {
+                                          const error = renameV25Position(state, slot.key, label, (id) => candidateById.get(id)).error;
+                                          setPositionLabelEditor((current) => current ? { ...current, label, error } : null);
+                                        }}
+                                        onConfirm={commitInlinePositionLabel}
+                                        onCancel={() => setPositionLabelEditor(null)}
+                                      />
+                                      {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
+                                      <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
+                                      <p className="text-[10px] text-amber-800">編集中は保存・行削除・位置設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。</p>
+                                    </div>
+                                  ) : (
+                                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-1">
+                                      <span className="shrink-0">設置位置：</span>
+                                      {slotCode ? (
+                                        <button type="button" className="min-w-0 truncate text-left text-[10px] font-medium text-emerald-900 underline underline-offset-2"
+                                          data-testid="v25-wb-slot-position"
+                                          disabled={pending || positionInputActive}
+                                          aria-label={readOnly ? '位置・選べる商品を設定' : '位置名を直接編集'}
+                                          title={positionInputActive
+                                            ? '編集中の位置名をEnterで確定するかEscで取り消してください'
+                                            : `${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
+                                          onClick={(event) => {
+                                            // 別行を開いて入力途中の位置名を上書きしない。
+                                            if (pending || positionInputActive) return;
+                                            if (readOnly) { rememberDialogOpener(event.currentTarget); openPosition(slot); }
+                                            else setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null });
+                                          }}>
+                                          {slot.slot_label.trim() || '未設定'}
+                                        </button>
+                                      ) : (
+                                        <span className="text-amber-800" data-testid="v25-wb-position-not-set">未設定</span>
+                                      )}
+                                      {slotCode && <span className="whitespace-nowrap text-slate-500">｜ 変更候補：{slot.selectable_option_ids.length > 0 ? `${slot.selectable_option_ids.length}件` : 'なし'}</span>}
+                                    </div>
+                                  )}
                                 </div>
-                              ) : (
-                                <button type="button" className="block max-w-full truncate text-left text-[10px] text-navy underline"
-                                  data-testid="v25-wb-slot-position"
-                                  disabled={pending || positionInputActive}
-                                  aria-label={readOnly ? '位置・選べる商品を設定' : '位置名を直接編集'}
-                                  title={positionInputActive
-                                    ? '編集中の位置名をEnterで確定するかEscで取り消してください'
-                                    : `${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
-                                  onClick={(event) => {
-                                    // 別行を開いて入力途中の位置名を上書きしない。
-                                    if (pending || positionInputActive) return;
-                                    if (readOnly) { rememberDialogOpener(event.currentTarget); openPosition(slot); }
-                                    else setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null });
-                                  }}>
-                                  {slot.slot_label.trim() || '位置'} · {slot.selectable_option_ids.length > 0 ? `変更候補${slot.selectable_option_ids.length}件` : '標準品のみ'}
-                                </button>
-                              ))}
+                              )}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
                               {status && status !== 'current' && (
                                 <div className="mt-0.5" data-testid="v25-wb-slot-cost-alert">
@@ -1456,7 +1487,7 @@ function WorkbenchBody({
       </p>
 
       {!readOnly && (
-        <div ref={saveAreaRef} className="space-y-3 rounded-lg border border-slate-300 bg-white p-3">
+        <div ref={saveAreaRef} className="space-y-3 rounded-lg border border-slate-200 bg-white p-3" data-testid="v25-wb-save-area">
           {positionInputActive && (
             <p role="status" data-testid="v25-wb-position-edit-save-blocked" className="text-sm font-medium text-amber-800">
               位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。
@@ -1470,7 +1501,8 @@ function WorkbenchBody({
               </ul>
             </Alert>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-2" data-testid="v25-wb-action-priorities">
+            <div className="flex flex-wrap items-center gap-2">
             <Button type="button" onClick={save} disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save">
               {pending ? '処理中…' : '下書きを保存'}
             </Button>
@@ -1480,6 +1512,8 @@ function WorkbenchBody({
             }}>
               変更を破棄
             </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"
               title={dirty ? '保存してから取り込んでください' : undefined}
               onClick={() => run(() => refreshStandardEstimateV25CostsAction({ revision_id: revisionId, expected_lock_version: lockVersion }))}>
@@ -1497,6 +1531,7 @@ function WorkbenchBody({
             >
               公開する
             </ConfirmActionButton>
+            </div>
           </div>
         </div>
       )}

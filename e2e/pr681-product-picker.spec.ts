@@ -106,17 +106,60 @@ test('長い品名・型番・寸法の折り返しと同じ行のカード高�
   }
 });
 
-test('位置別商品：テスト用の位置枠があれば表示・選択状態を確認', async ({ page }) => {
+test('位置別商品：基本・選択中の重複表示なし→変更候補選択→位置ごとにプラン反映', async ({ page }) => {
   test.setTimeout(150_000);
-  await openFreshSimulator(page);
-  const slots = page.locator('button[data-testid^="equip-slot-"]');
-  // The local seed may not contain the published v2.5 position slots; do not
-  // treat that situation as completed browser testing.
-  test.skip((await slots.count()) === 0, 'Local seed does not expose v2.5 position slots: isolated fixture is required');
-  await slots.first().click();
+  await page.goto('/__e2e_pr681_picker');
+  const fixture = page.getByTestId('pr681-local-fixture');
+  await expect(fixture).toBeVisible();
+  await expect(fixture.getByRole('alert')).toHaveCount(0);
+
+  // 標準の位置（選択中=基本プラン）を必ず作成して検査する。条件付きskipは禁止。
+  await page.getByTestId('fixture-open-bedroom-fix').click();
   const dialog = page.getByTestId('option-picker');
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByTestId('product-list')).toBeVisible();
-  await expect(dialog.getByTestId('product-list').locator('li').first()
-    .locator('[data-testid^="product-card-current-"]')).toBeVisible();
+  await expect(dialog).toContainText('寝室FIX窓');
+  await expect(dialog.getByTestId('product-choice-guide')).toContainText('開閉方式');
+  const baseCard = dialog.getByTestId('product-card-sash-standard');
+  await expect(baseCard.getByTestId('product-card-baseline-sash-standard')).toBeVisible();
+  await expect(baseCard.getByTestId('product-card-current-sash-standard')).toBeVisible();
+  await expect(baseCard.getByText('基本プランの商品', { exact: true })).toHaveCount(1);
+  await expect(baseCard.getByTestId('product-card-price-sash-standard')).toHaveCount(0);
+  await expect(dialog.getByTestId('product-list').locator('li').first()).toContainText('サッシ 標準');
+
+  // 基本プランを維持したまま、別商品へ変更→カードの現在選択が先頭へ移動。
+  await openProductDetail(page, 'sash-resin');
+  await expect(dialog.getByTestId('product-detail')).toBeVisible();
+  await dialog.getByTestId('product-detail-apply').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId('fixture-current-bedroom-fix')).toContainText('樹脂サッシ');
+  await expect(page.getByTestId('fixture-baseline-bedroom-fix')).toContainText('サッシ 標準');
+  await page.getByTestId('fixture-open-bedroom-fix').click();
+  await expect(dialog.getByTestId('product-card-current-sash-resin')).toBeVisible();
+  await expect(dialog.getByTestId('product-card-baseline-sash-standard')).toBeVisible();
+  await expect(dialog.getByTestId('product-list').locator('li').first()).toContainText('樹脂サッシ');
+  await expect(dialog.getByTestId('product-card-sash-standard').getByText('基本プランの商品', { exact: true })).toHaveCount(1);
+  await dialog.getByRole('button', { name: 'キャンセル' }).click();
+  await expect(dialog).toBeHidden();
+
+  // 別位置は同じ商品カテゴリーでも、基本プランIDが異なることを確認。
+  await page.getByTestId('fixture-open-entrance-window').click();
+  const otherBase = dialog.getByTestId('product-card-sash-resin');
+  await expect(otherBase.getByTestId('product-card-current-sash-resin')).toBeVisible();
+  await expect(otherBase.getByTestId('product-card-baseline-sash-resin')).toBeVisible();
+  await expect(otherBase.getByText('基本プランの商品', { exact: true })).toHaveCount(1);
+  await dialog.getByRole('button', { name: 'キャンセル' }).click();
+
+  // トイレも実際に基本プランの条件を作って重複を確認（skipなし）。
+  await page.getByTestId('fixture-open-toilet-room').click();
+  const toilet = dialog.getByTestId('product-card-toilet-washlet');
+  await expect(toilet.getByTestId('product-card-current-toilet-washlet')).toBeVisible();
+  await expect(toilet.getByTestId('product-card-baseline-toilet-washlet')).toBeVisible();
+  await expect(toilet.getByText('基本プランの商品', { exact: true })).toHaveCount(1);
+  await expect(toilet.getByTestId('product-card-price-toilet-washlet')).toHaveCount(0);
+  await openProductDetail(page, 'toilet-washlet');
+  await expect(dialog.getByTestId('product-detail-current')).toBeVisible();
+  await expect(dialog.getByTestId('product-detail-baseline')).toBeVisible();
+  await dialog.getByTestId('product-detail-apply').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId('fixture-current-toilet-room')).toContainText('ウォッシュレット');
 });

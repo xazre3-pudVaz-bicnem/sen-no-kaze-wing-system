@@ -653,7 +653,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(positioned).toContain('data-testid="v25-wb-duplicate-position"');
     expect(positioned).toContain('別の位置に複製');
     expect(positioned).toContain('位置名を直接編集');
-    expect(positioned).toContain('位置別設定');
+    expect(positioned).toContain('位置を設定');
     expect(positioned).toContain('この商品を台帳で編集');
     expect(positioned).not.toContain('v25-wb-duplicate-position-dialog');
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
@@ -719,10 +719,10 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('positionLabelEditor?.slotKey === slot.key && !readOnly');
     expect(source).toContain('onConfirm={commitInlinePositionLabel}');
     expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}');
-    expect(source).toContain('編集中は保存・行削除・位置別設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。');
+    expect(source).toContain('編集中は保存・行削除・位置設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。');
   });
 
-  it('位置名編集中は行削除と位置別設定の両経路を無効化し、確定・取消後は再び操作・保存が可能', () => {
+  it('位置名編集中は行削除と位置を設定の両経路を無効化し、確定・取消後は再び操作・保存が可能', () => {
     // pendingがない通常時は編集中だけロックし、Enter・Escで編集状態がnullに戻れば解除される。
     expect(v25PositionActionsLocked(false, true)).toBe(true);
     expect(v25PositionActionsLocked(false, false)).toBe(false); // Enter 確定後・Esc 取消後
@@ -744,7 +744,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('setPositionLabelEditor(null);'); // Enterが成功したとき
     expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}'); // Escのとき
     expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
-    expect(source).toContain('編集中は保存・行削除・位置別設定・別の位置名編集ができません。');
+    expect(source).toContain('編集中は保存・行削除・位置設定・別の位置名編集ができません。');
     // 保存ボタンは dirty のままなら編集確定／取消で再び押せる。元から未変更なら無効のまま。
     const canSave = (pending: boolean, dirty: boolean, editing: boolean) => !pending && dirty && !editing;
     expect(canSave(false, true, true)).toBe(false);

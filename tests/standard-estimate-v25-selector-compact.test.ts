@@ -32,7 +32,7 @@ const entries: StandardEstimateWorkspaceEntry[] = definitions.map(([model, purpo
     revisionId: 'published-' + index,
     version: index + 1,
     total: 1_123_001 + index * 104_079,
-    hasPor: index % 2 === 0,
+    hasPor: [1, 2, 3, 6, 7, 8].includes(index),
     pricingModel: 'v2.5',
   },
   draft: index === 0 || index === 5
@@ -68,7 +68,7 @@ describe('標準見積v2.5：コンパクトな仕様選択カード', () => {
     expect(html).toContain('下書き 第2版');
     expect(html).toContain('下書き 第7版');
     expect(html.match(/公開価格（税込）/g)).toHaveLength(10);
-    expect(html.match(/＋別途見積/g)).toHaveLength(5);
+    expect(html.match(/＋別途見積/g)).toHaveLength(6);
     expect(html.match(/data-testid="v25-selector-published-total"/g)).toHaveLength(10);
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
   });

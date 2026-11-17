@@ -86,6 +86,17 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
     expect(JSON.stringify({ slots, lines })).toBe(before); // group_label / 並び順 / 価格は無変更
   });
 
+  it('グループ編集中は元の表示場所に行を保ち、入力完了後に新しい表示場所へ移す', () => {
+    const editing = line('l-edit', '屋根工事（修正中）');
+    const frozen = v25WorkGroupsForDisplay([], [editing], () => null, () => '2. 屋根工事');
+    expect(frozen.map((group) => group.label)).toEqual(['2. 屋根工事']);
+    expect(frozen[0].lines[0]).toBe(editing);
+    const afterBlur = v25WorkGroupsForDisplay([], [editing], () => null);
+    expect(afterBlur.map((group) => group.label)).toEqual(['屋根工事（修正中）']);
+    expect(afterBlur[0].lines[0]).toBe(editing);
+    expect(editing.group_label).toBe('屋根工事（修正中）');
+  });
+
   it('区分内が空なら空の見出し行を表示しない', () => {
     expect(v25WorkGroupsForDisplay([], [], () => null)).toEqual([]);
   });
@@ -107,7 +118,9 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
   });
 
   it('商品/手入力は元の編集行を工事項目下に描画、区分小計は末尾に一度だけ', () => {
-    expect(source).toContain('v25WorkGroupsForDisplay(slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode)');
+    expect(source).toContain('const workGroups = v25WorkGroupsForDisplay(');
+    expect(source).toContain('(optionId) => candidateById.get(optionId)?.categoryCode');
+    expect(source).toContain('editingWorkGroup?.lineKey === line.key ? editingWorkGroup.originalLabel : line.group_label');
     expect(source).toContain('workGroups.map((workGroup)');
     expect(source).toContain('data-testid="v25-work-item-heading"');
     expect(source).toContain('data-work-item={workGroup.key}');
@@ -115,6 +128,8 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('{workGroup.lines.map((line) => {');
     expect(source).toContain('{!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}');
     expect(source).toContain('setLine(line.key, { group_label: event.target.value })');
+    expect(source).toContain('onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}');
+    expect(source).toContain('onBlur={() => setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current)}');
     expect(source).toContain('setSlot(slot.key, { quantity: event.target.value })');
     expect(source).toContain('id={`v25-manual-row-${line.key}`}');
   });

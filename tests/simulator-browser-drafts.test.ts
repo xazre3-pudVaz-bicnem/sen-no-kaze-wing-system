@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  activeSimulatorWorkSessionKey,
   legacySimulatorDraftKey,
   workSimulatorDraftKey,
   latestResumableBrowserDraft,
@@ -29,6 +30,7 @@ const record = (ownerId: string | null, savedAt: number, configId: string | null
 describe('お客様向けシミュレーター：下書きの独立と明示再開', () => {
   it('過去の旧形式キーを維持し、編集作業は異なるキーで保管する', () => {
     expect(legacy).toBe('wing:sim:wing-01');
+    expect(activeSimulatorWorkSessionKey('wing-01')).not.toBe(legacy);
     expect(workA).not.toBe(legacy);
     expect(workA).not.toBe(workB);
     expect(validSimulatorDraftId(first)).toBe(true);
@@ -69,6 +71,8 @@ describe('お客様向けシミュレーター：下書きの独立と明示再�
     const app = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
     const page = fs.readFileSync(path.join(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'), 'utf8');
     expect(app).toContain('workSimulatorDraftKey(model.slug, id)');
+    expect(app).toContain('window.sessionStorage.setItem(activeSimulatorWorkSessionKey(model.slug), id)');
+    expect(app).toContain('window.sessionStorage.removeItem(activeSimulatorWorkSessionKey(model.slug))');
     expect(app).toContain('activeWorkDraftId.current ?? window.crypto.randomUUID()');
     expect(app).toContain('if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();');
     expect(app).not.toContain('localStorage.setItem(legacySimulatorDraftKey');

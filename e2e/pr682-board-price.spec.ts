@@ -32,6 +32,8 @@ test('Wing現行価格：標準商品・未確定金額と選択操作、見積�
   await expect(standard.getByTestId('equip-price-toilet')).toHaveText('基本プランに含む');
   // Price-on-request elsewhere in the quote prevents certifying a changed card's amount.
   await expect(page.getByTestId('quote-sheet')).toBeVisible();
+  // 画面受入用の証跡。外部DBのないlocalhost専用テストでのみ保存。
+  await page.screenshot({ path: 'test-results/pr682-desktop-equipment-board.png', fullPage: true });
 });
 
 test('外壁4面：1面だけ変更しても選択操作と総額を保ち、別途見積があれば数値を確定しない', async ({ page }) => {

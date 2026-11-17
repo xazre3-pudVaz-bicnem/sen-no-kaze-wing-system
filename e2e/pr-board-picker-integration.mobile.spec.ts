@@ -5,7 +5,7 @@ test('スマートフォンでも候補一覧・詳細・商品カードの税�
   if (!baseURL || !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(baseURL)) throw new Error('localhost only');
   await page.goto('/local-card-price-fixture');
   const fixture = page.getByTestId('integrated-candidate-fixture');
-  await fixture.getByTestId('integrated-open-picker').click();
+  await fixture.getByTestId('equip-toilet').click();
   const picker = page.getByTestId('option-picker');
   const up = picker.getByTestId('product-card-price-toilet-up');
   await expect(up).toHaveText('＋98,670円（税込）');

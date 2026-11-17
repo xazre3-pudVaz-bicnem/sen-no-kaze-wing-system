@@ -39,7 +39,7 @@ export function writeBrowserWorkDraft(
   storage: { setItem(key: string, value: string): void },
   slug: string,
   id: string,
-  snapshot: { selected: string[] }
+  snapshot: { selected: string[]; ownerId?: string | null }
 ): boolean {
   if (!validSimulatorDraftId(id)) return false;
   try {

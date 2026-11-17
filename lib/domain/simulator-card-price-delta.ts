@@ -139,7 +139,7 @@ function validV25PositionSlots(
       const variant = choices.get(id);
       const group = variant ? groups.get(variant.group_id) : undefined;
       if (!variant || !group || group.option_id !== choice.option_id ||
-          variant.status === 'retired' || group.status === 'retired' ||
+          variant.status !== 'published' || group.status !== 'published' ||
           seenGroups.has(group.id)) return false;
       seenGroups.add(group.id);
       return true;

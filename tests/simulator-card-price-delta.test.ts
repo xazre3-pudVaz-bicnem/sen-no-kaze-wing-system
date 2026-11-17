@@ -184,18 +184,18 @@ const v25View: StandardEstimateSaleView = {
   total: 317_830, has_por: false,
   sections: [
     { code: 'base', expense_method: 'rate', line_subtotal: 0, expense_amount: 0, total: 0, has_por: false },
-    { code: 'interior_exterior', expense_method: 'rate', line_subtotal: 0, expense_amount: 0, total: 0, has_por: false },
-    { code: 'option', expense_method: 'rate', line_subtotal: 251_250, expense_amount: 37_687, total: 288_937, has_por: false },
+    { code: 'interior_exterior', expense_method: 'rate', line_subtotal: 251_250, expense_amount: 37_687, total: 288_937, has_por: false },
+    { code: 'option', expense_method: 'rate', line_subtotal: 0, expense_amount: 0, total: 0, has_por: false },
     { code: 'sitework', expense_method: 'none', line_subtotal: 0, expense_amount: 0, total: 0, has_por: false },
   ],
   base_lines: [],
   lines: [],
   baseline: [
-    { option_id: 'roof1', section_code: 'option', selection_target_code: 'roof',
+    { option_id: 'roof1', section_code: 'interior_exterior', selection_target_code: 'roof',
       quantity: '23.5000', unit_price: 10_500, amount: 246_750,
       price_on_request: false, variant_choice_ids: ['white'], variant_extra: 0,
       unit: '㎡', measured: true, slot_code: null, category_id: 'roof', selectable_option_ids: null },
-    { option_id: 'sash1', section_code: 'option', selection_target_code: 'sash',
+    { option_id: 'sash1', section_code: 'interior_exterior', selection_target_code: 'sash',
       quantity: '1', unit_price: 4_500, amount: 4_500,
       price_on_request: false, variant_choice_ids: [], variant_extra: 0,
       unit: '式', measured: true, slot_code: 'window-1', slot_label: '窓①', category_id: 'sash',
@@ -239,7 +239,7 @@ describe('商品カード：v2.5売価・数量・位置別の安全性', () => 
     const changed = plan(['roof2'], [], [], v25Slots);
     const officialChanged = computeSaleViewPricing(withoutCatalogCosts(v25Bundle), v25View, ['roof2'], [], [], undefined, v25Slots);
     const officialBack = computeSaleViewPricing(withoutCatalogCosts(v25Bundle), v25View, ['roof1'], ['white'], [], undefined, v25Slots);
-    expect(officialChanged.sections.find((section) => section.code === 'option')?.delta_line).toBe(35_250);
+    expect(officialChanged.sections.find((section) => section.code === 'interior_exterior')?.delta_line).toBe(35_250);
     expect(simulatorCardDelta(v25Input(changed), categoryTarget('roof'))).toEqual({
       kind: 'changed', deltaIncludingTax: officialChanged.pricing.total - officialBack.pricing.total,
     });

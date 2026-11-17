@@ -1605,7 +1605,7 @@ function WorkbenchBody({
                     </div>
                   )}
               </div>
-              <p className="text-[0.68rem] leading-5 text-muted">位置を設定する商品は数量1が必要です。</p>
+              <p className="text-[0.68rem] leading-5 text-muted">新しく位置を設定するときは数量1が必要です。</p>
               {!positionSlot.slot_code.trim() && Number(positionSlot.quantity) !== 1 && (
                 <p className="text-xs font-medium text-amber-800">現在の数量は {positionSlot.quantity} です。新しく位置を設定するには数量１が必要です。自動変更はしません。</p>
               )}

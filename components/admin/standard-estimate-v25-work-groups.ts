@@ -57,6 +57,8 @@ export function v25WorkGroupsForDisplay(
   slots: readonly V25SlotRow[],
   lines: readonly V25LineRow[],
   categoryCodeOf: (optionId: string) => string | null | undefined,
+  /** グループ名の入力中は表示上だけ編集前の所属へ据え置く（フォームを再マウントしない）。 */
+  displayGroupLabelOf: (line: V25LineRow) => string = (line) => line.group_label,
 ): V25DisplayWorkGroup[] {
   const groups = new Map<string, V25DisplayWorkGroup & { order: number; first: number }>();
   const ensureGroup = (identity: DisplayGroupIdentity) => {
@@ -72,7 +74,7 @@ export function v25WorkGroupsForDisplay(
       { key: 'products:unclassified', label: '工事項目未分類の商品', order: 102 };
     ensureGroup(item).slots.push(slot);
   }
-  for (const line of lines) ensureGroup(v25WorkItemForManual(line.group_label)).lines.push(line);
+  for (const line of lines) ensureGroup(v25WorkItemForManual(displayGroupLabelOf(line))).lines.push(line);
   return [...groups.values()]
     .sort((a, b) => a.order - b.order || a.first - b.first)
     .map(({ key, label, slots: itemSlots, lines: itemLines }) => ({ key, label, slots: itemSlots, lines: itemLines }));

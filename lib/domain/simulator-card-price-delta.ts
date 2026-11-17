@@ -31,7 +31,14 @@ export interface SimulatorCardPlanSelection {
 export type SimulatorCardPriceSource =
   | { kind: 'legacy'; baseOverride: number | null }
   | { kind: 'legacy-template'; template: EstimateTemplateBundle; finishLevel: FinishLevel }
-  | { kind: 'sale-view'; view: StandardEstimateSaleView; unitLookup?: V25UnitLookup }
+  | {
+      kind: 'sale-view';
+      view: StandardEstimateSaleView;
+      unitLookup?: V25UnitLookup;
+      /** 注文範囲内の公開位置コード（現在の選択ではなく、公開版と注文範囲から導出）。
+       * 未指定なら公開版の全位置枠を必須とする。 */
+      activeSlotCodes?: readonly string[];
+    }
   | { kind: 'v25-pending' };
 
 export type SimulatorCardTarget =
@@ -78,8 +85,66 @@ function completeFaces(faces: ExteriorFaceSelection[]): boolean {
     FACE_CODES.every((code) => faces.filter((face) => face.face_code === code).length === 1);
 }
 
-function uniqueSlots(slots: SlotSelection[]): boolean {
-  return slots.every((slot, index) => slots.findIndex((other) => other.slot_code === slot.slot_code) === index);
+/**
+ * 公開版の位置枠を正本として、選択データ全体を検証する。
+ * computeSaleViewPricing は無い位置や知らない位置を計上せず、重複は複数計上し得る。
+ * そのため表示専用の差額判定では、価格計算へ渡す前に欠落・重複・不整合を遮断する。
+ */
+function validV25PositionSlots(
+  bundle: CatalogBundle,
+  source: Extract<SimulatorCardPriceSource, { kind: 'sale-view' }>,
+  plan: SimulatorCardPlanSelection
+): boolean {
+  const published = v25PositionSlots(source.view);
+  const publishedCodes = published.map((slot) => slot.slot_code);
+  const activeCodes = source.activeSlotCodes ?? publishedCodes;
+  const selected = plan.slotSelections ?? [];
+  const publishedCodeSet = new Set(publishedCodes);
+  const activeCodeSet = new Set(activeCodes);
+
+  // 公開版そのものが重複・不正、注文範囲の指定が公開版と一致しない場合も数値を出さない。
+  if (publishedCodeSet.size !== publishedCodes.length ||
+      activeCodeSet.size !== activeCodes.length ||
+      activeCodes.some((code) => !publishedCodeSet.has(code)) ||
+      selected.length !== activeCodes.length ||
+      new Set(selected.map((item) => item.slot_code)).size !== selected.length ||
+      selected.some((item) => !activeCodeSet.has(item.slot_code))) {
+    return false;
+  }
+
+  const options = new Map(bundle.options.map((option) => [option.id, option] as const));
+  const groups = new Map(bundle.variantGroups.map((group) => [group.id, group] as const));
+  const choices = new Map(bundle.variantChoices.map((choice) => [choice.id, choice] as const));
+  const activeSlots = published.filter((slot) => activeCodeSet.has(slot.slot_code));
+  const activeCategories = new Set(activeSlots.map((slot) =>
+    slot.category_id ?? options.get(slot.standard_option_id)?.category_id
+  ));
+  // 位置別とカテゴリー別で同じ商品の価格を二重計上しない。
+  if (plan.optionIds.some((id) => activeCategories.has(options.get(id)?.category_id))) return false;
+
+  return activeSlots.every((slot) => {
+    const choice = selected.find((item) => item.slot_code === slot.slot_code);
+    const standardOption = options.get(slot.standard_option_id);
+    const pickedOption = choice ? options.get(choice.option_id) : undefined;
+    const categoryId = slot.category_id ?? standardOption?.category_id;
+    if (!choice || !standardOption || standardOption.status !== 'published' ||
+        !pickedOption || pickedOption.status !== 'published' ||
+        !categoryId || standardOption.category_id !== categoryId ||
+        pickedOption.category_id !== categoryId ||
+        !slot.selectable_option_ids.includes(choice.option_id) ||
+        !Array.isArray(choice.variant_choice_ids)) return false;
+
+    const seenGroups = new Set<string>();
+    return choice.variant_choice_ids.every((id) => {
+      const variant = choices.get(id);
+      const group = variant ? groups.get(variant.group_id) : undefined;
+      if (!variant || !group || group.option_id !== choice.option_id ||
+          variant.status === 'retired' || group.status === 'retired' ||
+          seenGroups.has(group.id)) return false;
+      seenGroups.add(group.id);
+      return true;
+    });
+  });
 }
 
 type Restored =
@@ -90,7 +155,8 @@ type Restored =
 function restoreTarget(input: SimulatorCardPriceInput, target: SimulatorCardTarget): Restored {
   const { bundle, source, current, standard } = input;
   const slots = current.slotSelections ?? [];
-  if (!uniqueSlots(slots)) return { kind: 'pending' };
+  if (source.kind === 'sale-view' && isV25SaleView(source.view) &&
+      !validV25PositionSlots(bundle, source, current)) return { kind: 'pending' };
 
   if (target.kind === 'slot') {
     if (source.kind !== 'sale-view' || !isV25SaleView(source.view)) return { kind: 'pending' };

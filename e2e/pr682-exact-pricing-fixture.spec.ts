@@ -12,7 +12,7 @@ test.beforeEach(async ({ baseURL }) => {
 });
 
 test('現行価格：正式な税込総額から計算された増額・減額・標準・0円差額をChromiumで表示', async ({ page }) => {
-  await page.goto('/__e2e__/card-price');
+  await page.goto('/local-card-price-fixture');
   const fixture = page.getByTestId('legacy-fixture');
   await expect(fixture).toBeVisible();
   const up = fixture.getByTestId('equip-price-roof');
@@ -31,7 +31,7 @@ test('現行価格：正式な税込総額から計算された増額・減額�
 });
 
 test('v2.5：屋根23.5㎡・位置別サッシの正式税込総額差をChromiumで表示', async ({ page }) => {
-  await page.goto('/__e2e__/card-price');
+  await page.goto('/local-card-price-fixture');
   const fixture = page.getByTestId('v25-fixture');
   await expect(fixture).toBeVisible();
   const roof = fixture.getByTestId('equip-price-roof');

@@ -2,11 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  activeSimulatorWorkSessionKey,
   legacySimulatorDraftKey,
   workSimulatorDraftKey,
   latestResumableBrowserDraft,
-  mayReuseActiveBrowserWork,
   readBrowserDraft,
   restoredDraftFinishLevel,
   writeBrowserWorkDraft,
@@ -33,7 +31,6 @@ const record = (ownerId: string | null, savedAt: number, configId: string | null
 describe('お客様向けシミュレーター：下書きの独立と明示再開', () => {
   it('過去の旧形式キーを維持し、編集作業は異なるキーで保管する', () => {
     expect(legacy).toBe('wing:sim:wing-01');
-    expect(activeSimulatorWorkSessionKey('wing-01')).not.toBe(legacy);
     expect(workA).not.toBe(legacy);
     expect(workA).not.toBe(workB);
     expect(validSimulatorDraftId(first)).toBe(true);
@@ -70,15 +67,21 @@ describe('お客様向けシミュレーター：下書きの独立と明示再�
     expect(readBrowserDraft({ getItem() { throw new Error('storage disabled'); } }, workA)).toBeNull();
   });
 
-  it('ログイン前の作業コピーはログイン後に新しい作業として編集し、元の匿名下書きを上書きしない', () => {
-    expect(mayReuseActiveBrowserWork(first, first, null, null)).toBe(true);
-    expect(mayReuseActiveBrowserWork(first, first, null, 'customer-a')).toBe(false);
-    expect(mayReuseActiveBrowserWork(first, first, 'customer-a', 'customer-a')).toBe(true);
-    expect(mayReuseActiveBrowserWork(first, first, 'customer-a', 'customer-b')).toBe(false);
-    expect(mayReuseActiveBrowserWork(first, second, 'customer-a', 'customer-a')).toBe(false);
-    expect(mayReuseActiveBrowserWork('malformed-id', 'malformed-id', 'customer-a', 'customer-a')).toBe(false);
+  it('ブラウザの別タブ・複製タブは同じ読取元を持てても、書込み対象IDを引き継がない', () => {
     const app = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
-    expect(app).toContain('mayReuseActiveBrowserWork(draftId, window.sessionStorage.getItem(activeSimulatorWorkSessionKey(model.slug)), workDraft.ownerId, user?.id ?? null)');
+    expect(app).toContain('const activeWorkDraftId = useRef<string | null>(null)');
+    expect(app).toContain('activeWorkDraftId.current ?? window.crypto.randomUUID()');
+    expect(app).not.toContain('activeWorkDraftId.current = draftId');
+    expect(app).not.toContain('sessionStorage.getItem(');
+    const records = new Map([[workA, record('user-a', 100)]]);
+    const store = { setItem(key: string, value: string) { records.set(key, value); } };
+    const original = records.get(workA);
+    expect(writeBrowserWorkDraft(store, 'wing-01', second, { selected: ['tab-two'], ownerId: 'user-a' })).toBe(true);
+    const otherId = '33333333-3333-4333-8333-333333333333';
+    expect(writeBrowserWorkDraft(store, 'wing-01', otherId, { selected: ['tab-three'], ownerId: 'user-a' })).toBe(true);
+    expect(records.get(workA)).toBe(original);
+    expect(JSON.parse(records.get(workB) ?? '{}').selected).toEqual(['tab-two']);
+    expect(JSON.parse(records.get(workSimulatorDraftKey('wing-01', otherId)) ?? '{}').selected).toEqual(['tab-three']);
   });
 
   it('注文範囲を以前の下書きどおり復元し、未知の値だけ現在の既定値へ戻す', () => {
@@ -117,8 +120,6 @@ describe('お客様向けシミュレーター：下書きの独立と明示再�
     const app = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
     const page = fs.readFileSync(path.join(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'), 'utf8');
     expect(app).toContain('writeBrowserWorkDraft(window.localStorage, model.slug, id, draft)');
-    expect(app).toContain('window.sessionStorage.setItem(activeSimulatorWorkSessionKey(model.slug), id)');
-    expect(app).toContain('window.sessionStorage.removeItem(activeSimulatorWorkSessionKey(model.slug))');
     expect(app).toContain('activeWorkDraftId.current ?? window.crypto.randomUUID()');
     expect(app).toContain('if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();');
     expect(app).not.toContain('localStorage.setItem(legacySimulatorDraftKey');

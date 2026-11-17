@@ -27,8 +27,10 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     const adminPage = source('components/admin/ui.tsx');
     const workbench = source('components/admin/standard-estimate-v25-workbench.tsx');
     expect(page).toContain('StandardEstimateWorkspaceLayout');
-    expect(page).toContain('flex flex-wrap gap-1.5');
-    expect(page).toContain('min-w-[13rem]');
+    expect(page).toContain('<StandardEstimateV25Selector');
+    const selector = source('components/admin/standard-estimate-v25-selector.tsx');
+    expect(selector).toContain('data-testid="standard-estimate-selector"');
+    expect(selector).toContain('grid grid-cols-2 gap-2');
     const layout = source('components/admin/standard-estimate-workspace-layout.tsx');
     expect(layout).toContain('min-w-0 space-y-3');
     expect(layout).not.toContain('lg:grid-cols-[15rem_minmax(0,1fr)]');

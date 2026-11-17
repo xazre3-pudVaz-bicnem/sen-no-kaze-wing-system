@@ -288,7 +288,8 @@ describe('Excel 風の画面（描画）', () => {
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);
-    expect(html).toContain('data-testid="v25-excel-toolbar"');
+    expect(html).not.toContain('data-testid="v25-excel-toolbar"');
+    expect(html).toContain('data-testid="v25-wb-column-display-position"');
     expect(html).toContain('data-testid="v25-excel-grid-scroll"');
     expect(html).toContain('overflow-x-auto rounded-b-md');
     expect(html).not.toContain('max-h-[70vh]');
@@ -833,10 +834,10 @@ describe('Excel 風の画面（描画）', () => {
     expect(editable).toContain('data-testid="v25-wb-save"');
     expect(editable).toContain('data-testid="v25-wb-refresh"');
     expect(editable).toContain('data-testid="v25-wb-publish"');
-    expect(editable).toContain('＋ 商品台帳から追加');
+    expect(editable).toContain('＋ 行を追加');
     const readOnly = render(true);
     expect(readOnly).not.toContain('data-testid="v25-wb-save"');
-    expect(readOnly).not.toContain('＋ 商品台帳から追加');
+    expect(readOnly).not.toContain('＋ 行を追加');
     expect(readOnly).toContain('disabled=""');
   });
 });

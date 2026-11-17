@@ -65,11 +65,11 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
     expect(layer).toContain('role="alertdialog"');
   });
 
-  it('「…」起点の3種類は元のsummaryを明示保存し、ポップアップ閉鎖で元の行に戻す', () => {
+  it('「…」と区分の行追加メニューは元のsummaryを明示保存し、ポップアップ閉鎖で元の行に戻す', () => {
     expect(workbench).toContain("const menuTrigger = button.closest('details')?.querySelector<HTMLElement>('summary')");
     expect(workbench).toContain('setDialogOpener(menuTrigger ?? button);');
     expect(workbench).toContain('const [dialogOpener, setDialogOpener] = useState<HTMLElement | null>(null);');
-    expect((workbench.match(/rememberRowMenuOpener\(event\.currentTarget\)/g) ?? [])).toHaveLength(3);
+    expect((workbench.match(/rememberRowMenuOpener\(event\.currentTarget\)/g) ?? [])).toHaveLength(4);
     expect((workbench.match(/returnFocusTo=\{dialogOpener\}/g) ?? [])).toHaveLength(5);
     // 子の「変更候補を選ぶ」は親画面内の元ボタンへ戻すため、明示オーバーライドを渡さない。
     expect(workbench).toContain('onClose={closeSelectable} dirty={selectableDirty}');

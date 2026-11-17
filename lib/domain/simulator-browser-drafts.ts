@@ -6,6 +6,8 @@ import { canRestoreSimulatorDraft } from './simulator-draft-ownership';
  */
 export const legacySimulatorDraftKey = (slug: string) => `wing:sim:${slug}`;
 export const workSimulatorDraftKey = (slug: string, id: string) => `wing:sim:work:${slug}:${id}`;
+/** Per-tab marker only; the browser drafts themselves remain in localStorage. */
+export const activeSimulatorWorkSessionKey = (slug: string) => `wing:sim:active-work:${slug}`;
 const workPrefix = (slug: string) => `wing:sim:work:${slug}:`;
 export const validSimulatorDraftId = (id: string | null | undefined): id is string =>
   typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(id) && id.length <= 64;

@@ -186,16 +186,21 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
     }
   }
 
+  // URL の対象（保存プラン・一時保存・仕様）と本部プレビューのモードを別々に識別する。
+  // 同じ画面からプレビューへ移ったときも、以前の React state を引き継がず標準状態から開始する。
+  const simulatorRouteKey = c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new';
+
   return (
     <>
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: `${model.name} 見積シミュレーター`, path: `/simulator/${model.slug}` }])} />
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
-          key={c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new'}
+          key={`${previewRequested ? 'standard-preview:' : ''}${simulatorRouteKey}`}
           bundle={clientBundle}
           estimateTemplates={sale.v25 ? withoutTemplatePrices(estimateTemplates) : estimateTemplates}
           saleViews={saleViews}
           pricingPreview={pricingPreview}
+          standardPreview={previewRequested}
           v25Pricing={sale.v25}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}

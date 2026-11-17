@@ -181,15 +181,18 @@ describe('標準見積v2.5：商品カテゴリーから工事項目へ（UI表�
     expect(JSON.stringify({ slots, lines })).toBe(before); // group_label / 並び順 / 価格は無変更
   });
 
-  it('グループ編集中は元の表示場所に行を保ち、入力完了後に新しい表示場所へ移す', () => {
-    const editing = line('l-edit', '屋根工事（修正中）');
-    const frozen = v25WorkGroupsForDisplay([], [editing], () => null, () => '2. 屋根工事');
-    expect(frozen.map((group) => group.label)).toEqual(['2. 屋根工事']);
-    expect(frozen[0].lines[0]).toBe(editing);
-    const afterBlur = v25WorkGroupsForDisplay([], [editing], () => null);
-    expect(afterBlur.map((group) => group.label)).toEqual(['屋根工事（修正中）']);
-    expect(afterBlur[0].lines[0]).toBe(editing);
-    expect(editing.group_label).toBe('屋根工事（修正中）');
+  it('編集ダイアログの確定前は所属見出しが不変で、確定後のみ新所属へ移る', () => {
+    const old = line('l-edit', '2. 屋根工事');
+    const before = v25WorkGroupsForDisplay([], [old], () => null);
+    expect(before[0].label).toBe('2. 屋根工事');
+    const confirmed = { ...old, group_label: '特注工事' };
+    const after = v25WorkGroupsForDisplay([], [confirmed], () => null);
+    expect(after[0].label).toBe('特注工事');
+    expect(old.group_label).toBe('2. 屋根工事');
+    expect(confirmed.key).toBe(old.key);
+    expect(confirmed.quantity).toBe(old.quantity);
+    expect(confirmed.unit_price).toBe(old.unit_price);
+    expect(v25WorkGroupsForDisplay([], [{ ...old, group_label: '' }], () => null)[0].label).toBe('工事項目未設定（手入力）');
   });
 
   it('区分内が空なら空の見出し行を表示しない', () => {
@@ -212,85 +215,68 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(subtotal).not.toContain('afterSaleAmount');
   });
 
-  it('商品/手入力は元の編集行を工事項目下に描画、区分小計は末尾に一度だけ', () => {
+  it('工事項目の重複表示を無くし、明示的なメニュー確定までgroup_labelを変更しない', () => {
     expect(source).toContain('const workGroups = v25WorkGroupsForDisplay(');
-    expect(source).toContain('(optionId) => candidateById.get(optionId)?.categoryCode');
-    expect(source).toContain('editingWorkGroup?.lineKey === line.key ? editingWorkGroup.originalLabel : line.group_label');
     expect(source).toContain('workGroups.map((workGroup)');
     expect(source).toContain('data-testid="v25-work-item-heading"');
     expect(source).toContain('data-work-item={workGroup.key}');
     expect(source).toContain('{workGroup.slots.map((slot) => {');
     expect(source).toContain('{workGroup.lines.map((line, lineIndex) => {');
+    expect(source).toContain('data-v25-excel-col="name"');
+    expect(source).not.toContain('data-v25-excel-col="group"');
+    expect(source).toContain('data-testid="v25-wb-change-work-group"');
+    expect(source).toContain('data-testid="v25-wb-work-group-dialog"');
+    expect(source).toContain('value={groupEditor.value}');
+    expect(source).toContain('setGroupEditor({ lineKey: line.key, originalLabel: line.group_label, value: line.group_label })');
+    expect(source).toContain("if (groupEditor.value !== groupEditor.originalLabel) setLine(groupEditor.lineKey, { group_label: groupEditor.value })");
+    expect(source).toContain('onClose={() => setGroupEditor(null)}');
+    expect(source).toContain('dirty={groupEditor.value !== groupEditor.originalLabel}');
+    expect(source).toContain("setJumpToKey({ key: groupEditor.lineKey })");
     expect(source).toContain('{!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}');
-    expect(source).toContain('setLine(line.key, { group_label: event.target.value })');
-    expect(source).toContain('onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}');
-    expect(source).toContain('onBlur={(event) => {');
-    expect(source).toContain('if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;');
-    expect(source).toContain('setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current);');
-    expect(source).toContain('setSlot(slot.key, { quantity: event.target.value })');
-    expect(source).toContain('id={`v25-manual-row-${line.key}`}');
   });
 
-  it('Tabでグループから同じ行の品名・数量へ移る間は再分類を保留する', () => {
-    const row = source.slice(
-      source.indexOf('id={`v25-manual-row-${line.key}`}'),
-      source.indexOf('data-v25-excel-col="name"', source.indexOf('id={`v25-manual-row-${line.key}`}')),
-    );
-    expect(row).toContain('onBlur={(event) => {');
-    expect(row).toContain('event.currentTarget.contains(event.relatedTarget)');
-    expect(row.indexOf('event.currentTarget.contains(event.relatedTarget)')).toBeLessThan(row.indexOf('setEditingWorkGroup((current)'));
-    expect(row).toContain('data-v25-excel-col="group"');
+  it('Tab・Enter明細フォーカス移動は保持し、編集ダイアログから分類変更しても行ID・数量を変えない', () => {
+    const table = source.slice(source.indexOf('<table ref={tableRef}'), source.indexOf('</table>', source.indexOf('<table ref={tableRef}')));
+    expect(table).toContain('onKeyDown={handleExcelNavigation}');
     expect(source).toContain('const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {');
     expect(source).toContain("event.key === 'Tab'");
-    expect(source).toContain('next.focus(); next.select();');
-    // グループ入力単体のonBlurでは再分類をしない
-    expect(row).not.toContain('onBlur={() => setEditingWorkGroup');
-  });
-
-  it('Enter・Shift+Enter・Tabで別行へ移った場合は、再分類後に同じ入力先を復元する', () => {
-    const row = source.slice(source.indexOf('id={`v25-manual-row-${line.key}`}'), source.indexOf('data-v25-excel-col="group"', source.indexOf('id={`v25-manual-row-${line.key}`}')));
-    expect(row).toContain('const nextInput = event.relatedTarget instanceof HTMLInputElement ? event.relatedTarget : null;');
-    expect(row).toContain("const nextRowId = nextInput?.closest('tr')?.id;");
-    expect(row).toContain('const nextColumn = nextInput?.dataset.v25ExcelCol;');
-    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && nextColumn');
-    expect(row).toContain('{ rowId: nextRowId, column: nextColumn }');
-    expect(row).toContain('setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current)');
     expect(source).toContain("event.key === 'Enter'");
     expect(source).toContain('event.shiftKey ? -1 : 1');
-    expect(source).toContain("event.key === 'Tab'");
-    expect(source).toContain('const [editingWorkGroup, setEditingWorkGroup] = useState');
-    expect(source).toContain('useLayoutEffect(() => {');
-    expect(source).toContain('const target = pendingWorkGroupFocus.current;');
-    expect(source).toContain('pendingWorkGroupFocus.current = null;');
-    expect(source).toContain('document.getElementById(target.rowId)');
-    expect(source).toContain("element.dataset.v25ExcelCol === target.column && !element.disabled");
-    expect(source).toContain('document.activeElement !== input');
-    expect(source).toContain('input.focus({ preventScroll: true });');
-    expect(source).toContain('input.select();');
-    expect(source).toContain('}, [editingWorkGroup]);');
+    expect(source).toContain('next.focus(); next.select();');
+    expect(source).not.toContain('setEditingWorkGroup');
+    expect(source).toContain('setLine(groupEditor.lineKey, { group_label: groupEditor.value })');
+    expect(source).toContain('const setLine = (key: string, patch: Partial<V25LineRow>)');
+    expect(source).toContain('lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line))');
   });
 
-  it('グループ以外の操作へ移る場合は入力先復元をしない', () => {
-    const row = source.slice(source.indexOf('id={`v25-manual-row-${line.key}`}'), source.indexOf('data-v25-excel-col="group"', source.indexOf('id={`v25-manual-row-${line.key}`}')));
-    expect(row).toContain('pendingWorkGroupFocus.current = nextRowId && nextColumn');
-    expect(row).toContain(': null;');
-    expect(source).toContain('if (!target) return;');
-    expect(source).toContain('if (input && document.activeElement !== input)');
+  it('明細行の右端6pxのみ既存の列幅変更へ渡し、結合行・メニュー操作を対象外とする', () => {
+    expect(source).toContain('data-testid="v25-wb-resizable-body"');
+    expect(source).toContain('onMouseDownCapture={startBodyResize}');
+    expect(source).toContain('onMouseMoveCapture={showBodyResizeCursor}');
+    expect(source).toContain('cell.colSpan !== 1');
+    expect(source).toContain("['v25-wb-base-row', 'v25-wb-slot', 'v25-wb-line']");
+    expect(source).toContain('displayedColumns[cell.cellIndex]');
+    expect(source).toContain('edge >= 0 && edge <= 6');
+    expect(source).toContain("target.closest('button, summary, a, select, textarea, [role=\"separator\"]')");
+    expect(source).toContain('columnPrefs.startResize(event, candidate.id)');
+    expect(source).toContain('V25WidthHandle');
+    expect(source).toContain('v25GridWidth(columnPrefs.prefs)');
+    expect(source).toContain('columnPrefs.reset');
   });
 
   it('上下ボタンは自由入力行だけに表示し、端では無効・列数もそのまま', () => {
     const manual = source.slice(source.indexOf('{workGroup.lines.map('), source.indexOf('</tbody>',source.indexOf('{workGroup.lines.map(')));
     expect(manual).toContain('data-testid="v25-wb-manual-move-up"');
     expect(manual).toContain('data-testid="v25-wb-manual-move-down"');
-    expect(manual).toContain('disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === 0}');
-    expect(manual).toContain('disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === workGroup.lines.length - 1}');
+    expect(manual).toContain('disabled={positionActionsLocked || groupEditor !== null || lineIndex === 0}');
+    expect(manual).toContain('disabled={positionActionsLocked || groupEditor !== null || lineIndex === workGroup.lines.length - 1}');
     expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1)');
     expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1)');
     const product = source.slice(source.indexOf('{workGroup.slots.map('), source.indexOf('{workGroup.lines.map('));
     expect(product).not.toContain('v25-wb-manual-move-up');
     expect(manual).toContain('testId="v25-wb-line-delete"');
     expect(manual).toContain('data-v25-excel-col="name"');
-    expect(manual).toContain('pendingWorkGroupFocus.current');
+    expect(manual).toContain('data-testid="v25-wb-change-work-group"');
     expect(source).toContain('data-v25-column="actions"');
     expect(source).toContain('style={{ width: columnPrefs.prefs.widths.actions }}');
   });

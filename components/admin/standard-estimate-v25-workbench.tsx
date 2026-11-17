@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Package, Trash2 } from 'lucide-react';
@@ -425,24 +425,9 @@ function WorkbenchBody({
   const [selectableDraftIds, setSelectableDraftIds] = useState<string[] | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
-  // グループ名の入力中に見出しを移動するとinputが再マウントされるため、フォーカス中だけ旧所属へ表示する。
-  // 保存・数量・価格などのstateとは独立した表示専用の固定情報。
-  const [editingWorkGroup, setEditingWorkGroup] = useState<{ lineKey: string; originalLabel: string } | null>(null);
-  // グループ変更で行が別の見出しに移動しても、Tab/Enterで移った入力欄へフォーカスを戻す。
-  // 表示だけの管理。保存データ・金額・並び順は変更しない。
-  const pendingWorkGroupFocus = useRef<{ rowId: string; column: string } | null>(null);
-  useLayoutEffect(() => {
-    const target = pendingWorkGroupFocus.current;
-    pendingWorkGroupFocus.current = null;
-    if (!target) return;
-    const row = document.getElementById(target.rowId);
-    const input = Array.from(row?.querySelectorAll<HTMLInputElement>('input[data-v25-excel-col]') ?? [])
-      .find((element) => element.dataset.v25ExcelCol === target.column && !element.disabled);
-    if (input && document.activeElement !== input) {
-      input.focus({ preventScroll: true });
-      input.select();
-    }
-  }, [editingWorkGroup]);
+  // グループ名は行内で常時表示せず、メニューから明示的に確定した場合だけ書き換える。
+  // ダイアログ内の入力中に再分類しないので、Tab/Enterで明細のフォーカスが外れることもない。
+  const [groupEditor, setGroupEditor] = useState<{ lineKey: string; originalLabel: string; value: string } | null>(null);
   const [pending, startTransition] = useTransition();
   // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
   const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
@@ -539,6 +524,32 @@ function WorkbenchBody({
     const next = v25StepPercent(percents[key], direction, key);
     if (next !== percents[key]) setRate(key, next);
   };
+  // 明細行の列境界の狭い領域だけを対象にし、既存の列幅変更hookへ委譲する。
+  // 結合見出し・小計、ボタン等は対象外。列幅は各行ではなく列全体に反映される。
+  const resizeHover = useRef<HTMLElement | null>(null);
+  const bodyResizeCandidate = (target: EventTarget, clientX: number) => {
+    if (!(target instanceof HTMLElement) || target.closest('button, summary, a, select, textarea, [role="separator"]')) return null;
+    const cell = target.closest('td');
+    if (!(cell instanceof HTMLTableCellElement) || cell.colSpan !== 1) return null;
+    const row = cell.closest('tr');
+    if (!row || !['v25-wb-base-row', 'v25-wb-slot', 'v25-wb-line'].includes(row.dataset.testid ?? '')) return null;
+    const column = displayedColumns[cell.cellIndex];
+    const edge = cell.getBoundingClientRect().right - clientX;
+    return column && edge >= 0 && edge <= 6 ? { id: column.id, cell } : null;
+  };
+  const showBodyResizeCursor = (event: ReactMouseEvent<HTMLTableSectionElement>) => {
+    const next = bodyResizeCandidate(event.target, event.clientX);
+    const target = next && event.target instanceof HTMLElement ? event.target : null;
+    if (resizeHover.current && resizeHover.current !== target) resizeHover.current.style.removeProperty('cursor');
+    if (target) target.style.cursor = 'col-resize';
+    resizeHover.current = target;
+  };
+  const startBodyResize = (event: ReactMouseEvent<HTMLTableSectionElement>) => {
+    if (event.button !== 0) return;
+    const candidate = bodyResizeCandidate(event.target, event.clientX);
+    if (candidate) columnPrefs.startResize(event, candidate.id);
+  };
+
   const autoWidth = (id: V25GridColumnId) => {
     const table = tableRef.current;
     const header = Array.from(table?.tHead?.rows[0]?.cells ?? []);
@@ -975,6 +986,7 @@ function WorkbenchBody({
             className="h-7 min-h-7! min-w-0 flex-1 rounded border-slate-300 bg-white text-[11px]"
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
         </div>
+        <span className="text-[10px] text-slate-500">列幅は明細行の列境界（右端6px）でもドラッグできます</span>
         <div className="ml-auto shrink-0" data-testid="v25-wb-column-display-position">
           <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
             setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
@@ -1030,7 +1042,9 @@ function WorkbenchBody({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody onMouseDownCapture={startBodyResize} onMouseMoveCapture={showBodyResizeCursor}
+            onMouseLeave={() => { if (resizeHover.current) resizeHover.current.style.removeProperty('cursor'); resizeHover.current = null; }}
+            data-testid="v25-wb-resizable-body">
             {sectionHeader('base', '本体（本体マスター）', (
               <span className="flex flex-wrap items-center gap-2 text-[10px]" data-testid="v25-wb-base-reference">
                 <span className="rounded border border-emerald-700 px-1 py-0.5 text-emerald-100">参照専用</span>
@@ -1079,7 +1093,6 @@ function WorkbenchBody({
               // 保存済みのsection_code・行順序・group_labelは書き換えない。
               const workGroups = v25WorkGroupsForDisplay(
                 slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode,
-                (line) => editingWorkGroup?.lineKey === line.key ? editingWorkGroup.originalLabel : line.group_label,
               );
               return (
                 <Fragment key={code}>
@@ -1322,27 +1335,9 @@ function WorkbenchBody({
                       return (
                         <tr key={line.key} id={`v25-manual-row-${line.key}`} tabIndex={-1}
                           className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500"
-                          data-testid="v25-wb-line"
-                          onBlur={(event) => {
-                            if (editingWorkGroup?.lineKey !== line.key) return;
-                            // Tabで「グループ→品名→数量…」と同じ行内を進む間は、行の所属を動かさない。
-                            if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;
-                            // 別行へEnter/Tabで移る場合は、再分類で入力欄が再マウントされても復元できるよう保存。
-                            const nextInput = event.relatedTarget instanceof HTMLInputElement ? event.relatedTarget : null;
-                            const nextRowId = nextInput?.closest('tr')?.id;
-                            const nextColumn = nextInput?.dataset.v25ExcelCol;
-                            pendingWorkGroupFocus.current = nextRowId && nextColumn
-                              ? { rowId: nextRowId, column: nextColumn }
-                              : null;
-                            setEditingWorkGroup((current) => current?.lineKey === line.key ? null : current);
-                          }}>
+                          data-testid="v25-wb-line">
                           <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
-                              <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
-                                aria-label="グループ" placeholder="区分" title={line.group_label || '手入力明細のグループ'}
-                                className="h-6 min-h-6! w-[4.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
-                                onFocus={() => setEditingWorkGroup({ lineKey: line.key, originalLabel: line.group_label })}
-                                onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { name: event.target.value })} />
@@ -1391,19 +1386,26 @@ function WorkbenchBody({
                                   <button type="button" aria-label={`${line.name || '明細'}を上へ移動`} title="同じ工事項目内で上へ"
                                     data-testid="v25-wb-manual-move-up"
                                     className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-                                    disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === 0}
+                                    disabled={positionActionsLocked || groupEditor !== null || lineIndex === 0}
                                     onClick={() => setState((current) => ({
                                       ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1),
                                     }))}>▲</button>
                                   <button type="button" aria-label={`${line.name || '明細'}を下へ移動`} title="同じ工事項目内で下へ"
                                     data-testid="v25-wb-manual-move-down"
                                     className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-                                    disabled={positionActionsLocked || editingWorkGroup !== null || lineIndex === workGroup.lines.length - 1}
+                                    disabled={positionActionsLocked || groupEditor !== null || lineIndex === workGroup.lines.length - 1}
                                     onClick={() => setState((current) => ({
                                       ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1),
                                     }))}>▼</button>
                                 </span>
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
+                                  <button type="button" data-testid="v25-wb-change-work-group" disabled={positionActionsLocked}
+                                    className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
+                                    onClick={(event) => {
+                                      rememberRowMenuOpener(event.currentTarget);
+                                      event.currentTarget.closest('details')?.removeAttribute('open');
+                                      setGroupEditor({ lineKey: line.key, originalLabel: line.group_label, value: line.group_label });
+                                    }}>工事項目を変更</button>
                                   {line.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { price_mode: 'manual' }); }}>金額を入力する</button>
@@ -1473,6 +1475,9 @@ function WorkbenchBody({
         savedTotal={savedTotal}
         unpricedCount={calc.unpriced.length}
         incompleteCostCount={calc.incomplete.length}
+        adjustmentValue={state.adjustment}
+        onAdjustmentChange={(value) => setState((current) => ({ ...current, adjustment: value }))}
+        readOnly={readOnly}
       />
 
       {calc.error && <Alert tone="warn">画面の試算ができません：{calc.error}</Alert>}
@@ -1550,6 +1555,41 @@ function WorkbenchBody({
             </div>
           </div>
         </div>
+      )}
+
+      {groupEditor && !readOnly && (
+        <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[12vh]"
+          onClose={() => setGroupEditor(null)} returnFocusTo={dialogOpener}
+          dirty={groupEditor.value !== groupEditor.originalLabel}>
+          {(requestClose) => (
+            <div role="dialog" aria-modal="true" aria-label="工事項目を変更" data-testid="v25-wb-work-group-dialog"
+              className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                <h3 className="text-sm font-semibold">工事項目を変更</h3>
+                <button type="button" data-v25-dialog-close aria-label="工事項目の編集を閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
+              </div>
+              <div className="space-y-2 px-4 py-3 text-xs">
+                <p>現在の工事項目：{groupEditor.originalLabel || '未設定'}</p>
+                <label className="block space-y-1">
+                  <span className="font-medium">工事項目名（空欄で未設定）</span>
+                  <Input autoFocus data-testid="v25-wb-work-group-input" aria-label="工事項目名" value={groupEditor.value}
+                    placeholder="例：2. 屋根工事（独自名称も可）" className="h-9 w-full text-sm"
+                    onChange={(event) => setGroupEditor((current) => current ? { ...current, value: event.target.value } : null)} />
+                </label>
+                <p className="text-slate-500">確定すると該当の小見出しに移動します。下書き保存までDBには反映されません。</p>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+                <Button type="button" variant="secondary" onClick={requestClose}>キャンセル</Button>
+                <Button type="button" data-testid="v25-wb-work-group-confirm" disabled={pending}
+                  onClick={() => {
+                    if (groupEditor.value !== groupEditor.originalLabel) setLine(groupEditor.lineKey, { group_label: groupEditor.value });
+                    setJumpToKey({ key: groupEditor.lineKey });
+                    setGroupEditor(null);
+                  }}>確定</Button>
+              </div>
+            </div>
+          )}
+        </V25DialogLayer>
       )}
 
       {variantEditor && variantSlot && (

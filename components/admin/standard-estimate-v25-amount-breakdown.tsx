@@ -7,6 +7,10 @@ type Props = {
   savedTotal: number | null;
   unpricedCount: number;
   incompleteCostCount: number;
+  /** 下書きの調整額。金額計算は親の既存試算だけが行う。 */
+  adjustmentValue?: string;
+  onAdjustmentChange?: (value: string) => void;
+  readOnly?: boolean;
 };
 
 const SECTION_LABELS: Record<PricingSectionCode, string> = {
@@ -28,6 +32,9 @@ export function StandardEstimateV25AmountBreakdown({
   savedTotal,
   unpricedCount,
   incompleteCostCount,
+  adjustmentValue,
+  onAdjustmentChange,
+  readOnly = true,
 }: Props) {
   const omitted = unpricedCount + incompleteCostCount;
   const partiallyUnknown = omitted > 0 || Boolean(result?.has_por);
@@ -89,7 +96,14 @@ export function StandardEstimateV25AmountBreakdown({
             </tr>
             <tr>
               <th scope="row" colSpan={3} className="px-2 py-1.5 text-right font-medium">調整額（税別）</th>
-              <td className="px-2 py-1.5">{result ? formatAmount(result.adjustment) : '—'}</td>
+              <td className="px-2 py-1.5">
+                {!readOnly && onAdjustmentChange && adjustmentValue !== undefined ? (
+                  <input type="text" inputMode="numeric" value={adjustmentValue} aria-label="金額内訳の調整額（税別・円）"
+                    data-testid="v25-amount-breakdown-adjustment"
+                    className="h-7 w-full max-w-[9rem] rounded border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600"
+                    onChange={(event) => onAdjustmentChange(event.target.value)} />
+                ) : (result ? formatAmount(result.adjustment) : '—')}
+              </td>
             </tr>
             <tr>
               <th scope="row" colSpan={3} className="px-2 py-1.5 text-right font-medium">調整後税別額</th>

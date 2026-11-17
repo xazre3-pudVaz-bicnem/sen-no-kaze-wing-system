@@ -21,9 +21,10 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
     expect(workbench).toContain("if (!details.open || event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return");
   });
 
-  it('6種類の編集画面すべてに同じ閉じ方と右上の×を適用する', () => {
-    expect((workbench.match(/<V25DialogLayer /g) ?? []).length).toBe(6);
-    expect((workbench.match(/\{\(requestClose\) => \(/g) ?? []).length).toBe(6);
+  it('7種類の編集画面すべてに同じ閉じ方と右上の×を適用する', () => {
+    expect((workbench.match(/<V25DialogLayer /g) ?? []).length).toBe(7);
+    expect((workbench.match(/\{\(requestClose\) => \(/g) ?? []).length).toBe(7);
+    expect(workbench).toContain('aria-label="工事項目の編集を閉じる"');
     expect(workbench).toContain('aria-label="仕様変更を閉じる"');
     expect(workbench).toContain('aria-label="別位置への複製を閉じる"');
     expect(workbench).toContain('aria-label="位置設定画面を閉じる"');
@@ -36,6 +37,7 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
 
   it('未確定入力だけ破棄確認し、続行では元の画面と入力が残る', () => {
     expect(workbench).toContain("dirty={duplicateFor.label !== ''}");
+    expect(workbench).toContain('dirty={groupEditor.value !== groupEditor.originalLabel}');
     expect(workbench).toContain('dirty={pickerDirty}');
     expect(workbench).toContain('dirty={!readOnly && JSON.stringify(variantEditor.choices) !== JSON.stringify(variantSlot.variant_choices)}');
     expect(workbench).toContain('dirty={!readOnly && (removePositionOnConfirm || positionDraft.slot_label !== positionSlot.slot_label');
@@ -69,8 +71,8 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
     expect(workbench).toContain("const menuTrigger = button.closest('details')?.querySelector<HTMLElement>('summary')");
     expect(workbench).toContain('setDialogOpener(menuTrigger ?? button);');
     expect(workbench).toContain('const [dialogOpener, setDialogOpener] = useState<HTMLElement | null>(null);');
-    expect((workbench.match(/rememberRowMenuOpener\(event\.currentTarget\)/g) ?? [])).toHaveLength(4);
-    expect((workbench.match(/returnFocusTo=\{dialogOpener\}/g) ?? [])).toHaveLength(5);
+    expect((workbench.match(/rememberRowMenuOpener\(event\.currentTarget\)/g) ?? [])).toHaveLength(5);
+    expect((workbench.match(/returnFocusTo=\{dialogOpener\}/g) ?? [])).toHaveLength(6);
     // 子の「変更候補を選ぶ」は親画面内の元ボタンへ戻すため、明示オーバーライドを渡さない。
     expect(workbench).toContain('onClose={closeSelectable} dirty={selectableDirty}');
     expect(layer).toContain('returnFocusTo?: HTMLElement | null;');

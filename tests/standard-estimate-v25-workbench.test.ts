@@ -238,7 +238,7 @@ describe('Excel 風の画面（描画）', () => {
     }
     expect(html).toContain('data-testid="v25-wb-base-row"');
     expect(html).toContain('>本体マスター</span>');
-    expect(html).toContain('data-v25-excel-col="group"');
+    expect(html).not.toContain('data-v25-excel-col="group"');
     expect(html).toContain('data-v25-excel-col="name"');
     expect(html).toContain('設備');
     expect(html).toContain('bg-slate-100');
@@ -250,6 +250,17 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('text-[11px]');
     // フォントサイズや共通UIルールを変更せず、通常の入力欄だけ旧画面相当の高さに調整
     expect(legacy).toContain('h-6 min-h-6');
+  });
+
+  it('品名欄はグループ入力に圧迫されず、変更操作は自由入力メニューにのみ現れる', () => {
+    const html = render(false);
+    const readOnlyHtml = render(true);
+    const manual = html.slice(html.indexOf('data-testid="v25-wb-line"'), html.indexOf('data-testid="v25-wb-line-menu"'));
+    expect(html).not.toContain('data-v25-excel-col="group"');
+    expect(manual).toContain('data-v25-excel-col="name"');
+    expect(html).toContain('data-testid="v25-wb-change-work-group"');
+    expect(readOnlyHtml).not.toContain('data-testid="v25-wb-change-work-group"');
+    expect(readOnlyHtml).not.toContain('data-testid="v25-wb-work-group-dialog"');
   });
 
   it('原価金額と粗利は正式なv2.5結果から表示用に求め、未提供金額はダッシュ表示', () => {
@@ -305,7 +316,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('fixed z-[60]');
     expect(html).not.toContain('sticky left-[6.25rem]');
     expect(html).toContain('bg-emerald-900');
-    expect(html).toContain('data-v25-excel-col="group"');
+    expect(html).not.toContain('data-v25-excel-col="group"');
     expect(html).toContain('data-v25-excel-col="name"');
     expect(html).toContain('data-v25-excel-col="qty"');
     expect(html).toContain('data-v25-excel-col="note"');
@@ -437,7 +448,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('title={candidate?.categoryName ??');
     expect(source).toContain('flex min-w-0 flex-wrap items-center gap-1');
     expect(source).toContain('title={line.remark}');
-    expect(source).toContain("title={line.group_label || '手入力明細のグループ'}");
+    expect(source).toContain('data-testid="v25-wb-change-work-group"');
     expect(source).toContain('data-v25-excel-col="name"');
     expect(source).toContain('data-v25-excel-col="note"');
   });
@@ -471,9 +482,9 @@ describe('Excel 風の画面（描画）', () => {
   it('明細セル内の入力欄だけ旧画面に合わせた24px最小高さと11px文字を維持する', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const globals = read('app/globals.css');
-    const grid = source.slice(source.indexOf('<tbody>'), source.indexOf('</tbody>'));
+    const grid = source.slice(source.indexOf('<tbody onMouseDownCapture='), source.indexOf('</tbody>'));
     const excelInputs = Array.from(grid.matchAll(/<Input data-v25-excel-col="[^"]+"[\s\S]*?className="([^"]+)"/g));
-    expect(excelInputs).toHaveLength(8);
+    expect(excelInputs).toHaveLength(7);
     for (const match of excelInputs) {
       const classes = match[1].split(/\s+/);
       expect(classes).toContain('h-6');
@@ -486,7 +497,7 @@ describe('Excel 風の画面（描画）', () => {
     const nonGrid = source.slice(source.indexOf('</tbody>'));
     expect(nonGrid).not.toContain('min-h-6!');
     // 標準見積の外の共通Inputやモーダル入力には同じ上書きを適用しない。
-    const beforeGrid = source.slice(0, source.indexOf('<tbody>'));
+    const beforeGrid = source.slice(0, source.indexOf('<tbody onMouseDownCapture='));
     expect(beforeGrid).not.toContain('className="h-6 min-h-6!');
     const html = render(false);
     const renderedInputs = Array.from(html.matchAll(/<input\b[^>]*data-v25-excel-col="[^"]+"[^>]*>/g));

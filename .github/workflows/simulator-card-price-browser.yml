@@ -9,6 +9,11 @@ on:
       - 'lib/domain/simulator-card-price-delta.ts'
       - 'lib/domain/simulator-card-price-presentation.ts'
       - 'e2e/pr682-*.spec.ts'
+      - 'e2e/pr-board-picker-integration*.spec.ts'
+      - 'components/simulator/option-picker-dialog.tsx'
+      - 'components/simulator/product-list.tsx'
+      - 'components/simulator/exterior-wall-faces-dialog.tsx'
+      - 'lib/domain/simulator-candidate-price-delta.ts'
       - '.github/workflows/simulator-card-price-browser.yml'
 
 permissions:
@@ -49,7 +54,7 @@ jobs:
           test -z "$SUPABASE_SERVICE_ROLE_KEY"
           test -z "${BASE_URL:-}"
       - name: Test customer cards desktop, mobile and synthetic official totals on localhost
-        run: npx playwright test e2e/pr682-board-price.spec.ts e2e/pr682-board-price.mobile.spec.ts e2e/pr682-exact-pricing-fixture.spec.ts
+        run: npx playwright test e2e/pr682-board-price.spec.ts e2e/pr682-board-price.mobile.spec.ts e2e/pr682-exact-pricing-fixture.spec.ts e2e/pr-board-picker-integration.spec.ts e2e/pr-board-picker-integration.mobile.spec.ts
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4

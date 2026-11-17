@@ -67,7 +67,7 @@ describe('標準見積v2.5 位置設定ダイアログ：保存形式を変え�
 
   it('標準品の変更候補と窓タイプ絞込、複数選択・二段階キャンセルを維持する', () => {
     expect(src).toContain('candidate.id !== selectableBase.id && !candidate.retired && !candidate.unavailable && candidate.categoryId === selectableBase.categoryId');
-    expect(src).toContain('const selectableDraftIds');
+    expect(src).toContain('const [selectableDraftIds, setSelectableDraftIds]');
     expect(src).toContain('setSelectableDraftIds([...(positionDraft?.selectable_option_ids ?? [])])');
     expect(src).toContain('setSelectableDraftIds((current) => current');
     expect(src).toContain('if (selectableDraftIds) updatePosition({ selectable_option_ids: [...selectableDraftIds] })');

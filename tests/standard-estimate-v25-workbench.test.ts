@@ -482,9 +482,9 @@ describe('Excel 風の画面（描画）', () => {
   it('明細セル内の入力欄だけ旧画面に合わせた24px最小高さと11px文字を維持する', () => {
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     const globals = read('app/globals.css');
-    const grid = source.slice(source.indexOf('<tbody>'), source.indexOf('</tbody>'));
+    const grid = source.slice(source.indexOf('<tbody onMouseDownCapture='), source.indexOf('</tbody>'));
     const excelInputs = Array.from(grid.matchAll(/<Input data-v25-excel-col="[^"]+"[\s\S]*?className="([^"]+)"/g));
-    expect(excelInputs).toHaveLength(8);
+    expect(excelInputs).toHaveLength(7);
     for (const match of excelInputs) {
       const classes = match[1].split(/\s+/);
       expect(classes).toContain('h-6');
@@ -497,7 +497,7 @@ describe('Excel 風の画面（描画）', () => {
     const nonGrid = source.slice(source.indexOf('</tbody>'));
     expect(nonGrid).not.toContain('min-h-6!');
     // 標準見積の外の共通Inputやモーダル入力には同じ上書きを適用しない。
-    const beforeGrid = source.slice(0, source.indexOf('<tbody>'));
+    const beforeGrid = source.slice(0, source.indexOf('<tbody onMouseDownCapture='));
     expect(beforeGrid).not.toContain('className="h-6 min-h-6!');
     const html = render(false);
     const renderedInputs = Array.from(html.matchAll(/<input\b[^>]*data-v25-excel-col="[^"]+"[^>]*>/g));

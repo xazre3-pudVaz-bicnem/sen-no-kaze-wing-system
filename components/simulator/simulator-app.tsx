@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ArrowRight, Save } from 'lucide-react';
 import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-configurations';
 import { fetchSimulatorV25UnitsAction } from '@/lib/actions/simulator-v25-units';
@@ -786,8 +786,10 @@ export function SimulatorApp({
   // Synchronization with external browser storage is intentional. persistDraft
   // reports storage failures to the UI only after the browser write has finished.
   /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    // Merely opening a new, saved or URL-specified plan must never write a draft.
+  useLayoutEffect(() => {
+    // Run after React commits the latest selected/slot/site state but before
+    // the browser paints: fast reload after a product click must not snapshot
+    // the previous render's selection. No write occurs on initial display.
     if (hydrated && dirty && !readOnly && !loadError && !standardPreview) persistDraft();
   }, [hydrated, dirty, readOnly, loadError, persistDraft, standardPreview]);
   /* eslint-enable react-hooks/set-state-in-effect */

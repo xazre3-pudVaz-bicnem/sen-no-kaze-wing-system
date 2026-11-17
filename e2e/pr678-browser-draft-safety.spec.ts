@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { openFreshSimulator, openPicker, openProductDetail, waitForSimulator } from './helpers';
 
 /**

@@ -108,7 +108,7 @@ test('長い品名・型番・寸法の折り返しと同じ行のカード高�
 
 test('位置別商品：基本・選択中の重複表示なし→変更候補選択→位置ごとにプラン反映', async ({ page }) => {
   test.setTimeout(150_000);
-  await page.goto('/__e2e_pr681_picker');
+  await page.goto('/pr681-e2e-picker');
   const fixture = page.getByTestId('pr681-local-fixture');
   await expect(fixture).toBeVisible();
   await expect(fixture.getByRole('alert')).toHaveCount(0);

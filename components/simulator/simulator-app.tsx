@@ -1359,6 +1359,14 @@ export function SimulatorApp({
       notices.push(`「${positionCategoryNames.join('・')}」は位置ごとに選びます。設備の一覧の位置のタイルから選んでください`);
     }
 
+    // A dependency or scope change may also remove products outside the chosen
+    // category. Ask before committing such a loss; the picker itself is intentional.
+    const automaticallyRemoved = selected.filter((id) => !cur.includes(id) && !inCategory.includes(id));
+    if (automaticallyRemoved.length > 0) {
+      const names = automaticallyRemoved.slice(0, 4).map((id) => optionById.get(id)?.name ?? '商品');
+      if (!window.confirm(`この変更により、ほかの商品（${names.join('・')}）も選択から外れます。続けますか？`)) return;
+      if (dirty && !persistDraft()) return;
+    }
     setSelected(cur);
     // このカテゴリーの商品に紐づく選択肢を入れ替える（そろえて外した商品の選択肢も外し、足した商品は標準の選択肢）
     const catOptionIds = new Set(inCategory);

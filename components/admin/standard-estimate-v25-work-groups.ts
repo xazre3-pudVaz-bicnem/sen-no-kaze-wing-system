@@ -35,21 +35,59 @@ export function v25WorkItemForCategory(categoryCode: string | null | undefined):
 }
 
 /**
- * 手入力のgroup_labelは既存の自由入力を正本にする。
- * 既定工事項目と完全一致する名称（番号なし又は同じ番号）だけ、商品と同じ見出しへ合流。
- * 番号だけの一致、部分一致、別の番号では推測せず、元の見出し名をそのまま使う。
+ * 中黒・全半角・空白だけを表示上で同等とする。
+ * それ以外の記号や語尾は削らないため、屋根補修工事等の別工事項目を誤って統合しない。
+ */
+function comparableWorkName(value: string): string {
+  return value.normalize('NFKC').replace(/[・･·\s]/gu, '');
+}
+
+/**
+ * 手入力のgroup_labelは保存済みの自由入力を正本とし、名称は変更しない。
+ * 番号がある場合は正しい番号との一致を必須にする。番号なしは名称の明確な一致のみ許容。
  */
 export function v25WorkItemForManual(groupLabel: string): DisplayGroupIdentity {
   const label = groupLabel.trim();
   if (!label) return { key: 'manual:empty', label: '工事項目未設定（手入力）', order: 101 };
-  const numbered = label.match(/^([1-4])[.．、]\s*(.+)$/);
+  const normalized = label.normalize('NFKC').trim();
+  // 「1. 名称」「１．名称」「1、名称」「1 名称」は許す。番号なしの文字列は別途扱う。
+  const numbered = normalized.match(/^([1-4])(?:[.、]\s*|\s+)(.+)$/u);
+  const name = numbered ? numbered[2] : normalized;
   const index = V25_DISPLAY_WORK_ITEMS.findIndex((item, i) =>
-    label === item.name || (numbered !== null && Number(numbered[1]) === i + 1 && numbered[2] === item.name));
+    (!numbered || Number(numbered[1]) === i + 1) && comparableWorkName(name) === comparableWorkName(item.name));
   if (index >= 0) {
     const item = V25_DISPLAY_WORK_ITEMS[index];
     return { key: `work:${item.id}`, label: item.label, order: index };
   }
   return { key: `manual:${label}`, label, order: 100 };
+}
+
+/**
+ * 同じ大区分・同じ表示上の工事項目の自由入力明細だけを1つ入れ替える。
+ * state.lines の配列インデックスを2箇所だけ交換し、他の行のインデックス/行ID/値は不変。
+ * 商品行はこの配列に含まれない。保存RPCが配列順でsort_orderを採番する。
+ */
+export function v25MoveManualLineWithinWorkGroup(
+  lines: readonly V25LineRow[],
+  key: string,
+  direction: -1 | 1,
+): V25LineRow[] {
+  const currentIndex = lines.findIndex((line) => line.key === key);
+  if (currentIndex < 0) return lines as V25LineRow[];
+  const current = lines[currentIndex];
+  const groupKey = v25WorkItemForManual(current.group_label).key;
+  const sameGroup = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) =>
+      line.section_code === current.section_code &&
+      v25WorkItemForManual(line.group_label).key === groupKey);
+  const groupIndex = sameGroup.findIndex(({ line }) => line.key === key);
+  const adjacent = sameGroup[groupIndex + direction];
+  if (!adjacent) return lines as V25LineRow[];
+  const updated = [...lines];
+  updated[currentIndex] = adjacent.line;
+  updated[adjacent.index] = current;
+  return updated;
 }
 
 /** UIでだけ商品と手入力を共通の工事項目の下に置く。元配列と保存順は変更しない。 */

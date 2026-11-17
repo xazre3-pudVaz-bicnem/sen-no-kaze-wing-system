@@ -118,6 +118,7 @@ declare
   v_slots jsonb;
   v_lines jsonb;
   v_lock integer;
+  v_order_total numeric;
   v_qd uuid := gen_random_uuid();
 begin
   set local session_replication_role = replica;
@@ -520,6 +521,45 @@ begin
     (select s.line_subtotal || '/' || s.expense_amount || '/' || s.expense_method || '/' || s.has_por
        from public.standard_estimate_revision_sections s where s.revision_id = v_b2 and s.section_code = 'sitework') || '/' ||
     (select s.expense_method from public.standard_estimate_revision_sections s where s.revision_id = v_b2 and s.section_code = 'option'));
+
+  -- PR #674: 自由入力明細を同じ工事項目内で上下移動（商品行や別のグループの位置は動かさない）。
+  -- DBの関数・表には変更を加えず、既存の保存RPCで実際に配列順→sort_order→売価表示までを確認する。
+  v_lines := jsonb_build_array(
+    jsonb_build_object('line_key', gen_random_uuid(), 'section_code', 'option', 'group_label', '1. サッシ木製建具工事', 'name', '順序試験A', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 1000),
+    jsonb_build_object('line_key', gen_random_uuid(), 'section_code', 'option', 'group_label', '2. 屋根工事', 'name', '順序試験B', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 2000),
+    jsonb_build_object('line_key', gen_random_uuid(), 'section_code', 'option', 'group_label', '１．サッシ・木製建具工事', 'name', '順序試験C', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 3000));
+  v_out := pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 2, %L::jsonb)).lock_version::text',
+    v_b2, pg_temp.sev_payload(
+      jsonb_build_array(jsonb_build_object('option_id', p2, 'quantity', 1),
+                        jsonb_build_object('option_id', p5, 'quantity', 1, 'price_mode', 'manual', 'manual_unit_price', 100000)),
+      v_lines, 0, null, '1')));
+  perform pg_temp.sev_expect_eq('自由入力明細の保存RPCは既存順序で保存できる', '3', v_out);
+  perform pg_temp.sev_expect_eq('自由入力明細の初回保存順序はsort_orderと一致する', '順序試験A/順序試験B/順序試験C',
+    (select string_agg(l.name, '/' order by l.sort_order) from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2));
+  select r.total into v_order_total from public.standard_estimate_revisions r where r.id = v_b2;
+  v_lines := jsonb_build_array(v_lines -> 2, v_lines -> 1, v_lines -> 0);
+  v_out := pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 3, %L::jsonb)).lock_version::text',
+    v_b2, pg_temp.sev_payload(
+      jsonb_build_array(jsonb_build_object('option_id', p2, 'quantity', 1),
+                        jsonb_build_object('option_id', p5, 'quantity', 1, 'price_mode', 'manual', 'manual_unit_price', 100000)),
+      v_lines, 0, null, '1')));
+  perform pg_temp.sev_expect_eq('同一工事項目の自由入力行だけを入れ替え、再保存できる', '4', v_out);
+  perform pg_temp.sev_expect_eq('再読込に使うsort_orderは入替後の順序、他グループBは中間を維持', '順序試験C/順序試験B/順序試験A',
+    (select string_agg(l.name, '/' order by l.sort_order) from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2));
+  perform pg_temp.sev_expect_eq('再保存後も行IDは保持される', 'true/true/true',
+    (select string_agg((l.line_key::text = (v_lines -> (l.sort_order - 1) ->> 'line_key'))::text, '/' order by l.sort_order)
+       from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2));
+  perform pg_temp.sev_expect_eq('再保存後も数量・単価・名称の対応は変わらない', '順序試験C:1:3000/順序試験B:1:2000/順序試験A:1:1000',
+    (select string_agg(l.name || ':' || l.quantity::text || ':' || l.unit_price::text, '/' order by l.sort_order)
+       from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2));
+  perform pg_temp.sev_expect_eq('自由入力行の並べ替えでは税込合計は変わらない', v_order_total::text,
+    (select r.total::text from public.standard_estimate_revisions r where r.id = v_b2));
+  perform pg_temp.sev_expect_eq('見積表示用の売価Viewでも自由入力行の順序が保持される', '順序試験C/順序試験B/順序試験A',
+    (select string_agg(l.value ->> 'name', '/' order by l.ordinality)
+       from jsonb_array_elements(public.standard_estimate_v25_sale_view(v_b2, false) -> 'lines')
+         with ordinality as l(value, ordinality)
+      where l.value ->> 'name' like '順序試験%'));
+
 end;
 $test$;
 

@@ -1,4 +1,5 @@
 import { canRestoreSimulatorDraft } from './simulator-draft-ownership';
+import { FINISH_LEVELS, type FinishLevel } from './types';
 
 /**
  * The original per-model key is kept read-only. Customer edits use new, unguessable
@@ -27,6 +28,30 @@ export interface DraftStorageReader {
   getItem(key: string): string | null;
 }
 export type ResumeCandidate = { kind: 'legacy' | 'work'; id: string | null; savedAt: number };
+
+/** Preserve the user's original scope instead of resetting every draft to its spec's default. */
+export function restoredDraftFinishLevel(saved: unknown, fallback: FinishLevel): FinishLevel {
+  return typeof saved === 'string' && FINISH_LEVELS.some((level) => level === saved)
+    ? (saved as FinishLevel)
+    : fallback;
+}
+
+/** A failure never deletes or modifies the legacy per-model draft. */
+export function writeBrowserWorkDraft(
+  storage: { setItem(key: string, value: string): void },
+  slug: string,
+  id: string,
+  snapshot: BrowserDraftRecord
+): boolean {
+  if (!validSimulatorDraftId(id)) return false;
+  try {
+    storage.setItem(workSimulatorDraftKey(slug, id), JSON.stringify(snapshot));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 export function readBrowserDraft(storage: Pick<DraftStorageReader, 'getItem'>, key: string): BrowserDraftRecord | null {
   try {

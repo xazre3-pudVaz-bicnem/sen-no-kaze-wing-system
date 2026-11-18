@@ -70,11 +70,11 @@ describe('標準見積 v2.5 の編集画面：保存内容の組み立て', () =
     expect(payload.adjustment).toBe(0);
     expect(payload.adjustment_reason).toBeNull();
     expect(payload.slots).toEqual([
-      { baseline_key: 'b1', option_id: 'p1', variant_choice_ids: ['c2'], quantity: '2', price_mode: 'auto', manual_unit_price: null, slot_code: null, slot_label: null, selectable_option_ids: [] },
-      { baseline_key: null, option_id: 'p3', variant_choice_ids: [], quantity: '1', price_mode: 'manual', manual_unit_price: 30000, slot_code: null, slot_label: null, selectable_option_ids: [] },
-      { baseline_key: null, option_id: 'p4', variant_choice_ids: [], quantity: '1', price_mode: 'por', manual_unit_price: null, slot_code: null, slot_label: null, selectable_option_ids: [] },
+      { baseline_key: 'b1', option_id: 'p1', variant_choice_ids: ['c2'], quantity: '2', price_mode: 'auto', manual_unit_price: null, slot_code: null, slot_label: null, selectable_option_ids: [], row_order: 1, work_item: null },
+      { baseline_key: null, option_id: 'p3', variant_choice_ids: [], quantity: '1', price_mode: 'manual', manual_unit_price: 30000, slot_code: null, slot_label: null, selectable_option_ids: [], row_order: 2, work_item: null },
+      { baseline_key: null, option_id: 'p4', variant_choice_ids: [], quantity: '1', price_mode: 'por', manual_unit_price: null, slot_code: null, slot_label: null, selectable_option_ids: [], row_order: 3, work_item: null },
     ]);
-    expect(payload.lines[0]).toMatchObject({ line_key: 'k1', price_mode: 'manual', unit_price: 50000, review_required: true, group_label: null });
+    expect(payload.lines[0]).toMatchObject({ line_key: 'k1', price_mode: 'manual', unit_price: 50000, review_required: true, group_label: null, row_order: 4 });
     expect(payload.lines[1]).toMatchObject({ line_key: null, price_mode: 'por', unit_price: null, review_required: false });
   });
 });

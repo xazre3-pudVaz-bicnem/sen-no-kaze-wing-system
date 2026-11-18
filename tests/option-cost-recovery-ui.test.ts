@@ -34,3 +34,10 @@ it('保存成功と記録失敗を移動先で区別し、エラー詳細をURL�
   expect(edit).toContain('router.push(registeredOptionLedgerUrl(option.id, result))');
   expect(ledger).toContain('<FlashMessages sp={sp} />');
 });
+
+it('公開後に戻る各見積テンプレート画面は共通の警告を表示する', () => {
+  const detail = readFileSync('app/admin/estimate-templates/[id]/page.tsx', 'utf8');
+  const legacy = readFileSync('app/admin/estimate-templates/legacy/page.tsx', 'utf8');
+  expect(detail).toContain('<FlashMessages sp={sp} />');
+  expect(legacy.match(/<FlashMessages sp=\{sp\} \/>/g)).toHaveLength(3);
+});

@@ -102,7 +102,7 @@ export async function recordPublishedOptionCost(
   if (error) return { status: 'error', message: errorMessage(error) };
   if (!optionRow || optionRow.status !== 'published' || optionRow.price_on_request) return { status: 'skipped' };
   // 商品価格（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
-  const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all');
+  const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all', true);
   const price = Number(option.price ?? 0);
   // 下書きの 0 円は価格未確認。登録（公開）のときだけ、確認済みの 0 円として記録する
   if (price < 0 || (price === 0 && kind !== 'publish')) return { status: 'skipped' };
@@ -153,7 +153,7 @@ export async function recordPublishedChoiceCosts(
   // 追加金額（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
   const targets = await withLegacyChoicePrices(
     ((choices.data ?? []) as { id: string; price_on_request: boolean }[]).filter((row) => !row.price_on_request),
-    'all'
+    'all', true
   );
   if (!targets.length) return { status: 'skipped' };
 

@@ -215,6 +215,7 @@ describe('選択肢保存と公開の部分成功', () => {
     mocks.getStore.mockResolvedValue(store);
     const result = await saveVariantChoiceAction({ ok: false }, choiceForm());
     expect(result.ok).toBe(false); expect(result.error).toContain('保存結果を確認できません');
+    expect(result.costRecordingFailed).toBe(true);
     expect(store.deleteUploadedImage).not.toHaveBeenCalled();
   });
   it.each(['/admin/ledger', '/admin/estimate-templates/legacy', '/admin/estimate-templates/44444444-4444-4444-8444-444444444444'])('公開後の記録失敗を %s に引き継ぐ', async (returnTo) => {

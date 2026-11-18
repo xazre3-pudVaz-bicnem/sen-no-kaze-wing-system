@@ -22,7 +22,7 @@ import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from
 const initial: AdminFormState = { ok: false };
 
 function ActionStatus({ state }: { state: AdminFormState }) {
-  if (state.error) return <Alert tone="danger">{state.error}</Alert>;
+  if (state.error) return <Alert tone="danger">{state.error}{state.costRecordingFailed && <> 原価Versionも確認し、必要な項目だけを選んでください。 <Link href="/admin/options/cost-import" className="underline">原価 Version の取り込み画面を開く</Link></>}</Alert>;
   if (state.fieldErrors?._form) return <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>;
   if (state.ok && state.costRecordingFailed) return <Alert tone="warn">{state.message} 対象と金額を確認し、必要な項目だけを選んでください。 <Link href="/admin/options/cost-import" className="underline">原価 Version の取り込み画面を開く</Link></Alert>;
   if (state.ok && state.message) return <Alert tone="success">{state.message}</Alert>;

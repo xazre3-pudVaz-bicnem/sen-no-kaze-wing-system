@@ -794,7 +794,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     }
     if (choiceWriteStarted) {
       console.error('[wing] variant choice save outcome unknown', e);
-      return { ok: false, error: '選択肢の保存結果を確認できません。再操作する前に選択肢と画像の状態を確認してください。' };
+      return { ok: false, costRecordingFailed: checkChoiceCost, error: '選択肢の保存結果を確認できません。再操作する前に選択肢と画像の状態を確認してください。' };
     }
     return errState(e);
   }

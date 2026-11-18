@@ -18,6 +18,11 @@ export function StandardEstimateWorkspaceLayout({ sidebar, children, selectedNam
   return (
     <div className="min-w-0 space-y-2" data-testid="standard-estimate-workspace-layout">
       <div className="flex flex-wrap items-center gap-2">
+        {selectedName && (
+          <span className="min-w-0 max-w-full break-words rounded-md border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm leading-5 text-emerald-950" title={selectedName} data-testid="v25-selected-spec-summary">
+            <span className="font-bold">現在の仕様：</span>{selectedName}
+          </span>
+        )}
         <button
           type="button"
           className="btn-secondary btn-sm border-emerald-700 text-emerald-900"
@@ -28,16 +33,11 @@ export function StandardEstimateWorkspaceLayout({ sidebar, children, selectedNam
         >
           {selectorOpen ? '仕様の選択を閉じる' : '仕様を変更'}
         </button>
-        {selectedName && !selectorOpen && (
-          <span className="min-w-0 rounded-md border border-emerald-700 bg-emerald-50 px-2 py-1 text-xs text-emerald-950" title={selectedName} data-testid="v25-selected-spec-summary">
-            <span className="font-semibold">現在の仕様：</span>{selectedName}
-          </span>
-        )}
       </div>
       <div className="min-w-0 space-y-3">
         <div
           id="standard-estimate-selector-panel"
-          className={selectorOpen ? 'min-w-0 w-full' : 'hidden'}
+          className={selectorOpen ? 'min-w-0 w-full max-w-[380px]' : 'hidden'}
         >
           {sidebar}
         </div>

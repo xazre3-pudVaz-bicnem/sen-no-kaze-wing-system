@@ -7,6 +7,7 @@ import { requireAdmin } from '@/lib/auth/session';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
+import { v25SavePayloadSchema } from '@/lib/domain/standard-estimate-v25-payload-schema';
 
 /**
  * 標準見積の v2.5 の編集画面（PR-B1b）。DB の RPC（20261019100000）を呼ぶだけで、金額・原価 Version の固定・公開の可否は DB が決める。
@@ -25,46 +26,6 @@ function message(error: { message?: string } | null | undefined): string {
 function localUnavailable(): StandardEstimateV25ActionResult | null {
   return isLocalMode() ? { ok: false, error: '標準見積の管理はSupabase接続環境で利用できます。' } : null;
 }
-
-const decimal = z.union([z.string(), z.number()]).transform((value) => String(value).trim()).pipe(z.string().regex(/^\d+(\.\d{1,4})?$/, '数の形式が正しくありません'));
-
-const payloadSchema = z.object({
-  rates: z.object({ sales_fee_rate: decimal, markup_rate: decimal, expense_rate: decimal }),
-  adjustment: z.number().int(),
-  adjustment_reason: z.string().trim().max(500).nullable(),
-  slots: z
-    .array(
-      z.object({
-        baseline_key: z.uuid().nullable(),
-        option_id: z.uuid(),
-        variant_choice_ids: z.array(z.uuid()).max(20),
-        quantity: decimal,
-        price_mode: z.enum(['auto', 'manual', 'por']),
-        manual_unit_price: z.number().int().min(0).nullable(),
-        // 位置・用途の選択枠（v2.5 PR-S1）。DB でも同じ決まりで確かめる
-        slot_code: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).nullable().default(null),
-        slot_label: z.string().trim().min(1).max(40).nullable().default(null),
-        selectable_option_ids: z.array(z.uuid()).max(50).default([]),
-      })
-    )
-    .max(200),
-  lines: z
-    .array(
-      z.object({
-        line_key: z.uuid().nullable(),
-        section_code: z.enum(['interior_exterior', 'option', 'sitework']),
-        group_label: z.string().trim().max(120).nullable(),
-        name: z.string().trim().min(1, '品名を入力してください').max(120),
-        quantity: decimal,
-        unit: z.string().trim().max(40).nullable(),
-        price_mode: z.enum(['manual', 'por']),
-        unit_price: z.number().int().min(0).nullable(),
-        remark: z.string().trim().max(500).nullable(),
-        review_required: z.boolean(),
-      })
-    )
-    .max(300),
-});
 
 const revisionSchema = z.object({ revision_id: z.uuid(), expected_lock_version: z.number().int().min(0) });
 
@@ -98,7 +59,7 @@ export async function saveStandardEstimateV25DraftAction(input: unknown): Promis
   await requireAdmin('/admin/standard-estimates');
   const unavailable = localUnavailable();
   if (unavailable) return unavailable;
-  const parsed = revisionSchema.extend({ payload: payloadSchema }).safeParse(input);
+  const parsed = revisionSchema.extend({ payload: v25SavePayloadSchema }).safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください' };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('save_standard_estimate_v25_draft', {

@@ -147,6 +147,12 @@ export function v25MoveManualLineWithinWorkGroup(
   const adjacent = sameGroup[groupIndex + direction];
   if (!adjacent) return lines as V25LineRow[];
   const updated = [...lines];
+  // 保存した並び順（row_order。2026-11-16 の先方の依頼）のある行は、並び順も入れ替える（上下の移動が見積書の並びにも効くように）
+  if (current.row_order != null || adjacent.line.row_order != null) {
+    updated[currentIndex] = { ...adjacent.line, row_order: current.row_order };
+    updated[adjacent.index] = { ...current, row_order: adjacent.line.row_order };
+    return updated;
+  }
   updated[currentIndex] = adjacent.line;
   updated[adjacent.index] = current;
   return updated;

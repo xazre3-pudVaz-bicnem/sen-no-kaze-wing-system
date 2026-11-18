@@ -5,7 +5,7 @@ import { buildV25SavePayload, type V25EditorState } from '@/lib/domain/standard-
 import { v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
 import {
   v25PersistedMixedRowOrder, v25ReconcileMixedRowOrder, v25MixedRowsForWorkGroup,
-  v25MoveMixedRowWithinGroup, v25InsertMixedRow, v25MixedRowIdentity,
+  v25MoveMixedRowWithinGroup, v25InsertMixedRow, v25MixedOrderEquals, v25MixedRowIdentity,
 } from '@/lib/domain/standard-estimate-v25-row-order';
 import { v25WorkGroupsForDisplay } from '@/components/admin/standard-estimate-v25-work-groups';
 const source = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/standard-estimate-v25-workbench.tsx'),'utf8');

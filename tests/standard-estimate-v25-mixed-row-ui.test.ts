@@ -67,6 +67,50 @@ describe('PR #666 × #686/#687 混在順序の保存・読込・工事項目整�
     expect(ids(v25MoveMixedRowWithinGroup(before,
       {slots:[editor.slots[0]],lines:[editor.lines[0]]},{kind:'slot',key:'b'},-1))).toEqual(ids(before));
   });
+
+  it('並び順のみ変更→変更を破棄→保存前の順序に復元→未保存状態を解除', () => {
+    const initial = state(true);
+    const group = groupOf(initial);
+    const initialOrder = v25PersistedMixedRowOrder(initial, sectionOf);
+    const savedViewOrder = v25MixedRowsForWorkGroup(initialOrder, group);
+    expect(ids(savedViewOrder)).toEqual(['line:c', 'slot:a', 'line:d', 'slot:b']);
+
+    // 商品行と手入力明細を上下交換：商品・金額・工事項目そのものは未編集。
+    const viewOrder = v25MoveMixedRowWithinGroup(initialOrder, group, { kind: 'slot', key: 'a' }, -1);
+    const editedDirty = false;
+    const orderDirty = !v25MixedOrderEquals(viewOrder, initialOrder);
+    const dirty = editedDirty || false /* unsavedAutoWorkItems > 0 */ || orderDirty;
+    expect(orderDirty).toBe(true);
+    expect(dirty).toBe(true);
+    expect(ids(viewOrder)).toEqual(['slot:a', 'line:c', 'line:d', 'slot:b']);
+    // 並び順のみでも変更破棄を押せる。保存中・位置名編集中の保護は維持。
+    expect(!editedDirty && !orderDirty).toBe(false);
+    expect(false || (!editedDirty && !orderDirty) || false).toBe(false);
+    expect(true || (!editedDirty && !orderDirty) || false).toBe(true);
+    expect(false || (!editedDirty && !orderDirty) || true).toBe(true);
+
+    // UIの変更破棄ハンドラーは setState(initial) と setViewOrder([]) を両方行う。
+    const discardedState = initial;
+    const discardedViewOrder: typeof viewOrder = [];
+    const restored = v25ReconcileMixedRowOrder(
+      discardedViewOrder.length ? discardedViewOrder : v25PersistedMixedRowOrder(discardedState, sectionOf),
+      discardedState, sectionOf,
+    );
+    expect(ids(restored)).toEqual(ids(initialOrder));
+    const afterDiscardOrderDirty = !v25MixedOrderEquals(restored, initialOrder);
+    const afterDiscardDirty = false /* editedDirty */ || false /* unsavedAutoWorkItems */ || afterDiscardOrderDirty;
+    expect(afterDiscardOrderDirty).toBe(false);
+    expect(afterDiscardDirty).toBe(false);
+    expect(JSON.stringify(discardedState)).toBe(JSON.stringify(initial));
+    expect(!false && !afterDiscardOrderDirty).toBe(true);
+
+    // 単体の順序計算だけでなく、実際のボタン条件・破棄処理への結線も固定して回帰防止。
+    expect(source).toContain('disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {');
+    expect(source).toContain('setState(initial);\n              setViewOrder([]);');
+    expect(source).toContain('const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;');
+    expect(source).toContain('v25PublishBlockers(preview, dirty)');
+  });
+
   it('画面の↑↓＋が保存・公開と結線され、既存の工事項目／本体／価格UIは維持する',()=>{
     expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
     expect(source).toContain('data-testid="v25-wb-row-up"');

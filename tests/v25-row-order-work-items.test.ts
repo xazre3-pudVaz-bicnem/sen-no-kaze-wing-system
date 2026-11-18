@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildV25SavePayload, type V25EditorState, type V25LineRow, type V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
-import { v25RowOrderRefs, v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
+import { v25HasRowOrder, v25RowOrderRefs, v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
+import { v25MoveManualLineWithinWorkGroup } from '@/components/admin/standard-estimate-v25-work-groups';
 import { v25SavePayloadSchema } from '@/lib/domain/standard-estimate-v25-payload-schema';
 import { v25SourceSlotGroupLabel } from '@/lib/domain/standard-quote-v25-source';
 
@@ -37,13 +38,36 @@ const schemaPayload = (slotExtra: Record<string, unknown> = {}, lineExtra: Recor
 });
 
 describe('並び順（DB の display_order）の保存と読み込み', () => {
-  it('保存前の下書き（row_order なし）は今までどおり商品→手入力の順で 1 から付ける', () => {
+  it('並び順の無い下書き（今までの画面）は並び順を送らない（今までどおり商品→手入力の順で保存）', () => {
     const payload = buildV25SavePayload(state([slot('s1', 'p1'), slot('s2', 'p2')], [line('l1'), line('l2')]));
-    expect(payload.slots.map((row) => row.row_order)).toEqual([1, 2]);
-    expect(payload.lines.map((row) => row.row_order)).toEqual([3, 4]);
+    expect(payload.slots.map((row) => row.row_order)).toEqual([null, null]);
+    expect(payload.lines.map((row) => row.row_order)).toEqual([null, null]);
+    expect(v25HasRowOrder(state([slot('s1', 'p1')], []))).toBe(false);
+    expect(v25HasRowOrder(state([], []))).toBe(false);
   });
 
-  it('保存済みの混在の順を保ち、新しい行はその後ろ（商品→手入力の配列の順）に付ける。番号は詰め直す', () => {
+  it('全部の行に並び順があれば、その順で 1 から詰め直して送る', () => {
+    const saved = state(
+      [slot('s1', 'p1', { row_order: 20 }), slot('s2', 'p2', { row_order: 5 })],
+      [line('l1', { row_order: 10 })]
+    );
+    expect(v25HasRowOrder(saved)).toBe(true);
+    const payload = buildV25SavePayload(saved);
+    expect(payload.slots.map((row) => row.row_order)).toEqual([3, 1]);
+    expect(payload.lines.map((row) => row.row_order)).toEqual([2]);
+  });
+
+  it('読み込んだ並び順のある下書きに行を足したら、古い番号は送らない（追加した商品が手入力の後ろに回らないように）', () => {
+    const added = state(
+      [slot('s1', 'p1', { row_order: 1 }), slot('s-new', 'p9')],
+      [line('l1', { row_order: 2 }), line('l2', { row_order: 3 })]
+    );
+    expect(v25HasRowOrder(added)).toBe(false);
+    const payload = buildV25SavePayload(added);
+    expect([...payload.slots, ...payload.lines].map((row) => row.row_order)).toEqual([null, null, null, null]);
+  });
+
+  it('保存した順の参照：並び順のある行をその順に、無い行をその後ろに商品→手入力の配列の順で', () => {
     const saved = state(
       [slot('s1', 'p1', { row_order: 20 }), slot('s2', 'p2', { row_order: 5 }), slot('s3', 'p3')],
       [line('l1', { row_order: 10 }), line('l2')]
@@ -51,9 +75,20 @@ describe('並び順（DB の display_order）の保存と読み込み', () => {
     expect(v25RowOrderRefs(saved)).toEqual([
       { kind: 'slot', key: 's2' }, { kind: 'line', key: 'l1' }, { kind: 'slot', key: 's1' }, { kind: 'slot', key: 's3' }, { kind: 'line', key: 'l2' },
     ]);
-    const payload = buildV25SavePayload(saved);
+    // 画面が全行に付け直すと送る
+    const payload = buildV25SavePayload(v25WithRowOrder(saved, v25RowOrderRefs(saved)));
     expect(payload.slots.map((row) => row.row_order)).toEqual([3, 1, 4]);
     expect(payload.lines.map((row) => row.row_order)).toEqual([2, 5]);
+  });
+
+  it('同じ工事項目の中の上下の移動（#674）は、保存した並び順も入れ替える', () => {
+    const lines = [line('l1', { group_label: '雑工事', row_order: 2 }), line('l2', { group_label: '雑工事', row_order: 3 })];
+    const moved = v25MoveManualLineWithinWorkGroup(lines, 'l1', 1);
+    expect(moved.map((row) => [row.key, row.row_order])).toEqual([['l2', 2], ['l1', 3]]);
+    // 並び順の無い行は今までどおり入れ替えるだけ（row_order の項目を足さない）
+    const plain = v25MoveManualLineWithinWorkGroup([line('a', { group_label: '雑工事' }), line('b', { group_label: '雑工事' })], 'a', 1);
+    expect(plain.map((row) => row.key)).toEqual(['b', 'a']);
+    expect(plain.every((row) => !('row_order' in row))).toBe(true);
   });
 
   it('画面の並び（{kind, key} の配列）のとおりに付け直す。並べ替えだけでは数量・単価などは変わらない', () => {

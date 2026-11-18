@@ -81,6 +81,8 @@ declare
   k_m1 constant uuid := '68800000-0000-4000-8000-000000000602';
   k_l1 constant uuid := '68800000-0000-4000-8000-000000000701';
   k_l2 constant uuid := '68800000-0000-4000-8000-000000000702';
+  cfg_q constant uuid := '68800000-0000-4000-8000-000000000801';
+  q_q constant uuid := '68800000-0000-4000-8000-000000000901';
   v_bmr text;
   v_se text;
   v_master uuid;
@@ -234,6 +236,26 @@ begin
   v_out := pg_temp.rwo_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, %s)).status', v_rev,
     (select lock_version from public.standard_estimate_revisions where id = v_rev)));
   perform pg_temp.rwo_expect_eq('RWO-12 前提：混在の並び順と工事項目の版を公開できる', 'published', v_out);
+  -- Web の見積の明細（write_standard_estimate_quote_items）も、公開した版の並び順と工事項目の摘要になる
+  -- （試験のため、価格のスイッチを入れた状態にし、見積依頼と見積の行を直接作る。この試験の終わりに全部取り消す）
+  set local session_replication_role = replica;
+  update public.app_settings set value = jsonb_build_object('enabled', true) where key = 'simulator_standard_pricing';
+  insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+  values (cfg_q, u_editor, m_model, '並び順の検査', 'draft', 'office', 'full');
+  insert into public.configuration_items (configuration_id, option_id, quantity, variant_choice_ids)
+  values (cfg_q, r1, 1, '{}'), (cfg_q, m1, 1, '{}');
+  insert into public.quote_requests (id, configuration_id, user_id, quote_id, status)
+  values (q_q, cfg_q, u_editor, q_q, 'new');
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, status, valid_until, customer_name, base_model_name,
+                             base_price, option_subtotal, installation_subtotal, subtotal, tax_rate, tax, total)
+  values (q_q, 'RT-RWO-1', q_q, cfg_q, u_editor, 'issued', now() + interval '30 days', '顧客', '並び順の検査モデル', 0, 0, 0, 0, 0.10, 0, 0);
+  set local session_replication_role = origin;
+  v_out := public.write_standard_estimate_quote_items(cfg_q, q_q)::text;
+  perform pg_temp.rwo_expect_eq('RWO-16 Web の見積の明細も公開した版の並び順（商品と手入力が混ざる）で、商品の行の摘要は工事項目（無ければカテゴリー）',
+    'true|手入力1:1. 設備機器/並び順 屋根1:2. 屋根工事/手入力2:-/並び順 設備1:並び順 設備',
+    v_out || '|' || coalesce((select string_agg(qi.name || ':' || coalesce(qi.description, '-'), '/' order by qi.sort_order)
+                                from public.quote_items qi
+                               where qi.quote_id = q_q and qi.kind = 'option' and qi.sort_order > 2000 and qi.sort_order < 2700), '(なし)'));
   v_rev2 := pg_temp.rwo_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L, null)::text', v_master))::uuid;
   perform pg_temp.rwo_expect_eq('RWO-13 公開した版から作る次の下書きに、並び順と工事項目を写す', v_mixed,
     (select string_agg(x.name || ':' || x.display_order || ':' || coalesce(x.work_item, '-'), '/' order by x.display_order)

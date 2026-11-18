@@ -78,16 +78,19 @@ describe('PR #666 × #686/#687 混在順序の保存・読込・工事項目整�
     // 商品行と手入力明細を上下交換：商品・金額・工事項目そのものは未編集。
     const viewOrder = v25MoveMixedRowWithinGroup(initialOrder, group, { kind: 'slot', key: 'a' }, -1);
     const editedDirty = false;
+    const unsavedAutoWorkItems = 0;
     const orderDirty = !v25MixedOrderEquals(viewOrder, initialOrder);
-    const dirty = editedDirty || false /* unsavedAutoWorkItems > 0 */ || orderDirty;
+    const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;
+    const discardDisabled = (
+      pending: boolean, editingPosition: boolean, hasEditedRows: boolean, hasMovedRows: boolean,
+    ) => pending || (!hasEditedRows && !hasMovedRows) || editingPosition;
     expect(orderDirty).toBe(true);
     expect(dirty).toBe(true);
     expect(ids(viewOrder)).toEqual(['slot:a', 'line:c', 'line:d', 'slot:b']);
     // 並び順のみでも変更破棄を押せる。保存中・位置名編集中の保護は維持。
-    expect(!editedDirty && !orderDirty).toBe(false);
-    expect(false || (!editedDirty && !orderDirty) || false).toBe(false);
-    expect(true || (!editedDirty && !orderDirty) || false).toBe(true);
-    expect(false || (!editedDirty && !orderDirty) || true).toBe(true);
+    expect(discardDisabled(false, false, editedDirty, orderDirty)).toBe(false);
+    expect(discardDisabled(true, false, editedDirty, orderDirty)).toBe(true);
+    expect(discardDisabled(false, true, editedDirty, orderDirty)).toBe(true);
 
     // UIの変更破棄ハンドラーは setState(initial) と setViewOrder([]) を両方行う。
     const discardedState = initial;
@@ -98,11 +101,12 @@ describe('PR #666 × #686/#687 混在順序の保存・読込・工事項目整�
     );
     expect(ids(restored)).toEqual(ids(initialOrder));
     const afterDiscardOrderDirty = !v25MixedOrderEquals(restored, initialOrder);
-    const afterDiscardDirty = false /* editedDirty */ || false /* unsavedAutoWorkItems */ || afterDiscardOrderDirty;
+    const afterDiscardEditedDirty = JSON.stringify(discardedState) !== JSON.stringify(initial);
+    const afterDiscardDirty = afterDiscardEditedDirty || unsavedAutoWorkItems > 0 || afterDiscardOrderDirty;
     expect(afterDiscardOrderDirty).toBe(false);
     expect(afterDiscardDirty).toBe(false);
-    expect(JSON.stringify(discardedState)).toBe(JSON.stringify(initial));
-    expect(!false && !afterDiscardOrderDirty).toBe(true);
+    expect(ids(restored)).toEqual(ids(savedViewOrder));
+    expect(discardDisabled(false, false, afterDiscardEditedDirty, afterDiscardOrderDirty)).toBe(true);
 
     // 単体の順序計算だけでなく、実際のボタン条件・破棄処理への結線も固定して回帰防止。
     expect(source).toContain('disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {');

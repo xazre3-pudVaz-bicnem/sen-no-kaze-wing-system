@@ -697,7 +697,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。');
     expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
     // 変更破棄は手で変えた分だけ（カテゴリーからの工事項目の自動の値は破棄できないため。2026-11-16 の先方の依頼）
-    expect(source).toContain('disabled={pending || !editedDirty || positionInputActive} onClick={() => {');
+    expect(source).toContain('disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {');
     expect(source).toContain('disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"');
     expect(source).toContain('disabled={pending || blockers.length > 0 || positionInputActive}');
     expect(source).toContain('const save = () => {\n    if (pending || positionInputActive) return;');

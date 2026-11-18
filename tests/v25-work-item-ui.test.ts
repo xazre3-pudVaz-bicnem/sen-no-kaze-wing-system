@@ -164,16 +164,17 @@ describe('画面（Excel 風明細）', () => {
     expect(workbench).toContain("if (readOnly) return '';");
   });
 
-  it('見出しの分け方と保存は同じ工事項目（表示の値）を使う。並び順は付けない（見積書の明細は今までどおりの順）', () => {
+  it('見出しの分け方と保存は同じ工事項目（表示の値）を使う。混在の保存順を全行に付ける', () => {
     expect(workbench).toContain("(line) => line.group_label, { modelSlug, specCode, sectionCode: code },\n                workItemOf,");
     expect(workbench).toContain('const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };');
-    expect(workbench).toContain('payload: buildV25SavePayload(toSave)');
+    expect(workbench).toContain('const orderedToSave = v25WithRowOrder(toSave, renderedMixedOrder);');
+    expect(workbench).toContain('payload: buildV25SavePayload(orderedToSave)');
     expect(workbench).not.toContain('buildV25SavePayload(v25WithRowOrder(');
   });
 
   it('自動の値がまだ保存されていない行は未保存として扱い（保存するまで公開しない）、案内を出す。「変更を破棄」は手で変えた分だけ', () => {
     expect(workbench).toContain('const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;');
-    expect(workbench).toContain('const dirty = editedDirty || unsavedAutoWorkItems > 0;');
+    expect(workbench).toContain('const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;');
     expect(workbench).toContain('data-testid="v25-wb-work-item-auto-unsaved"');
     expect(workbench).toContain('disabled={pending || !editedDirty || positionInputActive} onClick={() => {\n              setState(initial);');
   });

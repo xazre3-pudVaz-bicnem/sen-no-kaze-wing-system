@@ -296,7 +296,7 @@ describe('Excel 風の画面（描画）', () => {
     const unregistered = render(false, { candidates: candidates.map((item) => ({ ...item, priceUnit: null })) });
     expect(unregistered).toContain('data-testid="v25-wb-slot-unit"');
     expect(unregistered).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>\s*—\s*<\/td>/);
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(toSave)');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(orderedToSave)');
   });
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
@@ -407,7 +407,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
-    expect(source).toContain('payload: buildV25SavePayload(toSave)');
+    expect(source).toContain('payload: buildV25SavePayload(orderedToSave)');
   });
 
   it('幅の過大な列を圧縮し、広い画面では表全体を可変幅で表示する', () => {

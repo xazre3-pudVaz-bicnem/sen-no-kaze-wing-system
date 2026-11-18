@@ -329,8 +329,9 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('workGroups.map((workGroup)');
     expect(source).toContain('data-testid="v25-work-item-heading"');
     expect(source).toContain('data-work-item={workGroup.key}');
-    expect(source).toContain('{workGroup.slots.map((slot) => {');
-    expect(source).toContain('{workGroup.lines.map((line, lineIndex) => {');
+    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
+    expect(source).toContain("if (rowRef.kind === 'slot')");
+    expect(source).toContain('const line = workGroup.lines.find((item) => item.key === rowRef.key)');
     expect(source).toContain('data-v25-excel-col="name"');
     expect(source).not.toContain('data-v25-excel-col="group"');
     expect(source).toContain('data-testid="v25-wb-change-work-group"');
@@ -373,19 +374,20 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('columnPrefs.reset');
   });
 
-  it('上下ボタンは自由入力行だけに表示し、端では無効・列数もそのまま', () => {
-    const manual = source.slice(source.indexOf('{workGroup.lines.map('), source.indexOf('</tbody>',source.indexOf('{workGroup.lines.map(')));
-    expect(manual).toContain('data-testid="v25-wb-manual-move-up"');
-    expect(manual).toContain('data-testid="v25-wb-manual-move-down"');
-    expect(manual).toContain('disabled={positionActionsLocked || groupEditor !== null || lineIndex === 0}');
-    expect(manual).toContain('disabled={positionActionsLocked || groupEditor !== null || lineIndex === workGroup.lines.length - 1}');
-    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1, { modelSlug, specCode })');
-    expect(manual).toContain('v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1, { modelSlug, specCode })');
-    const product = source.slice(source.indexOf('{workGroup.slots.map('), source.indexOf('{workGroup.lines.map('));
-    expect(product).not.toContain('v25-wb-manual-move-up');
-    expect(manual).toContain('testId="v25-wb-line-delete"');
-    expect(manual).toContain('data-v25-excel-col="name"');
-    expect(manual).toContain('data-testid="v25-wb-change-work-group"');
+  it('↑↓＋は商品と自由入力を混在表示し、工事項目の境界を跨がず列数を変えない', () => {
+    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
+    expect(source).toContain('v25MoveMixedRowWithinGroup(');
+    expect(source).toContain('data-testid="v25-wb-row-up"');
+    expect(source).toContain('data-testid="v25-wb-row-down"');
+    expect(source).toContain('testId="v25-wb-row-insert"');
+    expect(source).toContain('testId="v25-wb-line-menu"');
+    expect(source).toContain('data-testid="v25-wb-manual-move-up"');
+    expect(source).toContain('data-testid="v25-wb-manual-move-down"');
+    expect(source).toContain('disabled={positionActionsLocked || groupEditor !== null || rowIndex === 0}');
+    expect(source).toContain('rowIndex === v25MixedRowsForWorkGroup(mixedOrder, workGroup).length - 1');
+    expect(source).toContain('testId="v25-wb-line-delete"');
+    expect(source).toContain('data-v25-excel-col="name"');
+    expect(source).toContain('data-testid="v25-wb-change-work-group"');
     expect(source).toContain('data-v25-column="actions"');
     expect(source).toContain('style={{ width: columnPrefs.prefs.widths.actions }}');
   });
@@ -414,7 +416,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('V25WidthHandle');
     expect(source).toContain('useV25PageFloatingHeader(headerLayoutKey)');
     expect(source).toContain('overlay.scrollLeft = grid.scrollLeft');
-    expect(source).toContain('buildV25SavePayload(toSave)');
+    expect(source).toContain('buildV25SavePayload(orderedToSave)');
     expect(source).toContain('saveStandardEstimateV25DraftAction');
     expect(source).toContain('clearV25Position(state, positionFor)');
     expect(source).toContain('updateV25Position(state, positionFor, positionDraft.slot_label');

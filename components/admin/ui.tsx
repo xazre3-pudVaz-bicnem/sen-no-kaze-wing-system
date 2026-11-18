@@ -26,7 +26,15 @@ export function FlashMessages({ sp }: { sp: Record<string, string | undefined> }
       {sp.image_deleted && <Alert tone="success">画像を削除しました。</Alert>}
       {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       {/* 商品の登録で原価の Version の記録に失敗したとき（v2.5 PR-A3）。登録は済んでいる */}
-      {sp.cost_warning && <Alert tone="warn">{sp.cost_warning}</Alert>}
+      {sp.cost_warning && (
+        <Alert tone="warn">
+          <p>{sp.cost_warning}</p>
+          <p className="mt-2">対象と金額を確認し、必要な項目だけを選んでください。</p>
+          <Link href="/admin/options/cost-import" className="mt-2 inline-block font-semibold underline underline-offset-4">
+            原価 Version の取り込み画面を開く
+          </Link>
+        </Alert>
+      )}
     </>
   );
 }

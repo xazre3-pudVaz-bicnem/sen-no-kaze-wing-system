@@ -159,7 +159,7 @@ describe('v2.5 PR-A3：独立レビューの指摘への対応', () => {
   });
 
   it('登録の後の戻り先でも、原価の記録の失敗を知らせる（共通の通知）', () => {
-    expect(read('components/admin/ui.tsx')).toContain('{sp.cost_warning && <Alert tone="warn">{sp.cost_warning}</Alert>}');
+    expect(read('components/admin/ui.tsx')).toContain('{sp.cost_warning && (');
   });
 
   it('取り込みは、途中の状態でも原価が 0 円未満にならない順に記録する（選択肢の上げ → 商品 → 選択肢の下げ）', () => {

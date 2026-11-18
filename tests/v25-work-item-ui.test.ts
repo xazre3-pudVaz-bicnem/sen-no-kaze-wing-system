@@ -108,6 +108,19 @@ describe('保存する並び順（画面の表示の順）', () => {
     expect(payload.lines.map((row) => [row.name, row.row_order, row.unit_price])).toEqual([['l-roof', 3, 3000], ['l-opt', 6, 1000], ['l-free', 4, 1000]]);
   });
 
+  it('並び順を保存した下書きに商品を足しても、その見出しの中（手入力より前）に付ける。全行に番号を付けて送る', () => {
+    const saved = state(
+      [slot('r', 'roof1', { row_order: 1 })],
+      [line('l-roof', { group_label: '2. 屋根工事', row_order: 2 }), line('l-free', { group_label: '雑工事', row_order: 3 })]
+    );
+    const added = { ...saved, slots: [...saved.slots, slot('r2', 'roof1')] };
+    const refs = v25DisplayRowRefs(added, sectionOf, categoryOf, (row) => row.work_item ?? '', context);
+    expect(refs.map((ref) => ref.key)).toEqual(['r', 'r2', 'l-roof', 'l-free']);
+    const payload = buildV25SavePayload(v25WithRowOrder(added, refs));
+    expect(payload.slots.map((row) => row.row_order)).toEqual([1, 2]);
+    expect(payload.lines.map((row) => row.row_order)).toEqual([3, 4]);
+  });
+
   it('工事項目を変えると、その見出しの位置で保存する', () => {
     const moved = state([slot('r', 'roof1', { work_item: '4. 内装仕上げ' }), slot('s', 'sash1')], [line('l', { group_label: '3. 外壁工事' })]);
     const refs = v25DisplayRowRefs(moved, sectionOf, categoryOf, (row) => row.work_item ?? '', context);

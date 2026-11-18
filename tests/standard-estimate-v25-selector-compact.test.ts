@@ -44,19 +44,23 @@ const render = (rows: StandardEstimateWorkspaceEntry[] = entries, selectedId: st
 const source = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
 
 describe('標準見積v2.5：コンパクトな仕様選択カード', () => {
-  it('現在の10仕様をWing・BOX・Flatの区分内で漏れなく表示し、PC3列・タブレット2列・スマホ1列とする', () => {
+  it('現在の10仕様を保持し、モデル別に1列で折り畳める', () => {
     const html = render();
     expect(html.match(/data-testid="v25-selector-entry"/g)).toHaveLength(10);
     expect(html.match(/data-testid="v25-selector-product"/g)).toHaveLength(3);
-    expect(html.match(/data-testid="v25-selector-grid"/g)).toHaveLength(3);
-    expect(html.match(/grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3/g)).toHaveLength(3);
+    expect(html.match(/data-testid="v25-selector-list"/g)).toHaveLength(3);
+    expect(html).toContain('max-h-[22rem]');
+    expect(html).not.toContain('lg:grid-cols-3');
+    expect(html).toContain('<details');
+    expect(html).toMatch(/<details[^>]*open=""/);
+    expect(html.match(/<details[^>]*open=""/g)).toHaveLength(1);
     expect(groupV25Selector(entries).map((group) => group.product)).toEqual(['Wing', 'BOX', 'Flat']);
     for (const entry of entries) {
       expect(html).toContain('master=' + entry.masterId);
       expect(html).toContain(entry.identity.split(' / ')[2]);
     }
     expect(html).not.toContain('max-w-[42rem]');
-    expect(html).not.toContain('選択中</span>');
+    expect(html).toContain('選択中</span>');
   });
 
   it('10仕様すべてで公開済みRevisionの保存済み税込総額だけを表示し、下書きの版番号と混同しない', () => {
@@ -100,8 +104,8 @@ describe('標準見積v2.5：コンパクトな仕様選択カード', () => {
     expect(selector).toContain('event.preventDefault()');
     expect(selector).toContain('window.confirm(');
     expect(layout).toContain('aria-expanded={selectorOpen}');
-    expect(layout).toContain("selectorOpen ? 'min-w-0 w-full' : 'hidden'");
-    expect(layout).toContain('selectedName && !selectorOpen');
+    expect(layout).toContain("selectorOpen ? 'min-w-0 w-full max-w-[380px]' : 'hidden'");
+    expect(layout).toContain('selectedName && (');
     expect(page).toContain("workspace.revision.status === 'draft' ? 'warn' : 'success'");
     expect(page).toContain('第{workspace.revision.version}版');
     expect(page).toContain('版の詳細');

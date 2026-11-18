@@ -151,14 +151,14 @@ export function EquipmentBoard({
           data-testid={`equip-slot-${tile.slotCode}`}
         >
           <span className="block min-h-24 w-full p-1.5 sm:p-2">
-            <span className="relative block h-full min-h-20 w-full overflow-hidden rounded bg-sand">
+            <span className="relative block h-24 w-full overflow-hidden rounded border border-line/60 bg-white sm:h-28">
               {main?.image_url ? (
                 <SmartImage
                   src={main.image_url}
                   alt={main.name}
                   fill
                   sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
-                  className="object-cover"
+                  className="object-contain p-1.5"
                 />
               ) : (
                 <span className="flex h-full min-h-20 items-center justify-center bg-ivory px-2 text-center text-[0.65rem] text-muted">
@@ -294,14 +294,14 @@ export function EquipmentBoard({
           data-testid={`equip-${cat.code}`}
         >
           <span className="block min-h-24 w-full p-1.5 sm:p-2">
-            <span className="relative block h-full min-h-20 w-full overflow-hidden rounded bg-sand">
+            <span className="relative block h-24 w-full overflow-hidden rounded border border-line/60 bg-white sm:h-28">
               {main?.image_url ? (
                 <SmartImage
                   src={main.image_url}
                   alt={main.name}
                   fill
                   sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
-                  className="object-cover"
+                  className="object-contain p-1.5"
                 />
               ) : (
                 <span className="flex h-full min-h-20 items-center justify-center bg-ivory px-2 text-center text-[0.65rem] text-muted">

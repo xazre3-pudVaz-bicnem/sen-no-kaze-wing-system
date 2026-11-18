@@ -4,6 +4,7 @@
  * ここは画面の状態を RPC の形に変え、DB と同じ入力の決まりを先に案内するだけ（金額は計算しない）。
  */
 import type { StandardLineSectionCode } from './standard-estimate-view';
+import { v25HasRowOrder, v25RowOrderRefs, v25WithRowOrder } from './standard-estimate-v25-row-persistence';
 
 export type V25SlotPriceMode = 'auto' | 'manual' | 'por';
 export type V25LinePriceMode = 'manual' | 'por';
@@ -55,6 +56,13 @@ export interface V25SlotRow {
   slot_label: string;
   /** 位置の枠で、お客様が標準の商品の代わりに選べる商品（標準の商品は常に選べるので入れない）。空なら標準の商品だけ */
   selectable_option_ids: string[];
+  /**
+   * 版の中で商品の行と手入力明細を通して並べる順（1 始まり。DB の display_order）。保存前の下書き・新しい行は null・省略
+   * （2026-11-16 の先方の依頼。並びを保存する画面は、保存の前に表示の順で全行に付け直す。1 行でも無ければ並び順は保存しない）
+   */
+  row_order?: number | null;
+  /** 工事項目（ラベル。DB の work_item）。空は未設定。画面がカテゴリーから自動で入れ、変えられる（2026-11-16 の先方の依頼） */
+  work_item?: string;
 }
 
 /** 位置・用途の選択枠の識別子の形（DB の check と同じ） */
@@ -73,6 +81,8 @@ export interface V25LineRow {
   unit_price: string;
   remark: string;
   review_required: boolean;
+  /** 版の中で商品の行と手入力明細を通して並べる順（1 始まり。DB の display_order）。保存前の下書き・新しい行は null・省略 */
+  row_order?: number | null;
 }
 
 export interface V25EditorState {
@@ -201,7 +211,11 @@ export function validateV25EditorState(
 }
 
 /** 画面の状態を save_standard_estimate_v25_draft の p_payload にする（選択肢は選択項目の順に並べる） */
-export function buildV25SavePayload(state: V25EditorState) {
+export function buildV25SavePayload(input: V25EditorState) {
+  // 並び順（DB の display_order）：画面が全部の行に付けたときだけ、その順で 1 から詰め直して送る。
+  // 1 行でも無ければ送らない（今までどおり「商品→手入力」の順で保存。古い番号で並べ替え・追加を打ち消さないため）
+  const ordered = v25HasRowOrder(input);
+  const state = ordered ? v25WithRowOrder(input, v25RowOrderRefs(input)) : input;
   return {
     rates: {
       sales_fee_rate: state.sales_fee_rate.trim(),
@@ -223,6 +237,9 @@ export function buildV25SavePayload(state: V25EditorState) {
       selectable_option_ids: slot.slot_code.trim()
         ? [...new Set(slot.selectable_option_ids.filter((id) => id && id !== slot.option_id))]
         : [],
+      // 並び順と工事項目（2026-11-16 の先方の依頼）
+      row_order: ordered ? slot.row_order ?? null : null,
+      work_item: slot.work_item?.trim() || null,
     })),
     lines: state.lines.map((line) => ({
       line_key: line.line_key,
@@ -235,6 +252,7 @@ export function buildV25SavePayload(state: V25EditorState) {
       unit_price: line.price_mode === 'manual' ? Number(line.unit_price.trim()) : null,
       remark: line.remark.trim() || null,
       review_required: line.review_required,
+      row_order: ordered ? line.row_order ?? null : null,
     })),
   };
 }

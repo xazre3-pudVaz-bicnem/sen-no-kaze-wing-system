@@ -10,6 +10,7 @@ import { AdminPage } from '@/components/admin/ui';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 import { StandardEstimateV25Workbench } from '@/components/admin/standard-estimate-v25-workbench';
 import { StandardEstimateWorkspaceLayout } from '@/components/admin/standard-estimate-workspace-layout';
+import { StandardEstimateV25Selector } from '@/components/admin/standard-estimate-v25-selector';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 
 export const dynamic = 'force-dynamic';
@@ -62,20 +63,13 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
 
       <StandardEstimateWorkspaceLayout
         selectedName={selected?.identity}
-        sidebar={(
-          <nav aria-label="標準見積の一覧" className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-white p-2" data-testid="standard-estimate-selector">
-          {entries.length === 0 && <p className="px-2 py-4 text-sm text-muted">標準見積がまだありません。「新しい標準見積を作る」で、本体マスターの公開版から作成してください。</p>}
-          {entries.map((entry) => (
-            <EntryLink key={entry.masterId} entry={entry} active={entry.masterId === selected?.masterId} />
-          ))}
-          </nav>
-        )}
+        sidebar={<StandardEstimateV25Selector entries={entries} selectedId={selected?.masterId ?? null} />}
       >
         <div className="min-w-0 space-y-3">
           {selected && workspace ? (
             <>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold">{selected.identity}</h2>
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <h2 className="text-sm font-semibold text-slate-900">{selected.identity}</h2>
                 <Badge tone={workspace.revision.status === 'draft' ? 'warn' : 'success'}>
                   第{workspace.revision.version}版・{workspace.revision.status === 'draft' ? '下書き' : '公開中'}
                 </Badge>
@@ -90,9 +84,12 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
                   )}
                   <StandardEstimateV25Workbench
                     resetKey={`${workspace.revision.id}:${workspace.revision.lockVersion}`}
+                    modelSlug={workspace.v25.modelSlug}
+                    specCode={selected.specCode}
                     revisionId={workspace.revision.id}
                     lockVersion={workspace.revision.lockVersion}
                     readOnly={workspace.revision.status !== 'draft'}
+                    baseMasterReference={workspace.v25.baseMasterReference}
                     baseLines={workspace.v25.baseLines}
                     candidates={workspace.v25.candidates}
                     initial={workspace.v25.initial}
@@ -128,22 +125,6 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
         </div>
       </StandardEstimateWorkspaceLayout>
     </AdminPage>
-  );
-}
-
-function EntryLink({ entry, active }: { entry: StandardEstimateWorkspaceEntry; active: boolean }) {
-  return (
-    <Link
-      href={`/admin/estimate-templates?master=${entry.masterId}`}
-      aria-current={active ? 'page' : undefined}
-      className={`min-w-[13rem] max-w-[20rem] flex-1 rounded-md px-2 py-1.5 text-xs leading-5 ${active ? 'bg-ink text-white' : 'text-ink hover:bg-sand'}`}
-    >
-      <span className="block font-semibold">{entry.identity}</span>
-      <span className={active ? 'text-white/80' : 'text-muted'}>
-        {entry.published ? `公開中 第${entry.published.version}版（${PRICING_LABEL[entry.published.pricingModel]}）` : '未公開'}
-        {entry.draft ? `・下書きあり（${PRICING_LABEL[entry.draft.pricingModel]}）` : ''}
-      </span>
-    </Link>
   );
 }
 

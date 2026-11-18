@@ -7,6 +7,10 @@ type Props = {
   savedTotal: number | null;
   unpricedCount: number;
   incompleteCostCount: number;
+  /** 下書きの調整額。金額計算は親の既存試算だけが行う。 */
+  adjustmentValue?: string;
+  onAdjustmentChange?: (value: string) => void;
+  readOnly?: boolean;
 };
 
 const SECTION_LABELS: Record<PricingSectionCode, string> = {
@@ -28,6 +32,9 @@ export function StandardEstimateV25AmountBreakdown({
   savedTotal,
   unpricedCount,
   incompleteCostCount,
+  adjustmentValue,
+  onAdjustmentChange,
+  readOnly = true,
 }: Props) {
   const omitted = unpricedCount + incompleteCostCount;
   const partiallyUnknown = omitted > 0 || Boolean(result?.has_por);
@@ -35,14 +42,14 @@ export function StandardEstimateV25AmountBreakdown({
   return (
     <section
       aria-labelledby="v25-amount-breakdown-title"
-      className="rounded-lg border border-slate-300 bg-white p-3 text-xs"
+      className="rounded-lg border border-slate-200 bg-white p-3 text-xs"
       data-testid="v25-amount-breakdown"
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
         <h3 id="v25-amount-breakdown-title" className="text-sm font-semibold text-slate-900">
           金額内訳
         </h3>
-        <span className="text-slate-500">画面の試算・参考（正式金額はDB保存後に確定）</span>
+        <span className="text-slate-500">画面の試算（参考）と保存済み金額（DB）を区別して表示</span>
       </div>
 
       {partiallyUnknown && (
@@ -54,13 +61,13 @@ export function StandardEstimateV25AmountBreakdown({
       )}
 
       <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[27rem] border-collapse text-right tabular-nums" data-testid="v25-amount-breakdown-table">
+        <table className="w-full min-w-[27rem] border-collapse text-right tabular-nums leading-5" data-testid="v25-amount-breakdown-table">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-100 text-slate-600">
-              <th scope="col" className="px-2 py-2 text-left font-medium">区分</th>
-              <th scope="col" className="px-2 py-2 font-medium">明細売価（税別）</th>
-              <th scope="col" className="px-2 py-2 font-medium">経費</th>
-              <th scope="col" className="px-2 py-2 font-medium">区分計（税別）</th>
+              <th scope="col" className="px-2 py-1.5 text-left font-medium">区分</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">明細売価（税別）</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">経費</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">区分計（税別）</th>
             </tr>
           </thead>
           <tbody>
@@ -68,16 +75,16 @@ export function StandardEstimateV25AmountBreakdown({
               const section = result?.sections.find((item) => item.code === code);
               return (
                 <tr key={code} className="border-b border-slate-100" data-testid={`v25-amount-breakdown-${code}`}>
-                  <th scope="row" className="px-2 py-2 text-left font-medium text-slate-800">
+                  <th scope="row" className="px-2 py-1 text-left font-medium text-slate-800">
                     {SECTION_LABELS[code]}
                     {section?.has_por && <span className="ml-1 font-normal text-amber-800">（未確定あり）</span>}
                   </th>
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-1">
                     {section ? formatYen(section.priced_subtotal) : '—'}
                     {section?.has_por && <span className="ml-1 text-amber-800">＋未確定</span>}
                   </td>
-                  <td className="px-2 py-2">{section ? formatAmount(section.expense) : '—'}</td>
-                  <td className="px-2 py-2 font-medium">{section ? formatAmount(section.total) : '—'}</td>
+                  <td className="px-2 py-1">{section ? formatAmount(section.expense) : '—'}</td>
+                  <td className="px-2 py-1 font-medium text-slate-900">{section ? formatAmount(section.total) : '—'}</td>
                 </tr>
               );
             })}
@@ -85,11 +92,18 @@ export function StandardEstimateV25AmountBreakdown({
           <tfoot>
             <tr className="border-t-2 border-slate-300">
               <th scope="row" colSpan={3} className="px-2 py-2 text-right font-medium">税別小計（経費込み）</th>
-              <td className="px-2 py-2 font-medium">{result ? formatAmount(result.subtotal) : '—'}</td>
+              <td className="px-2 py-1.5 font-medium">{result ? formatAmount(result.subtotal) : '—'}</td>
             </tr>
             <tr>
               <th scope="row" colSpan={3} className="px-2 py-1.5 text-right font-medium">調整額（税別）</th>
-              <td className="px-2 py-1.5">{result ? formatAmount(result.adjustment) : '—'}</td>
+              <td className="px-2 py-1.5">
+                {!readOnly && onAdjustmentChange && adjustmentValue !== undefined ? (
+                  <input type="text" inputMode="numeric" value={adjustmentValue} aria-label="金額内訳の調整額（税別・円）"
+                    data-testid="v25-amount-breakdown-adjustment"
+                    className="h-7 w-full max-w-[9rem] rounded border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600"
+                    onChange={(event) => onAdjustmentChange(event.target.value)} />
+                ) : (result ? formatAmount(result.adjustment) : '—')}
+              </td>
             </tr>
             <tr>
               <th scope="row" colSpan={3} className="px-2 py-1.5 text-right font-medium">調整後税別額</th>
@@ -99,17 +113,17 @@ export function StandardEstimateV25AmountBreakdown({
               <th scope="row" colSpan={3} className="px-2 py-1.5 text-right font-medium">消費税</th>
               <td className="px-2 py-1.5">{result ? formatAmount(result.tax) : '—'}</td>
             </tr>
-            <tr className="border-t border-slate-300 bg-slate-50">
-              <th scope="row" colSpan={3} className="px-2 py-2 text-right text-sm font-semibold">税込合計（画面の試算）</th>
-              <td className="px-2 py-2 text-sm font-semibold" data-testid="v25-amount-breakdown-total">
+            <tr className="border-t-2 border-emerald-700 bg-emerald-50" data-testid="v25-amount-breakdown-trial-row">
+              <th scope="row" colSpan={3} className="px-2 py-2 text-right text-sm font-semibold text-emerald-950">税込合計（画面の試算）</th>
+              <td className="px-2 py-2 text-base font-bold text-emerald-950" data-testid="v25-amount-breakdown-total">
                 {result ? formatAmount(result.total) : '—'}
                 {omitted > 0 && result?.total !== null && result?.total !== undefined &&
                   <span className="block text-[10px] font-normal text-amber-800">一部明細を除く</span>}
               </td>
             </tr>
-            <tr>
-              <th scope="row" colSpan={3} className="px-2 py-2 text-right font-medium">保存済み税込合計（DB）</th>
-              <td className="px-2 py-2 font-semibold" data-testid="v25-amount-breakdown-saved-total">
+            <tr className="border-b border-slate-200 bg-slate-50" data-testid="v25-amount-breakdown-saved-row">
+              <th scope="row" colSpan={3} className="px-2 py-2 text-right font-medium text-slate-700">保存済み税込合計（DB）</th>
+              <td className="px-2 py-2 font-semibold text-slate-900" data-testid="v25-amount-breakdown-saved-total">
                 {savedTotal === null ? '未確定' : formatYen(savedTotal)}
               </td>
             </tr>
@@ -117,7 +131,7 @@ export function StandardEstimateV25AmountBreakdown({
         </table>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 px-2 py-2" data-testid="v25-amount-breakdown-profit-pending">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5" data-testid="v25-amount-breakdown-profit-pending">
         <span className="font-medium text-slate-700">原価合計・粗利・粗利率</span>
         <span className="font-semibold text-slate-700">未算定</span>
       </div>

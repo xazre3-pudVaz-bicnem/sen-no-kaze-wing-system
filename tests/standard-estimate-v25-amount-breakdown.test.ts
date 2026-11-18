@@ -30,6 +30,9 @@ const render = (result: PricingResult | null, overrides: Partial<{
   savedTotal: number | null;
   unpricedCount: number;
   incompleteCostCount: number;
+  adjustmentValue: string;
+  onAdjustmentChange: (value: string) => void;
+  readOnly: boolean;
 }> = {}) => renderToStaticMarkup(createElement(StandardEstimateV25AmountBreakdown, {
   result, savedTotal: result?.total ?? null, unpricedCount: 0, incompleteCostCount: 0, ...overrides,
 }));
@@ -54,6 +57,20 @@ describe('標準見積v2.5：旧画面の金額内訳を現行の計算結果か
     expect(html).toContain('原価合計・粗利・粗利率');
     expect(html).toContain('未算定');
     expect(html).not.toContain('data-testid="v25-amount-breakdown-incomplete"');
+  });
+
+  it('下書きのみ金額内訳に調整額入力を表示し、マイナス値・未入力は文字列として保持する', () => {
+    const html = render(calculated(), { readOnly: false, adjustmentValue: '-17', onAdjustmentChange: () => {} });
+    expect(html).toContain('data-testid="v25-amount-breakdown-adjustment"');
+    expect(html).toContain('value="-17"');
+    expect(html.toLowerCase()).toContain('inputmode="numeric"');
+    expect(html).toContain('保存済み税込合計（DB）');
+    const blank = render(null, { readOnly: false, adjustmentValue: '', onAdjustmentChange: () => {} });
+    expect(blank).toContain('data-testid="v25-amount-breakdown-adjustment"');
+    expect(blank).toContain('value=""');
+    const readonly = render(calculated(), { readOnly: true, adjustmentValue: '-17', onAdjustmentChange: () => {} });
+    expect(readonly).not.toContain('data-testid="v25-amount-breakdown-adjustment"');
+    expect(readonly).toContain(formatYen(-17));
   });
 
   it('PORがある区分は未確定とし、判明分を0円にすり替えない', () => {
@@ -100,6 +117,11 @@ describe('標準見積v2.5：旧画面の金額内訳を現行の計算結果か
     expect(workbench).toContain('result={calc.result}');
     expect(workbench).toContain('unpricedCount={calc.unpriced.length}');
     expect(workbench).toContain('incompleteCostCount={calc.incomplete.length}');
+    expect(workbench).toContain('adjustmentValue={state.adjustment}');
+    expect(workbench).toContain('onAdjustmentChange={(value) => setState((current) => ({ ...current, adjustment: value }))}');
+    expect(workbench).toContain('readOnly={readOnly}');
+    expect(workbench).toContain('id="v25-wb-adjustment" value={state.adjustment}');
+    expect(workbench).toContain('adjustment_reason: event.target.value');
     expect(component).not.toContain('calculatePricingV25(');
     expect(component).not.toContain('saveStandardEstimateV25DraftAction(');
   });

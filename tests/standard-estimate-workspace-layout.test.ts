@@ -16,8 +16,8 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     expect(html).toContain('data-testid="standard-estimate-workspace-layout"');
     expect(html).toContain('data-testid="standard-estimate-selector-toggle"');
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('仕様一覧を開く');
-    expect(html).toContain('選択中：Wing ホテル仕様・非防火');
+    expect(html).toContain('仕様を変更');
+    expect(html).toContain('現在の仕様：</span>Wing ホテル仕様・非防火');
     expect(html).toContain('id="standard-estimate-selector-panel" class="hidden"');
     expect(html).toContain('編集サンプル');
   });
@@ -27,8 +27,10 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     const adminPage = source('components/admin/ui.tsx');
     const workbench = source('components/admin/standard-estimate-v25-workbench.tsx');
     expect(page).toContain('StandardEstimateWorkspaceLayout');
-    expect(page).toContain('flex flex-wrap gap-1.5');
-    expect(page).toContain('min-w-[13rem]');
+    expect(page).toContain('<StandardEstimateV25Selector');
+    const selector = source('components/admin/standard-estimate-v25-selector.tsx');
+    expect(selector).toContain('data-testid="standard-estimate-selector"');
+    expect(selector).toContain('grid grid-cols-2 gap-2');
     const layout = source('components/admin/standard-estimate-workspace-layout.tsx');
     expect(layout).toContain('min-w-0 space-y-3');
     expect(layout).not.toContain('lg:grid-cols-[15rem_minmax(0,1fr)]');
@@ -37,7 +39,7 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     expect(adminPage).toContain('wide = false');
     expect(workbench).toContain('overflow-x-auto rounded-b-md');
     expect(workbench).not.toContain('max-h-[70vh]');
-    expect(workbench).toContain('useV25PageFloatingHeader(showCost)');
+    expect(workbench).toContain('useV25PageFloatingHeader(headerLayoutKey)');
     expect(workbench).toContain('gridRect.bottom > headerHeight');
     expect(workbench).toContain('sticky left-0 top-0 z-40');
     expect(workbench).toContain('fixed z-[60]');

@@ -15,6 +15,7 @@ import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOp
 import { visibleVariantGroups } from '@/lib/domain/preset';
 import { Button } from '@/components/ui';
 import { ProductList } from './product-list';
+import { productChoicePoints } from '@/lib/domain/simulator-product-choice-guide';
 import { VariantPicker } from './variant-picker';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,7 @@ interface Props {
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   selectedOptionIds: string[];
+  baselineSelectedIds: string[];
   selectedVariantIds: string[];
   current: ExteriorFaceSelection[];
   initialFace: ExteriorFaceCode;
@@ -41,6 +43,7 @@ export function ExteriorWallFacesDialog({
   variantGroups,
   variantChoices,
   selectedOptionIds,
+  baselineSelectedIds,
   selectedVariantIds,
   current,
   initialFace,
@@ -135,6 +138,15 @@ export function ExteriorWallFacesDialog({
       </div>
 
       <div className="max-h-[76vh] overflow-y-auto px-4 py-4 sm:px-6">
+        <section className="mb-3 rounded-lg border border-line bg-ivory/55 px-3 py-2.5" aria-label="外壁の選ぶポイント" data-testid="exterior-wall-choice-guide">
+          <h3 className="text-xs font-semibold text-ink">選ぶポイント</h3>
+          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+            {productChoicePoints(category.code).map((point) => (
+              <li key={point} className="rounded-md border border-line/70 bg-white px-2 py-1 text-[0.7rem] text-ink-soft">{point}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[0.65rem] leading-relaxed text-muted">比較するときの目安です。実際の仕様は商品詳細やメーカー資料でご確認ください。</p>
+        </section>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="外壁の面">
           {EXTERIOR_FACES.map((face) => (
             <button
@@ -171,6 +183,7 @@ export function ExteriorWallFacesDialog({
             category={category}
             options={availableOptions}
             selectedIds={activeOption ? [activeOption.id] : []}
+            baselineSelectedIds={baselineSelectedIds}
             getPriceLabel={(option) =>
               option.price_on_request
                 ? '別途見積'

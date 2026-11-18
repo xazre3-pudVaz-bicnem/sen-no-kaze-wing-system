@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
 import { withLegacyOptionPrices } from '@/lib/data/legacy-prices';
+import { isMissingColumn } from '@/lib/data/schema-compat';
 import { isLocalMode } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { findUnresolvedLines, quoteOptionFlagMap, type QuoteLineCheckLine } from '@/lib/domain/quote-por';
@@ -12,6 +13,20 @@ import { createClient } from '@/lib/supabase/server';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { StandardQuoteEditor } from '@/components/admin/standard-quote-editor';
+
+/** v2.5 の版の選択枠（工事項目つき。20261110140000 の前の DB では工事項目を除いて読み直す。2026-11-16 の先方の依頼） */
+async function readV25SourceSlots(supabase: Awaited<ReturnType<typeof createClient>>, revisionId: string) {
+  const columns = (withWorkItem: boolean) =>
+    `section_code, option_name_snapshot, category_name_snapshot, slot_label,${withWorkItem ? ' work_item,' : ''} price_mode, cost_unit_price, manual_unit_price, variants:standard_estimate_revision_baseline_variants(id, variant_choice_name_snapshot, sort_order)`;
+  const read = (withWorkItem: boolean) =>
+    supabase
+      .from('standard_estimate_revision_baseline_items')
+      .select(columns(withWorkItem))
+      .eq('revision_id', revisionId)
+      .not('price_mode', 'is', null);
+  const first = await read(true);
+  return first.error && (isMissingColumn(first.error) || /column .* does not exist/i.test(first.error.message ?? '')) ? read(false) : first;
+}
 
 export const metadata: Metadata = { title: '標準見積から作成した見積下書き | 管理画面', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -74,15 +89,7 @@ export default async function StandardQuoteDraftPage({
           .select('section_code, name, group_label, remark, price_mode, cost_unit_price, unit_price')
           .eq('revision_id', sourceRevisionId)
       : Promise.resolve({ data: [], error: null }),
-    sourceRevisionId
-      ? supabase
-          .from('standard_estimate_revision_baseline_items')
-          .select(
-            'section_code, option_name_snapshot, category_name_snapshot, slot_label, price_mode, cost_unit_price, manual_unit_price, variants:standard_estimate_revision_baseline_variants(id, variant_choice_name_snapshot, sort_order)'
-          )
-          .eq('revision_id', sourceRevisionId)
-          .not('price_mode', 'is', null)
-      : Promise.resolve({ data: [], error: null }),
+    sourceRevisionId ? readV25SourceSlots(supabase, sourceRevisionId) : Promise.resolve({ data: [], error: null }),
     sourceRevisionId
       ? supabase
           .from('standard_estimate_revision_v25_lines')
@@ -128,7 +135,7 @@ export default async function StandardQuoteDraftPage({
         remark: row.remark,
         unit_price: 0,
       })),
-    ...v25SourceZeroLines((v25SlotsRead.data ?? []) as V25SourceSlot[], (v25LinesRead.data ?? []) as V25SourceLine[]),
+    ...v25SourceZeroLines((v25SlotsRead.data ?? []) as unknown as V25SourceSlot[], (v25LinesRead.data ?? []) as V25SourceLine[]),
   ];
   const unresolvedItems = parentReadFailed
     ? new Set<StandardQuoteDraftPayload['items'][number]>()

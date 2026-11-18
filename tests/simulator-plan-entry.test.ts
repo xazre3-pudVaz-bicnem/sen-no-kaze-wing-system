@@ -9,8 +9,8 @@ const entryHelper = fs.readFileSync(path.join(root, 'lib/domain/simulator-entry.
 describe('平面図からシミュレーターへの仕様指定導線', () => {
   it('spec queryを受け取り、保存済みConfigurationがない場合だけ新規初期状態へ使う', () => {
     // plan は、ログインなしの一時保存（URL）から開くとき（フェーズ2）
-    expect(simulatorPage).toContain("type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string; plan?: string }>");
-    expect(simulatorPage).toContain('const [{ slug }, { c, resume, spec, preview, plan }]');
+    expect(simulatorPage).toContain("type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string; plan?: string; draft?: string }>");
+    expect(simulatorPage).toContain('const [{ slug }, { c, resume, spec, preview, plan, draft }]');
     expect(simulatorPage).toContain('if (c) {');
     expect(simulatorPage).toContain('} else if (spec) {');
     // v2.5 の売価を使う間は、標準の選択肢を標準見積の選択枠の選択肢にする（v2.5 PR-C1）

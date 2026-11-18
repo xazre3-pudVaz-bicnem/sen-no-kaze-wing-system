@@ -1,10 +1,8 @@
+import { v25RowOrderRefs } from './standard-estimate-v25-row-persistence';
 import type { StandardLineSectionCode } from './standard-estimate-view';
 import type { V25EditorState } from './standard-estimate-v25-view';
 
-/**
- * 表示専用の行参照。DBの保存データやbuildV25SavePayloadには追加しない。
- * 商品枠と手入力明細のkeyは別名前空間として扱い、同じ文字列でも衝突させない。
- */
+/** 商品行と手入力の混在表示参照。DBへは既存の row_order として保存する。 */
 export type V25MixedRowRef = {
   kind: 'slot' | 'line';
   key: string;
@@ -94,4 +92,45 @@ export function v25InsertMixedRow(
 export function v25MixedOrderEquals(a: readonly V25MixedRowRef[], b: readonly V25MixedRowRef[]): boolean {
   return a.length === b.length && a.every((row, index) =>
     v25MixedRowIdentity(row) === v25MixedRowIdentity(b[index]) && row.section === b[index].section);
+}
+
+/** #686 の保存済み display_order を読み込んで、区分内の混在順へ復元する。 */
+export function v25PersistedMixedRowOrder(
+  state: Pick<V25EditorState, 'slots' | 'lines'>,
+  sectionOf: (optionId: string) => StandardLineSectionCode | undefined,
+): V25MixedRowRef[] {
+  return v25ReconcileMixedRowOrder(
+    v25RowOrderRefs(state).map((ref): V25MixedRowRef => ({ ...ref, section: 'option' })), state, sectionOf
+  );
+}
+
+/** #687の工事項目を保ち、商品と自由入力を1つの順序で描画する。 */
+export function v25MixedRowsForWorkGroup(
+  order: readonly V25MixedRowRef[],
+  group: { slots: readonly { key: string }[]; lines: readonly { key: string }[] },
+): V25MixedRowRef[] {
+  const keys = new Set([
+    ...group.slots.map((row) => 'slot:' + row.key),
+    ...group.lines.map((row) => 'line:' + row.key),
+  ]);
+  return order.filter((row) => keys.has(v25MixedRowIdentity(row)));
+}
+
+/** 工事項目をまたがず、商品と自由入力が隣接する場合も↑↓で1行ずつ交換する。 */
+export function v25MoveMixedRowWithinGroup(
+  order: readonly V25MixedRowRef[],
+  group: { slots: readonly { key: string }[]; lines: readonly { key: string }[] },
+  row: Pick<V25MixedRowRef, 'kind' | 'key'>,
+  direction: -1 | 1,
+): V25MixedRowRef[] {
+  const groupRows = v25MixedRowsForWorkGroup(order, group);
+  const index = groupRows.findIndex((item) => v25MixedRowIdentity(item) === v25MixedRowIdentity(row));
+  const other = groupRows[index + direction];
+  if (index < 0 || !other || groupRows[index].section !== other.section) return [...order];
+  const moved = [...order];
+  const a = moved.findIndex((item) => v25MixedRowIdentity(item) === v25MixedRowIdentity(row));
+  const b = moved.findIndex((item) => v25MixedRowIdentity(item) === v25MixedRowIdentity(other));
+  if (a < 0 || b < 0) return moved;
+  [moved[a], moved[b]] = [moved[b], moved[a]];
+  return moved;
 }

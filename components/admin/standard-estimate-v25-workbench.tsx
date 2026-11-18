@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Package, Trash2 } from 'lucide-react';
@@ -53,11 +53,28 @@ import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-estimate-v25-amount-breakdown';
 import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
-import {
-  v25DefaultMixedRowOrder, v25ReconcileMixedRowOrder, v25MoveMixedRow,
-  v25InsertMixedRow, v25MixedOrderEquals, v25MixedRowIdentity, type V25MixedRowRef,
-} from '@/lib/domain/standard-estimate-v25-row-order';
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
+import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-position-label-suggestions';
+import { v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
+import {
+  v25PersistedMixedRowOrder, v25ReconcileMixedRowOrder, v25InsertMixedRow,
+  v25MixedOrderEquals, v25MixedRowsForWorkGroup, v25MoveMixedRowWithinGroup,
+  v25MixedRowIdentity, type V25MixedRowRef,
+} from '@/lib/domain/standard-estimate-v25-row-order';
+import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
+import {
+  v25AutoWorkItemLabel,
+  v25WorkGroupsForDisplay,
+  v25WorkItemLabelsForSection,
+} from '@/components/admin/standard-estimate-v25-work-groups';
+import {
+  V25ColumnDisplayMenu,
+  V25WidthHandle,
+  V25_GRID_COLUMNS,
+  v25GridWidth,
+  useV25GridPreferences,
+  type V25GridColumnId,
+} from '@/components/admin/v25-grid-preferences';
 
 const LINE_SECTIONS: StandardLineSectionCode[] = ['interior_exterior', 'option', 'sitework'];
 const COST_TONE: Record<V25CostStatus, 'success' | 'warn' | 'danger'> = { current: 'success', stale: 'warn', missing: 'danger' };
@@ -70,6 +87,12 @@ const newKey = (prefix: string) => `${prefix}-new-${(rowSeq += 1)}`;
 const NO_WINDOW_TYPE = '__none';
 
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
+
+/** 金額を変更せず、計算済み粗利の符号だけで表示色を選ぶ。 */
+export function v25GrossToneClass(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || !Number.isFinite(amount) || amount === 0) return 'font-medium text-slate-500';
+  return amount > 0 ? 'font-semibold text-emerald-800' : 'font-semibold text-red-700';
+}
 
 /**
  * v2.5の計算結果「見積用原価単価・売価金額」をそのまま使う表示専用の内訳。
@@ -94,7 +117,7 @@ export function v25DisplayedCostAndGross(
   return { costAmount, gross };
 }
 
-/** 位置名の編集中や保存などの処理中は、行削除と位置別設定を保護する。 */
+/** 位置名の編集中や保存などの処理中は、行削除と位置設定の操作を保護する。 */
 export const v25PositionActionsLocked = (pending: boolean, editingPosition: boolean) => pending || editingPosition;
 
 type Notice = { tone: 'success' | 'danger'; text: string };
@@ -128,7 +151,7 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
   );
 }
 
-function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', compact = false, disabled = false }: { label: string; testId: string; children: ReactNode; triggerText?: string; compact?: boolean; disabled?: boolean }) {
+function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', disabled = false }: { label: string; testId: string; children: ReactNode; triggerText?: string; disabled?: boolean }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
 
@@ -183,13 +206,15 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', com
       }}
       onKeyDown={(event) => {
         if (disabled && (event.key === 'Enter' || event.key === ' ')) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
+          event.preventDefault(); event.stopPropagation(); return;
         }
         if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); }
       }}>
-      <summary className={`flex ${compact ? 'size-5 text-xs' : 'size-6 text-sm'} cursor-pointer list-none items-center justify-center rounded font-bold text-slate-600 hover:bg-slate-100 aria-disabled:opacity-40 [&::-webkit-details-marker]:hidden`}
+      <summary className={triggerText === '⋯'
+        ? 'flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden'
+        : triggerText === '＋' 
+          ? 'flex size-4 cursor-pointer list-none items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-semibold text-emerald-900 hover:bg-slate-100 [&::-webkit-details-marker]:hidden'
+          : 'flex h-6 cursor-pointer list-none items-center justify-center rounded border border-emerald-400/70 px-2 text-[10px] font-semibold text-white hover:bg-emerald-800 [&::-webkit-details-marker]:hidden'}
         aria-label={label} title={label} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : 0}
         onClick={(event) => {
           if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
@@ -213,7 +238,7 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', com
  * 幅は元表の各 th から測定し、横スクロールは同じ scrollLeft を使う。
  * 複製は aria-hidden / pointer-events-none とし、編集や保存には一切関与しない。
  */
-function useV25PageFloatingHeader(showCost: boolean) {
+function useV25PageFloatingHeader(headerLayoutKey: string) {
   const gridRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const saveAreaRef = useRef<HTMLDivElement>(null);
@@ -282,7 +307,7 @@ function useV25PageFloatingHeader(showCost: boolean) {
       resizeObserver?.disconnect();
       overlay.remove();
     };
-  }, [showCost]);
+  }, [headerLayoutKey]);
 
   return { gridRef, tableRef, saveAreaRef };
 }
@@ -341,10 +366,15 @@ export function v25VariantSummary(candidate: Pick<V25WorkbenchCandidate, 'varian
 }
 
 type WorkbenchProps = {
+  /** 見積の選択モデルと仕様。工事項目見出しの表示だけに使う。 */
+  modelSlug?: string | null;
+  specCode?: string | null;
   revisionId: string;
   lockVersion: number;
   readOnly: boolean;
   baseLines: V25WorkbenchBaseLine[];
+  /** 現在の標準見積が参照する本体Revision。確認できた場合のみ版番号・直リンクを表示。 */
+  baseMasterReference?: { masterId: string; revisionVersion: number } | null;
   candidates: V25WorkbenchCandidate[];
   initial: V25EditorState;
   costs: V25WorkbenchCosts;
@@ -367,10 +397,13 @@ export function StandardEstimateV25Workbench({ resetKey, ...props }: WorkbenchPr
 }
 
 function WorkbenchBody({
+  modelSlug,
+  specCode,
   revisionId,
   lockVersion,
   readOnly,
   baseLines,
+  baseMasterReference,
   candidates,
   initial,
   costs,
@@ -383,16 +416,22 @@ function WorkbenchBody({
 }: WorkbenchProps & { notice: Notice | null; onNotice: (notice: Notice | null) => void }) {
   const router = useRouter();
   const [state, setState] = useState<V25EditorState>(initial);
+  // PR #686 の共通 row_order を表示順の正本にする。↑↓＋は未保存中だけ上書きし、保存時に連番化する。
+  const [viewOrder, setViewOrder] = useState<V25MixedRowRef[]>([]);
   const [percents, setPercents] = useState(() => ({
     sales_fee_rate: rateToPercent(initial.sales_fee_rate),
     expense_rate: rateToPercent(initial.expense_rate),
     markup_rate: rateToPercent(initial.markup_rate),
   }));
-  const [showCost, setShowCost] = useState(true);
-  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(showCost);
+  const columnPrefs = useV25GridPreferences();
+  const visible = columnPrefs.prefs.visible;
+  const displayedColumns = V25_GRID_COLUMNS.filter((col) => visible[col.id]);
+  const columnCount = displayedColumns.length;
+  const beforeSaleAmount = 3 + Number(visible.cost_unit) + Number(visible.cost_amount) + Number(visible.sale_unit);
+  const afterSaleAmount = Number(visible.gross) + Number(visible.note) + 1;
+  const headerLayoutKey = displayedColumns.map((col) => `${col.id}:${columnPrefs.prefs.widths[col.id]}`).join('|');
+  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(headerLayoutKey);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  // 並び順の保存・読込仕様は業者確認中。これは明細表示だけの一時的な順序で、保存Payloadに混ぜない。
-  const [viewOrder, setViewOrder] = useState<V25MixedRowRef[]>([]);
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null; insertAfter?: V25MixedRowRef | null } | null>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
@@ -412,6 +451,9 @@ function WorkbenchBody({
   const [selectableDraftIds, setSelectableDraftIds] = useState<string[] | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
+  // グループ名は行内で常時表示せず、メニューから明示的に確定した場合だけ書き換える。
+  // ダイアログ内の入力中に再分類しないので、Tab/Enterで明細のフォーカスが外れることもない。
+  const [groupEditor, setGroupEditor] = useState<{ lineKey: string; originalLabel: string; value: string } | null>(null);
   const [pending, startTransition] = useTransition();
   // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
   const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
@@ -426,15 +468,62 @@ function WorkbenchBody({
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const sectionOf = (optionId: string) => candidateById.get(optionId)?.section;
-  const defaultOrder = useMemo(() => v25DefaultMixedRowOrder(state, (id) => candidateById.get(id)?.section), [state, candidateById]);
-  const mixedOrder = useMemo(() =>
-    v25ReconcileMixedRowOrder(viewOrder, state, (id) => candidateById.get(id)?.section),
-    [viewOrder, state, candidateById]);
-  const orderPreviewOnly = !v25MixedOrderEquals(mixedOrder, defaultOrder);
-  const moveViewRow = (row: V25MixedRowRef, direction: -1 | 1) => {
-    if (readOnly || positionActionsLocked) return;
-    setViewOrder((current) => v25MoveMixedRow(
-      v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section), row, direction
+  // 工事項目（2026-11-16 の先方の依頼）：商品の行は保存した値、未設定ならカテゴリーからの自動の値を表示・見出し・保存に使う。
+  // 公開済みの版（閲覧だけ）は保存した値だけを出す（自動の値は保存されていないため）
+  const autoWorkItemOf = (slot: Pick<V25SlotRow, 'option_id'>) => {
+    if (readOnly) return '';
+    const candidate = candidateById.get(slot.option_id);
+    return v25AutoWorkItemLabel(candidate?.categoryCode, { modelSlug, specCode, sectionCode: candidate?.section });
+  };
+  const workItemOf = (slot: V25SlotRow) => slot.work_item?.trim() || autoWorkItemOf(slot);
+  // プルダウンの選択肢：その区分の分類の項目、同じ区分の手入力明細の工事項目（group_label）、今の値
+  const workItemOptions = (code: StandardLineSectionCode, current: string) => [
+    ...new Set([
+      ...v25WorkItemLabelsForSection({ modelSlug, specCode, sectionCode: code }),
+      ...state.lines.filter((line) => line.section_code === code).map((line) => line.group_label.trim()),
+      current.trim(),
+    ].filter(Boolean)),
+  ];
+
+  // 保存した共通 display_order から商品・自由入力の混在順を再構成する。
+  // 工事項目ごとの見出しは #687 の現行仕様を維持し、見出し内だけ ↑↓ できる。
+  const persistedMixedOrder = useMemo(
+    () => v25PersistedMixedRowOrder(state, (id) => candidateById.get(id)?.section),
+    [state, candidateById]
+  );
+  const mixedOrder = useMemo(
+    () => v25ReconcileMixedRowOrder(
+      viewOrder.length ? viewOrder : persistedMixedOrder, state, (id) => candidateById.get(id)?.section
+    ),
+    [viewOrder, persistedMixedOrder, state, candidateById]
+  );
+  const renderedMixedOrder = LINE_SECTIONS.flatMap((code) => {
+    const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
+    const lines = state.lines.filter((line) => line.section_code === code);
+    return v25WorkGroupsForDisplay(
+      slots, lines, (id) => candidateById.get(id)?.categoryCode,
+      (line) => line.group_label, { modelSlug, specCode, sectionCode: code }, workItemOf
+    ).flatMap((group) => v25MixedRowsForWorkGroup(mixedOrder, group));
+  });
+  // 保存済みの行と同じ順に戻したときは未保存扱いにしない（並べ替えだけでも保存可）。
+  const initialMixedOrder = v25PersistedMixedRowOrder(initial, (id) => candidateById.get(id)?.section);
+  const initialRenderedOrder = LINE_SECTIONS.flatMap((code) =>
+    v25WorkGroupsForDisplay(
+      initial.slots.filter((slot) => sectionOf(slot.option_id) === code),
+      initial.lines.filter((line) => line.section_code === code),
+      (id) => candidateById.get(id)?.categoryCode,
+      (line) => line.group_label, { modelSlug, specCode, sectionCode: code }, workItemOf
+    ).flatMap((group) => v25MixedRowsForWorkGroup(initialMixedOrder, group))
+  );
+  const orderDirty = !v25MixedOrderEquals(renderedMixedOrder, initialRenderedOrder);
+  const moveViewRow = (
+    row: V25MixedRowRef, direction: -1 | 1,
+    group: ReturnType<typeof v25WorkGroupsForDisplay>[number]
+  ) => {
+    if (readOnly || positionActionsLocked || groupEditor !== null) return;
+    setViewOrder((current) => v25MoveMixedRowWithinGroup(
+      v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
+      group, row, direction
     ));
   };
   const calc = useMemo(
@@ -468,7 +557,11 @@ function WorkbenchBody({
   }, [preview]);
   const unpricedKeys = useMemo(() => new Set(calc.unpriced), [calc.unpriced]);
   const unavailableCount = state.slots.filter((slot) => candidateById.get(slot.option_id)?.unavailable).length;
-  const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
+  const editedDirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
+  // 工事項目が未設定で、カテゴリーからの自動の値を表示している商品の行（保存すると、その値を保存し見積書の摘要にも出る）。
+  // 画面と保存・公開の内容をそろえるため、未保存の変更として扱う（保存するまで公開しない）
+  const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;
+  const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;
   const positionMixes = useMemo(() => v25PositionMixes(state.slots, (id) => candidateById.get(id)), [state.slots, candidateById]);
   // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
   const slotRuleIssues = useMemo(
@@ -482,7 +575,6 @@ function WorkbenchBody({
   );
   const blockers = [
     ...v25PublishBlockers(preview, dirty),
-    ...(orderPreviewOnly ? ['表示順は保存できません。並びを「表示順だけ戻す」で元に戻してから公開してください'] : []),
     ...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),
   ];
 
@@ -490,7 +582,8 @@ function WorkbenchBody({
   // 案内から未設定行へ移動。折り畳まれていた場合は行を開いてから移動する。
   useEffect(() => {
     if (!jumpToKey || lastNavigated.current === jumpToKey) return;
-    const row = document.getElementById(`v25-position-row-${jumpToKey.key}`);
+    const row = document.getElementById(`v25-position-row-${jumpToKey.key}`) ??
+      document.getElementById(`v25-manual-row-${jumpToKey.key}`);
     if (!row) return;
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     row.focus({ preventScroll: true });
@@ -501,14 +594,73 @@ function WorkbenchBody({
     setState((current) => ({ ...current, slots: current.slots.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)) }));
   const setLine = (key: string, patch: Partial<V25LineRow>) =>
     setState((current) => ({ ...current, lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)) }));
+  // 追加が確定した場合だけ対象区分を開く。商品選択のキャンセル時には呼ばない。
+  const revealAddedRow = (section: StandardLineSectionCode, key: string) => {
+    setCollapsed((current) => {
+      if (!current.has(section)) return current;
+      const next = new Set(current);
+      next.delete(section);
+      return next;
+    });
+    setJumpToKey({ key });
+  };
   const setRate = (key: keyof typeof RATE_LABEL, value: string) => {
     setPercents((current) => ({ ...current, [key]: value }));
     setState((current) => ({ ...current, [key]: percentToRate(value) }));
   };
+  const stepRate = (key: keyof typeof RATE_LABEL, direction: -1 | 1) => {
+    const next = v25StepPercent(percents[key], direction, key);
+    if (next !== percents[key]) setRate(key, next);
+  };
+  // 明細行の列境界の狭い領域だけを対象にし、既存の列幅変更hookへ委譲する。
+  // 結合見出し・小計、ボタン等は対象外。列幅は各行ではなく列全体に反映される。
+  const resizeHover = useRef<HTMLElement | null>(null);
+  const bodyResizeCandidate = (target: EventTarget, clientX: number) => {
+    if (!(target instanceof HTMLElement) || target.closest('button, summary, a, select, textarea, [role="separator"]')) return null;
+    const cell = target.closest('td');
+    if (!(cell instanceof HTMLTableCellElement) || cell.colSpan !== 1) return null;
+    const row = cell.closest('tr');
+    if (!row || !['v25-wb-base-row', 'v25-wb-slot', 'v25-wb-line'].includes(row.dataset.testid ?? '')) return null;
+    const column = displayedColumns[cell.cellIndex];
+    const edge = cell.getBoundingClientRect().right - clientX;
+    return column && edge >= 0 && edge <= 6 ? { id: column.id, cell } : null;
+  };
+  const showBodyResizeCursor = (event: ReactMouseEvent<HTMLTableSectionElement>) => {
+    const next = bodyResizeCandidate(event.target, event.clientX);
+    const target = next && event.target instanceof HTMLElement ? event.target : null;
+    if (resizeHover.current && resizeHover.current !== target) resizeHover.current.style.removeProperty('cursor');
+    if (target) target.style.cursor = 'col-resize';
+    resizeHover.current = target;
+  };
+  const startBodyResize = (event: ReactMouseEvent<HTMLTableSectionElement>) => {
+    if (event.button !== 0) return;
+    const candidate = bodyResizeCandidate(event.target, event.clientX);
+    if (candidate) columnPrefs.startResize(event, candidate.id);
+  };
+
+  const autoWidth = (id: V25GridColumnId) => {
+    const table = tableRef.current;
+    const header = Array.from(table?.tHead?.rows[0]?.cells ?? []);
+    const index = header.findIndex((cell) => cell.getAttribute('data-v25-column') === id);
+    if (!table || index < 0) return;
+    let desired = header[index].scrollWidth + 10;
+    for (const tbody of Array.from(table.tBodies)) {
+      for (const row of Array.from(tbody.rows)) {
+        if (row.cells.length !== header.length) continue;
+        const cell = row.cells[index];
+        if (!cell || cell.colSpan !== 1) continue;
+        desired = Math.max(desired, cell.scrollWidth + 10);
+        for (const child of Array.from(cell.querySelectorAll<HTMLElement>('[title], input, button'))) {
+          desired = Math.max(desired, child.scrollWidth + 14);
+        }
+      }
+    }
+    columnPrefs.setWidth(id, desired);
+  };
 
   const choose = (candidate: V25WorkbenchCandidate, choices: Record<string, string>) => {
     if (!picker) return;
-    // 確定時も選択対象の区分・カテゴリー・販売可否を検証する。画面の絞り込みだけに依存しない。
+    // 確定経路でも区分・販売可否・元のカテゴリーを検証し、画面側の絞り込みのみに依存しない。
     if (candidate.section !== picker.section || candidate.retired || candidate.unavailable || !candidate.categoryId.trim()) {
       onNotice({ tone: 'danger', text: 'この区分では選択できない商品です。商品台帳をご確認ください。' });
       return;
@@ -544,6 +696,7 @@ function WorkbenchBody({
         setPicker(null);
         return;
       }
+      // 入れ替えは同じカテゴリーの商品だけなので、工事項目はそのまま
       setSlot(picker.targetKey, {
         option_id: candidate.id,
         variant_choices: { ...choices },
@@ -561,7 +714,7 @@ function WorkbenchBody({
     } else {
       const addedKey = newKey('slot');
       setViewOrder((current) => v25InsertMixedRow(
-        v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section),
+        v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
         { kind: 'slot', key: addedKey, section: picker.section }, picker.insertAfter ?? null
       ));
       setState((current) => ({
@@ -580,9 +733,12 @@ function WorkbenchBody({
             slot_code: '',
             slot_label: '',
             selectable_option_ids: [],
+            // 工事項目は未設定から始め、カテゴリーからの自動の値で表示・保存する（2026-11-16 の先方の依頼。プルダウンで変えられる）
+            work_item: '',
           },
         ],
       }));
+      revealAddedRow(picker.section, addedKey);
     }
     setPicker(null);
   };
@@ -630,6 +786,7 @@ function WorkbenchBody({
   };
   const positionSlot = positionFor ? state.slots.find((slot) => slot.key === positionFor) : null;
   const positionCandidate = positionSlot ? candidateById.get(positionSlot.option_id) : undefined;
+  const positionLabelSuggestions = v25PositionLabelSuggestions(positionCandidate?.categoryCode);
   const confirmPosition = () => {
     if (readOnly || pending || !positionFor || !positionDraft) return;
     const candidateOf = (id: string) => candidateById.get(id);
@@ -662,15 +819,13 @@ function WorkbenchBody({
       setDuplicateFor((current) => current ? { ...current, error: result.error } : null);
       return;
     }
-    const origin = state.slots.find((slot) => slot.key === duplicateFor.slotKey);
-    const section = origin ? sectionOf(origin.option_id) : undefined;
-    if (section) {
-      setViewOrder((current) => v25InsertMixedRow(
-        v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section),
-        { kind: 'slot', key: addedKey, section },
-        { kind: 'slot', key: duplicateFor.slotKey, section }
-      ));
-    }
+    const original = state.slots.find((slot) => slot.key === duplicateFor.slotKey);
+    const section = original ? sectionOf(original.option_id) : undefined;
+    if (section) setViewOrder((current) => v25InsertMixedRow(
+      v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
+      { kind: 'slot', key: addedKey, section },
+      { kind: 'slot', key: duplicateFor.slotKey, section }
+    ));
     setState(result.state);
     setDuplicateFor(null);
   };
@@ -751,11 +906,15 @@ function WorkbenchBody({
     );
   }, [selectableOptions, selectableWindowType, selectableQuery]);
 
-  const addLine = (section: StandardLineSectionCode, insertAfter: V25MixedRowRef | null = null) => {
-    if (readOnly || positionActionsLocked) return;
+  const addLine = (
+    section: StandardLineSectionCode,
+    insertAfter: V25MixedRowRef | null = null,
+    workGroupLabel = ''
+  ) => {
+    if (readOnly || positionActionsLocked || groupEditor !== null) return;
     const addedKey = newKey('line');
     setViewOrder((current) => v25InsertMixedRow(
-      v25ReconcileMixedRowOrder(current, state, (id) => candidateById.get(id)?.section),
+      v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
       { kind: 'line', key: addedKey, section }, insertAfter
     ));
     setState((current) => ({
@@ -766,7 +925,7 @@ function WorkbenchBody({
           key: addedKey,
           line_key: null,
           section_code: section,
-          group_label: '',
+          group_label: workGroupLabel === '工事項目未分類の商品' ? '' : workGroupLabel,
           name: '',
           quantity: '1',
           unit: '式',
@@ -778,6 +937,7 @@ function WorkbenchBody({
         },
       ],
     }));
+    revealAddedRow(section, addedKey);
   };
 
   const run = (task: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>) => {
@@ -797,7 +957,14 @@ function WorkbenchBody({
       onNotice({ tone: 'danger', text: problem });
       return;
     }
-    run(() => saveStandardEstimateV25DraftAction({ revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(state) }));
+    // 工事項目（2026-11-16 の先方の依頼）：未設定の商品の行は、表示しているカテゴリーからの自動の値で保存する
+    const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };
+    // #686/#687: 商品と手入力の表示順で row_order を全行（1始まり）へ採番。
+    // 工事項目を自動で埋める保存経路はそのまま、金額・数量は変更しない。
+    const orderedToSave = v25WithRowOrder(toSave, renderedMixedOrder);
+    run(() => saveStandardEstimateV25DraftAction({
+      revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(orderedToSave),
+    }));
   };
 
   const toggleSection = (code: string) =>
@@ -807,6 +974,43 @@ function WorkbenchBody({
       else next.add(code);
       return next;
     });
+
+
+  const mixedRowControls = (
+    row: V25MixedRowRef,
+    rowIndex: number,
+    group: ReturnType<typeof v25WorkGroupsForDisplay>[number]
+  ) => {
+    const groupRows = v25MixedRowsForWorkGroup(mixedOrder, group);
+    const locked = positionActionsLocked || groupEditor !== null;
+    return (
+      <span className="inline-flex w-[3.75rem] shrink-0 items-center gap-px" data-testid="v25-wb-row-order-actions">
+        <button type="button" data-testid="v25-wb-row-up" aria-label="この行を上へ移動"
+          className="rounded px-0.5 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+          disabled={locked || rowIndex === 0}
+          onClick={() => moveViewRow(row, -1, group)}>↑</button>
+        <button type="button" data-testid="v25-wb-row-down" aria-label="この行を下へ移動"
+          className="rounded px-0.5 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+          disabled={locked || rowIndex === groupRows.length - 1}
+          onClick={() => moveViewRow(row, 1, group)}>↓</button>
+        <V25WorkbenchRowMenu testId="v25-wb-row-insert" label="この行の直下に追加" triggerText="＋" disabled={locked}>
+          <button type="button" data-testid="v25-wb-insert-slot" disabled={locked}
+            className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
+            onClick={(event) => {
+              event.currentTarget.closest('details')?.removeAttribute('open');
+              rememberRowMenuOpener(event.currentTarget);
+              setPickerDirty(false); setPicker({ section: row.section, targetKey: null, insertAfter: row });
+            }}>直下に商品台帳から追加</button>
+          <button type="button" data-testid="v25-wb-insert-line" disabled={locked}
+            className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
+            onClick={(event) => {
+              event.currentTarget.closest('details')?.removeAttribute('open');
+              addLine(row.section, row, group.label);
+            }}>直下に手入力明細を追加</button>
+        </V25WorkbenchRowMenu>
+      </span>
+    );
+  };
 
   // Excel明細の入力セルだけにTab・Enter移動を適用し、保存やポップアップは変更しない。
   const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {
@@ -830,44 +1034,53 @@ function WorkbenchBody({
     if (next) { event.preventDefault(); next.focus(); next.select(); }
   };
 
-  // 列配置: [↑↓＋][将来:カテゴリー・位置][品名]…[操作]。将来列を挿入するときは品名のsticky offsetを更新する。
-  const columnCount = showCost ? 11 : 8;
-
   const sectionHeader = (code: string, label: string, actions?: ReactNode) => {
     const result = sectionResult(code);
     return (
       <tr className="bg-emerald-900 text-white" data-testid={`v25-section-${code}`}>
         <td colSpan={columnCount} className="border-y border-emerald-800 px-2 py-0.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="flex items-center gap-1.5 text-left text-[11px] font-semibold text-white" onClick={() => toggleSection(code)} aria-expanded={!collapsed.has(code)}>
-              <span aria-hidden="true">{collapsed.has(code) ? '▸' : '▾'}</span>
-              {label}
-              <span className="font-normal text-emerald-100">
-                小計 {result?.subtotal !== null && result?.subtotal !== undefined ? yen(result.subtotal) : result ? `${yen(result.priced_subtotal)}＋未確定` : '—'}
-                {result?.expense_target ? `・経費 ${result.expense !== null ? yen(result.expense) : '未確定'}` : ''}
-              </span>
-              {result?.has_por && <Badge tone="warn">別途見積を含む</Badge>}
-            </button>
-            {actions}
+          <div className="flex min-w-0 items-center justify-between gap-2 text-[11px]" data-testid={`v25-wb-section-heading-${code}`}>
+            <div className="flex min-w-0 items-center gap-2">
+              <button type="button" className="flex shrink-0 items-center gap-1.5 text-left text-[11px] font-semibold text-white"
+                onClick={() => toggleSection(code)} aria-expanded={!collapsed.has(code)}>
+                <span aria-hidden="true">{collapsed.has(code) ? '▸' : '▾'}</span>
+                {label}
+              </button>
+              {actions}
+              {result?.has_por && <span className="hidden text-[10px] text-amber-100 sm:inline">別途見積を含む</span>}
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap tabular-nums" data-testid={`v25-wb-section-money-${code}`}>
+              <span className="text-emerald-200">小計</span>
+              <strong className="font-bold text-white">{result?.subtotal !== null && result?.subtotal !== undefined
+                ? yen(result.subtotal) : result ? `${yen(result.priced_subtotal)}＋未確定` : '—'}</strong>
+              {result?.expense_target && (
+                <>
+                  <span className="border-l border-emerald-600 pl-2 text-emerald-200">経費</span>
+                  <strong className="font-bold text-white">{result.expense !== null ? yen(result.expense) : '未確定'}</strong>
+                </>
+              )}
+            </div>
           </div>
         </td>
       </tr>
     );
   };
 
-  // 区分の明細の末尾に、正式なv2.5試算の小計だけを表示する（区分の経費は既存見出しに保持）。
+  // 区分末尾の小計は全列結合。可視列や列幅によって金額が別の列へずれない。
+  // 数字は従来のv2.5計算結果をそのまま表示し、区分の経費は既存見出し側で扱う。
   const sectionSubtotal = (code: string, label: string) => {
     const result = sectionResult(code);
     return (
-      <tr className="border-y-2 border-emerald-800 bg-emerald-50 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
-        <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right font-semibold">
-          {label} 小計（税別）
-          {result?.has_por && <span className="ml-2 text-amber-800">別途見積を含む</span>}
+      <tr className="border-y-2 border-emerald-800 bg-lime-100 text-slate-800" data-testid={`v25-section-subtotal-${code}`}>
+        <td colSpan={columnCount} className="px-2 py-1">
+          <div className="flex w-full items-center justify-end gap-3 text-right tabular-nums" data-testid={`v25-section-subtotal-layout-${code}`}>
+            <span className="font-semibold whitespace-nowrap">{label} 小計（税別）</span>
+            {result?.has_por && <span className="text-amber-800">別途見積を含む</span>}
+            <strong className="min-w-[7rem] text-right font-semibold whitespace-nowrap" data-testid={`v25-section-subtotal-value-${code}`}>
+              {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
+            </strong>
+          </div>
         </td>
-        <td className="border-l border-emerald-200 px-2 py-1 text-right font-semibold tabular-nums" data-testid={`v25-section-subtotal-value-${code}`}>
-          {result ? result.subtotal !== null ? yen(result.subtotal) : '未確定' : '—'}
-        </td>
-        <td colSpan={showCost ? 3 : 2} />
       </tr>
     );
   };
@@ -876,6 +1089,11 @@ function WorkbenchBody({
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
       {!readOnly && dirty && <p className="text-xs font-semibold text-amber-800" data-testid="v25-wb-unsaved-position">明細に反映済み・下書き未保存（保存は「下書きを保存」から）</p>}
+      {!readOnly && unsavedAutoWorkItems > 0 && (
+        <p className="text-xs text-amber-800" data-testid="v25-wb-work-item-auto-unsaved">
+          工事項目が未設定の商品 {unsavedAutoWorkItems} 件は、カテゴリーから工事項目を入れて表示しています。「下書きを保存」で保存すると、見積書の摘要にも反映されます。
+        </p>
+      )}
       {positionMixes.length > 0 && (
         <div className="space-y-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs" data-testid="v25-wb-position-mixed">
           {positionMixes.map((mix) => (
@@ -891,77 +1109,125 @@ function WorkbenchBody({
         </div>
       )}
 
-      <div className="grid gap-2 rounded-t-md border border-slate-300 bg-white px-3 py-2 text-[11px] sm:grid-cols-[repeat(3,minmax(0,8rem))_minmax(0,9rem)_minmax(0,1fr)_auto] sm:items-end">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-t-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px]" data-testid="v25-wb-compact-settings">
         {(['sales_fee_rate', 'expense_rate', 'markup_rate'] as const).map((key) => (
-          <label key={key} className="space-y-1">
-            <span className="text-muted">{RATE_LABEL[key]}（%）</span>
-            <Input value={percents[key]} disabled={readOnly} inputMode="decimal" className="h-8 text-right" data-testid={`v25-wb-${key}`}
-              onChange={(event) => setRate(key, event.target.value)} />
-          </label>
+          <div key={key} className="flex items-center gap-1.5">
+            <label htmlFor={`v25-wb-rate-${key}`} className="whitespace-nowrap text-slate-600">{RATE_LABEL[key]}（%）</label>
+            <div className="relative">
+              <Input id={`v25-wb-rate-${key}`} value={percents[key]} disabled={readOnly} inputMode="decimal"
+                className="h-7 min-h-7! w-[5rem] rounded border-slate-300 bg-white pr-5 text-right text-[11px]" data-testid={`v25-wb-${key}`}
+                onChange={(event) => setRate(key, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    stepRate(key, event.key === 'ArrowUp' ? 1 : -1);
+                  }
+                }} />
+              <span className="absolute inset-y-0 right-0 flex w-[18px] flex-col border-l border-slate-300" aria-label={`${RATE_LABEL[key]}の増減`}>
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%増やす`} title="1%増やす" disabled={readOnly || v25StepPercent(percents[key], 1, key) === percents[key]}
+                  className="flex h-1/2 items-center justify-center rounded-tr-sm text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => stepRate(key, 1)}>▲</button>
+                <button type="button" aria-label={`${RATE_LABEL[key]}を1%減らす`} title="1%減らす" disabled={readOnly || v25StepPercent(percents[key], -1, key) === percents[key]}
+                  className="flex h-1/2 items-center justify-center rounded-br-sm border-t border-slate-200 text-[9px] leading-none hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => stepRate(key, -1)}>▼</button>
+              </span>
+            </div>
+          </div>
         ))}
-        <label className="space-y-1">
-          <span className="text-muted">調整額（税別・円）</span>
-          <Input value={state.adjustment} disabled={readOnly} inputMode="numeric" className="h-8 text-right" data-testid="v25-wb-adjustment"
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="v25-wb-adjustment" className="whitespace-nowrap text-slate-600">調整額（税別・円）</label>
+          <Input id="v25-wb-adjustment" value={state.adjustment} disabled={readOnly} inputMode="numeric"
+            className="h-7 min-h-7! w-[7rem] rounded border-slate-300 bg-white text-right text-[11px]" data-testid="v25-wb-adjustment"
             onChange={(event) => setState((current) => ({ ...current, adjustment: event.target.value }))} />
-        </label>
-        <label className="space-y-1">
-          <span className="text-muted">調整額の理由</span>
-          <Input value={state.adjustment_reason} disabled={readOnly} className="h-8"
+        </div>
+        <div className="flex min-w-[13rem] flex-[2_1_16rem] items-center gap-1.5">
+          <label htmlFor="v25-wb-adjustment-reason" className="shrink-0 whitespace-nowrap text-slate-600">調整理由</label>
+          <Input id="v25-wb-adjustment-reason" value={state.adjustment_reason} disabled={readOnly}
+            className="h-7 min-h-7! min-w-0 flex-1 rounded border-slate-300 bg-white text-[11px]"
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
-        </label>
-        <label className="flex items-center gap-2 pb-1.5 text-ink-soft">
-          <input type="checkbox" checked={showCost} onChange={(event) => setShowCost(event.target.checked)} data-testid="v25-wb-show-cost" />
-          原価を表示
-        </label>
+        </div>
+        <span className="text-[10px] text-slate-500">列幅は明細行の列境界（右端6px）でもドラッグできます</span>
+        <div className="ml-auto shrink-0" data-testid="v25-wb-column-display-position">
+          <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
+            setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-x border-slate-300 bg-slate-100 px-2 py-1 text-[10px] text-slate-600" data-testid="v25-excel-toolbar">
-        <strong>標準見積明細（Excel風）</strong>
-        <span>黄色＝入力 ／ グレー＝参照 ／ Tab：次のセル ／ Enter：下の行 ／ Shift＋Enter：上の行</span>
-      </div>
-      <div className="border-x border-amber-200 bg-amber-50 px-3 py-1 text-[11px] text-amber-900"
-        role="status" data-testid="v25-wb-order-preview-warning">
-        ↑ ↓ ＋ による混在順序は現在この画面だけの仮表示です。順序は保存・公開・再読込に反映されません（業者さんの保存仕様が確定後に対応）。
-        {orderPreviewOnly && (
-          <span className="ml-1">
-            <strong>表示順を変更中です。保存すると行の内容のみ反映され、順序は元に戻ります。</strong>
-            {!readOnly && (
-              <button type="button" data-testid="v25-wb-row-order-reset"
-                className="ml-2 font-semibold underline" onClick={() => setViewOrder([])}>
-                表示順だけ戻す
-              </button>
-            )}
-          </span>
-        )}
-      </div>
+
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
-        <table ref={tableRef} className={`table-fixed border-collapse text-[11px] ${showCost ? 'w-full min-w-[69rem]' : 'w-full min-w-[52rem]'}`} data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
+        <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
+          style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}
+          data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
           <thead className="bg-slate-200 text-[10px] text-slate-600">
             <tr>
-              <th className="sticky left-0 top-0 z-40 w-16 border-b border-r border-slate-300 bg-slate-100 px-0 py-1 text-center font-medium" data-testid="v25-wb-order-column">移動・追加</th>
-              {/* 将来の「カテゴリー・位置」列は、この操作列と品名列の間に入れる。 */}
-              <th className="sticky left-16 top-0 z-40 w-[16rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名</th>
-              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量</th>
-              <th className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位</th>
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価</th>}
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額</th>}
-              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価</th>
-              <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額</th>
-              {showCost && <th className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利</th>}
-              <th className="sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考</th>
-              <th className="sticky top-0 z-30 w-[4.5rem] border-b border-slate-300 bg-slate-200 px-1 py-1 text-center font-medium">操作</th>
+              <th data-v25-column="name" style={{ width: columnPrefs.prefs.widths.name }} className="sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名
+                <V25WidthHandle id="name" width={columnPrefs.prefs.widths.name}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              <th data-v25-column="quantity" style={{ width: columnPrefs.prefs.widths.quantity }} className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量
+                <V25WidthHandle id="quantity" width={columnPrefs.prefs.widths.quantity}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              <th data-v25-column="unit" style={{ width: columnPrefs.prefs.widths.unit }} className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位
+                <V25WidthHandle id="unit" width={columnPrefs.prefs.widths.unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              {visible.cost_unit && <th data-v25-column="cost_unit" style={{ width: columnPrefs.prefs.widths.cost_unit }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価
+                <V25WidthHandle id="cost_unit" width={columnPrefs.prefs.widths.cost_unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.cost_amount && <th data-v25-column="cost_amount" style={{ width: columnPrefs.prefs.widths.cost_amount }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額
+                <V25WidthHandle id="cost_amount" width={columnPrefs.prefs.widths.cost_amount}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.sale_unit && <th data-v25-column="sale_unit" style={{ width: columnPrefs.prefs.widths.sale_unit }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価
+                <V25WidthHandle id="sale_unit" width={columnPrefs.prefs.widths.sale_unit}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              <th data-v25-column="sale_amount" style={{ width: columnPrefs.prefs.widths.sale_amount }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額
+                <V25WidthHandle id="sale_amount" width={columnPrefs.prefs.widths.sale_amount}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
+              {visible.gross && <th data-v25-column="gross" style={{ width: columnPrefs.prefs.widths.gross }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利
+                <V25WidthHandle id="gross" width={columnPrefs.prefs.widths.gross}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              {visible.note && <th data-v25-column="note" style={{ width: columnPrefs.prefs.widths.note }} className="sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考
+                <V25WidthHandle id="note" width={columnPrefs.prefs.widths.note}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>}
+              <th data-v25-column="actions" style={{ width: columnPrefs.prefs.widths.actions }} className="sticky right-0 top-0 z-40 w-[4.5rem] border-b border-l border-slate-300 bg-slate-100 px-1 py-1 text-center font-medium">操作
+                <V25WidthHandle id="actions" width={columnPrefs.prefs.widths.actions}
+                  onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
+              </th>
             </tr>
           </thead>
-          <tbody>
-            {sectionHeader('base', '本体（本体マスター）')}
+          <tbody onMouseDownCapture={startBodyResize} onMouseMoveCapture={showBodyResizeCursor}
+            onMouseLeave={() => { if (resizeHover.current) resizeHover.current.style.removeProperty('cursor'); resizeHover.current = null; }}
+            data-testid="v25-wb-resizable-body">
+            {sectionHeader('base', '本体（本体マスター）', (
+              <span className="flex flex-wrap items-center gap-2 text-[10px]" data-testid="v25-wb-base-reference">
+                <span className="rounded border border-emerald-700 px-1 py-0.5 text-emerald-100">参照専用</span>
+                {baseMasterReference ? (
+                  <Link href={`/admin/base-masters/${encodeURIComponent(baseMasterReference.masterId)}`}
+                    className="font-medium text-white underline underline-offset-2" data-testid="v25-wb-base-master-link"
+                    title="参照中の本体マスター。現在の公開版と異なる可能性があります">
+                    本体マスターを開く（参照版：第{baseMasterReference.revisionVersion}版）
+                  </Link>
+                ) : (
+                  <Link href="/admin/base-masters" className="text-emerald-100 underline underline-offset-2"
+                    data-testid="v25-wb-base-master-fallback">本体マスター一覧（参照元の版番号は未取得）</Link>
+                )}
+              </span>
+            ))}
             {!collapsed.has('base') &&
               baseLines.map((line) => {
                 const result = resultByKey.get(`base:${line.id}`);
                 const display = v25DisplayedCostAndGross(result, line.quantity);
                 return (
                   <tr key={line.id} className="border-b border-slate-200 bg-slate-100 text-slate-700" data-testid="v25-wb-base-row">
-                    <td className="sticky left-0 z-20 w-16 border-r border-slate-200 bg-slate-100 px-0 py-px text-center text-slate-400" data-testid="v25-wb-base-order-cell">—</td>
-                    <td className="sticky left-16 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="max-w-[5rem] shrink-0 truncate text-[10px] text-slate-600" title={line.section}>{line.section}</span>
                         <span className="min-w-0 flex-1 truncate" title={line.name}>{line.name}</span>
@@ -969,50 +1235,27 @@ function WorkbenchBody({
                     </td>
                     <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{line.quantity}</td>
                     <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">{line.unit ?? ''}</td>
-                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
-                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.costAmount)}</td>}
-                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.sale_unit_price)}</td>
-                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-base-sale-amount">{yen(result?.amount)}</td>
-                    {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(display.gross)}</td>}
-                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>
-                    <td className="bg-slate-100 px-1 py-px text-center text-slate-500">参照</td>
+                    {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500">{yen(result?.cost_unit_price)}</td>}
+                    {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500">{yen(display.costAmount)}</td>}
+                    {visible.sale_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.sale_unit_price)}</td>}
+                    <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums font-semibold text-slate-900" data-testid="v25-wb-base-sale-amount">{yen(result?.amount)}</td>
+                    {visible.gross && <td className={`border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums ${v25GrossToneClass(display.gross)}`}>{yen(display.gross)}</td>}
+                    {visible.note && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"><span className="block truncate" title="本体マスターの明細">本体マスター</span></td>}
+                    <td className="sticky right-0 z-10 bg-slate-100 px-1 py-px text-center text-slate-500">参照</td>
                   </tr>
                 );
               })}
-            {sectionSubtotal('base', '本体')}
+            {!collapsed.has('base') && sectionSubtotal('base', '本体')}
 
             {LINE_SECTIONS.map((code) => {
               const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
               const lines = state.lines.filter((line) => line.section_code === code);
-              const orderedSectionRows = mixedOrder.filter((row) => row.section === code);
-              const rowControls = (row: V25MixedRowRef, rowIndex: number) => (
-                <div className="flex w-full items-center justify-center gap-px" data-testid="v25-wb-row-order-actions">
-                  <button type="button" data-testid="v25-wb-row-up" aria-label="一行上へ移動" title="同じ区分の一行上へ"
-                    disabled={positionActionsLocked || rowIndex === 0}
-                    className="flex size-5 items-center justify-center rounded text-xs text-navy hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
-                    onClick={() => moveViewRow(row, -1)}>↑</button>
-                  <button type="button" data-testid="v25-wb-row-down" aria-label="一行下へ移動" title="同じ区分の一行下へ"
-                    disabled={positionActionsLocked || rowIndex === orderedSectionRows.length - 1}
-                    className="flex size-5 items-center justify-center rounded text-xs text-navy hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
-                    onClick={() => moveViewRow(row, 1)}>↓</button>
-                  <V25WorkbenchRowMenu testId="v25-wb-row-insert" label="この行の直下に追加" triggerText="＋" compact disabled={positionActionsLocked}>
-                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                      disabled={positionActionsLocked}
-                      onClick={(event) => {
-                        event.currentTarget.closest('details')?.removeAttribute('open');
-                        addLine(code, row);
-                      }}>直下に手入力明細を追加</button>
-                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                      disabled={positionActionsLocked}
-                      onClick={(event) => {
-                        if (positionActionsLocked) return;
-                        rememberRowMenuOpener(event.currentTarget);
-                        event.currentTarget.closest('details')?.removeAttribute('open');
-                        setPickerDirty(false);
-                        setPicker({ section: code, targetKey: null, insertAfter: row });
-                      }}>直下に商品台帳から追加</button>
-                  </V25WorkbenchRowMenu>
-                </div>
+              // 商品のカテゴリーと、手入力明細の既存group_labelから表示用の小見出しを作る。
+              // 保存済みのsection_code・行順序・group_labelは書き換えない。
+              const workGroups = v25WorkGroupsForDisplay(
+                slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode,
+                (line) => line.group_label, { modelSlug, specCode, sectionCode: code },
+                workItemOf,
               );
               return (
                 <Fragment key={code}>
@@ -1020,22 +1263,34 @@ function WorkbenchBody({
                     code,
                     STANDARD_SECTION_LABEL[code],
                     readOnly ? undefined : (
-                      <div className="flex gap-2">
-                        <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-product-${code}`}
-                          onClick={(event) => { rememberDialogOpener(event.currentTarget); setPickerDirty(false); setPicker({ section: code, targetKey: null });  }}>
-                          ＋ 商品台帳から追加
-                        </button>
-                        <button type="button" className="btn-secondary btn-sm !h-6 !min-h-6 !px-2 !text-[10px]" data-testid={`v25-wb-add-line-${code}`} onClick={() => addLine(code)}>
-                          ＋ 明細（工事費など）
-                        </button>
-                      </div>
+                      <V25WorkbenchRowMenu testId={`v25-wb-add-row-${code}`}
+                        label={`${STANDARD_SECTION_LABEL[code]}へ行を追加`} triggerText="＋ 行を追加">
+                        <button type="button" className="block w-full px-3 py-1.5 text-left text-ink hover:bg-slate-50"
+                          onClick={(event) => {
+                            rememberRowMenuOpener(event.currentTarget);
+                            event.currentTarget.closest('details')?.removeAttribute('open');
+                            setPickerDirty(false); setPicker({ section: code, targetKey: null });
+                          }}>商品台帳から追加</button>
+                        <button type="button" className="block w-full px-3 py-1.5 text-left text-ink hover:bg-slate-50"
+                          onClick={(event) => {
+                            event.currentTarget.closest('details')?.removeAttribute('open');
+                            addLine(code);
+                          }}>直接入力</button>
+                      </V25WorkbenchRowMenu>
                     )
                   )}
-                  {!collapsed.has(code) &&
-                    orderedSectionRows.map((rowRef, rowIndex) => {
+                  {!collapsed.has(code) && workGroups.map((workGroup) => (
+                    <Fragment key={workGroup.key}>
+                      <tr className="border-y border-emerald-200 bg-emerald-100 text-slate-800"
+                        data-testid="v25-work-item-heading" data-work-item={workGroup.key}>
+                        <td colSpan={columnCount} className="px-3 py-1 text-[11px] font-semibold">
+                          {workGroup.label}
+                        </td>
+                      </tr>
+                      {v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {
                       if (rowRef.kind === 'slot') {
-                      const slot = slots.find((item) => item.key === rowRef.key);
-                      if (!slot) return null;
+                        const slot = workGroup.slots.find((item) => item.key === rowRef.key);
+                        if (!slot) return null;
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const display = v25DisplayedCostAndGross(result, slot.quantity);
@@ -1045,25 +1300,24 @@ function WorkbenchBody({
                       const slotCode = slot.slot_code.trim();
                       const positionAllowed = Boolean(candidate && !candidate.unavailable && canUsePositionSlot(candidate.categoryCode));
                       const isSash = candidate?.categoryCode === 'sash';
+                      const isLighting = candidate?.categoryCode === 'lighting';
                       const mixedUnset = !slotCode && positionMixes.some((mix) =>
                         mix.categoryId === candidate?.categoryId && mix.unsetKeys.includes(slot.key));
                       return (
                         <Fragment key={v25MixedRowIdentity(rowRef)}>
                         <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
-                          <td className="sticky left-0 z-20 focus-within:z-[70] w-16 border-r border-slate-200 bg-slate-100 px-0 py-px text-center" data-testid="v25-wb-slot-order-cell">
-                            {!readOnly && rowControls(rowRef, rowIndex)}
-                          </td>
-                          <td className="sticky left-16 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
+                          <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                             <div className="min-w-0">
                               <div className="flex min-w-0 flex-wrap items-center gap-1">
+                                {!readOnly && mixedRowControls(rowRef, rowIndex, workGroup)}
                                 <span className="max-w-[4.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                                 <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
                                 {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
-                                {isSash && positionAllowed && !readOnly && (
+                                {(isSash || isLighting) && positionAllowed && (
                                   <button type="button" className="shrink-0 text-[10px] text-navy underline disabled:opacity-50" data-testid="v25-wb-slot-position-toggle"
                                     disabled={positionActionsLocked}
                                     title={positionActionsLocked ? '位置名をEnterで確定するかEscで取り消してください' : undefined}
-                                    aria-label="位置・選べる商品を設定" onClick={(event) => { rememberDialogOpener(event.currentTarget); openPosition(slot); }}>位置別設定</button>
+                                    aria-label="位置を設定" onClick={(event) => { rememberDialogOpener(event.currentTarget); openPosition(slot); }}>位置を設定</button>
                                 )}
                                 {!readOnly && (
                                   <button type="button"
@@ -1077,40 +1331,73 @@ function WorkbenchBody({
                                 )}
                                 {candidate && <span className="sr-only">{[candidate.manufacturer, candidate.modelNo, candidate.windowTypeLabel].filter(Boolean).join(' ／ ')}</span>}
                               </div>
-                              {slotCode && (positionLabelEditor?.slotKey === slot.key && !readOnly ? (
-                                <div className="space-y-0.5" data-testid="v25-wb-inline-position-editor">
-                                  <V25PositionNameInput disabled={pending}
-                                    testId="v25-wb-inline-position-input"
-                                    value={positionLabelEditor.label} placeholder="例：寝室の窓"
-                                    onChange={(label) => {
-                                      const error = renameV25Position(state, slot.key, label, (id) => candidateById.get(id)).error;
-                                      setPositionLabelEditor((current) => current ? { ...current, label, error } : null);
-                                    }}
-                                    onConfirm={commitInlinePositionLabel}
-                                    onCancel={() => setPositionLabelEditor(null)}
-                                  />
-                                  {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
-                                  <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
-                                  <p className="text-[10px] text-amber-800">編集中は保存・行削除・位置別設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。</p>
+                              {(slotCode || isSash || isLighting) && (
+                                <div className="mt-px min-w-0 text-[10px] text-slate-600" data-testid="v25-wb-position-summary">
+                                  {slotCode && positionLabelEditor?.slotKey === slot.key && !readOnly ? (
+                                    <div className="space-y-0.5" data-testid="v25-wb-inline-position-editor">
+                                      <span>設置位置：</span>
+                                      <V25PositionNameInput disabled={pending}
+                                        testId="v25-wb-inline-position-input"
+                                        value={positionLabelEditor.label} placeholder="例：寝室の窓"
+                                        onChange={(label) => {
+                                          const error = renameV25Position(state, slot.key, label, (id) => candidateById.get(id)).error;
+                                          setPositionLabelEditor((current) => current ? { ...current, label, error } : null);
+                                        }}
+                                        onConfirm={commitInlinePositionLabel}
+                                        onCancel={() => setPositionLabelEditor(null)}
+                                      />
+                                      {positionLabelEditor.error && <p role="alert" className="text-[10px] text-red-700">{positionLabelEditor.error}</p>}
+                                      <span className="text-[10px] text-muted">Enterで確定 ／ Escで取消（日本語変換中は確定しません）</span>
+                                      <p className="text-[10px] text-amber-800">編集中は保存・行削除・位置設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。</p>
+                                    </div>
+                                  ) : (
+                                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-1">
+                                      <span className="shrink-0">設置位置：</span>
+                                      {slotCode ? (
+                                        <button type="button" className="min-w-0 truncate text-left text-[10px] font-medium text-emerald-900 underline underline-offset-2"
+                                          data-testid="v25-wb-slot-position"
+                                          disabled={pending || positionInputActive}
+                                          aria-label={readOnly ? '位置・選べる商品を設定' : '位置名を直接編集'}
+                                          title={positionInputActive
+                                            ? '編集中の位置名をEnterで確定するかEscで取り消してください'
+                                            : `${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
+                                          onClick={(event) => {
+                                            // 別行を開いて入力途中の位置名を上書きしない。
+                                            if (pending || positionInputActive) return;
+                                            if (readOnly) { rememberDialogOpener(event.currentTarget); openPosition(slot); }
+                                            else setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null });
+                                          }}>
+                                          {slot.slot_label.trim() || '未設定'}
+                                        </button>
+                                      ) : (
+                                        <span className="text-amber-800" data-testid="v25-wb-position-not-set">未設定</span>
+                                      )}
+                                      {slotCode && <span className="whitespace-nowrap text-slate-500">｜ 変更候補：{slot.selectable_option_ids.length > 0 ? `${slot.selectable_option_ids.length}件` : 'なし'}</span>}
+                                    </div>
+                                  )}
                                 </div>
-                              ) : (
-                                <button type="button" className="block max-w-full truncate text-left text-[10px] text-navy underline"
-                                  data-testid="v25-wb-slot-position"
-                                  disabled={pending || positionInputActive}
-                                  aria-label={readOnly ? '位置・選べる商品を設定' : '位置名を直接編集'}
-                                  title={positionInputActive
-                                    ? '編集中の位置名をEnterで確定するかEscで取り消してください'
-                                    : `${slot.slot_label.trim()}（変更候補${slot.selectable_option_ids.length}件）`}
-                                  onClick={(event) => {
-                                    // 別行を開いて入力途中の位置名を上書きしない。
-                                    if (pending || positionInputActive) return;
-                                    if (readOnly) { rememberDialogOpener(event.currentTarget); openPosition(slot); }
-                                    else setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null });
-                                  }}>
-                                  {slot.slot_label.trim() || '位置'} · {slot.selectable_option_ids.length > 0 ? `変更候補${slot.selectable_option_ids.length}件` : '標準品のみ'}
-                                </button>
-                              ))}
+                              )}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
+                              {/* 工事項目（2026-11-16 の先方の依頼）：未設定ならカテゴリーからの自動の値。プルダウンで変えられ、保存・見積書の摘要に残る */}
+                              <div className="mt-px flex min-w-0 items-baseline gap-x-1 text-[10px] text-slate-600" data-testid="v25-wb-slot-work-item">
+                                <span className="shrink-0">工事項目：</span>
+                                {readOnly ? (
+                                  <span className="min-w-0 truncate" title={slot.work_item?.trim() || '未設定'}>{slot.work_item?.trim() || '未設定'}</span>
+                                ) : (
+                                  <select
+                                    className="h-5 min-w-0 max-w-[14rem] rounded border border-slate-300 bg-white px-0.5 py-0 text-[10px] text-ink"
+                                    aria-label={`${candidate?.name ?? '商品'}の工事項目`}
+                                    data-testid="v25-wb-slot-work-item-select"
+                                    disabled={pending}
+                                    title={workItemOf(slot) || '未設定'}
+                                    value={workItemOf(slot)}
+                                    onChange={(event) => setSlot(slot.key, { work_item: event.target.value })}>
+                                    {/* 自動の値があるカテゴリーは未設定にしない（開き直すと自動の値に戻るため） */}
+                                    {!autoWorkItemOf(slot) && <option value="">未設定</option>}
+                                    {workItemOptions(code, workItemOf(slot)).map((label) => <option key={label} value={label}>{label}</option>)}
+                                  </select>
+                                )}
+                              </div>
                               {status && status !== 'current' && (
                                 <div className="mt-0.5" data-testid="v25-wb-slot-cost-alert">
                                   <Badge tone={COST_TONE[status]} title={V25_COST_STATUS_LABEL[status]}>{COST_COMPACT_LABEL[status]}</Badge>
@@ -1123,14 +1410,14 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="qty" value={slot.quantity} disabled={readOnly} inputMode="decimal" aria-label="数量" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setSlot(slot.key, { quantity: event.target.value })} />
                           </td>
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-muted"
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-slate-800"
                             data-testid="v25-wb-slot-unit"
                             title="商品台帳の販売単位です。単位を変更する場合は台帳の価格・換算条件も確認してください。">
                             {candidate?.priceUnit?.trim() || '—'}
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums">{yen(result?.cost_unit_price)}</td>}
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-cost-amount">{yen(display.costAmount)}</td>}
-                          <td className={`border-r border-slate-200 px-0.5 py-px text-right ${slot.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-slot-price-cell">
+                          {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500">{yen(result?.cost_unit_price)}</td>}
+                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500" data-testid="v25-wb-slot-cost-amount">{yen(display.costAmount)}</td>}
+                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${slot.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-slot-price-cell">
                             {slot.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={slot.manual_unit_price} disabled={readOnly} inputMode="numeric" aria-label="売価単価"
                                 className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
@@ -1140,8 +1427,8 @@ function WorkbenchBody({
                             ) : (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
-                          </td>
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-sale-amount">
+                          </td>}
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums font-semibold text-slate-900" data-testid="v25-wb-slot-sale-amount">
                             {slot.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
                             ) : unpricedKeys.has(slot.key) ? (
@@ -1152,8 +1439,8 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-slot-gross">{yen(display.gross)}</td>}
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">
+                          {visible.gross && <td className={`border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums ${v25GrossToneClass(display.gross)}`} data-testid="v25-wb-slot-gross">{yen(display.gross)}</td>}
+                          {visible.note && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px">
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="min-w-0 flex-1 truncate text-muted" title={v25VariantSummary(candidate, slot.variant_choices)} data-testid="v25-wb-variant-summary">
                                 {v25VariantSummary(candidate, slot.variant_choices)}
@@ -1163,9 +1450,9 @@ function WorkbenchBody({
                                   onClick={(event) => { rememberDialogOpener(event.currentTarget); openVariant(slot); }}>{readOnly ? '仕様を確認' : '仕様を変更'}</button>
                               )}
                             </div>
-                          </td>
+                          </td>}
 
-                          <td className="relative bg-slate-100 px-0.5 py-px text-center">
+                          <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-2">
                                 <V25WorkbenchRowMenu testId="v25-wb-slot-menu" label={(candidate?.name ?? '商品') + 'の操作'}>
@@ -1200,7 +1487,7 @@ function WorkbenchBody({
                                         rememberRowMenuOpener(event.currentTarget);
                                         event.currentTarget.closest('details')?.removeAttribute('open');
                                         openPosition(slot);
-                                      }}>位置別設定</button>
+                                      }}>位置を設定</button>
                                   )}
                                   {slot.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
@@ -1230,20 +1517,16 @@ function WorkbenchBody({
                         </Fragment>
                       );
                       }
-                      const line = lines.find((item) => item.key === rowRef.key);
+                      const line = workGroup.lines.find((item) => item.key === rowRef.key);
                       if (!line) return null;
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
-                        <tr key={v25MixedRowIdentity(rowRef)} className="border-b border-slate-200 align-middle" data-testid="v25-wb-line">
-                          <td className="sticky left-0 z-20 focus-within:z-[70] w-16 border-r border-slate-200 bg-slate-100 px-0 py-px text-center" data-testid="v25-wb-line-order-cell">
-                            {!readOnly && rowControls(rowRef, rowIndex)}
-                          </td>
-                          <td className={`sticky left-16 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                        <tr key={v25MixedRowIdentity(rowRef)} id={`v25-manual-row-${line.key}`} tabIndex={-1}
+                          className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500"
+                          data-testid="v25-wb-line">
+                          <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
-                              <Input data-v25-excel-col="group" value={line.group_label} disabled={readOnly}
-                                aria-label="グループ" placeholder="区分" title={line.group_label || '手入力明細のグループ'}
-                                className="h-6 min-h-6! w-[4.5rem] shrink-0 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
-                                onChange={(event) => setLine(line.key, { group_label: event.target.value })} />
+                              {!readOnly && mixedRowControls(rowRef, rowIndex, workGroup)}
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { name: event.target.value })} />
@@ -1259,9 +1542,9 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          <td className={`border-r border-slate-200 px-0.5 py-px text-right ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
+                          {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
                             {line.price_mode === 'manual' ? (
                               <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
                                 className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
@@ -1269,8 +1552,8 @@ function WorkbenchBody({
                             ) : (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
                             )}
-                          </td>
-                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums" data-testid="v25-wb-line-sale-amount">
+                          </td>}
+                          <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums font-semibold text-slate-900" data-testid="v25-wb-line-sale-amount">
                             {line.price_mode === 'por' ? (
                               <Badge tone="warn">未確定</Badge>
                             ) : unpricedKeys.has(line.key) ? (
@@ -1279,16 +1562,35 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          {showCost && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                          {visible.gross && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {visible.note && <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
-                          </td>
+                          </td>}
 
-                          <td className="relative bg-slate-100 px-0.5 py-px text-center">
+                          <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
-                              <div className="flex items-center justify-center gap-2">
+                              <div className="flex items-center justify-center gap-0.5">
+                                <span className="flex w-4 shrink-0 flex-col" data-testid="v25-wb-manual-reorder">
+                                  <button type="button" aria-label={`${line.name || '明細'}を上へ移動`} title="同じ工事項目内で上へ"
+                                    data-testid="v25-wb-manual-move-up"
+                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+                                    disabled={positionActionsLocked || groupEditor !== null || rowIndex === 0}
+                                    onClick={() => moveViewRow(rowRef, -1, workGroup)}>▲</button>
+                                  <button type="button" aria-label={`${line.name || '明細'}を下へ移動`} title="同じ工事項目内で下へ"
+                                    data-testid="v25-wb-manual-move-down"
+                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+                                    disabled={positionActionsLocked || groupEditor !== null || rowIndex === v25MixedRowsForWorkGroup(mixedOrder, workGroup).length - 1}
+                                    onClick={() => moveViewRow(rowRef, 1, workGroup)}>▼</button>
+                                </span>
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
+                                  <button type="button" data-testid="v25-wb-change-work-group" disabled={positionActionsLocked}
+                                    className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
+                                    onClick={(event) => {
+                                      rememberRowMenuOpener(event.currentTarget);
+                                      event.currentTarget.closest('details')?.removeAttribute('open');
+                                      setGroupEditor({ lineKey: line.key, originalLabel: line.group_label, value: line.group_label });
+                                    }}>工事項目を変更</button>
                                   {line.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { price_mode: 'manual' }); }}>金額を入力する</button>
@@ -1317,35 +1619,37 @@ function WorkbenchBody({
                         </tr>
                       );
                     })}
-                  {sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}
+                    </Fragment>
+                  ))}
+                  {!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}
                 </Fragment>
               );
             })}
           </tbody>
           <tfoot className="bg-slate-100 text-[11px]">
             <tr className="border-t-2 border-slate-300">
-              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">税別小計（経費を含む）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right font-semibold tabular-nums" data-testid="v25-wb-subtotal">
                 {calc.result ? (calc.result.subtotal !== null ? yen(calc.result.subtotal) : '未確定') : '—'}
               </td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right text-slate-600">調整額</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">調整額</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? yen(calc.result.adjustment) : '—'}</td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr>
-              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right text-slate-600">消費税</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right text-slate-600">消費税</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right tabular-nums">{calc.result ? (calc.result.tax !== null ? yen(calc.result.tax) : '未確定') : '—'}</td>
-              <td colSpan={showCost ? 3 : 2} />
+              <td colSpan={afterSaleAmount} />
             </tr>
             <tr className="border-t border-slate-300">
-              <td colSpan={showCost ? 7 : 5} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
+              <td colSpan={beforeSaleAmount} className="px-2 py-1 text-right font-semibold">税込合計（画面の試算）</td>
               <td className="border-l border-slate-300 px-2 py-1 text-right text-sm font-semibold tabular-nums" data-testid="v25-wb-total">
                 {calc.result ? (calc.result.total !== null ? yen(calc.result.total) : '未確定（別途見積を含む）') : '—'}
               </td>
-              <td colSpan={showCost ? 3 : 2} className="px-2 py-1 text-right text-[0.68rem] text-slate-500">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
+              <td colSpan={afterSaleAmount} className="px-2 py-1 text-right text-[0.68rem] text-slate-500">保存済み {savedTotal !== null ? yen(savedTotal) : '未確定'}</td>
             </tr>
           </tfoot>
         </table>
@@ -1356,6 +1660,9 @@ function WorkbenchBody({
         savedTotal={savedTotal}
         unpricedCount={calc.unpriced.length}
         incompleteCostCount={calc.incomplete.length}
+        adjustmentValue={state.adjustment}
+        onAdjustmentChange={(value) => setState((current) => ({ ...current, adjustment: value }))}
+        readOnly={readOnly}
       />
 
       {calc.error && <Alert tone="warn">画面の試算ができません：{calc.error}</Alert>}
@@ -1386,7 +1693,7 @@ function WorkbenchBody({
       </p>
 
       {!readOnly && (
-        <div ref={saveAreaRef} className="space-y-3 rounded-lg border border-slate-300 bg-white p-3">
+        <div ref={saveAreaRef} className="space-y-3 rounded-lg border border-slate-200 bg-white p-3" data-testid="v25-wb-save-area">
           {positionInputActive && (
             <p role="status" data-testid="v25-wb-position-edit-save-blocked" className="text-sm font-medium text-amber-800">
               位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。
@@ -1400,17 +1707,20 @@ function WorkbenchBody({
               </ul>
             </Alert>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-2" data-testid="v25-wb-action-priorities">
+            <div className="flex flex-wrap items-center gap-2">
             <Button type="button" onClick={save} disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save">
               {pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !dirty || positionInputActive} onClick={() => {
+            <Button type="button" variant="secondary" disabled={pending || !editedDirty || positionInputActive} onClick={() => {
               setState(initial);
               setViewOrder([]);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>
               変更を破棄
             </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"
               title={dirty ? '保存してから取り込んでください' : undefined}
               onClick={() => run(() => refreshStandardEstimateV25CostsAction({ revision_id: revisionId, expected_lock_version: lockVersion }))}>
@@ -1428,8 +1738,44 @@ function WorkbenchBody({
             >
               公開する
             </ConfirmActionButton>
+            </div>
           </div>
         </div>
+      )}
+
+      {groupEditor && !readOnly && (
+        <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[12vh]"
+          onClose={() => setGroupEditor(null)} returnFocusTo={dialogOpener}
+          dirty={groupEditor.value !== groupEditor.originalLabel}>
+          {(requestClose) => (
+            <div role="dialog" aria-modal="true" aria-label="工事項目を変更" data-testid="v25-wb-work-group-dialog"
+              className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                <h3 className="text-sm font-semibold">工事項目を変更</h3>
+                <button type="button" data-v25-dialog-close aria-label="工事項目の編集を閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
+              </div>
+              <div className="space-y-2 px-4 py-3 text-xs">
+                <p>現在の工事項目：{groupEditor.originalLabel || '未設定'}</p>
+                <label className="block space-y-1">
+                  <span className="font-medium">工事項目名（空欄で未設定）</span>
+                  <Input autoFocus data-testid="v25-wb-work-group-input" aria-label="工事項目名" value={groupEditor.value}
+                    placeholder="例：2. 屋根工事（独自名称も可）" className="h-9 w-full text-sm"
+                    onChange={(event) => setGroupEditor((current) => current ? { ...current, value: event.target.value } : null)} />
+                </label>
+                <p className="text-slate-500">確定すると該当の小見出しに移動します。下書き保存までDBには反映されません。</p>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+                <Button type="button" variant="secondary" onClick={requestClose}>キャンセル</Button>
+                <Button type="button" data-testid="v25-wb-work-group-confirm" disabled={pending}
+                  onClick={() => {
+                    if (groupEditor.value !== groupEditor.originalLabel) setLine(groupEditor.lineKey, { group_label: groupEditor.value });
+                    setJumpToKey({ key: groupEditor.lineKey });
+                    setGroupEditor(null);
+                  }}>確定</Button>
+              </div>
+            </div>
+          )}
+        </V25DialogLayer>
       )}
 
       {variantEditor && variantSlot && (
@@ -1509,32 +1855,46 @@ function WorkbenchBody({
       {positionSlot && positionDraft && (
         <V25DialogLayer className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[8vh]" onClose={closePosition} returnFocusTo={dialogOpener} dirty={!readOnly && (removePositionOnConfirm || positionDraft.slot_label !== positionSlot.slot_label || JSON.stringify(positionDraft.selectable_option_ids) !== JSON.stringify(positionSlot.selectable_option_ids))}>
           {(requestClose) => (
-          <div role="dialog" aria-modal="true" aria-label="位置・選べる商品を設定" data-testid="v25-wb-slot-position-editor"
+          <div role="dialog" aria-modal="true" aria-label="位置を設定" data-testid="v25-wb-slot-position-editor"
             className="flex max-h-[82vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <div>
-                <p className="font-semibold">{positionCandidate?.name ?? '商品'}：位置別設定</p>
-                <p className="text-xs text-muted">この商品の位置名と変更候補を設定</p>
-              </div>
-              <button type="button" data-v25-dialog-close aria-label="位置別設定を閉じる" title="閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
-            </div>
-            <div className="space-y-4 overflow-y-auto px-4 py-3">
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold">1. お客様に表示する位置名</span>
-                <Input value={positionDraft.slot_label} disabled={readOnly} maxLength={40} data-testid="v25-wb-slot-label"
-                  placeholder="例：リビングの掃出し窓" onChange={(event) => updatePosition({ slot_label: event.target.value })} />
-              </label>
-              <div className="space-y-1 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
-                <p className="font-semibold">2. この行の標準品</p>
-                <p>{positionCandidate?.name ?? '（商品が見つかりません）'}
+              <div className="min-w-0">
+                <p className="font-semibold">位置を設定</p>
+                <p className="mt-1 text-xs text-slate-600" data-testid="v25-wb-position-standard-product">
+                  標準商品：{positionCandidate?.name ?? '（商品が見つかりません）'}
                   {positionCandidate?.windowTypeLabel ? `（${positionCandidate.windowTypeLabel}）` : ''}
                 </p>
-                <p className="text-muted">標準品はこの行の商品です。別の商品への入替は明細の商品選択から行います。</p>
               </div>
-              <div className="space-y-2 text-xs">
-                  <p className="font-semibold">3. 変更候補（標準品は含まない）</p>
+              <button type="button" data-v25-dialog-close aria-label="位置設定画面を閉じる" title="閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
+            </div>
+            <div className="space-y-4 overflow-y-auto px-4 py-3">
+              <div className="space-y-2 text-xs" data-testid="v25-wb-position-location-section">
+                <p className="font-semibold">① この商品をどこに使いますか？</p>
+                {positionLabelSuggestions.length > 0 && (
+                  <label className="block space-y-1">
+                    <span className="block text-slate-600">位置名の候補（任意）</span>
+                    <Select
+                      value={positionLabelSuggestions.includes(positionDraft.slot_label) ? positionDraft.slot_label : ''}
+                      disabled={readOnly} aria-label="位置名の候補" data-testid="v25-wb-position-label-suggestions"
+                      className="h-8 w-full text-xs"
+                      onChange={(event) => {
+                        if (event.target.value) updatePosition({ slot_label: event.target.value });
+                      }}>
+                      <option value="">候補から選ぶ（任意）</option>
+                      {positionLabelSuggestions.map((label) => <option key={label} value={label}>{label}</option>)}
+                    </Select>
+                  </label>
+                )}
+                <label className="block space-y-1">
+                  <span className="block text-slate-600">位置名（自由に入力・修正できます）</span>
+                  <Input value={positionDraft.slot_label} disabled={readOnly} maxLength={40} data-testid="v25-wb-slot-label"
+                    placeholder="例：リビングの掃出し窓" onChange={(event) => updatePosition({ slot_label: event.target.value })} />
+                </label>
+              </div>
+              <div className="space-y-2 text-xs" data-testid="v25-wb-position-alternatives-section">
+                <p className="font-semibold">② お客様が選べる別の商品（任意）</p>
                   <ul className="flex flex-wrap gap-1.5" data-testid="v25-wb-slot-selectables">
-                    {positionDraft.selectable_option_ids.length === 0 && <li className="text-muted">変更候補なし（標準品のみ）</li>}
+                    {positionDraft.selectable_option_ids.length === 0 && <li className="text-muted">変更候補なし（標準商品のみ）</li>}
                     {positionDraft.selectable_option_ids.map((id) => {
                       const alternative = candidateById.get(id);
                       const name = alternative?.name ?? '（選べない商品）';
@@ -1550,7 +1910,7 @@ function WorkbenchBody({
                     <button type="button" className="btn-secondary btn-sm" disabled={!positionDraft.slot_label.trim()}
                       data-testid="v25-wb-slot-selectable-open"
                       onClick={() => openSelectable(positionSlot.key)}>
-                      ＋ 変更候補を選ぶ
+                      ＋ 別の商品を選ぶ
                     </button>
                   )}
                   {positionSlot.slot_code.trim() && !readOnly && (
@@ -1571,22 +1931,17 @@ function WorkbenchBody({
                     </div>
                   )}
               </div>
-              <p className="text-[0.68rem] leading-5 text-muted">
-                {positionSlot.slot_code.trim()
-                  ? `識別子：${positionSlot.slot_code}（位置名を変更しても変わりません）`
-                  : '識別子は位置名を反映すると自動発行します。'}
-                位置枠は数量１です。
-              </p>
+              <p className="text-[0.68rem] leading-5 text-muted">新しく位置を設定するときは数量1が必要です。</p>
               {!positionSlot.slot_code.trim() && Number(positionSlot.quantity) !== 1 && (
                 <p className="text-xs font-medium text-amber-800">現在の数量は {positionSlot.quantity} です。新しく位置を設定するには数量１が必要です。自動変更はしません。</p>
               )}
               {positionError && <Alert tone="danger">{positionError}</Alert>}
-              <p className="text-xs text-muted">この操作は編集中の明細への反映です。下書きは保存されません。保存は「下書きを保存」で行います。</p>
+              <p className="text-xs text-muted">設定を反映しただけでは正式保存されません。最後に「下書きを保存」してください。</p>
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
               <Button type="button" variant="secondary" onClick={requestClose}>{readOnly ? '閉じる' : 'キャンセル'}</Button>
               {!readOnly && <Button type="button" data-testid="v25-wb-position-confirm" onClick={confirmPosition} disabled={pending}>
-                {removePositionOnConfirm ? '位置設定を解除する' : 'この行に反映'}
+                {removePositionOnConfirm ? '位置設定を解除する' : '設定を反映'}
               </Button>}
             </div>
           </div>
@@ -1659,7 +2014,7 @@ function WorkbenchBody({
           <div role="dialog" aria-modal="true" aria-label="お客様が選べる商品" className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
               <div className="min-w-0">
-                <p className="font-semibold">{positionDraft?.slot_label.trim() || positionDraft?.slot_code.trim() || 'カテゴリー単位'}：お客様が選べる商品</p>
+                <p className="font-semibold">{positionDraft?.slot_label.trim() || '位置名未設定'}：お客様が選べる商品</p>
                 <p className="text-xs text-muted">標準の「{selectableBase.name}」の代わりに選べる、{selectableBase.categoryName}の商品を選びます（いくつでも）。</p>
               </div>
               <button type="button" data-v25-dialog-close aria-label="変更候補の選択を閉じる" title="閉じる" className="shrink-0 text-xl text-muted" onClick={requestClose}>×</button>

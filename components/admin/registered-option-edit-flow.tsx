@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
+import { registeredOptionLedgerUrl } from '@/lib/domain/registered-option-save-result';
 import { windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
@@ -334,7 +335,7 @@ export function RegisteredOptionEditFlow({
     setPending(false);
     setState(result);
     if (result.ok) {
-      router.push(`/admin/ledger?updated_option=${encodeURIComponent(option.id)}`);
+      router.push(registeredOptionLedgerUrl(option.id, result));
     }
   };
 

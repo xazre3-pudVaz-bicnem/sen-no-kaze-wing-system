@@ -35,6 +35,15 @@ export function FlashMessages({ sp }: { sp: Record<string, string | undefined> }
           </Link>
         </Alert>
       )}
+      {sp.cost_recording_failed === '1' && (
+        <Alert tone="warn">
+          <p>商品は保存しましたが、原価の Version を記録できませんでした。記録済みの項目がある場合もあります。</p>
+          <p className="mt-2">対象と金額を確認し、必要な項目だけを選んでください。</p>
+          <Link href="/admin/options/cost-import" className="mt-2 inline-block font-semibold underline underline-offset-4">
+            原価 Version の取り込み画面を開く
+          </Link>
+        </Alert>
+      )}
     </>
   );
 }

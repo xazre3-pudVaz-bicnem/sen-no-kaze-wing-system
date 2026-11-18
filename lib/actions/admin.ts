@@ -58,6 +58,7 @@ export interface AdminFormState {
   error?: string;
   fieldErrors?: FieldErrors;
   message?: string;
+  costRecordingFailed?: boolean;
   savedImageUrl?: string;
 }
 
@@ -443,7 +444,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     }
     redirect('/admin/options/' + createdId + '?step=info&created=1');
   }
-  return { ok: true, message: costNotice ? `保存しました。${costNotice}` : '保存しました', savedImageUrl: image_url };
+  return { ok: true, message: costNotice ? `保存しました。${costNotice}` : '保存しました', costRecordingFailed: Boolean(costNotice), savedImageUrl: image_url };
 }
 
 export async function publishOptionAction(formData: FormData): Promise<void> {

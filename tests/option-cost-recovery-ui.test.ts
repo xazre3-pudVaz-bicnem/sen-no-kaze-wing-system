@@ -14,3 +14,23 @@ describe('原価記録失敗の案内', () => {
     expect(renderToStaticMarkup(createElement(FlashMessages, { sp: {saved:'1'} }))).not.toContain('/admin/options/cost-import');
   });
 });
+
+import { registeredOptionLedgerUrl } from '@/lib/domain/registered-option-save-result';
+import { readFileSync } from 'node:fs';
+
+it('保存成功と記録失敗を移動先で区別し、エラー詳細をURLに含めない', () => {
+  const normal = new URL(registeredOptionLedgerUrl('id & 1', {}), 'https://wing.invalid');
+  expect(normal.searchParams.get('updated_option')).toBe('id & 1');
+  expect(normal.searchParams.has('cost_recording_failed')).toBe(false);
+  const failed = new URL(registeredOptionLedgerUrl('id & 1', { costRecordingFailed: true }), 'https://wing.invalid');
+  expect(failed.searchParams.get('cost_recording_failed')).toBe('1');
+  const html = renderToStaticMarkup(createElement(FlashMessages, { sp: Object.fromEntries(failed.searchParams) }));
+  expect(html).toContain('商品は保存しましたが、原価の Version を記録できませんでした');
+  expect(html).toContain('記録済みの項目がある場合もあります');
+  expect(html).toContain('href="/admin/options/cost-import"');
+  const edit = readFileSync('components/admin/registered-option-edit-flow.tsx', 'utf8');
+  const ledger = readFileSync('app/admin/ledger/page.tsx', 'utf8');
+  expect(edit).toContain('if (result.ok)');
+  expect(edit).toContain('router.push(registeredOptionLedgerUrl(option.id, result))');
+  expect(ledger).toContain('<FlashMessages sp={sp} />');
+});

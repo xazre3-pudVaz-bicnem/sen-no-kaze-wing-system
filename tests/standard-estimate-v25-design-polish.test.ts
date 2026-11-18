@@ -76,7 +76,7 @@ describe('標準見積v2.5 設定・金額・本体参照・位置表示', () =>
     expect(workbench).toContain('dialogTitle="この内容で公開しますか？"');
     expect(workbench).toContain('saveStandardEstimateV25DraftAction');
     expect(workbench).toContain('publishStandardEstimateV25RevisionAction');
-    expect(workbench).toContain('buildV25SavePayload(state)');
+    expect(workbench).toContain('buildV25SavePayload(v25WithRowOrder(toSave, displayRefs))');
   });
 
   it('参照中の本体マスターの固定版だけを表示し、未取得時は安全な一覧へ案内', () => {

@@ -1712,7 +1712,7 @@ function WorkbenchBody({
             <Button type="button" onClick={save} disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save">
               {pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !editedDirty || positionInputActive} onClick={() => {
+            <Button type="button" variant="secondary" disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {
               setState(initial);
               setViewOrder([]);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });

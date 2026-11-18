@@ -133,7 +133,7 @@ export function StandardEstimateV25Selector({ entries, selectedId }: {
         const rows = group.sections.flatMap((section) => section.sizes.flatMap((sized) => sized.rows));
         const sizes = [...new Set(rows.map((row) => row.size).filter(Boolean))];
         return (
-          <details key={group.product} open={group.product === selectedGroup}
+          <details key={group.product} name="v25-spec-product" open={group.product === selectedGroup}
             data-testid="v25-selector-product" className="min-w-0 rounded-md border border-slate-300 bg-white">
             <summary className="flex min-h-[42px] cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm font-semibold text-slate-900 marker:text-slate-700">
               <span>{group.product}</span>

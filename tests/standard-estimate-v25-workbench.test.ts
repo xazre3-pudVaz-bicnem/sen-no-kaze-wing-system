@@ -296,7 +296,7 @@ describe('Excel 風の画面（描画）', () => {
     const unregistered = render(false, { candidates: candidates.map((item) => ({ ...item, priceUnit: null })) });
     expect(unregistered).toContain('data-testid="v25-wb-slot-unit"');
     expect(unregistered).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>\s*—\s*<\/td>/);
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(state)');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(toSave)');
   });
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
@@ -407,7 +407,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
-    expect(source).toContain('payload: buildV25SavePayload(state)');
+    expect(source).toContain('payload: buildV25SavePayload(toSave)');
   });
 
   it('幅の過大な列を圧縮し、広い画面では表全体を可変幅で表示する', () => {
@@ -696,7 +696,8 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('data-testid="v25-wb-position-edit-save-blocked"');
     expect(source).toContain('位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。');
     expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
-    expect(source).toContain('disabled={pending || !dirty || positionInputActive} onClick={() => {');
+    // 変更破棄は手で変えた分だけ（カテゴリーからの工事項目の自動の値は破棄できないため。2026-11-16 の先方の依頼）
+    expect(source).toContain('disabled={pending || !editedDirty || positionInputActive} onClick={() => {');
     expect(source).toContain('disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"');
     expect(source).toContain('disabled={pending || blockers.length > 0 || positionInputActive}');
     expect(source).toContain('const save = () => {\n    if (pending || positionInputActive) return;');

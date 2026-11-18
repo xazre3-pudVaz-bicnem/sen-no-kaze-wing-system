@@ -130,7 +130,7 @@ describe('標準見積v2.5 列表示と幅のブラウザー設定', () => {
     expect(src).toContain('onResizeStart={columnPrefs.startResize}');
     expect(src).toContain('onAutoWidth={autoWidth}');
     expect(src).toContain('sticky right-0');
-    expect(src).toContain('payload: buildV25SavePayload(state)');
+    expect(src).toContain('payload: buildV25SavePayload(toSave)');
     expect(src).not.toContain('buildV25SavePayload(columnPrefs');
   });
 });

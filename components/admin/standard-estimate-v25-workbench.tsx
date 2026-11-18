@@ -56,7 +56,12 @@ import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-es
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-position-label-suggestions';
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
-import { v25MoveManualLineWithinWorkGroup, v25WorkGroupsForDisplay } from '@/components/admin/standard-estimate-v25-work-groups';
+import {
+  v25AutoWorkItemLabel,
+  v25MoveManualLineWithinWorkGroup,
+  v25WorkGroupsForDisplay,
+  v25WorkItemLabelsForSection,
+} from '@/components/admin/standard-estimate-v25-work-groups';
 import {
   V25ColumnDisplayMenu,
   V25WidthHandle,
@@ -447,6 +452,22 @@ function WorkbenchBody({
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const sectionOf = (optionId: string) => candidateById.get(optionId)?.section;
+  // 工事項目（2026-11-16 の先方の依頼）：商品の行は保存した値、未設定ならカテゴリーからの自動の値を表示・見出し・保存に使う。
+  // 公開済みの版（閲覧だけ）は保存した値だけを出す（自動の値は保存されていないため）
+  const autoWorkItemOf = (slot: Pick<V25SlotRow, 'option_id'>) => {
+    if (readOnly) return '';
+    const candidate = candidateById.get(slot.option_id);
+    return v25AutoWorkItemLabel(candidate?.categoryCode, { modelSlug, specCode, sectionCode: candidate?.section });
+  };
+  const workItemOf = (slot: V25SlotRow) => slot.work_item?.trim() || autoWorkItemOf(slot);
+  // プルダウンの選択肢：その区分の分類の項目、同じ区分の手入力明細の工事項目（group_label）、今の値
+  const workItemOptions = (code: StandardLineSectionCode, current: string) => [
+    ...new Set([
+      ...v25WorkItemLabelsForSection({ modelSlug, specCode, sectionCode: code }),
+      ...state.lines.filter((line) => line.section_code === code).map((line) => line.group_label.trim()),
+      current.trim(),
+    ].filter(Boolean)),
+  ];
   const calc = useMemo(
     () => calculateV25Workbench(rule, taxRule, state, baseLines, costs, (optionId) => candidateById.get(optionId)?.section),
     [rule, taxRule, state, baseLines, costs, candidateById]
@@ -478,7 +499,11 @@ function WorkbenchBody({
   }, [preview]);
   const unpricedKeys = useMemo(() => new Set(calc.unpriced), [calc.unpriced]);
   const unavailableCount = state.slots.filter((slot) => candidateById.get(slot.option_id)?.unavailable).length;
-  const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
+  const editedDirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
+  // 工事項目が未設定で、カテゴリーからの自動の値を表示している商品の行（保存すると、その値を保存し見積書の摘要にも出る）。
+  // 画面と保存・公開の内容をそろえるため、未保存の変更として扱う（保存するまで公開しない）
+  const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;
+  const dirty = editedDirty || unsavedAutoWorkItems > 0;
   const positionMixes = useMemo(() => v25PositionMixes(state.slots, (id) => candidateById.get(id)), [state.slots, candidateById]);
   // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
   const slotRuleIssues = useMemo(
@@ -613,6 +638,7 @@ function WorkbenchBody({
         setPicker(null);
         return;
       }
+      // 入れ替えは同じカテゴリーの商品だけなので、工事項目はそのまま
       setSlot(picker.targetKey, {
         option_id: candidate.id,
         variant_choices: { ...choices },
@@ -645,6 +671,8 @@ function WorkbenchBody({
             slot_code: '',
             slot_label: '',
             selectable_option_ids: [],
+            // 工事項目は未設定から始め、カテゴリーからの自動の値で表示・保存する（2026-11-16 の先方の依頼。プルダウンで変えられる）
+            work_item: '',
           },
         ],
       }));
@@ -850,7 +878,13 @@ function WorkbenchBody({
       onNotice({ tone: 'danger', text: problem });
       return;
     }
-    run(() => saveStandardEstimateV25DraftAction({ revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(state) }));
+    // 工事項目（2026-11-16 の先方の依頼）：未設定の商品の行は、表示しているカテゴリーからの自動の値で保存する
+    const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };
+    // 並び順はこの画面では付けない（工事項目の見出しは表示だけ。見積書の明細は今までどおりの順）。
+    // 商品と手入力を混ぜた並べ替え（#666）を入れるときは、その表示の順で v25WithRowOrder(toSave, 表示の順) してから渡す
+    run(() => saveStandardEstimateV25DraftAction({
+      revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(toSave),
+    }));
   };
 
   const toggleSection = (code: string) =>
@@ -938,6 +972,11 @@ function WorkbenchBody({
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
       {!readOnly && dirty && <p className="text-xs font-semibold text-amber-800" data-testid="v25-wb-unsaved-position">明細に反映済み・下書き未保存（保存は「下書きを保存」から）</p>}
+      {!readOnly && unsavedAutoWorkItems > 0 && (
+        <p className="text-xs text-amber-800" data-testid="v25-wb-work-item-auto-unsaved">
+          工事項目が未設定の商品 {unsavedAutoWorkItems} 件は、カテゴリーから工事項目を入れて表示しています。「下書きを保存」で保存すると、見積書の摘要にも反映されます。
+        </p>
+      )}
       {positionMixes.length > 0 && (
         <div className="space-y-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs" data-testid="v25-wb-position-mixed">
           {positionMixes.map((mix) => (
@@ -1099,6 +1138,7 @@ function WorkbenchBody({
               const workGroups = v25WorkGroupsForDisplay(
                 slots, lines, (optionId) => candidateById.get(optionId)?.categoryCode,
                 (line) => line.group_label, { modelSlug, specCode, sectionCode: code },
+                workItemOf,
               );
               return (
                 <Fragment key={code}>
@@ -1217,6 +1257,26 @@ function WorkbenchBody({
                                 </div>
                               )}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
+                              {/* 工事項目（2026-11-16 の先方の依頼）：未設定ならカテゴリーからの自動の値。プルダウンで変えられ、保存・見積書の摘要に残る */}
+                              <div className="mt-px flex min-w-0 items-baseline gap-x-1 text-[10px] text-slate-600" data-testid="v25-wb-slot-work-item">
+                                <span className="shrink-0">工事項目：</span>
+                                {readOnly ? (
+                                  <span className="min-w-0 truncate" title={slot.work_item?.trim() || '未設定'}>{slot.work_item?.trim() || '未設定'}</span>
+                                ) : (
+                                  <select
+                                    className="h-5 min-w-0 max-w-[14rem] rounded border border-slate-300 bg-white px-0.5 py-0 text-[10px] text-ink"
+                                    aria-label={`${candidate?.name ?? '商品'}の工事項目`}
+                                    data-testid="v25-wb-slot-work-item-select"
+                                    disabled={pending}
+                                    title={workItemOf(slot) || '未設定'}
+                                    value={workItemOf(slot)}
+                                    onChange={(event) => setSlot(slot.key, { work_item: event.target.value })}>
+                                    {/* 自動の値があるカテゴリーは未設定にしない（開き直すと自動の値に戻るため） */}
+                                    {!autoWorkItemOf(slot) && <option value="">未設定</option>}
+                                    {workItemOptions(code, workItemOf(slot)).map((label) => <option key={label} value={label}>{label}</option>)}
+                                  </select>
+                                )}
+                              </div>
                               {status && status !== 'current' && (
                                 <div className="mt-0.5" data-testid="v25-wb-slot-cost-alert">
                                   <Badge tone={COST_TONE[status]} title={V25_COST_STATUS_LABEL[status]}>{COST_COMPACT_LABEL[status]}</Badge>
@@ -1533,7 +1593,7 @@ function WorkbenchBody({
             <Button type="button" onClick={save} disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save">
               {pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !dirty || positionInputActive} onClick={() => {
+            <Button type="button" variant="secondary" disabled={pending || !editedDirty || positionInputActive} onClick={() => {
               setState(initial);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>

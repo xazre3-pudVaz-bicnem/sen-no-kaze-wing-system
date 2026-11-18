@@ -414,7 +414,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('V25WidthHandle');
     expect(source).toContain('useV25PageFloatingHeader(headerLayoutKey)');
     expect(source).toContain('overlay.scrollLeft = grid.scrollLeft');
-    expect(source).toContain('buildV25SavePayload(state)');
+    expect(source).toContain('buildV25SavePayload(toSave)');
     expect(source).toContain('saveStandardEstimateV25DraftAction');
     expect(source).toContain('clearV25Position(state, positionFor)');
     expect(source).toContain('updateV25Position(state, positionFor, positionDraft.slot_label');

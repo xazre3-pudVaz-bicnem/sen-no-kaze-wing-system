@@ -413,7 +413,13 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     updateTag(CATALOG_TAG);
     // 登録済みの商品は、本部が保存した金額を商品標準原価の Version に記録する（下書きは登録のときに記録する）
     if (o.status === 'published' && costAccess.available && costAccess.canManage) {
-      costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save', costAccess));
+      try {
+        costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save', costAccess));
+      } catch (error) {
+        // 商品はすでに保存済み。記録処理の例外を保存自体の失敗と誤認させない。
+        console.error('[wing] failed to record option cost version', error);
+        costNotice = costRecordingNotice({ status: 'error', message: '原価の Version を記録できませんでした' });
+      }
     }
   } catch (e) {
     // メディアの複製に失敗した場合はコピー先の新規下書きだけ取り消す。

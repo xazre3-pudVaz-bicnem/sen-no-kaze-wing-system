@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   updateTag: vi.fn(),
   costFailure: false,
+  costThrows: false,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -37,7 +38,10 @@ vi.mock('@/lib/data/option-cost-recording', () => ({
   NO_COST_RECORDING: { available: false, canManage: false },
   canEditCostField: (access: { available: boolean; canManage: boolean; error?: boolean }) => !access.error && (!access.available || access.canManage),
   COST_ACCESS_ERROR_MESSAGE: '原価の権限を確認できませんでした。',
-  recordPublishedOptionCost: vi.fn(async () => mocks.costFailure ? ({ status: 'error', message: 'conflict' }) : ({ status: 'recorded' })),
+  recordPublishedOptionCost: vi.fn(async () => {
+    if (mocks.costThrows) throw new Error('price read failed');
+    return mocks.costFailure ? { status: 'error', message: 'conflict' } : { status: 'recorded' };
+  }),
   recordPublishedChoiceCosts: vi.fn(async () => ({ status: 'unavailable' })),
   costRecordingNotice: (result: {status: string}) => result.status === 'error' ? '商品は保存しましたが、原価の Version を記録できませんでした' : null,
 }));
@@ -115,7 +119,26 @@ function validOptionForm() {
 describe('登録済み商品の保存と原価Version', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.costThrows = false;
     mocks.requireStaff.mockResolvedValue({ id: 'admin', role: 'admin' });
+  });
+  it('商品保存後に原価読取が例外を投げても保存済みの警告を返す', async () => {
+    mocks.costFailure = false;
+    mocks.costThrows = true;
+    const store = {
+      getOption: vi.fn(async () => option()),
+      upsertOption: vi.fn(async (value: unknown) => value),
+      setOptionRelations: vi.fn(async () => undefined),
+    };
+    mocks.getStore.mockResolvedValue(store);
+    const form = validOptionForm();
+    form.set('price', '100000');
+    form.set('image_url', 'https://example.invalid/main.png');
+    const result = await saveOptionAction({ ok: false }, form);
+    expect(store.upsertOption).toHaveBeenCalledOnce();
+    expect(result.ok).toBe(true);
+    expect(result.costRecordingFailed).toBe(true);
+    expect(result.message).toContain('商品は保存しましたが');
   });
   it.each([false, true])('記録失敗=%s を保存成功と分けて返す', async (failed) => {
     mocks.costFailure = failed;

@@ -176,7 +176,7 @@ describe('画面（Excel 風明細）', () => {
     expect(workbench).toContain('const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;');
     expect(workbench).toContain('const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;');
     expect(workbench).toContain('data-testid="v25-wb-work-item-auto-unsaved"');
-    expect(workbench).toContain('disabled={pending || !editedDirty || positionInputActive} onClick={() => {\n              setState(initial);');
+    expect(workbench).toContain('disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {\n              setState(initial);');
   });
 
   it('新しく選んだ商品は未設定から始め（表示・保存はカテゴリーからの自動の値）、同じカテゴリーへの入れ替えは工事項目を変えない', () => {

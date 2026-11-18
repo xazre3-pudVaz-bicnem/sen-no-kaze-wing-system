@@ -221,14 +221,18 @@ select pg_temp.rw_patch_function(
   $new$b.slot_code, b.slot_label, b.unit_snapshot, b.display_order, b.work_item$new$
 );
 
--- 明細の複製：v2.5 の版から写すときは並び順も写す（v2.5 以前の版の明細には並び順は無い）。#618 は変えない関数なので置き換える
-create or replace function public.standard_estimate_v25_copy_lines(p_from_revision_id uuid, p_to_revision_id uuid, p_from_legacy boolean)
-returns void
-language plpgsql
-set search_path to ''
-as $function$
-begin
-  if not p_from_legacy then
+-- 明細の複製：v2.5 の版から写すときは並び順も写す（v2.5 以前の版の明細には並び順は無い。その分岐は変えない）
+select pg_temp.rw_patch_function(
+  'public.standard_estimate_v25_copy_lines(uuid, uuid, boolean)'::regprocedure,
+  $old$  if not p_from_legacy then
+    insert into public.standard_estimate_revision_v25_lines (
+      revision_id, line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order
+    )
+    select p_to_revision_id, l.line_key, l.section_code, l.group_label, l.name, l.quantity, l.unit, l.price_mode, l.unit_price, l.amount,
+           l.remark, l.review_required, l.sort_order
+      from public.standard_estimate_revision_v25_lines l
+$old$,
+  $new$  if not p_from_legacy then
     insert into public.standard_estimate_revision_v25_lines (
       revision_id, line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order,
       display_order
@@ -236,21 +240,8 @@ begin
     select p_to_revision_id, l.line_key, l.section_code, l.group_label, l.name, l.quantity, l.unit, l.price_mode, l.unit_price, l.amount,
            l.remark, l.review_required, l.sort_order, l.display_order
       from public.standard_estimate_revision_v25_lines l
-     where l.revision_id = p_from_revision_id;
-  else
-    insert into public.standard_estimate_revision_v25_lines (
-      revision_id, line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order
-    )
-    select p_to_revision_id, l.line_key, l.section_code, l.group_label, l.name, l.quantity, l.unit,
-           case when l.price_mode = 'por' or l.section_code = 'sitework' then 'por' else 'manual' end,
-           case when l.price_mode = 'por' or l.section_code = 'sitework' then null else l.unit_price end,
-           case when l.price_mode = 'por' or l.section_code = 'sitework' then null else trunc(l.quantity * l.unit_price)::integer end,
-           l.remark, true, l.sort_order
-      from public.standard_estimate_revision_lines l
-     where l.revision_id = p_from_revision_id;
-  end if;
-end;
-$function$;
+$new$
+);
 
 -- 売価だけの形：見積書の明細の並び（display_order があれば商品と手入力を混ぜる）と、商品の行の摘要（工事項目）
 select pg_temp.rw_patch_function(
@@ -322,11 +313,6 @@ $old$,
 $new$
 );
 
--- ---------- 所有者と権限 ----------
-
-alter function public.standard_estimate_v25_copy_lines(uuid, uuid, boolean) owner to postgres;
-revoke all on function public.standard_estimate_v25_copy_lines(uuid, uuid, boolean) from public, anon, authenticated, service_role;
-
 -- ---------- postconditions ----------
 
 do $postconditions$
@@ -349,7 +335,9 @@ begin
      or pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.standard_estimate_v25_quote_draft_lines(uuid, boolean)'::regprocedure),
                           'coalesce(l.display_order, l.sort_order)') = 0
      or pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.standard_estimate_v25_copy_slots(uuid, uuid)'::regprocedure),
-                          'b.unit_snapshot, b.display_order, b.work_item') = 0 then
+                          'b.unit_snapshot, b.display_order, b.work_item') = 0
+     or pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.standard_estimate_v25_copy_lines(uuid, uuid, boolean)'::regprocedure),
+                          'l.remark, l.review_required, l.sort_order, l.display_order') = 0 then
     raise exception 'POSTCONDITION: the patched functions are not as expected';
   end if;
   -- #618（区分の経費の決め方）がまだ当たっていなければ、#618 の保存の目印の行が残っていること

@@ -5,6 +5,9 @@
  * - 保存：`slots[i].row_order`・`lines[j].row_order` に、版の中で商品と手入力を通した 1 始まりの番号を全行に付ける
  *   （全行に付けるか全部省略。重なりなし。1〜100000）。`slots[i].work_item` は工事項目のラベル（未設定は null）。
  *   手入力明細の工事項目は今までどおり `group_label`
+ * - 並びを保存する画面は、保存の前に画面の表示の順で全行に付け直す（`v25WithRowOrder(state, 表示の順)`）。
+ *   読み込んだ row_order は、行の追加・移動・入れ替えの後は古くなる（配列の順を変えても row_order は変わらない）ため、
+ *   そのまま送らない。1 行でも row_order の無い行があると、`buildV25SavePayload` は並び順を送らない（今までどおりの順で保存）
  * - 読み込み：初期状態の `slots[i].row_order`・`lines[j].row_order`（number | null。保存前の下書きは null）と
  *   `slots[i].work_item`（文字列。未設定は ''）
  *
@@ -15,6 +18,13 @@ import type { V25EditorState } from './standard-estimate-v25-view';
 export type V25RowRef = { kind: 'slot' | 'line'; key: string };
 
 const identity = (ref: V25RowRef) => `${ref.kind}:${ref.key}`;
+const hasOrder = (order: number | null | undefined): order is number => typeof order === 'number' && Number.isFinite(order);
+
+/** 全部の商品の行と手入力明細に row_order が付いているか（画面が表示の順で付け直した状態か。行が無ければ false） */
+export function v25HasRowOrder(state: Pick<V25EditorState, 'slots' | 'lines'>): boolean {
+  const rows = [...state.slots, ...state.lines];
+  return rows.length > 0 && rows.every((row) => hasOrder(row.row_order));
+}
 
 /**
  * 保存済みの並び（row_order）の順の行の参照。row_order のある行をその順に、無い行（保存前の下書き・新しい行）を
@@ -27,9 +37,9 @@ export function v25RowOrderRefs(state: Pick<V25EditorState, 'slots' | 'lines'>):
     ...state.lines.map((line, index) => ({ ref: { kind: 'line' as const, key: line.key }, order: line.row_order ?? null, rank: 1, index })),
   ];
   const ordered = rows
-    .filter((row) => typeof row.order === 'number' && Number.isFinite(row.order))
+    .filter((row) => hasOrder(row.order))
     .sort((a, b) => (a.order as number) - (b.order as number) || a.rank - b.rank || a.index - b.index);
-  const rest = rows.filter((row) => !(typeof row.order === 'number' && Number.isFinite(row.order)));
+  const rest = rows.filter((row) => !hasOrder(row.order));
   return [...ordered, ...rest].map((row) => row.ref);
 }
 

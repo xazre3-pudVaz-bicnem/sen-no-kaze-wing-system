@@ -5,11 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
 import { buildV25SavePayload, type V25EditorState, type V25LineRow, type V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
-import { v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
 import type { V25WorkbenchCandidate } from '@/lib/domain/standard-estimate-v25-workbench';
 import {
   v25AutoWorkItemLabel,
-  v25DisplayRowRefs,
   v25WorkGroupsForDisplay,
   v25WorkItemLabelsForSection,
 } from '@/components/admin/standard-estimate-v25-work-groups';
@@ -22,7 +20,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
 }));
 const { StandardEstimateV25Workbench } = await import('@/components/admin/standard-estimate-v25-workbench');
 
-// 2026-11-16 の先方の依頼：Excel 風明細の商品の行の工事項目（自動の値・プルダウン・保存）と、表示の順での並び順の保存（画面の部分）
+// 2026-11-16 の先方の依頼：Excel 風明細の商品の行の工事項目（自動の値・プルダウン・保存）の画面の部分
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8').split('\r').join('');
 
 const slot = (key: string, optionId: string, extra: Partial<V25SlotRow> = {}): V25SlotRow => ({
@@ -88,43 +86,15 @@ describe('工事項目の見出しの分け方', () => {
   });
 });
 
-describe('保存する並び順（画面の表示の順）', () => {
-  const sectionOf = (id: string) => ({ roof1: 'interior_exterior', sash1: 'interior_exterior', kitchen1: 'option' } as Record<string, V25LineRow['section_code']>)[id];
-  const categoryOf = (id: string) => ({ roof1: 'roof', sash1: 'sash', kitchen1: 'kitchen' } as Record<string, string>)[id];
-
-  it('区分→工事項目の見出し→その中の商品→手入力の順。配列の順や数量・単価は変えない', () => {
+describe('保存（工事項目は送り、並び順は送らない）', () => {
+  it('工事項目を送り、並び順は送らない（見積書の明細は今までどおりの順。見出しは画面の表示だけ）', () => {
     const before = state(
-      [slot('k', 'kitchen1'), slot('r', 'roof1'), slot('s', 'sash1')],
-      [line('l-roof', { group_label: '2. 屋根工事', unit_price: '3000' }), line('l-opt', { section_code: 'option', group_label: '1. 設備機器' }),
-        line('l-free', { group_label: '雑工事' })]
+      [slot('k', 'kitchen1', { work_item: '1. 設備機器' }), slot('r', 'roof1', { work_item: '2. 屋根工事' })],
+      [line('l-roof', { group_label: '2. 屋根工事', unit_price: '3000' })]
     );
-    const refs = v25DisplayRowRefs(before, sectionOf, categoryOf, (row) => row.work_item ?? '', context);
-    expect(refs).toEqual([
-      { kind: 'slot', key: 's' }, { kind: 'slot', key: 'r' }, { kind: 'line', key: 'l-roof' }, { kind: 'line', key: 'l-free' },
-      { kind: 'slot', key: 'k' }, { kind: 'line', key: 'l-opt' },
-    ]);
-    const payload = buildV25SavePayload(v25WithRowOrder(before, refs));
-    expect(payload.slots.map((row) => [row.option_id, row.row_order])).toEqual([['kitchen1', 5], ['roof1', 2], ['sash1', 1]]);
-    expect(payload.lines.map((row) => [row.name, row.row_order, row.unit_price])).toEqual([['l-roof', 3, 3000], ['l-opt', 6, 1000], ['l-free', 4, 1000]]);
-  });
-
-  it('並び順を保存した下書きに商品を足しても、その見出しの中（手入力より前）に付ける。全行に番号を付けて送る', () => {
-    const saved = state(
-      [slot('r', 'roof1', { row_order: 1 })],
-      [line('l-roof', { group_label: '2. 屋根工事', row_order: 2 }), line('l-free', { group_label: '雑工事', row_order: 3 })]
-    );
-    const added = { ...saved, slots: [...saved.slots, slot('r2', 'roof1')] };
-    const refs = v25DisplayRowRefs(added, sectionOf, categoryOf, (row) => row.work_item ?? '', context);
-    expect(refs.map((ref) => ref.key)).toEqual(['r', 'r2', 'l-roof', 'l-free']);
-    const payload = buildV25SavePayload(v25WithRowOrder(added, refs));
-    expect(payload.slots.map((row) => row.row_order)).toEqual([1, 2]);
-    expect(payload.lines.map((row) => row.row_order)).toEqual([3, 4]);
-  });
-
-  it('工事項目を変えると、その見出しの位置で保存する', () => {
-    const moved = state([slot('r', 'roof1', { work_item: '4. 内装仕上げ' }), slot('s', 'sash1')], [line('l', { group_label: '3. 外壁工事' })]);
-    const refs = v25DisplayRowRefs(moved, sectionOf, categoryOf, (row) => row.work_item ?? '', context);
-    expect(refs).toEqual([{ kind: 'slot', key: 's' }, { kind: 'line', key: 'l' }, { kind: 'slot', key: 'r' }]);
+    const payload = buildV25SavePayload(before);
+    expect(payload.slots.map((row) => [row.option_id, row.work_item, row.row_order])).toEqual([['kitchen1', '1. 設備機器', null], ['roof1', '2. 屋根工事', null]]);
+    expect(payload.lines.map((row) => [row.name, row.group_label, row.row_order, row.unit_price])).toEqual([['l-roof', '2. 屋根工事', null, 3000]]);
   });
 });
 
@@ -194,10 +164,11 @@ describe('画面（Excel 風明細）', () => {
     expect(workbench).toContain("if (readOnly) return '';");
   });
 
-  it('見出しの分け方と保存は同じ工事項目（表示の値）を使う。保存は表示の順で並び順を付ける', () => {
+  it('見出しの分け方と保存は同じ工事項目（表示の値）を使う。並び順は付けない（見積書の明細は今までどおりの順）', () => {
     expect(workbench).toContain("(line) => line.group_label, { modelSlug, specCode, sectionCode: code },\n                workItemOf,");
     expect(workbench).toContain('const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };');
-    expect(workbench).toContain('payload: buildV25SavePayload(v25WithRowOrder(toSave, displayRefs))');
+    expect(workbench).toContain('payload: buildV25SavePayload(toSave)');
+    expect(workbench).not.toContain('buildV25SavePayload(v25WithRowOrder(');
   });
 
   it('自動の値がまだ保存されていない行は未保存として扱い（保存するまで公開しない）、案内を出す。「変更を破棄」は手で変えた分だけ', () => {

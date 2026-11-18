@@ -58,12 +58,10 @@ import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
 import {
   v25AutoWorkItemLabel,
-  v25DisplayRowRefs,
   v25MoveManualLineWithinWorkGroup,
   v25WorkGroupsForDisplay,
   v25WorkItemLabelsForSection,
 } from '@/components/admin/standard-estimate-v25-work-groups';
-import { v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
 import {
   V25ColumnDisplayMenu,
   V25WidthHandle,
@@ -882,12 +880,10 @@ function WorkbenchBody({
     }
     // 工事項目（2026-11-16 の先方の依頼）：未設定の商品の行は、表示しているカテゴリーからの自動の値で保存する
     const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };
-    // 並び順：画面の表示の順（区分→工事項目の見出し→その中の商品→手入力）で付けて保存する。見積書の明細も同じ順になる
-    const displayRefs = v25DisplayRowRefs(
-      toSave, sectionOf, (optionId) => candidateById.get(optionId)?.categoryCode, workItemOf, { modelSlug, specCode },
-    );
+    // 並び順はこの画面では付けない（工事項目の見出しは表示だけ。見積書の明細は今までどおりの順）。
+    // 商品と手入力を混ぜた並べ替え（#666）を入れるときは、その表示の順で v25WithRowOrder(toSave, 表示の順) してから渡す
     run(() => saveStandardEstimateV25DraftAction({
-      revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(v25WithRowOrder(toSave, displayRefs)),
+      revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(toSave),
     }));
   };
 

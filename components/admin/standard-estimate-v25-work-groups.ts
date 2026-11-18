@@ -171,34 +171,6 @@ export function v25AutoWorkItemLabel(categoryCode: string | null | undefined, co
   return v25WorkItemForCategory(categoryCode, context)?.label ?? '';
 }
 
-const DISPLAY_SECTIONS: readonly V25LineRow['section_code'][] = ['interior_exterior', 'option', 'sitework'];
-
-/**
- * 保存する並び順（2026-11-16 の先方の依頼）：画面の表示の順＝区分→工事項目の見出し→その中の商品→手入力。
- * 見積書の明細もこの順になる。区分の分からない商品（台帳に無い）は含めない（保存のときに後ろへ付く）
- */
-export function v25DisplayRowRefs(
-  state: { slots: readonly V25SlotRow[]; lines: readonly V25LineRow[] },
-  sectionOf: (optionId: string) => V25LineRow['section_code'] | undefined,
-  categoryCodeOf: (optionId: string) => string | null | undefined,
-  slotWorkItemOf: (slot: V25SlotRow) => string,
-  context: Omit<V25WorkItemContext, 'sectionCode'>,
-): { kind: 'slot' | 'line'; key: string }[] {
-  return DISPLAY_SECTIONS.flatMap((sectionCode) =>
-    v25WorkGroupsForDisplay(
-      state.slots.filter((slot) => sectionOf(slot.option_id) === sectionCode),
-      state.lines.filter((line) => line.section_code === sectionCode),
-      categoryCodeOf,
-      (line) => line.group_label,
-      { ...context, sectionCode },
-      slotWorkItemOf,
-    ).flatMap((group) => [
-      ...group.slots.map((slot) => ({ kind: 'slot' as const, key: slot.key })),
-      ...group.lines.map((line) => ({ kind: 'line' as const, key: line.key })),
-    ])
-  );
-}
-
 /** 商品と自由入力を表示上だけ束ねる。section_code / group_label / 保存順序は変更しない。 */
 export function v25WorkGroupsForDisplay(
   slots: readonly V25SlotRow[],

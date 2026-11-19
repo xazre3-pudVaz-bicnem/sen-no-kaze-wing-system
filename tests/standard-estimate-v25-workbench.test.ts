@@ -354,12 +354,15 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('overlay.scrollLeft = grid.scrollLeft');
     expect(source).toContain("window.addEventListener('scroll', sync, true)");
     expect(source).toContain('const nativeHeaderPassed = sourceHead.getBoundingClientRect().bottom <= 0;');
-    expect(source).toContain("saveAreaRef.current.getBoundingClientRect().top < window.innerHeight");
-    expect(source).toContain('const visible = nativeHeaderPassed && gridRect.bottom > headerHeight && !saveAreaReached;');
-    expect(source).toContain('ref={saveAreaRef}');
+    expect(source).not.toContain('saveAreaRef.current');
+    expect(source).not.toContain('saveAreaReached');
+    expect(source).toContain('const visible = nativeHeaderPassed && gridRect.bottom > headerHeight;');
+    expect(source).toContain('data-testid="v25-wb-save-area"');
     expect(source).toContain("overlay.style.display = visible ? 'block' : 'none'");
     expect(source).toContain("overlay.setAttribute('aria-hidden', 'true')");
-    expect(source).toContain('pointer-events-none fixed top-0');
+    expect(source).toContain('pointer-events-none fixed top-0 z-[45]');
+    expect(source).toContain('bg-slate-900 text-[12px] font-bold leading-4 text-white');
+    expect(source).toContain('h-[34px] sticky');
     expect(source).toContain("sourceHead.cloneNode(true) as HTMLTableSectionElement");
     // 原価列の切替後は同じ hook が再実行され、複製される列数は実ヘッダーに一致する。
     expect(source).toContain('}, [headerLayoutKey]);');

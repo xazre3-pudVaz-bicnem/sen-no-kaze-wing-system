@@ -317,8 +317,9 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('sticky left-7 top-0 z-40');
     expect(html).not.toContain('sticky left-[8rem] top-0 z-40');
     expect(html).toContain('sticky top-0 z-30');
-    expect(html).toContain('data-testid="v25-wb-menu-panel"');
-    expect(html).toContain('fixed z-[60]');
+    expect(source).toContain('data-testid="v25-wb-menu-panel"');
+    expect(source).toContain('fixed z-[80]');
+    expect(source).toContain('createPortal(');
     expect(html).not.toContain('sticky left-[6.25rem]');
     expect(html).toContain('bg-emerald-900');
     expect(html).not.toContain('data-v25-excel-col="group"');

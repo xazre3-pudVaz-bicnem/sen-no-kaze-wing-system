@@ -98,3 +98,25 @@ test('Pixel 7長い明細：実タッチを画面下端で保持すると画面�
   await page.getByRole('button',{name:'変更を破棄'}).click();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
 });
+
+
+test('Pixel 7長い明細：ハンドル以外の実タッチスクロールは通常どおり動作し並び順を変更しない', async ({page}) => {
+  test.setTimeout(90_000);
+  await page.goto('/pr691-e2e-row-move');
+  await expect(page.getByTestId('pr691-local-fixture')).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0,0));
+  const before=await page.evaluate(() => window.scrollY);
+  const box=await page.evaluate(() => ({x:Math.round(window.innerWidth*.57),startY:window.innerHeight-130}));
+  const cdp=await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x,y:box.startY}]});
+  for(let i=1;i<=18;i++){
+    await cdp.send('Input.dispatchTouchEvent',{
+      type:'touchMove',touchPoints:[{x:box.x,y:box.startY-320*i/18}],
+    });
+  }
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await expect.poll(async () => page.evaluate(() => window.scrollY),{timeout:10_000})
+    .toBeGreaterThan(before+70);
+  await expect(page.getByTestId('v25-wb-drop-indicator')).toHaveCount(0);
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+});

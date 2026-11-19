@@ -5,13 +5,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { calculatePricingV25, type PricingCalculationRule, type PricingTaxRule } from '@/lib/domain/pricing-v25';
 import { formatYen } from '@/lib/domain/pricing';
-import type { V25EditorState, V25Preview } from '@/lib/domain/standard-estimate-v25-view';
+import { buildV25SavePayload, validateV25EditorState, type V25EditorState, type V25Preview } from '@/lib/domain/standard-estimate-v25-view';
 import {
   calculateV25Workbench,
   percentProblem,
   percentToRate,
   rateToPercent,
   slotCostForWorkbench,
+  standardSlotQuantity,
+  v25ProductChangePatch,
+  v25ProductReplacementIssue,
+  v25SlotRuleIssues,
   type V25WorkbenchBaseLine,
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
@@ -296,13 +300,14 @@ describe('Excel 風の画面（描画）', () => {
     const unregistered = render(false, { candidates: candidates.map((item) => ({ ...item, priceUnit: null })) });
     expect(unregistered).toContain('data-testid="v25-wb-slot-unit"');
     expect(unregistered).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>\s*—\s*<\/td>/);
-    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(toSave)');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(orderedToSave)');
   });
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);
     expect(html).not.toContain('data-testid="v25-excel-toolbar"');
     expect(html).toContain('data-testid="v25-wb-column-display-position"');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('className="relative z-50 ml-auto shrink-0"');
     expect(html).toContain('data-testid="v25-excel-grid-scroll"');
     expect(html).toContain('overflow-x-auto rounded-b-md');
     expect(html).not.toContain('max-h-[70vh]');
@@ -354,17 +359,27 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('overlay.scrollLeft = grid.scrollLeft');
     expect(source).toContain("window.addEventListener('scroll', sync, true)");
     expect(source).toContain('const nativeHeaderPassed = sourceHead.getBoundingClientRect().bottom <= 0;');
-    expect(source).toContain("saveAreaRef.current.getBoundingClientRect().top < window.innerHeight");
-    expect(source).toContain('const visible = nativeHeaderPassed && gridRect.bottom > headerHeight && !saveAreaReached;');
-    expect(source).toContain('ref={saveAreaRef}');
+    expect(source).not.toContain('saveAreaRef.current');
+    expect(source).not.toContain('saveAreaReached');
+    expect(source).toContain('const visible = nativeHeaderPassed && gridRect.bottom > headerHeight;');
+    expect(source).toContain('data-testid="v25-wb-save-area"');
     expect(source).toContain("overlay.style.display = visible ? 'block' : 'none'");
     expect(source).toContain("overlay.setAttribute('aria-hidden', 'true')");
-    expect(source).toContain('pointer-events-none fixed top-0');
+    expect(source).toContain('pointer-events-none fixed top-0 z-[45]');
+    expect(source).toContain('bg-[#E6EDF3] text-[12px] font-bold leading-4 text-[#24374B]');
+    expect(source).toContain("overlay.className = 'pointer-events-none fixed top-0 z-[45] overflow-hidden border-b border-[#CBD5E1] bg-[#E6EDF3] shadow-sm';");
+    expect(source).toContain('border-[#CBD5E1] bg-[#E6EDF3]');
+    expect(source).not.toContain('border-slate-600 bg-slate-900');
+    // 大区分と工事項目の緑は列見出し淡色化の対象外。
+    expect(source).toContain('className="bg-emerald-900 text-white" data-testid={`v25-section-${code}`}');
+    expect(source).toContain('className="border-y border-emerald-200 bg-emerald-100 text-slate-800"');
+    expect(source).toContain('h-[34px] sticky');
     expect(source).toContain("sourceHead.cloneNode(true) as HTMLTableSectionElement");
     // 原価列の切替後は同じ hook が再実行され、複製される列数は実ヘッダーに一致する。
     expect(source).toContain('}, [headerLayoutKey]);');
     expect(source).toContain('{visible.cost_unit && <th');
     expect(read('components/admin/v25-grid-preferences.tsx')).toContain('原価を表示');
+    expect(read('components/admin/v25-grid-preferences.tsx')).toContain('relative z-50'); // 見出しより前面に列表示メニューを出す
     // 表の後ろに見積の保存領域が残り、別スクロールではなくページで到達できる。
     expect(source).toContain('data-testid="v25-wb-save"');
     expect(source).toContain('data-testid="v25-wb-publish"');
@@ -407,7 +422,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
     expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
-    expect(source).toContain('payload: buildV25SavePayload(toSave)');
+    expect(source).toContain('payload: buildV25SavePayload(orderedToSave)');
   });
 
   it('幅の過大な列を圧縮し、広い画面では表全体を可変幅で表示する', () => {
@@ -697,7 +712,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。');
     expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
     // 変更破棄は手で変えた分だけ（カテゴリーからの工事項目の自動の値は破棄できないため。2026-11-16 の先方の依頼）
-    expect(source).toContain('disabled={pending || !editedDirty || positionInputActive} onClick={() => {');
+    expect(source).toContain('disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {');
     expect(source).toContain('disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"');
     expect(source).toContain('disabled={pending || blockers.length > 0 || positionInputActive}');
     expect(source).toContain('const save = () => {\n    if (pending || positionInputActive) return;');
@@ -888,5 +903,211 @@ describe('見積書管理 ＞ 標準見積の画面（本部だけ・承認申�
     const action = read('lib/actions/standard-estimate-v25.ts');
     expect(action).toContain("formData.get('return_to') === 'workbench'");
     expect(action).toContain('/admin/estimate-templates?master=');
+  });
+});
+
+describe('v2.5数量保持：商品選択ポップアップの確定経路と#659の計上数量', () => {
+  const roof: V25WorkbenchCandidate = {
+    id: 'roof-original', name: '屋根材A', categoryId: 'cat-roof', categoryName: '屋根',
+    categoryCode: 'roof', singleSelect: true, section: 'interior_exterior', priceUnit: '㎡',
+    manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {},
+  };
+  const roofOther: V25WorkbenchCandidate = { ...roof, id: 'roof-other', name: '屋根材B' };
+  const wall: V25WorkbenchCandidate = {
+    ...roof, id: 'wall-original', name: '外壁材A', categoryId: 'cat-wall', categoryName: '外壁',
+    categoryCode: 'exterior-wall', singleSelect: false, priceUnit: '面',
+  };
+  const wallOther: V25WorkbenchCandidate = { ...wall, id: 'wall-other', name: '外壁材B' };
+  const sitework: V25WorkbenchCandidate = {
+    ...roof, id: 'sitework-original', name: '別途工事A', categoryId: 'cat-sitework',
+    categoryName: '別途工事', categoryCode: 'sitework', singleSelect: false, section: 'sitework', priceUnit: '式',
+  };
+  const siteworkOther: V25WorkbenchCandidate = { ...sitework, id: 'sitework-other', name: '別途工事B' };
+  const catalog = [roof, roofOther, wall, wallOther, sitework, siteworkOther];
+  const get = (id: string) => catalog.find((p) => p.id === id);
+  const getInCategory = (id: string) => catalog.filter((p) => p.categoryId === id);
+  const row = (option_id: string, quantity: string, extra: Partial<V25EditorState['slots'][number]> = {}) => ({
+    key: 'item-1', baseline_key: 'saved-1', option_id, variant_choices: { color: 'white' },
+    quantity, price_mode: 'auto' as const, manual_unit_price: '', slot_code: '', slot_label: '',
+    selectable_option_ids: [], row_order: 2, work_item: '2. 屋根工事', ...extra,
+  });
+  const editor = (slot: V25EditorState['slots'][number]): V25EditorState => ({
+    sales_fee_rate: '1', markup_rate: '1', expense_rate: '0',
+    adjustment: '0', adjustment_reason: '', slots: [slot], lines: [],
+  });
+  const costData: V25WorkbenchCosts = {
+    pinned: {},
+    currentProduct: { 'roof-original': 10500, 'roof-other': 12000, 'wall-original': 1000, 'wall-other': 1200 },
+    currentChoice: { white: 0, black: 750 },
+  };
+  const price = (data: V25EditorState) => {
+    const calc = calculateV25Workbench(rule, taxRule, data, [], costData, (id) => get(id)?.section);
+    expect(calc.error).toBeNull();
+    expect(calc.incomplete).toEqual([]);
+    return calc.result?.sections.find((section) => section.code === 'interior_exterior')?.lines[0];
+  };
+  const change = (
+    existing: V25EditorState, candidate: V25WorkbenchCandidate, choices: Record<string, string>
+  ) => {
+    const original = get(existing.slots[0].option_id)!;
+    const issue = v25ProductReplacementIssue(existing.slots[0], original, candidate, existing.slots, get, getInCategory);
+    if (issue) return { issue, state: existing };
+    const patch = v25ProductChangePatch(existing.slots[0], candidate, choices, get);
+    return { issue: null, patch, state: { ...existing, slots: [{ ...existing.slots[0], ...patch }] } };
+  };
+
+  it('同一屋根の色変更では23.5㎡・価格モード・行順・工事項目を保持し、色の金額差だけ反映する', () => {
+    const before = editor(row(roof.id, '23.5', { manual_unit_price: '9000' }));
+    expect(price(before)?.amount).toBe(246750);
+    const updated = change(before, roof, { color: 'black' });
+    expect(updated.issue).toBeNull();
+    expect(updated.patch).toEqual({ variant_choices: { color: 'black' } });
+    expect(updated.state.slots[0]).toEqual({ ...before.slots[0], variant_choices: { color: 'black' } });
+    expect(price(updated.state)?.sale_unit_price).toBe(11250);
+    expect(price(updated.state)?.amount).toBe(264375);
+    const save = buildV25SavePayload(updated.state).slots[0];
+    expect(save).toMatchObject({ option_id: roof.id, quantity: '23.5', variant_choice_ids: ['black'],
+      price_mode: 'auto', row_order: 1, work_item: '2. 屋根工事' });
+    expect(validateV25EditorState(updated.state, (id) => get(id)?.section)).toBeNull();
+  });
+
+  it('同一販売単位の別屋根材へ入替えても23.5㎡を保持し、変更前後の金額を数量分で計算する', () => {
+    const before = editor(row(roof.id, '23.5'));
+    const updated = change(before, roofOther, { color: 'white' });
+    expect(updated.issue).toBeNull();
+    expect(updated.patch).not.toHaveProperty('quantity');
+    expect(updated.state.slots[0].quantity).toBe('23.5');
+    expect(updated.state.slots[0].baseline_key).toBe('saved-1');
+    expect(price(before)?.amount).toBe(246750);
+    expect(price(updated.state)?.sale_unit_price).toBe(12000);
+    expect(price(updated.state)?.amount).toBe(282000);
+    const persisted = JSON.parse(JSON.stringify(buildV25SavePayload(updated.state)));
+    expect(persisted.slots[0]).toMatchObject({ option_id: roofOther.id, quantity: '23.5', price_mode: 'auto' });
+    // このテストはUI→RPC入力の再シリアライズ検査。実DB保存/再読込はDB Rehearsal側で別途行う。
+    expect(v25SlotRuleIssues(updated.state.slots, get, getInCategory)).toEqual([]);
+  });
+
+  it('単位の不一致・欠損・不正数量なら元の行と金額を変更せず保留する', () => {
+    const before = editor(row(roof.id, '23.5'));
+    const initialAmount = price(before)?.amount;
+    for (const candidate of [
+      { ...roofOther, priceUnit: '式' },
+      { ...roofOther, priceUnit: null },
+      { ...roofOther, priceUnit: '  ' },
+    ]) {
+      const invalid = change(before, candidate, { color: 'black' });
+      expect(invalid.issue).toContain('販売単位');
+      expect(invalid.state).toBe(before);
+      expect(price(invalid.state)?.amount).toBe(initialAmount);
+      expect(buildV25SavePayload(invalid.state).slots[0].quantity).toBe('23.5');
+    }
+    expect(v25ProductReplacementIssue(before.slots[0], { ...roof, priceUnit: null }, roofOther,
+      before.slots, get, getInCategory)).toContain('販売単位');
+    const invalidQuantity = editor(row(roof.id, 'abc'));
+    expect(change(invalidQuantity, roofOther, {}).issue).toContain('数量');
+  });
+
+  it('外壁4面は維持し、別の同単位外壁へ替えても数量4・単価×4・位置無しの規則を守る', () => {
+    const before = editor(row(wall.id, '4', { work_item: '3. 外壁工事' }));
+    expect(standardSlotQuantity('exterior-wall')).toBe(4);
+    expect(standardSlotQuantity('roof')).toBe(1);
+    const recolor = change(before, wall, { color: 'black' });
+    expect(recolor.state.slots[0].quantity).toBe('4');
+    const next = change(before, wallOther, { color: 'white' });
+    expect(next.issue).toBeNull();
+    expect(next.state.slots[0].quantity).toBe('4');
+    expect(price(before)?.amount).toBe(4000);
+    expect(price(next.state)?.amount).toBe(4800);
+    expect(buildV25SavePayload(next.state).slots[0].quantity).toBe('4');
+    expect(v25SlotRuleIssues(next.state.slots, get, getInCategory)).toEqual([]);
+    const mismatched = change(before, { ...wallOther, priceUnit: '㎡' }, {});
+    expect(mismatched.issue).toContain('販売単位');
+    expect(mismatched.state).toBe(before);
+  });
+
+  it('別商品でも手入力売価の既存設定と位置情報を勝手に変更しない', () => {
+    const before = editor(row(roof.id, '23.5', { price_mode: 'manual', manual_unit_price: '9000',
+      selectable_option_ids: [], work_item: '屋根工事' }));
+    const after = change(before, roofOther, {});
+    expect(after.issue).toBeNull();
+    expect(after.patch).not.toHaveProperty('price_mode');
+    expect(after.patch).not.toHaveProperty('quantity');
+    expect(after.state.slots[0]).toMatchObject({
+      price_mode: 'manual', manual_unit_price: '9000', quantity: '23.5',
+      baseline_key: 'saved-1', row_order: 2, work_item: '屋根工事',
+    });
+    expect(price(before)?.amount).toBe(211500);
+    expect(price(after.state)?.amount).toBe(211500);
+  });
+
+  it('別途工事の商品入替では既存のmanual/porと手入力売価・数量・混在行順を保持する', () => {
+    for (const mode of ['manual', 'por'] as const) {
+      const before = editor(row(sitework.id, '1', {
+        price_mode: mode, manual_unit_price: mode === 'manual' ? '180000' : '',
+        row_order: 2, work_item: '別途工事', slot_label: '',
+      }));
+      before.lines = [{
+        key: 'line-1', line_key: 'saved-line', section_code: 'sitework',
+        group_label: '追加工事', name: '追加費用', quantity: '1', unit: '式',
+        price_mode: 'manual', unit_price: '25000', remark: '', review_required: false, row_order: 1,
+      }];
+      const originalPayload = buildV25SavePayload(before);
+      expect(validateV25EditorState(before, (id) => get(id)?.section)).toBeNull();
+      const beforeSitework = calculateV25Workbench(rule, taxRule, before, [], costData,
+        (id) => get(id)?.section).result?.sections.find((section) => section.code === 'sitework');
+      if (mode === 'manual') expect(beforeSitework?.lines[0].amount).toBe(180000);
+
+      const changed = change(before, siteworkOther, { color: 'black' });
+      expect(changed.issue).toBeNull();
+      expect(changed.patch).not.toHaveProperty('price_mode');
+      expect(changed.patch).not.toHaveProperty('manual_unit_price');
+      expect(changed.patch).not.toHaveProperty('quantity');
+      expect(changed.state.slots[0]).toMatchObject({
+        option_id: siteworkOther.id, price_mode: mode,
+        manual_unit_price: before.slots[0].manual_unit_price,
+        quantity: '1', row_order: 2, work_item: '別途工事', baseline_key: 'saved-1',
+      });
+      expect(changed.state.lines).toEqual(before.lines);
+      const afterSitework = calculateV25Workbench(rule, taxRule, changed.state, [], costData,
+        (id) => get(id)?.section).result?.sections.find((section) => section.code === 'sitework');
+      expect(afterSitework?.lines).toEqual(beforeSitework?.lines);
+      expect(afterSitework?.subtotal).toBe(beforeSitework?.subtotal);
+      expect(afterSitework?.has_por).toBe(beforeSitework?.has_por);
+      expect(validateV25EditorState(changed.state, (id) => get(id)?.section)).toBeNull();
+      const payload = buildV25SavePayload(changed.state);
+      expect(payload.slots[0]).toMatchObject({
+        option_id: siteworkOther.id, price_mode: mode, quantity: '1', row_order: 2,
+        manual_unit_price: mode === 'manual' ? 180000 : null,
+      });
+      expect(payload.lines).toEqual(originalPayload.lines);
+      expect(payload.lines[0].row_order).toBe(1);
+      expect(buildV25SavePayload(JSON.parse(JSON.stringify(changed.state)))).toEqual(payload);
+    }
+    const unchanged = change(editor(row(sitework.id, '1', {
+      price_mode: 'manual', manual_unit_price: '180000',
+    })), sitework, { color: 'black' });
+    expect(unchanged.patch).toEqual({ variant_choices: { color: 'black' } });
+    expect(unchanged.state.slots[0].price_mode).toBe('manual');
+  });
+
+  it('同一商品は販売単位が未登録でも数量を変更しない（旧データの仕様変更を妨げない）', () => {
+    const previous = { ...roof, priceUnit: null };
+    const existing = editor(row(roof.id, '23.5'));
+    expect(v25ProductReplacementIssue(existing.slots[0], previous, previous,
+      existing.slots, get, getInCategory)).toBeNull();
+    expect(v25ProductChangePatch(existing.slots[0], previous, { color: 'black' }, get))
+      .toEqual({ variant_choices: { color: 'black' } });
+  });
+
+  it('親画面の全確定経路が安全判定を呼び、既存行は数量を上書きしない', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('v25ProductReplacementIssue(');
+    expect(source).toContain('v25ProductChangePatch(target, candidate, choices, (id) => candidateById.get(id))');
+    expect(source).toContain('if (issue) {');
+    expect(source).toContain('return; // 選択ポップアップを保持');
+    expect(source).toContain('quantity: initialQuantity,');
+    expect(source).not.toContain('quantity: String(standardSlotQuantity(candidate.categoryCode))');
+    const positionSource = read('lib/domain/standard-estimate-v25-position-ui.ts');
+    expect(positionSource).toContain('v25ProductReplacementIssue(');
   });
 });

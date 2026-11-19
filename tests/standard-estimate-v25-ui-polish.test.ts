@@ -63,7 +63,7 @@ describe('v2.5 区分見出し・明細の一行表示', () => {
 
   it('新規追加が確定したときだけ閉じた区分を展開し、行へ移動する', () => {
     // 手入力：新規IDを確定後、同区分を展開してスクロール/フォーカス
-    const lineStart = source.indexOf('const addLine = (section:');
+    const lineStart = source.indexOf('const addLine = (');
     const lineEnd = source.indexOf('const run =', lineStart);
     const addLine = source.slice(lineStart, lineEnd);
     expect(addLine).toContain("const addedKey = newKey('line')");

@@ -4,6 +4,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type Rea
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Package, Trash2 } from 'lucide-react';
+import { V25RowDragHandle } from './v25-row-drag-handle';
+import { v25ArrowRowTarget, v25PlanMixedRowMove, type V25MoveSide, type V25MoveGroup } from './standard-estimate-v25-row-move';
 import {
   publishStandardEstimateV25RevisionAction,
   refreshStandardEstimateV25CostsAction,
@@ -36,6 +38,8 @@ import {
   slotIdentity,
   standardSlotQuantity,
   v25SlotRuleIssues,
+  v25ProductReplacementIssue,
+  v25ProductChangePatch,
   type V25WorkbenchBaseLine,
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
@@ -55,12 +59,16 @@ import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-
 import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-position-label-suggestions';
+import { v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
+import {
+  v25PersistedMixedRowOrder, v25ReconcileMixedRowOrder, v25InsertMixedRow,
+  v25MixedOrderEquals, v25MixedRowsForWorkGroup,
+  v25MixedRowIdentity, type V25MixedRowRef,
+} from '@/lib/domain/standard-estimate-v25-row-order';
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
 import {
   v25AutoWorkItemLabel,
-  v25MoveManualLineWithinWorkGroup,
   v25WorkGroupsForDisplay,
-  v25WorkItemLabelsForSection,
 } from '@/components/admin/standard-estimate-v25-work-groups';
 import {
   V25ColumnDisplayMenu,
@@ -130,8 +138,8 @@ export function deleteV25WorkbenchRow(state: V25EditorState, kind: 'slot' | 'lin
 }
 
 /** 品名を確認してからだけ行を削除する。削除は画面上の下書きstateに限定する。 */
-function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
-  name: string; disabled: boolean; testId: string; onConfirm: () => void;
+function V25RowDeleteButton({ name, disabled, testId, onConfirm, inMenu = false }: {
+  name: string; disabled: boolean; testId: string; onConfirm: () => void; inMenu?: boolean;
 }) {
   return (
     <ConfirmActionButton destructive data-testid={testId} disabled={disabled}
@@ -140,13 +148,16 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
       confirmLabel="削除する" onConfirm={onConfirm}
       aria-label={`「${name}」を削除`}
       title={disabled ? '位置名を確定または取り消してから削除してください' : `${name}を削除`}
-      className="flex size-6 shrink-0 items-center justify-center rounded text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40">
+      className={inMenu
+        ? 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40'
+        : 'flex size-6 shrink-0 items-center justify-center rounded text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40'}>
       <Trash2 className="size-3.5" aria-hidden="true" />
+      {inMenu && <span>削除</span>}
     </ConfirmActionButton>
   );
 }
 
-function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯' }: { label: string; testId: string; children: ReactNode; triggerText?: string }) {
+function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', disabled = false }: { label: string; testId: string; children: ReactNode; triggerText?: string; disabled?: boolean }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
 
@@ -192,6 +203,7 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯' }: {
   return (
     <details ref={menuRef} className="group relative inline-block" data-testid={testId}
       onToggle={(event) => {
+        if (disabled && event.currentTarget.open) { event.currentTarget.open = false; return; }
         if (!event.currentTarget.open) setPlacement(null);
         else if (!placement) {
           const summary = event.currentTarget.querySelector('summary');
@@ -199,13 +211,21 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯' }: {
         }
       }}
       onKeyDown={(event) => {
+        if (disabled && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault(); event.stopPropagation(); return;
+        }
         if (event.key === 'Escape') { event.currentTarget.open = false; event.stopPropagation(); }
       }}>
       <summary className={triggerText === '⋯'
         ? 'flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden'
-        : 'flex h-6 cursor-pointer list-none items-center justify-center rounded border border-emerald-400/70 px-2 text-[10px] font-semibold text-white hover:bg-emerald-800 [&::-webkit-details-marker]:hidden'}
-        aria-label={label} title={label}
-        onClick={(event) => { if (!menuRef.current?.open) place(event.currentTarget); }}>{triggerText}</summary>
+        : triggerText === '＋' 
+          ? 'flex size-4 cursor-pointer list-none items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-semibold text-emerald-900 hover:bg-slate-100 [&::-webkit-details-marker]:hidden'
+          : 'flex h-6 cursor-pointer list-none items-center justify-center rounded border border-emerald-400/70 px-2 text-[10px] font-semibold text-white hover:bg-emerald-800 [&::-webkit-details-marker]:hidden'}
+        aria-label={label} title={label} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : 0}
+        onClick={(event) => {
+          if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
+          if (!menuRef.current?.open) place(event.currentTarget);
+        }}>{triggerText}</summary>
       {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
         onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />}
       <div className={'fixed z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg ' + (placement ? '' : 'invisible')}
@@ -227,8 +247,6 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯' }: {
 function useV25PageFloatingHeader(headerLayoutKey: string) {
   const gridRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  const saveAreaRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const grid = gridRef.current;
     const table = tableRef.current;
@@ -238,7 +256,7 @@ function useV25PageFloatingHeader(headerLayoutKey: string) {
     const overlay = document.createElement('div');
     overlay.dataset.testid = 'v25-page-floating-column-header';
     overlay.setAttribute('aria-hidden', 'true');
-    overlay.className = 'pointer-events-none fixed top-0 z-30 overflow-hidden bg-slate-200';
+    overlay.className = 'pointer-events-none fixed top-0 z-[45] overflow-hidden border-b border-[#CBD5E1] bg-[#E6EDF3] shadow-sm';
     overlay.style.display = 'none';
 
     const mirrorTable = table.cloneNode(false) as HTMLTableElement;
@@ -258,12 +276,12 @@ function useV25PageFloatingHeader(headerLayoutKey: string) {
     const sync = () => {
       const gridRect = grid.getBoundingClientRect();
       const headerHeight = sourceHead.getBoundingClientRect().height;
-      // 明細に入ったときだけ表示し、明細の末尾で必ず解除して保存欄を隠さない。
+      // ページ縦スクロールで元の見出しが画面上端を通過したときに表示する。
       const nativeHeaderPassed = sourceHead.getBoundingClientRect().bottom <= 0;
-      // 保存操作が見え始めたら固定見出しを解除し、画面末尾でも残さない。
-      const saveAreaReached = saveAreaRef.current !== null &&
-        saveAreaRef.current.getBoundingClientRect().top < window.innerHeight;
-      const visible = nativeHeaderPassed && gridRect.bottom > headerHeight && !saveAreaReached;
+      // 表の終端で解除する。保存欄が viewport の下端に現れた時点で消すと、
+      // 行数が少ない表・高い画面では明細の途中なのに固定見出しが消えてしまう。
+      // 公開済み(readOnly)にも保存欄は無いので、表の矩形だけを正本とする。
+      const visible = nativeHeaderPassed && gridRect.bottom > headerHeight;
       overlay.style.display = visible ? 'block' : 'none';
       if (!visible) return;
 
@@ -295,7 +313,7 @@ function useV25PageFloatingHeader(headerLayoutKey: string) {
     };
   }, [headerLayoutKey]);
 
-  return { gridRef, tableRef, saveAreaRef };
+  return { gridRef, tableRef };
 }
 
 /** 位置名のEnter確定は日本語変換中／変換終了直後には実行しない。 */
@@ -402,6 +420,13 @@ function WorkbenchBody({
 }: WorkbenchProps & { notice: Notice | null; onNotice: (notice: Notice | null) => void }) {
   const router = useRouter();
   const [state, setState] = useState<V25EditorState>(initial);
+  // PR #686 の共通 row_order を表示順の正本にする。↑↓＋は未保存中だけ上書きし、保存時に連番化する。
+  const [viewOrder, setViewOrder] = useState<V25MixedRowRef[]>([]);
+  // ドラッグ中の一時的な移動先。保存データ・Revisionには含めない。
+  const [dropPreview, setDropPreview] = useState<{
+    sourceId: string; targetId: string; side: V25MoveSide;
+    top: number; left: number; width: number;
+  } | null>(null);
   const [percents, setPercents] = useState(() => ({
     sales_fee_rate: rateToPercent(initial.sales_fee_rate),
     expense_rate: rateToPercent(initial.expense_rate),
@@ -414,9 +439,9 @@ function WorkbenchBody({
   const beforeSaleAmount = 3 + Number(visible.cost_unit) + Number(visible.cost_amount) + Number(visible.sale_unit);
   const afterSaleAmount = Number(visible.gross) + Number(visible.note) + 1;
   const headerLayoutKey = displayedColumns.map((col) => `${col.id}:${columnPrefs.prefs.widths[col.id]}`).join('|');
-  const { gridRef, tableRef, saveAreaRef } = useV25PageFloatingHeader(headerLayoutKey);
+  const { gridRef, tableRef } = useV25PageFloatingHeader(headerLayoutKey);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
+  const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null; insertAfter?: V25MixedRowRef | null } | null>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
   // 位置・用途の選択枠（v2.5 PR-S2）：位置の編集欄を開いている行と、選べる商品を選ぶ画面の対象の行
   const [variantEditor, setVariantEditor] = useState<{ slotKey: string; choices: V25SlotRow['variant_choices'] } | null>(null);
@@ -460,14 +485,81 @@ function WorkbenchBody({
     return v25AutoWorkItemLabel(candidate?.categoryCode, { modelSlug, specCode, sectionCode: candidate?.section });
   };
   const workItemOf = (slot: V25SlotRow) => slot.work_item?.trim() || autoWorkItemOf(slot);
-  // プルダウンの選択肢：その区分の分類の項目、同じ区分の手入力明細の工事項目（group_label）、今の値
-  const workItemOptions = (code: StandardLineSectionCode, current: string) => [
-    ...new Set([
-      ...v25WorkItemLabelsForSection({ modelSlug, specCode, sectionCode: code }),
-      ...state.lines.filter((line) => line.section_code === code).map((line) => line.group_label.trim()),
-      current.trim(),
-    ].filter(Boolean)),
-  ];
+  // 保存した共通 display_order から商品・自由入力の混在順を再構成する。
+  // 工事項目ごとの見出しは #687 の現行仕様を維持し、見出し内だけ ↑↓ できる。
+  const persistedMixedOrder = useMemo(
+    () => v25PersistedMixedRowOrder(state, (id) => candidateById.get(id)?.section),
+    [state, candidateById]
+  );
+  const mixedOrder = useMemo(
+    () => v25ReconcileMixedRowOrder(
+      viewOrder.length ? viewOrder : persistedMixedOrder, state, (id) => candidateById.get(id)?.section
+    ),
+    [viewOrder, persistedMixedOrder, state, candidateById]
+  );
+  const renderedMixedOrder = LINE_SECTIONS.flatMap((code) => {
+    const slots = state.slots.filter((slot) => sectionOf(slot.option_id) === code);
+    const lines = state.lines.filter((line) => line.section_code === code);
+    return v25WorkGroupsForDisplay(
+      slots, lines, (id) => candidateById.get(id)?.categoryCode,
+      (line) => line.group_label, { modelSlug, specCode, sectionCode: code }, workItemOf
+    ).flatMap((group) => v25MixedRowsForWorkGroup(mixedOrder, group));
+  });
+  // 保存済みの行と同じ順に戻したときは未保存扱いにしない（並べ替えだけでも保存可）。
+  const initialMixedOrder = v25PersistedMixedRowOrder(initial, (id) => candidateById.get(id)?.section);
+  const initialRenderedOrder = LINE_SECTIONS.flatMap((code) =>
+    v25WorkGroupsForDisplay(
+      initial.slots.filter((slot) => sectionOf(slot.option_id) === code),
+      initial.lines.filter((line) => line.section_code === code),
+      (id) => candidateById.get(id)?.categoryCode,
+      (line) => line.group_label, { modelSlug, specCode, sectionCode: code }, workItemOf
+    ).flatMap((group) => v25MixedRowsForWorkGroup(initialMixedOrder, group))
+  );
+  const orderDirty = !v25MixedOrderEquals(renderedMixedOrder, initialRenderedOrder);
+  const moveContext = (code: StandardLineSectionCode) => ({ modelSlug, specCode, sectionCode: code, sectionOf });
+  const rowMoveLocked = readOnly || positionActionsLocked || groupEditor !== null;
+  const plannedMove = (
+    row: V25MixedRowRef, target: V25MixedRowRef, side: V25MoveSide, groups: readonly V25MoveGroup[]
+  ) => v25PlanMixedRowMove(state, mixedOrder, groups, row, target, side, moveContext(row.section));
+  const applyRowMove = (
+    row: V25MixedRowRef, target: V25MixedRowRef, side: V25MoveSide, groups: readonly V25MoveGroup[]
+  ) => {
+    if (rowMoveLocked) return;
+    const next = plannedMove(row, target, side, groups);
+    if (!next) return;
+    // 並び順と工事項目を同一イベントで更新。数量・価格・位置・原価Versionは不変。
+    setState(next.state);
+    setViewOrder(next.order);
+    setDropPreview(null);
+  };
+  const moveViewRow = (
+    row: V25MixedRowRef, direction: -1 | 1, groups: readonly V25MoveGroup[]
+  ) => {
+    const target = v25ArrowRowTarget(mixedOrder, groups, row, direction);
+    if (target) applyRowMove(row, target.row, target.side, groups);
+  };
+  const previewRowMove = (
+    source: V25MixedRowRef, targetId: string | null, side: V25MoveSide,
+    groups: readonly V25MoveGroup[]
+  ): boolean => {
+    if (rowMoveLocked || !targetId) { setDropPreview(null); return false; }
+    const target = mixedOrder.find((row) => v25MixedRowIdentity(row) === targetId);
+    if (!target || !plannedMove(source, target, side, groups)) {
+      setDropPreview(null);
+      return false;
+    }
+    const rowEl = Array.from(tableRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-v25-dnd-row]') ?? [])
+      .find((el) => el.dataset.v25DndRow === targetId);
+    if (!rowEl) { setDropPreview(null); return false; }
+    const rect = rowEl.getBoundingClientRect();
+    const top = side === 'before' ? rect.top : rect.bottom;
+    setDropPreview((current) => current?.sourceId === v25MixedRowIdentity(source) &&
+      current.targetId === targetId && current.side === side &&
+      current.top === top && current.left === rect.left && current.width === rect.width
+      ? current
+      : { sourceId: v25MixedRowIdentity(source), targetId, side, top, left: rect.left, width: rect.width });
+    return true;
+  };
   const calc = useMemo(
     () => calculateV25Workbench(rule, taxRule, state, baseLines, costs, (optionId) => candidateById.get(optionId)?.section),
     [rule, taxRule, state, baseLines, costs, candidateById]
@@ -503,7 +595,7 @@ function WorkbenchBody({
   // 工事項目が未設定で、カテゴリーからの自動の値を表示している商品の行（保存すると、その値を保存し見積書の摘要にも出る）。
   // 画面と保存・公開の内容をそろえるため、未保存の変更として扱う（保存するまで公開しない）
   const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;
-  const dirty = editedDirty || unsavedAutoWorkItems > 0;
+  const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;
   const positionMixes = useMemo(() => v25PositionMixes(state.slots, (id) => candidateById.get(id)), [state.slots, candidateById]);
   // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
   const slotRuleIssues = useMemo(
@@ -615,10 +707,30 @@ function WorkbenchBody({
         return;
       }
     }
+    if (picker.targetKey) {
+      const target = state.slots.find((slot) => slot.key === picker.targetKey);
+      const original = target ? candidateById.get(target.option_id) : null;
+      if (!target || !original) return;
+      const issue = v25ProductReplacementIssue(
+        target, original, candidate, state.slots,
+        (id) => candidateById.get(id),
+        (categoryId) => candidates.filter((item) => item.categoryId === categoryId),
+      );
+      if (issue) {
+        onNotice({ tone: 'danger', text: issue });
+        return; // 選択ポップアップを保持。数量や商品を一切変更しない。
+      }
+      if (target.option_id === candidate.id) {
+        // 同一商品：色・仕様のみ更新し、数量・価格モード・位置・候補・工事項目を変更しない。
+        setSlot(target.key, v25ProductChangePatch(target, candidate, choices, (id) => candidateById.get(id)));
+        setPicker(null);
+        return;
+      }
+    }
     // 別途工事は販売費・経費・掛率を掛けない（自動にできない）。Web では金額を確定しないので別途見積にする
     const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';
-    // 選択枠の数量は、外壁は 4（面）、それ以外は 1（シミュレーターと連携する選択枠の決まり）
-    const quantity = String(standardSlotQuantity(candidate.categoryCode));
+    // 初期数量は新規追加にのみ使う。既存行の数量は変更・換算しない。
+    const initialQuantity = String(standardSlotQuantity(candidate.categoryCode));
     if (picker.targetKey) {
       const target = state.slots.find((slot) => slot.key === picker.targetKey);
       if (target?.slot_code.trim()) {
@@ -638,23 +750,16 @@ function WorkbenchBody({
         setPicker(null);
         return;
       }
-      // 入れ替えは同じカテゴリーの商品だけなので、工事項目はそのまま
-      setSlot(picker.targetKey, {
-        option_id: candidate.id,
-        variant_choices: { ...choices },
-        quantity,
-        ...(candidate.section === 'sitework' ? { price_mode: priceMode } : {}),
-        // 位置の枠の選べる商品は、新しい標準の商品と同じカテゴリーのものだけ残す（標準の商品そのものは外す）
-        ...(target
-          ? {
-              selectable_option_ids: target.selectable_option_ids.filter(
-                (id) => id !== candidate.id && candidateById.get(id)?.categoryId === candidate.categoryId
-              ),
-            }
-          : {}),
-      });
+      // 入れ替えは数量・位置・行順・工事項目を保持。変更候補だけ同カテゴリに整理する。
+      if (target) {
+        setSlot(target.key, v25ProductChangePatch(target, candidate, choices, (id) => candidateById.get(id)));
+      }
     } else {
       const addedKey = newKey('slot');
+      setViewOrder((current) => v25InsertMixedRow(
+        v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
+        { kind: 'slot', key: addedKey, section: picker.section }, picker.insertAfter ?? null
+      ));
       setState((current) => ({
         ...current,
         slots: [
@@ -664,7 +769,7 @@ function WorkbenchBody({
             baseline_key: null,
             option_id: candidate.id,
             variant_choices: { ...choices },
-            quantity,
+            quantity: initialQuantity,
             price_mode: priceMode,
             manual_unit_price: '',
             // 位置・用途の選択枠（v2.5 PR-S1）。新しい行はカテゴリー単位の枠から始める
@@ -750,12 +855,20 @@ function WorkbenchBody({
   };
   const confirmDuplicatePosition = () => {
     if (!duplicateFor || readOnly || pending) return;
-    const result = addV25PositionRow(state, duplicateFor.slotKey, newKey('slot'), duplicateFor.label, [],
+    const addedKey = newKey('slot');
+    const result = addV25PositionRow(state, duplicateFor.slotKey, addedKey, duplicateFor.label, [],
       (id) => candidateById.get(id));
     if (result.error) {
       setDuplicateFor((current) => current ? { ...current, error: result.error } : null);
       return;
     }
+    const original = state.slots.find((slot) => slot.key === duplicateFor.slotKey);
+    const section = original ? sectionOf(original.option_id) : undefined;
+    if (section) setViewOrder((current) => v25InsertMixedRow(
+      v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
+      { kind: 'slot', key: addedKey, section },
+      { kind: 'slot', key: duplicateFor.slotKey, section }
+    ));
     setState(result.state);
     setDuplicateFor(null);
   };
@@ -836,8 +949,17 @@ function WorkbenchBody({
     );
   }, [selectableOptions, selectableWindowType, selectableQuery]);
 
-  const addLine = (section: StandardLineSectionCode) => {
+  const addLine = (
+    section: StandardLineSectionCode,
+    insertAfter: V25MixedRowRef | null = null,
+    workGroupLabel = ''
+  ) => {
+    if (readOnly || positionActionsLocked || groupEditor !== null) return;
     const addedKey = newKey('line');
+    setViewOrder((current) => v25InsertMixedRow(
+      v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
+      { kind: 'line', key: addedKey, section }, insertAfter
+    ));
     setState((current) => ({
       ...current,
       lines: [
@@ -846,7 +968,7 @@ function WorkbenchBody({
           key: addedKey,
           line_key: null,
           section_code: section,
-          group_label: '',
+          group_label: workGroupLabel === '工事項目未分類の商品' ? '' : workGroupLabel,
           name: '',
           quantity: '1',
           unit: '式',
@@ -880,10 +1002,11 @@ function WorkbenchBody({
     }
     // 工事項目（2026-11-16 の先方の依頼）：未設定の商品の行は、表示しているカテゴリーからの自動の値で保存する
     const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };
-    // 並び順はこの画面では付けない（工事項目の見出しは表示だけ。見積書の明細は今までどおりの順）。
-    // 商品と手入力を混ぜた並べ替え（#666）を入れるときは、その表示の順で v25WithRowOrder(toSave, 表示の順) してから渡す
+    // #686/#687: 商品と手入力の表示順で row_order を全行（1始まり）へ採番。
+    // 工事項目を自動で埋める保存経路はそのまま、金額・数量は変更しない。
+    const orderedToSave = v25WithRowOrder(toSave, renderedMixedOrder);
     run(() => saveStandardEstimateV25DraftAction({
-      revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(toSave),
+      revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(orderedToSave),
     }));
   };
 
@@ -894,6 +1017,54 @@ function WorkbenchBody({
       else next.add(code);
       return next;
     });
+
+
+  const mixedRowControls = (
+    row: V25MixedRowRef,
+    groups: readonly V25MoveGroup[],
+    group: V25MoveGroup
+  ) => {
+    const locked = rowMoveLocked;
+    const up = v25ArrowRowTarget(mixedOrder, groups, row, -1);
+    const down = v25ArrowRowTarget(mixedOrder, groups, row, 1);
+    const canUp = Boolean(up && plannedMove(row, up.row, up.side, groups));
+    const canDown = Boolean(down && plannedMove(row, down.row, down.side, groups));
+    return (
+      <span className="inline-flex w-[5.4rem] shrink-0 items-center gap-px" data-testid="v25-wb-row-order-actions">
+        <V25RowDragHandle rowId={v25MixedRowIdentity(row)} section={row.section} disabled={locked}
+          onPreview={(targetId, side) => previewRowMove(row, targetId, side, groups)}
+          onDrop={(targetId, side) => {
+            const target = mixedOrder.find((candidate) => v25MixedRowIdentity(candidate) === targetId);
+            if (target) applyRowMove(row, target, side, groups);
+          }} />
+        <button type="button" data-testid="v25-wb-row-up" aria-label="この行を上へ移動"
+          title="同じ工事項目内、または直前の工事項目へ移動"
+          className="rounded px-0.5 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+          disabled={locked || !canUp}
+          onClick={() => moveViewRow(row, -1, groups)}>↑</button>
+        <button type="button" data-testid="v25-wb-row-down" aria-label="この行を下へ移動"
+          title="同じ工事項目内、または直後の工事項目へ移動"
+          className="rounded px-0.5 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
+          disabled={locked || !canDown}
+          onClick={() => moveViewRow(row, 1, groups)}>↓</button>
+        <V25WorkbenchRowMenu testId="v25-wb-row-insert" label="この行の直下に追加" triggerText="＋" disabled={locked}>
+          <button type="button" data-testid="v25-wb-insert-slot" disabled={locked}
+            className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
+            onClick={(event) => {
+              event.currentTarget.closest('details')?.removeAttribute('open');
+              rememberRowMenuOpener(event.currentTarget);
+              setPickerDirty(false); setPicker({ section: row.section, targetKey: null, insertAfter: row });
+            }}>直下に商品台帳から追加</button>
+          <button type="button" data-testid="v25-wb-insert-line" disabled={locked}
+            className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
+            onClick={(event) => {
+              event.currentTarget.closest('details')?.removeAttribute('open');
+              addLine(row.section, row, group.label);
+            }}>直下に手入力明細を追加</button>
+        </V25WorkbenchRowMenu>
+      </span>
+    );
+  };
 
   // Excel明細の入力セルだけにTab・Enter移動を適用し、保存やポップアップは変更しない。
   const handleExcelNavigation = (event: ReactKeyboardEvent<HTMLTableElement>) => {
@@ -970,6 +1141,12 @@ function WorkbenchBody({
 
   return (
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
+      {dropPreview && <div data-testid="v25-wb-drop-indicator" role="status" aria-label="ここに移動"
+        className="pointer-events-none fixed z-[48] h-[3px] bg-emerald-600 shadow-[0_0_0_1px_white]"
+        style={{ top: dropPreview.top - 1, left: dropPreview.left, width: dropPreview.width }}>
+        <span className="absolute -top-5 left-1 rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-white">ここへ移動</span>
+      </div>}
+
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
       {!readOnly && dirty && <p className="text-xs font-semibold text-amber-800" data-testid="v25-wb-unsaved-position">明細に反映済み・下書き未保存（保存は「下書きを保存」から）</p>}
       {!readOnly && unsavedAutoWorkItems > 0 && (
@@ -1031,7 +1208,7 @@ function WorkbenchBody({
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
         </div>
         <span className="text-[10px] text-slate-500">列幅は明細行の列境界（右端6px）でもドラッグできます</span>
-        <div className="ml-auto shrink-0" data-testid="v25-wb-column-display-position">
+        <div className="relative z-50 ml-auto shrink-0" data-testid="v25-wb-column-display-position">
           <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
             setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
         </div>
@@ -1042,45 +1219,45 @@ function WorkbenchBody({
         <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
           style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}
           data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
-          <thead className="bg-slate-200 text-[10px] text-slate-600">
+          <thead className="bg-[#E6EDF3] text-[12px] font-bold leading-4 text-[#24374B]" data-testid="v25-wb-column-header">
             <tr>
-              <th data-v25-column="name" style={{ width: columnPrefs.prefs.widths.name }} className="sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left font-medium">品名
+              <th data-v25-column="name" style={{ width: columnPrefs.prefs.widths.name }} className="h-[34px] sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-2 py-1 text-left font-bold">品名
                 <V25WidthHandle id="name" width={columnPrefs.prefs.widths.name}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              <th data-v25-column="quantity" style={{ width: columnPrefs.prefs.widths.quantity }} className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">数量
+              <th data-v25-column="quantity" style={{ width: columnPrefs.prefs.widths.quantity }} className="h-[34px] sticky top-0 z-30 w-14 border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">数量
                 <V25WidthHandle id="quantity" width={columnPrefs.prefs.widths.quantity}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              <th data-v25-column="unit" style={{ width: columnPrefs.prefs.widths.unit }} className="sticky top-0 z-30 w-14 border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">単位
+              <th data-v25-column="unit" style={{ width: columnPrefs.prefs.widths.unit }} className="h-[34px] sticky top-0 z-30 w-14 border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-left font-bold">単位
                 <V25WidthHandle id="unit" width={columnPrefs.prefs.widths.unit}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              {visible.cost_unit && <th data-v25-column="cost_unit" style={{ width: columnPrefs.prefs.widths.cost_unit }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価単価
+              {visible.cost_unit && <th data-v25-column="cost_unit" style={{ width: columnPrefs.prefs.widths.cost_unit }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">原価単価
                 <V25WidthHandle id="cost_unit" width={columnPrefs.prefs.widths.cost_unit}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              {visible.cost_amount && <th data-v25-column="cost_amount" style={{ width: columnPrefs.prefs.widths.cost_amount }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">原価金額
+              {visible.cost_amount && <th data-v25-column="cost_amount" style={{ width: columnPrefs.prefs.widths.cost_amount }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">原価金額
                 <V25WidthHandle id="cost_amount" width={columnPrefs.prefs.widths.cost_amount}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              {visible.sale_unit && <th data-v25-column="sale_unit" style={{ width: columnPrefs.prefs.widths.sale_unit }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価単価
+              {visible.sale_unit && <th data-v25-column="sale_unit" style={{ width: columnPrefs.prefs.widths.sale_unit }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">売価単価
                 <V25WidthHandle id="sale_unit" width={columnPrefs.prefs.widths.sale_unit}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              <th data-v25-column="sale_amount" style={{ width: columnPrefs.prefs.widths.sale_amount }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">売価金額
+              <th data-v25-column="sale_amount" style={{ width: columnPrefs.prefs.widths.sale_amount }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">売価金額
                 <V25WidthHandle id="sale_amount" width={columnPrefs.prefs.widths.sale_amount}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              {visible.gross && <th data-v25-column="gross" style={{ width: columnPrefs.prefs.widths.gross }} className="sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-right font-medium">粗利
+              {visible.gross && <th data-v25-column="gross" style={{ width: columnPrefs.prefs.widths.gross }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">粗利
                 <V25WidthHandle id="gross" width={columnPrefs.prefs.widths.gross}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              {visible.note && <th data-v25-column="note" style={{ width: columnPrefs.prefs.widths.note }} className="sticky top-0 z-30 w-[8rem] border-b border-r border-slate-300 bg-slate-200 px-1 py-1 text-left font-medium">仕様・備考
+              {visible.note && <th data-v25-column="note" style={{ width: columnPrefs.prefs.widths.note }} className="h-[34px] sticky top-0 z-30 w-[8rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-left font-bold">仕様・備考
                 <V25WidthHandle id="note" width={columnPrefs.prefs.widths.note}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              <th data-v25-column="actions" style={{ width: columnPrefs.prefs.widths.actions }} className="sticky right-0 top-0 z-40 w-[4.5rem] border-b border-l border-slate-300 bg-slate-100 px-1 py-1 text-center font-medium">操作
+              <th data-v25-column="actions" style={{ width: columnPrefs.prefs.widths.actions }} className="h-[34px] sticky right-0 top-0 z-40 w-[4.5rem] border-b border-l border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-center font-bold">操作
                 <V25WidthHandle id="actions" width={columnPrefs.prefs.widths.actions}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
@@ -1170,7 +1347,10 @@ function WorkbenchBody({
                           {workGroup.label}
                         </td>
                       </tr>
-                      {workGroup.slots.map((slot) => {
+                      {v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {
+                      if (rowRef.kind === 'slot') {
+                        const slot = workGroup.slots.find((item) => item.key === rowRef.key);
+                        if (!slot) return null;
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const display = v25DisplayedCostAndGross(result, slot.quantity);
@@ -1184,11 +1364,15 @@ function WorkbenchBody({
                       const mixedUnset = !slotCode && positionMixes.some((mix) =>
                         mix.categoryId === candidate?.categoryId && mix.unsetKeys.includes(slot.key));
                       return (
-                        <Fragment key={slot.key}>
-                        <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
+                        <Fragment key={v25MixedRowIdentity(rowRef)}>
+                        <tr id={`v25-position-row-${slot.key}`} tabIndex={-1}
+                          data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
+                          className={`border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500 ${dropPreview?.targetId === v25MixedRowIdentity(rowRef) ? 'outline outline-2 outline-emerald-600' : ''}`}
+                          data-testid="v25-wb-slot">
                           <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                             <div className="min-w-0">
                               <div className="flex min-w-0 flex-wrap items-center gap-1">
+                                {!readOnly && mixedRowControls(rowRef, workGroups, workGroup)}
                                 <span className="max-w-[4.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                                 <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
                                 {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
@@ -1257,25 +1441,13 @@ function WorkbenchBody({
                                 </div>
                               )}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
-                              {/* 工事項目（2026-11-16 の先方の依頼）：未設定ならカテゴリーからの自動の値。プルダウンで変えられ、保存・見積書の摘要に残る */}
+                              {/* 工事項目は移動操作で更新する。未分類商品の表示・自動設定・既存保存処理は維持。 */}
                               <div className="mt-px flex min-w-0 items-baseline gap-x-1 text-[10px] text-slate-600" data-testid="v25-wb-slot-work-item">
                                 <span className="shrink-0">工事項目：</span>
-                                {readOnly ? (
-                                  <span className="min-w-0 truncate" title={slot.work_item?.trim() || '未設定'}>{slot.work_item?.trim() || '未設定'}</span>
-                                ) : (
-                                  <select
-                                    className="h-5 min-w-0 max-w-[14rem] rounded border border-slate-300 bg-white px-0.5 py-0 text-[10px] text-ink"
-                                    aria-label={`${candidate?.name ?? '商品'}の工事項目`}
-                                    data-testid="v25-wb-slot-work-item-select"
-                                    disabled={pending}
-                                    title={workItemOf(slot) || '未設定'}
-                                    value={workItemOf(slot)}
-                                    onChange={(event) => setSlot(slot.key, { work_item: event.target.value })}>
-                                    {/* 自動の値があるカテゴリーは未設定にしない（開き直すと自動の値に戻るため） */}
-                                    {!autoWorkItemOf(slot) && <option value="">未設定</option>}
-                                    {workItemOptions(code, workItemOf(slot)).map((label) => <option key={label} value={label}>{label}</option>)}
-                                  </select>
-                                )}
+                                <span className="min-w-0 truncate" data-testid="v25-wb-slot-work-item-label"
+                                  title={(readOnly ? slot.work_item?.trim() : workItemOf(slot)) || '未設定'}>
+                                  {(readOnly ? slot.work_item?.trim() : workItemOf(slot)) || '未設定'}
+                                </span>
                               </div>
                               {status && status !== 'current' && (
                                 <div className="mt-0.5" data-testid="v25-wb-slot-cost-alert">
@@ -1380,8 +1552,7 @@ function WorkbenchBody({
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'auto' }); }}>自動計算に戻す</button>
                                   )}
-                                </V25WorkbenchRowMenu>
-                                <V25RowDeleteButton
+                                <V25RowDeleteButton inMenu
                                   testId="v25-wb-slot-delete" name={candidate?.name || '商品'}
                                   disabled={positionActionsLocked}
                                   onConfirm={() => {
@@ -1389,21 +1560,25 @@ function WorkbenchBody({
                                     setState((current) => deleteV25WorkbenchRow(current, 'slot', slot.key));
                                   }}
                                 />
+                                </V25WorkbenchRowMenu>
                               </div>
                             )}
                           </td>
                         </tr>
                         </Fragment>
                       );
-                    })}
-                      {workGroup.lines.map((line, lineIndex) => {
+                      }
+                      const line = workGroup.lines.find((item) => item.key === rowRef.key);
+                      if (!line) return null;
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
-                        <tr key={line.key} id={`v25-manual-row-${line.key}`} tabIndex={-1}
-                          className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500"
+                        <tr key={v25MixedRowIdentity(rowRef)} id={`v25-manual-row-${line.key}`} tabIndex={-1}
+                          data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
+                          className={`border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500 ${dropPreview?.targetId === v25MixedRowIdentity(rowRef) ? 'outline outline-2 outline-emerald-600' : ''}`}
                           data-testid="v25-wb-line">
                           <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
+                              {!readOnly && mixedRowControls(rowRef, workGroups, workGroup)}
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { name: event.target.value })} />
@@ -1448,22 +1623,7 @@ function WorkbenchBody({
                           <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-0.5">
-                                <span className="flex w-4 shrink-0 flex-col" data-testid="v25-wb-manual-reorder">
-                                  <button type="button" aria-label={`${line.name || '明細'}を上へ移動`} title="同じ工事項目内で上へ"
-                                    data-testid="v25-wb-manual-move-up"
-                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-                                    disabled={positionActionsLocked || groupEditor !== null || lineIndex === 0}
-                                    onClick={() => setState((current) => ({
-                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, -1, { modelSlug, specCode }),
-                                    }))}>▲</button>
-                                  <button type="button" aria-label={`${line.name || '明細'}を下へ移動`} title="同じ工事項目内で下へ"
-                                    data-testid="v25-wb-manual-move-down"
-                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-                                    disabled={positionActionsLocked || groupEditor !== null || lineIndex === workGroup.lines.length - 1}
-                                    onClick={() => setState((current) => ({
-                                      ...current, lines: v25MoveManualLineWithinWorkGroup(current.lines, line.key, 1, { modelSlug, specCode }),
-                                    }))}>▼</button>
-                                </span>
+
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
                                   <button type="button" data-testid="v25-wb-change-work-group" disabled={positionActionsLocked}
                                     className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
@@ -1485,8 +1645,7 @@ function WorkbenchBody({
                                     title="要見直し → 見直し済みにする"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { review_required: false }); }}>見直し済みにする</button>
                                   )}
-                                </V25WorkbenchRowMenu>
-                                <V25RowDeleteButton
+                                <V25RowDeleteButton inMenu
                                   testId="v25-wb-line-delete" name={line.name.trim() || '名称未入力の明細'}
                                   disabled={positionActionsLocked}
                                   onConfirm={() => {
@@ -1494,6 +1653,7 @@ function WorkbenchBody({
                                     setState((current) => deleteV25WorkbenchRow(current, 'line', line.key));
                                   }}
                                 />
+                                </V25WorkbenchRowMenu>
                               </div>
                             )}
                           </td>
@@ -1574,7 +1734,7 @@ function WorkbenchBody({
       </p>
 
       {!readOnly && (
-        <div ref={saveAreaRef} className="space-y-3 rounded-lg border border-slate-200 bg-white p-3" data-testid="v25-wb-save-area">
+        <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3" data-testid="v25-wb-save-area">
           {positionInputActive && (
             <p role="status" data-testid="v25-wb-position-edit-save-blocked" className="text-sm font-medium text-amber-800">
               位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。
@@ -1593,8 +1753,9 @@ function WorkbenchBody({
             <Button type="button" onClick={save} disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save">
               {pending ? '処理中…' : '下書きを保存'}
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || !editedDirty || positionInputActive} onClick={() => {
+            <Button type="button" variant="secondary" disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {
               setState(initial);
+              setViewOrder([]);
               setPercents({ sales_fee_rate: rateToPercent(initial.sales_fee_rate), expense_rate: rateToPercent(initial.expense_rate), markup_rate: rateToPercent(initial.markup_rate) });
             }}>
               変更を破棄

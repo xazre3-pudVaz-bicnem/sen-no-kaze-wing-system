@@ -114,6 +114,70 @@ function normalizedUnit(value: string | null | undefined): string | null {
   return unit || null;
 }
 
+/** 既存行の変更用patch。安全判定（v25ProductReplacementIssue）が成功した後だけ利用する。 */
+export function v25ProductChangePatch(
+  slot: V25SlotRow,
+  candidate: V25WorkbenchCandidate,
+  choices: Record<string, string>,
+  candidateOf: (id: string) => V25WorkbenchCandidate | undefined,
+): Partial<V25SlotRow> {
+  if (candidate.id === slot.option_id) return { variant_choices: { ...choices } };
+  return {
+    option_id: candidate.id,
+    variant_choices: { ...choices },
+    // 既存行の価格モードは商品入替では変更しない（別途工事の手入力売価も保持）。
+    selectable_option_ids: slot.selectable_option_ids.filter(
+      (id) => id !== candidate.id && candidateOf(id)?.categoryId === candidate.categoryId
+    ),
+  };
+}
+
+/**
+ * 既存商品から別の商品へ入れ替えるときだけの安全検査。
+ * 同一商品は仕様だけ変えるため数量・単位・位置・価格指定を保持する。
+ * 販売単位を画面で推測・換算せず、#659 の公開判定を変更候補の確定前にも適用する。
+ */
+export function v25ProductReplacementIssue(
+  slot: V25SlotRow,
+  previous: V25WorkbenchCandidate,
+  replacement: V25WorkbenchCandidate,
+  slots: readonly V25SlotRow[],
+  candidateOf: (id: string) => V25WorkbenchCandidate | undefined,
+  candidatesInCategory: (categoryId: string) => V25WorkbenchCandidate[],
+): string | null {
+  if (previous.id !== slot.option_id || previous.categoryId !== replacement.categoryId ||
+    previous.section !== replacement.section || replacement.retired || replacement.unavailable) {
+    return '同じカテゴリーの選択可能な商品へ変更してください';
+  }
+  if (previous.id === replacement.id) return null;
+
+  const beforeUnit = normalizedUnit(previous.priceUnit);
+  const afterUnit = normalizedUnit(replacement.priceUnit);
+  if (!beforeUnit || !afterUnit || beforeUnit.length > 12 || afterUnit.length > 12) {
+    return '変更前後の商品の販売単位を確認できません。商品台帳の販売単位を確認してから変更してください（数量は自動変更しません）';
+  }
+  if (beforeUnit !== afterUnit) {
+    return `変更前後の販売単位が異なります（${beforeUnit} → ${afterUnit}）。数量の換算は行いません。商品台帳と数量を確認してください`;
+  }
+
+  const quantity = slot.quantity.trim();
+  if (!/^\d+(?:\.\d{1,4})?$/.test(quantity) || !Number.isFinite(Number(quantity)) ||
+    Number(quantity) <= 0 || Number(quantity) > 99999) {
+    return '既存数量が有効ではありません。数量を確認してから商品を変更してください';
+  }
+
+  const candidateAfter = (id: string) => id === replacement.id ? replacement : candidateOf(id);
+  const beforeIssues = new Set(v25SlotRuleIssues([...slots], candidateOf, candidatesInCategory));
+  const afterSlots = slots.map((row) =>
+    row.key === slot.key ? { ...row, option_id: replacement.id } : row);
+  const newIssues = v25SlotRuleIssues(afterSlots, candidateAfter, candidatesInCategory)
+    .filter((issue) => !beforeIssues.has(issue));
+  if (newIssues.length > 0) {
+    return `変更すると数量・選択枠のルールに適合しません：${newIssues[0]}`;
+  }
+  return null;
+}
+
 /**
  * 選択枠がシミュレーターと連携する決まりに合わない内容（公開できない理由。DB の standard_estimate_v25_slot_rule_issues と同じ決まり・同じ文言）。
  * 外壁は数量 4（面）。外壁以外の数量（計上数量）を 1 以外にできるのは、1 つだけ選べるカテゴリーにその枠だけがある

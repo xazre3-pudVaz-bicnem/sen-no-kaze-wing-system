@@ -37,6 +37,7 @@ import {
   standardSlotQuantity,
   v25SlotRuleIssues,
   v25ProductReplacementIssue,
+  v25ProductChangePatch,
   type V25WorkbenchBaseLine,
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
@@ -689,7 +690,7 @@ function WorkbenchBody({
       }
       if (target.option_id === candidate.id) {
         // 同一商品：色・仕様のみ更新し、数量・価格モード・位置・候補・工事項目を変更しない。
-        setSlot(target.key, { variant_choices: { ...choices } });
+        setSlot(target.key, v25ProductChangePatch(target, candidate, choices, (id) => candidateById.get(id)));
         setPicker(null);
         return;
       }
@@ -717,20 +718,10 @@ function WorkbenchBody({
         setPicker(null);
         return;
       }
-      // 入れ替えは同じカテゴリーの商品だけなので、工事項目はそのまま
-      setSlot(picker.targetKey, {
-        option_id: candidate.id,
-        variant_choices: { ...choices },
-        ...(candidate.section === 'sitework' ? { price_mode: priceMode } : {}),
-        // 位置の枠の選べる商品は、新しい標準の商品と同じカテゴリーのものだけ残す（標準の商品そのものは外す）
-        ...(target
-          ? {
-              selectable_option_ids: target.selectable_option_ids.filter(
-                (id) => id !== candidate.id && candidateById.get(id)?.categoryId === candidate.categoryId
-              ),
-            }
-          : {}),
-      });
+      // 入れ替えは数量・位置・行順・工事項目を保持。変更候補だけ同カテゴリに整理する。
+      if (target) {
+        setSlot(target.key, v25ProductChangePatch(target, candidate, choices, (id) => candidateById.get(id)));
+      }
     } else {
       const addedKey = newKey('slot');
       setViewOrder((current) => v25InsertMixedRow(

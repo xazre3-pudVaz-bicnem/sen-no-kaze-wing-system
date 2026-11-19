@@ -182,3 +182,48 @@ test('PC長い明細：端スクロール中のEscキャンセル、通常スク
   await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThan(stationary);
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
 });
+
+
+test('PC長い明細：画面上端から逆方向へ自動スクロールし、別工事項目の指定行の直前へ移動', async ({page}) => {
+  test.setTimeout(150_000);
+  await ready(page);
+  const source=row(page,'line','wall-extra-75');
+  const target=row(page,'line','sashLine');
+  const grip=source.getByTestId('v25-wb-row-drag-handle');
+  await grip.scrollIntoViewIfNeeded();
+  const box=await grip.boundingBox();
+  expect(box).toBeTruthy();
+  const before=await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(500);
+  const targetBefore=await target.boundingBox();
+  expect(targetBefore && targetBefore.y < 0).toBeTruthy();
+
+  const x=box!.x+box!.width/2,y=box!.y+box!.height/2;
+  await page.mouse.move(x,y);
+  await page.mouse.down();
+  await page.mouse.move(x,10,{steps:15});
+  const reached=await page.evaluate(() => window.scrollY);
+  await expect.poll(async () => page.evaluate(() => window.scrollY),{timeout:15_000})
+    .toBeLessThan(Math.min(before-180,reached-100));
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+
+  await expect.poll(async () => target.evaluate((el) => {
+    const r=el.getBoundingClientRect();
+    return r.top>=90 && r.bottom<=window.innerHeight-85;
+  }),{timeout:25_000}).toBe(true);
+  const safeY=await page.evaluate(() => Math.round(window.innerHeight*.52));
+  await page.mouse.move(x,safeY,{steps:3});
+  const frozen=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.scrollY)).toBe(frozen);
+
+  const dest=await target.boundingBox();
+  expect(dest).toBeTruthy();
+  await page.mouse.move(x,dest!.y+dest!.height*.2,{steps:2});
+  await expect(target).toHaveClass(/outline-emerald-600/);
+  await page.mouse.up();
+  await expect(page.locator(id('line','wall-extra-75')+' + '+id('line','sashLine'))).toBeVisible();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  await page.getByRole('button',{name:'変更を破棄'}).click();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+});

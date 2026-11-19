@@ -38,10 +38,16 @@ test('PC：行直下への追加だけで明細が増え、スクロールで未
   const menu=insert(page);
   await menu.locator('summary').click();
   await expect(panel(page)).toBeVisible();
-  // Trigger the same captured scroll event fired by page/table scrolling.
-  // A synthetic event is used here because the viewport may have been auto-scrolled
-  // by the Playwright click before the test reaches this step.
-  await page.evaluate(()=>window.dispatchEvent(new Event('scroll')));
+  // Move to the opposite end of the real document, irrespective of Playwright's
+  // automatic scroll into view before opening the menu.
+  const scrollResult=await page.evaluate(()=>{
+    const before=window.scrollY;
+    const max=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+    window.scrollTo({top:before>max/2?0:max,behavior:'instant'});
+    return {before,after:window.scrollY,max};
+  });
+  expect(scrollResult.max).toBeGreaterThan(200);
+  expect(Math.abs(scrollResult.after-scrollResult.before)).toBeGreaterThan(100);
   await expect(panel(page)).toHaveCount(0);
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
   await menu.locator('summary').click();

@@ -7,6 +7,7 @@ on:
       - 'components/admin/standard-estimate-v25-workbench.tsx'
       - 'tests/standard-estimate-v25-workbench.test.ts'
       - 'e2e/pr-v25-row-menu-top-layer.spec.ts'
+      - 'e2e/pr-v25-row-menu-top-layer-mobile.spec.ts'
       - '.github/workflows/v25-row-menu-top-layer-browser.yml'
 
 permissions:
@@ -47,7 +48,7 @@ jobs:
           mkdir -p app/pr691-e2e-row-move
           cp e2e/fixtures/pr691-v25-row-move-page.tsx.fixture app/pr691-e2e-row-move/page.tsx
       - name: Test desktop and emulated mobile Chromium
-        run: npx playwright test e2e/pr-v25-row-menu-top-layer.spec.ts --project=desktop --project=mobile
+        run: npx playwright test e2e/pr-v25-row-menu-top-layer.spec.ts e2e/pr-v25-row-menu-top-layer-mobile.spec.ts --project=desktop --project=mobile
       - uses: actions/upload-artifact@v4
         if: always()
         with:

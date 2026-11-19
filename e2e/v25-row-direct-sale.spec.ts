@@ -55,7 +55,9 @@ test('PC：重複した商品メニューを整理し、位置の入口・売価
   await expect(menu(page).getByRole('button',{name:'金額を入力する'})).toBeVisible();
   await menu(page).getByRole('button',{name:'金額を入力する'}).click();
   await expect(roof.getByTestId('v25-wb-slot-price-cell').getByRole('textbox',{name:'売価単価'})).toBeVisible();
-  await page.getByRole('button',{name:'変更を破棄'}).click();
+  // POR→manualで元の価格モードと金額へ戻るため、破棄する変更がない。
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'変更を破棄'})).toBeDisabled();
 
   const manualMenu=row(page,'line','roofLine').getByTestId('v25-wb-line-menu');
   await manualMenu.locator('summary').click();

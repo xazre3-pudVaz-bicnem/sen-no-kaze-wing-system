@@ -125,7 +125,7 @@ export function v25ProductChangePatch(
   return {
     option_id: candidate.id,
     variant_choices: { ...choices },
-    ...(candidate.section === 'sitework' ? { price_mode: 'por' as const } : {}),
+    // 既存行の価格モードは商品入替では変更しない（別途工事の手入力売価も保持）。
     selectable_option_ids: slot.selectable_option_ids.filter(
       (id) => id !== candidate.id && candidateOf(id)?.categoryId === candidate.categoryId
     ),

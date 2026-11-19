@@ -142,7 +142,7 @@ describe('画面の描画（工事項目は表示のみ、移動で変更）', (
 
   it('公開済みの版（閲覧だけ）は保存した値だけを出す（自動の値は出さない）', () => {
     const html = render(true, state([slot('a', 'roof1'), slot('b', 'sash1', { work_item: '1. サッシ・木製建具工事' })], []));
-    expect(workLabels(html)).toEqual(['未設定', '1. サッシ・木製建具工事']);
+    expect(workLabels(html)).toEqual(['1. サッシ・木製建具工事', '未設定']);
     expect(html).toContain('title="未設定">未設定</span>');
     expect(html).toContain('title="1. サッシ・木製建具工事">1. サッシ・木製建具工事</span>');
     expect(html).not.toContain('data-testid="v25-wb-work-item-auto-unsaved"');

@@ -12,7 +12,9 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
   it('行の⋯メニューは枠外・Esc・同じ⋯の操作で閉じ、背景のクリックを通さない', () => {
     expect(workbench).toContain('<details ref={menuRef}');
     expect(workbench).toContain('onToggle={(event) => {');
-    expect(workbench).toContain('if (!event.currentTarget.open) setPlacement(null)');
+    expect(workbench).toContain('panelRef.current?.hidePopover()');
+    expect(workbench).toContain('backdropRef.current?.hidePopover()');
+    expect(workbench).toContain("document.addEventListener('pointerdown', onOutside, true)");
     expect(workbench).toContain('data-testid="v25-wb-menu-backdrop"');
     expect(workbench).toContain("if (menuRef.current) menuRef.current.open = false");
     expect(workbench).toContain('event.preventDefault(); event.stopPropagation()');

@@ -1,0 +1,88 @@
+name: PR 690 Safe V25 Floating Header Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/standard-estimate-v25-workbench.tsx'
+      - 'e2e/pr690-v25-floating-header.spec.ts'
+      - 'e2e/fixtures/pr690-v25-floating-header-page.tsx.fixture'
+      - '.github/workflows/pr690-v25-floating-header-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr690-floating-header-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install test-only Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify localhost isolation
+        run: |
+          test "$WING_LOCAL_MODE" = '1'
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+
+      - name: Install temporary fixture route only in runner
+        run: |
+          mkdir -p app/pr690-local-floating
+          cp e2e/fixtures/pr690-v25-floating-header-page.tsx.fixture app/pr690-local-floating/page.tsx
+          test -f app/pr690-local-floating/page.tsx
+
+      - name: Test actual workbench using isolated localhost Webpack server
+        run: |
+          npm run dev -- --webpack --port 3100 > /tmp/pr690-next.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl --silent --fail --output /dev/null http://localhost:3100/pr690-local-floating; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            tail -n 150 /tmp/pr690-next.log
+            exit 1
+          fi
+          BASE_URL=http://localhost:3100 npx playwright test e2e/pr690-v25-floating-header.spec.ts --project=desktop
+
+      - name: Upload screenshots and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr690-v25-floating-header-screenshots
+          path: |
+            e2e/artifacts/pr690-*.png
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -325,7 +325,8 @@ describe('シミュレーターと連携する選択枠の数量（2026-10-29 �
 
   it('編集画面は外壁の選択枠を数量 4 で足し、決まりに合わなければ公開できない。DB も公開とスイッチで止める', () => {
     const workbench = read('components/admin/standard-estimate-v25-workbench.tsx');
-    expect(workbench).toContain('const quantity = String(standardSlotQuantity(candidate.categoryCode));');
+    expect(workbench).toContain('const initialQuantity = String(standardSlotQuantity(candidate.categoryCode));');
+    expect(workbench).toContain('quantity: initialQuantity,');
     expect(workbench).toContain("...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),");
     const migration = read('supabase/migrations/20261029100000_simulator_v25_pricing.sql');
     expect(migration).toContain('create function public.standard_estimate_v25_slot_rule_issues(p_revision_id uuid)');

@@ -252,7 +252,17 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
         }} />
       <div ref={panelRef} popover="manual"
         className="fixed inset-auto m-0 z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg"
-        style={placement ?? undefined} data-testid="v25-wb-menu-panel">
+        style={placement ?? undefined} data-testid="v25-wb-menu-panel"
+        onClickCapture={(event) => {
+          // ConfirmActionButton opens a body-level dialog. Close this native top-layer
+          // backdrop before the dialog opens, or it would block the dialog's controls.
+          const target = event.target;
+          if (target instanceof Element && target.closest('[data-testid="v25-wb-slot-delete"], [data-testid="v25-wb-line-delete"]')) {
+            if (menuRef.current) menuRef.current.open = false;
+            panelRef.current?.hidePopover();
+            backdropRef.current?.hidePopover();
+          }
+        }}>
         {children}
       </div>
     </details>

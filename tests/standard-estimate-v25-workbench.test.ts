@@ -28,7 +28,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked, deleteV25WorkbenchRow, v25DisplayedCostAndGross } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked, deleteV25WorkbenchRow, v25DisplayedCostAndGross, v25LineSalePricePatch } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -388,7 +388,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).not.toContain('max-h-[70vh] overflow-auto');
   });
 
-  it('売価単価は数字だけを表示・入力し、切替と行操作を右端メニューへ集約する', () => {
+  it('商品行は自動から手入力へ切替、手入力明細は売価セルで直接入力できる', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(html).not.toContain('>計算</th>');
@@ -410,7 +410,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('要見直し');
     expect(source).toContain("status && status !== 'current'");
     expect(source).toContain('title={V25_COST_STATUS_LABEL[status]}');
-    expect(html).toContain('商品台帳から選択');
+    expect(html).not.toContain('商品台帳から選択');
     expect(html).toContain('金額を入力する');
     expect(html).toContain('別途見積にする');
     expect(html).toContain('自動計算に戻す');
@@ -422,7 +422,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("setSlot(slot.key, { price_mode: 'auto' })");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'manual' })");
     expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
-    expect(source).toContain("setLine(line.key, { price_mode: 'manual' })");
+    expect(source).toContain('v25LineSalePricePatch(line, event.target.value)');
     expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
     expect(source).toContain('payload: buildV25SavePayload(orderedToSave)');
   });
@@ -559,6 +559,48 @@ describe('Excel 風の画面（描画）', () => {
     expect(published).not.toContain('data-testid="v25-wb-line-delete"');
   });
 
+  it('手入力の売価は別途見積のまま空欄で開始し、0を含む値入力でmanualへ移行、未入力のmanualは保存検証で停止する', () => {
+    const line = initial.lines[0];
+    const unchanged = { ...line, ...v25LineSalePricePatch(line, '') };
+    expect(unchanged.price_mode).toBe('por');
+    expect(unchanged.unit_price).toBe('');
+    expect(buildV25SavePayload({ ...initial, lines: [unchanged, initial.lines[1]] }).lines[0]).toMatchObject({
+      price_mode: 'por', unit_price: null,
+    });
+    const zero = { ...line, ...v25LineSalePricePatch(line, '0') };
+    expect(zero.price_mode).toBe('manual');
+    expect(zero.unit_price).toBe('0');
+    expect(validateV25EditorState({ ...initial, lines: [zero, initial.lines[1]] }, sectionOf)).toBeNull();
+    expect(buildV25SavePayload({ ...initial, lines: [zero, initial.lines[1]] }).lines[0]).toMatchObject({
+      price_mode: 'manual', unit_price: 0,
+    });
+    const priced = { ...line, quantity: '2', ...v25LineSalePricePatch(line, '12500') };
+    const draft = { ...initial, lines: [priced, initial.lines[1]] };
+    expect(validateV25EditorState(draft, sectionOf)).toBeNull();
+    expect(buildV25SavePayload(draft).lines[0]).toMatchObject({ quantity: '2', price_mode: 'manual', unit_price: 12500 });
+    // 既存計算器を使用。手入力売価×数量に予定外の式や掛率を加えない。
+    const result = calculateV25Workbench(rule, taxRule, draft, baseLines, costs, sectionOf);
+    const manualResult = result.result?.sections.flatMap((section) => section.lines)
+      .find((item) => item.key === result.lineKeyOf[priced.key]);
+    expect(manualResult?.amount).toBe(25000);
+    const clearing = { ...priced, ...v25LineSalePricePatch(priced, '') };
+    expect(clearing.price_mode).toBe('manual');
+    expect(clearing.unit_price).toBe('');
+    expect(validateV25EditorState({ ...initial, lines: [clearing, initial.lines[1]] }, sectionOf))
+      .toContain('売価単価');
+    const invalid = { ...line, ...v25LineSalePricePatch(line, 'abc') };
+    expect(invalid.price_mode).toBe('manual');
+    expect(validateV25EditorState({ ...initial, lines: [invalid, initial.lines[1]] }, sectionOf))
+      .toContain('売価単価');
+    const explicitPor = { ...priced, price_mode: 'por' as const };
+    expect(buildV25SavePayload({ ...initial, lines: [explicitPor, initial.lines[1]] }).lines[0])
+      .toMatchObject({ price_mode: 'por', unit_price: null });
+    // 編集のイベント以前は既存stateを変更しない。
+    expect(initial.lines[0].price_mode).toBe('por');
+    expect(initial.lines[1].price_mode).toBe('manual');
+    expect(initial.lines[1].unit_price).toBe('50000');
+  });
+
   it('商品名右端に商品台帳アイコンを配置し、既存の選び直し画面を使用する', () => {
     const html = render(false);
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
@@ -574,7 +616,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('<StandardEstimateV25ProductPicker');
     expect(source).toContain('onChoose={choose}');
     expect(html).toContain('data-testid="v25-wb-slot-menu"');
-    expect(html).toContain('商品台帳から選択');
+    expect(html).not.toContain('商品台帳から選択');
   });
 
   it('採用済みの現行商品だけ、行の「…」から商品台帳を別タブで編集できる', () => {
@@ -586,7 +628,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('href="/admin/options/p2"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain('商品台帳から選択');
+    expect(html).not.toContain('商品台帳から選択');
     expect(html).toContain('仕様を変更');
     const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(source).toContain("encodeURIComponent(slot.option_id)");

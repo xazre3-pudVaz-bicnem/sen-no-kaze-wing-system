@@ -305,6 +305,7 @@ describe('Excel 風の画面（描画）', () => {
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(html).not.toContain('data-testid="v25-excel-toolbar"');
     expect(html).toContain('data-testid="v25-wb-column-display-position"');
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('className="relative z-50 ml-auto shrink-0"');

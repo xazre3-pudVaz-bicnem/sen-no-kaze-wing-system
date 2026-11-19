@@ -1022,21 +1022,32 @@ function WorkbenchBody({
 
   const mixedRowControls = (
     row: V25MixedRowRef,
-    rowIndex: number,
-    group: ReturnType<typeof v25WorkGroupsForDisplay>[number]
+    groups: readonly V25MoveGroup[],
+    group: V25MoveGroup
   ) => {
-    const groupRows = v25MixedRowsForWorkGroup(mixedOrder, group);
-    const locked = positionActionsLocked || groupEditor !== null;
+    const locked = rowMoveLocked;
+    const up = v25ArrowRowTarget(mixedOrder, groups, row, -1);
+    const down = v25ArrowRowTarget(mixedOrder, groups, row, 1);
+    const canUp = Boolean(up && plannedMove(row, up.row, up.side, groups));
+    const canDown = Boolean(down && plannedMove(row, down.row, down.side, groups));
     return (
-      <span className="inline-flex w-[3.75rem] shrink-0 items-center gap-px" data-testid="v25-wb-row-order-actions">
+      <span className="inline-flex w-[5.4rem] shrink-0 items-center gap-px" data-testid="v25-wb-row-order-actions">
+        <V25RowDragHandle rowId={v25MixedRowIdentity(row)} section={row.section} disabled={locked}
+          onPreview={(targetId, side) => previewRowMove(row, targetId, side, groups)}
+          onDrop={(targetId, side) => {
+            const target = mixedOrder.find((candidate) => v25MixedRowIdentity(candidate) === targetId);
+            if (target) applyRowMove(row, target, side, groups);
+          }} />
         <button type="button" data-testid="v25-wb-row-up" aria-label="この行を上へ移動"
+          title="同じ工事項目内、または直前の工事項目へ移動"
           className="rounded px-0.5 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-          disabled={locked || rowIndex === 0}
-          onClick={() => moveViewRow(row, -1, group)}>↑</button>
+          disabled={locked || !canUp}
+          onClick={() => moveViewRow(row, -1, groups)}>↑</button>
         <button type="button" data-testid="v25-wb-row-down" aria-label="この行を下へ移動"
+          title="同じ工事項目内、または直後の工事項目へ移動"
           className="rounded px-0.5 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-          disabled={locked || rowIndex === groupRows.length - 1}
-          onClick={() => moveViewRow(row, 1, group)}>↓</button>
+          disabled={locked || !canDown}
+          onClick={() => moveViewRow(row, 1, groups)}>↓</button>
         <V25WorkbenchRowMenu testId="v25-wb-row-insert" label="この行の直下に追加" triggerText="＋" disabled={locked}>
           <button type="button" data-testid="v25-wb-insert-slot" disabled={locked}
             className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
@@ -1199,6 +1210,11 @@ function WorkbenchBody({
       </div>
 
 
+      {dropPreview && <div data-testid="v25-wb-drop-indicator" role="status" aria-label="ここに移動"
+        className="pointer-events-none fixed z-[48] h-[3px] bg-emerald-600 shadow-[0_0_0_1px_white]"
+        style={{ top: dropPreview.top - 1, left: dropPreview.left, width: dropPreview.width }}>
+        <span className="absolute -top-5 left-1 rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-white">ここへ移動</span>
+      </div>}
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
         <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
           style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}
@@ -1349,11 +1365,14 @@ function WorkbenchBody({
                         mix.categoryId === candidate?.categoryId && mix.unsetKeys.includes(slot.key));
                       return (
                         <Fragment key={v25MixedRowIdentity(rowRef)}>
-                        <tr id={`v25-position-row-${slot.key}`} tabIndex={-1} className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500" data-testid="v25-wb-slot">
+                        <tr id={`v25-position-row-${slot.key}`} tabIndex={-1}
+                          data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
+                          className={`border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500 ${dropPreview?.targetId === v25MixedRowIdentity(rowRef) ? 'outline outline-2 outline-emerald-600' : ''}`}
+                          data-testid="v25-wb-slot">
                           <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-2 py-px">
                             <div className="min-w-0">
                               <div className="flex min-w-0 flex-wrap items-center gap-1">
-                                {!readOnly && mixedRowControls(rowRef, rowIndex, workGroup)}
+                                {!readOnly && mixedRowControls(rowRef, workGroups, workGroup)}
                                 <span className="max-w-[4.5rem] shrink-0 truncate text-[10px] text-slate-600" title={candidate?.categoryName ?? ''}>{candidate?.categoryName ?? ''}</span>
                                 <span className="min-w-0 flex-1 truncate font-medium text-ink" title={[candidate?.name, candidate?.manufacturer, candidate?.modelNo, candidate?.windowTypeLabel].filter(Boolean).join(' ／ ')}>{candidate?.name ?? '（商品が見つかりません）'}</span>
                                 {candidate?.unavailable ? <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge> : (candidate?.retired && <Badge tone="warn">販売停止</Badge>)}
@@ -1566,11 +1585,12 @@ function WorkbenchBody({
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
                       return (
                         <tr key={v25MixedRowIdentity(rowRef)} id={`v25-manual-row-${line.key}`} tabIndex={-1}
-                          className="border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500"
+                          data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
+                          className={`border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500 ${dropPreview?.targetId === v25MixedRowIdentity(rowRef) ? 'outline outline-2 outline-emerald-600' : ''}`}
                           data-testid="v25-wb-line">
                           <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
-                              {!readOnly && mixedRowControls(rowRef, rowIndex, workGroup)}
+                              {!readOnly && mixedRowControls(rowRef, workGroups, workGroup)}
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
                                 className="h-6 min-h-6! min-w-0 flex-1 rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                                 onChange={(event) => setLine(line.key, { name: event.target.value })} />

@@ -65,3 +65,17 @@ test('Pixel 7：最下部＋と行⋯も画面から切れず、スクロール�
   await expect(other.getByTestId('v25-wb-menu-panel')).toBeHidden();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
 });
+
+test('Pixel 7：⋯から削除確認を開いても最前面の透明レイヤーが操作を妨げない',async ({page}) => {
+  await ready(page);
+  const line=page.locator('tr[data-v25-dnd-row="line:roofLine"]');
+  const menu=line.getByTestId('v25-wb-line-menu');
+  await menu.locator('summary').tap();
+  await menu.getByTestId('v25-wb-line-delete').tap();
+  const dialog=page.getByRole('dialog',{name:'この明細を削除しますか？'});
+  await expect(dialog).toBeVisible();
+  await expect(menu.getByTestId('v25-wb-menu-backdrop')).toBeHidden();
+  await dialog.getByRole('button',{name:'キャンセル'}).tap();
+  await expect(line).toBeVisible();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+});

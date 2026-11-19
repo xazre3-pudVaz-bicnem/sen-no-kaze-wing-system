@@ -1,9 +1,7 @@
 import { expect, test, devices, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 
-// The CI workflow swaps only the Workbench component between the pinned main
-// baseline and PR code in an isolated localhost runner. No DB is connected.
-const baseline = process.env.V25_VISUAL_BASELINE === '1';
+// Current-spec regression against a disposable localhost fixture; never connects to production DB.
 const fixture = '/pr691-e2e-row-move';
 const row = (kind: 'slot' | 'line', key: string) =>
   `tr[data-v25-dnd-row="${kind}:${key}"]`;
@@ -26,8 +24,9 @@ async function assertVisibleStructure(page: Page) {
   await expect(page.locator('tr[data-work-item="work:roof"]')).toContainText('2. 屋根工事');
   const slots = page.locator('tr[data-testid="v25-wb-slot"]');
   await expect(slots).toHaveCount(4);
-  await expect(page.getByTestId('v25-wb-slot-work-item-label')).toHaveCount(baseline ? 4 : 0);
-  await expect(page.getByTestId('v25-wb-slot-work-item')).toHaveCount(baseline ? 4 : 0);
+  // Product rows have no duplicated labels; their section heading remains intact.
+  await expect(page.getByTestId('v25-wb-slot-work-item-label')).toHaveCount(0);
+  await expect(page.getByTestId('v25-wb-slot-work-item')).toHaveCount(0);
   const sash = page.locator(row('slot', 'sash'));
   await expect(sash).toContainText('検査用サッシ');
   await expect(sash.locator('input[aria-label="数量"]')).toHaveValue('1');
@@ -37,23 +36,25 @@ async function assertVisibleStructure(page: Page) {
   await expect(page.locator(row('line','sashLine')).getByTestId('v25-wb-line-menu')).toHaveCount(1);
 }
 
-test('PC｜変更前後の明細・工事項目見出しと既存UI操作', async ({ page }) => {
+test('PC｜現在仕様の工事項目見出し・重複表示防止・Portal操作', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({width: 1060, height: 760});
   await openWorkbench(page);
   await assertVisibleStructure(page);
   await mkdir('e2e/artifacts', { recursive: true });
   await page.screenshot({
-    path: `e2e/artifacts/pr695-${baseline ? 'before' : 'after'}-pc.png`,
+    path: 'e2e/artifacts/pr695-current-pc.png',
     fullPage:false,
   });
-  if (baseline) return;
 
   // The manual-line work-item change entry remains usable, but it only edits
   // local draft state. No save action or production database is invoked.
   const manual = page.locator(row('line','sashLine'));
   await manual.getByTestId('v25-wb-line-menu').locator('summary').click();
-  await manual.getByTestId('v25-wb-change-work-group').click();
+  // Portal menu actions are children of document.body, not the original row.
+  const menuPanel=page.getByTestId('v25-wb-menu-panel');
+  await expect(menuPanel).toBeVisible();
+  await menuPanel.getByTestId('v25-wb-change-work-group').click();
   const dialog = page.getByTestId('v25-wb-work-group-dialog');
   await expect(dialog).toBeVisible();
   await dialog.getByTestId('v25-wb-work-group-input').fill('3. 外壁工事');
@@ -97,7 +98,7 @@ test('PC｜変更前後の明細・工事項目見出しと既存UI操作', asyn
   await expect(page.getByTestId('v25-wb-slot-work-item')).toHaveCount(0);
 });
 
-test('スマートフォン｜変更前後の明細と固定見出しの横同期', async ({ browser }) => {
+test('スマートフォン｜現在仕様の重複表示防止と固定見出しの横同期', async ({ browser }) => {
   test.setTimeout(120_000);
   const context=await browser.newContext({...devices['Pixel 7']});
   const page=await context.newPage();
@@ -107,10 +108,9 @@ test('スマートフォン｜変更前後の明細と固定見出しの横同�
     await page.locator(row('slot','sash')).scrollIntoViewIfNeeded();
     await mkdir('e2e/artifacts',{recursive:true});
     await page.screenshot({
-      path:`e2e/artifacts/pr695-${baseline ? 'before' : 'after'}-mobile.png`,
+      path:'e2e/artifacts/pr695-current-mobile.png',
       fullPage:false,
     });
-    if (baseline) return;
     await page.evaluate(() => {
       const head=document.querySelector('[data-testid="v25-wb-column-header"]');
       if (!head) throw new Error('Missing header');

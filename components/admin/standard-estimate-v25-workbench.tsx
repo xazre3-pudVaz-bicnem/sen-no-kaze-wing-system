@@ -36,6 +36,7 @@ import {
   slotIdentity,
   standardSlotQuantity,
   v25SlotRuleIssues,
+  v25ProductReplacementIssue,
   type V25WorkbenchBaseLine,
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
@@ -673,10 +674,30 @@ function WorkbenchBody({
         return;
       }
     }
+    if (picker.targetKey) {
+      const target = state.slots.find((slot) => slot.key === picker.targetKey);
+      const original = target ? candidateById.get(target.option_id) : null;
+      if (!target || !original) return;
+      const issue = v25ProductReplacementIssue(
+        target, original, candidate, state.slots,
+        (id) => candidateById.get(id),
+        (categoryId) => candidates.filter((item) => item.categoryId === categoryId),
+      );
+      if (issue) {
+        onNotice({ tone: 'danger', text: issue });
+        return; // 選択ポップアップを保持。数量や商品を一切変更しない。
+      }
+      if (target.option_id === candidate.id) {
+        // 同一商品：色・仕様のみ更新し、数量・価格モード・位置・候補・工事項目を変更しない。
+        setSlot(target.key, { variant_choices: { ...choices } });
+        setPicker(null);
+        return;
+      }
+    }
     // 別途工事は販売費・経費・掛率を掛けない（自動にできない）。Web では金額を確定しないので別途見積にする
     const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';
-    // 選択枠の数量は、外壁は 4（面）、それ以外は 1（シミュレーターと連携する選択枠の決まり）
-    const quantity = String(standardSlotQuantity(candidate.categoryCode));
+    // 初期数量は新規追加にのみ使う。既存行の数量は変更・換算しない。
+    const initialQuantity = String(standardSlotQuantity(candidate.categoryCode));
     if (picker.targetKey) {
       const target = state.slots.find((slot) => slot.key === picker.targetKey);
       if (target?.slot_code.trim()) {
@@ -700,7 +721,6 @@ function WorkbenchBody({
       setSlot(picker.targetKey, {
         option_id: candidate.id,
         variant_choices: { ...choices },
-        quantity,
         ...(candidate.section === 'sitework' ? { price_mode: priceMode } : {}),
         // 位置の枠の選べる商品は、新しい標準の商品と同じカテゴリーのものだけ残す（標準の商品そのものは外す）
         ...(target
@@ -726,7 +746,7 @@ function WorkbenchBody({
             baseline_key: null,
             option_id: candidate.id,
             variant_choices: { ...choices },
-            quantity,
+            quantity: initialQuantity,
             price_mode: priceMode,
             manual_unit_price: '',
             // 位置・用途の選択枠（v2.5 PR-S1）。新しい行はカテゴリー単位の枠から始める

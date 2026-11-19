@@ -1338,7 +1338,7 @@ function WorkbenchBody({
                           {workGroup.label}
                         </td>
                       </tr>
-                      {v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {
+                      {v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {
                       if (rowRef.kind === 'slot') {
                         const slot = workGroup.slots.find((item) => item.key === rowRef.key);
                         if (!slot) return null;

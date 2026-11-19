@@ -116,7 +116,7 @@ describe('PR #666 × #686/#687 混在順序の保存・読込・工事項目整�
   });
 
   it('画面の↑↓＋が保存・公開と結線され、既存の工事項目／本体／価格UIは維持する',()=>{
-    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
+    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {');
     expect(source).toContain('data-testid="v25-wb-row-up"');
     expect(source).toContain('data-testid="v25-wb-row-down"');
     expect(source).toContain('testId="v25-wb-row-insert"');

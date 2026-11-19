@@ -164,6 +164,10 @@ test('スマートフォン｜ページ縦スクロールの見出し追従と�
   const page = await context.newPage();
   try {
     await page.goto(FIXTURE);
+    // React hydration後に生成されるfloating headerを待ってからスクロールする。
+    // PCケースは同等の待機を行うが、スマホケースでは欠けていた。
+    await expect(page.locator('[data-testid="v25-workbench-grid"]')).toBeVisible();
+    await expect(page.locator(FLOAT)).toHaveCount(1);
     await scrollPastNativeHeader(page);
     await assertMatchingHeader(page);
     const grid = page.locator(GRID);

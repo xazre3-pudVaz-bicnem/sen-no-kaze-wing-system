@@ -1602,7 +1602,7 @@ function WorkbenchBody({
                           data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
                           className={`border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500 ${dropPreview?.targetId === v25MixedRowIdentity(rowRef) ? 'outline outline-2 outline-emerald-600' : ''}`}
                           data-testid="v25-wb-line">
-                          <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                          <td className={`sm:sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
                               {!readOnly && mixedRowControls(rowRef, workGroups, workGroup)}
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
@@ -1649,7 +1649,8 @@ function WorkbenchBody({
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
                           </td>}
 
-                          <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
+                          {/* スマホでは左右の固定列が売価単価セルのタップ領域を覆うため、手入力行だけ横スクロール可能にする。 */}
+                          <td className="sm:sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-0.5">
 

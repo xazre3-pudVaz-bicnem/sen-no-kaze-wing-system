@@ -266,8 +266,14 @@ test('PC：Escape時にポインターキャプチャと自動スクロールを
   await expect(page.locator('tr[data-work-item="work:roof"] + '+id('slot','roof'))).toBeVisible();
 
   // The same handle must remain usable after Escape.
+  // Cancellation occurred after long auto-scroll; restore a stable viewport
+  // before measuring both rows for the next drag (avoid stale/offscreen coordinates).
+  await page.evaluate(() => window.scrollTo({ top:0, behavior:'instant' }));
+  await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(0);
   await handle.scrollIntoViewIfNeeded();
   await target.scrollIntoViewIfNeeded();
+  await expect(handle).toBeInViewport();
+  await expect(target).toBeInViewport();
   const next=await handle.boundingBox(), dest=await target.boundingBox();
   expect(next && dest).toBeTruthy();
   const nextX=next!.x+next!.width/2;

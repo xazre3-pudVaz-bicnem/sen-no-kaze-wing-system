@@ -8,9 +8,9 @@ import {
 } from '@/lib/domain/standard-estimate-v25-position-ui';
 
 const products: V25WorkbenchCandidate[] = [
-  { id: 's1', name: 'サッシA', categoryId: 'sash-cat', categoryName: 'サッシ', categoryCode: 'sash', singleSelect: false,
+  { id: 's1', name: 'サッシA', categoryId: 'sash-cat', categoryName: 'サッシ', categoryCode: 'sash', singleSelect: false, priceUnit: '本',
     section: 'option', manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
-  { id: 's2', name: 'サッシB', categoryId: 'sash-cat', categoryName: 'サッシ', categoryCode: 'sash', singleSelect: false,
+  { id: 's2', name: 'サッシB', categoryId: 'sash-cat', categoryName: 'サッシ', categoryCode: 'sash', singleSelect: false, priceUnit: '本',
     section: 'option', manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
   { id: 's3', name: '販売停止商品', retired: true, categoryId: 'sash-cat', categoryName: 'サッシ', categoryCode: 'sash', singleSelect: false,
     section: 'option', manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
@@ -199,5 +199,38 @@ describe('標準見積v2.5 位置別設定：編集中の原子的な操作', ()
     expect(cleared.state.slots[0]).toMatchObject({ option_id: 's1', slot_code: '', slot_label: '', selectable_option_ids: [] });
     expect(v25PositionMixes(cleared.state.slots, get)).toHaveLength(1);
     expect(mixed.slots[0].slot_label).toBe('リビングの窓');
+  });
+});
+
+describe('商品入替時の位置別サッシ数量・販売単位の保護', () => {
+  it('同じ単位の別サッシへ変更しても位置・数量1・価格指定を保持し、保存payloadも同じ', () => {
+    const before = state([row('window', { slot_code: 'living', slot_label: 'リビング窓', quantity: '1',
+      price_mode: 'manual', manual_unit_price: '180000', selectable_option_ids: ['s2'] })]);
+    const result = replaceV25PositionStandard(before, 'window', get('s2')!, {}, ['s1'], get);
+    expect(result.error).toBeNull();
+    expect(result.state.slots[0]).toMatchObject({
+      option_id: 's2', slot_code: 'living', slot_label: 'リビング窓', quantity: '1',
+      price_mode: 'manual', manual_unit_price: '180000', selectable_option_ids: ['s1'],
+    });
+    const saved = buildV25SavePayload(result.state).slots[0];
+    expect(saved.quantity).toBe('1');
+    expect(saved.slot_code).toBe('living');
+    expect(saved.option_id).toBe('s2');
+    expect(saved.manual_unit_price).toBe(180000);
+    expect(validateV25EditorState(result.state, (id) => get(id)?.section)).toBeNull();
+  });
+
+  it('位置別サッシの単位不一致・未登録では確定しない', () => {
+    const before = state([row('window', { slot_code: 'living', slot_label: '居間の窓', selectable_option_ids: ['s2'] })]);
+    const mismatched = { ...get('s2')!, priceUnit: '式' };
+    const unknown = { ...get('s2')!, priceUnit: null };
+    for (const invalid of [mismatched, unknown]) {
+      const result = replaceV25PositionStandard(before, 'window', invalid, {}, [], get);
+      expect(result.error).toContain('販売単位');
+      expect(result.state).toBe(before);
+    }
+    const same = replaceV25PositionStandard(before, 'window', get('s1')!, { color: 'black' }, [], get);
+    expect(same.error).toBeNull();
+    expect(same.state.slots[0]).toEqual({ ...before.slots[0], variant_choices: { color: 'black' } });
   });
 });

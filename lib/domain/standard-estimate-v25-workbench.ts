@@ -114,6 +114,24 @@ function normalizedUnit(value: string | null | undefined): string | null {
   return unit || null;
 }
 
+/** 既存行の変更用patch。安全判定（v25ProductReplacementIssue）が成功した後だけ利用する。 */
+export function v25ProductChangePatch(
+  slot: V25SlotRow,
+  candidate: V25WorkbenchCandidate,
+  choices: Record<string, string>,
+  candidateOf: (id: string) => V25WorkbenchCandidate | undefined,
+): Partial<V25SlotRow> {
+  if (candidate.id === slot.option_id) return { variant_choices: { ...choices } };
+  return {
+    option_id: candidate.id,
+    variant_choices: { ...choices },
+    ...(candidate.section === 'sitework' ? { price_mode: 'por' as const } : {}),
+    selectable_option_ids: slot.selectable_option_ids.filter(
+      (id) => id !== candidate.id && candidateOf(id)?.categoryId === candidate.categoryId
+    ),
+  };
+}
+
 /**
  * 既存商品から別の商品へ入れ替えるときだけの安全検査。
  * 同一商品は仕様だけ変えるため数量・単位・位置・価格指定を保持する。

@@ -159,6 +159,7 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm, inMenu = false 
 
 function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', disabled = false }: { label: string; testId: string; children: ReactNode; triggerText?: string; disabled?: boolean }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
 
   const place = (summary: HTMLElement) => {
@@ -178,7 +179,11 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
   useEffect(() => {
     const details = menuRef.current;
     if (!placement || !details?.open) return;
-    const dismiss = () => { details.open = false; };
+    const dismiss = () => { details.open = false; panelRef.current?.hidePopover(); };
+    const onOutside = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && !details.contains(target)) dismiss();
+    };
     const onScroll = (event: Event) => {
       if (details.contains(event.target as Node)) return;
       dismiss();
@@ -190,10 +195,14 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
       dismiss();
       details.querySelector('summary')?.focus();
     };
+    document.addEventListener('pointerdown', onOutside, true);
+    document.addEventListener('click', onOutside, true);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', dismiss);
     document.addEventListener('keydown', onEscape, true);
     return () => {
+      document.removeEventListener('pointerdown', onOutside, true);
+      document.removeEventListener('click', onOutside, true);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', dismiss);
       document.removeEventListener('keydown', onEscape, true);
@@ -204,10 +213,14 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
     <details ref={menuRef} className="group relative inline-block" data-testid={testId}
       onToggle={(event) => {
         if (disabled && event.currentTarget.open) { event.currentTarget.open = false; return; }
-        if (!event.currentTarget.open) setPlacement(null);
-        else if (!placement) {
+        if (!event.currentTarget.open) {
+          panelRef.current?.hidePopover();
+          setPlacement(null);
+        } else {
           const summary = event.currentTarget.querySelector('summary');
           if (summary instanceof HTMLElement) place(summary);
+          // Native top layer escapes all ancestor overflow and sticky stacking contexts.
+          panelRef.current?.showPopover();
         }
       }}
       onKeyDown={(event) => {
@@ -226,9 +239,8 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
           if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
           if (!menuRef.current?.open) place(event.currentTarget);
         }}>{triggerText}</summary>
-      {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
-        onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />}
-      <div className={'fixed z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg ' + (placement ? '' : 'invisible')}
+      <div ref={panelRef} popover="manual"
+        className="fixed inset-auto m-0 z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg"
         style={placement ?? undefined} data-testid="v25-wb-menu-panel">
         {children}
       </div>

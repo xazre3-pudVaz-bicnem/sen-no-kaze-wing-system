@@ -77,18 +77,19 @@ test('Pixel 7長い明細：実タッチを画面下端で保持すると画面�
     return r.top>=100 && r.bottom<=window.innerHeight-85;
   }),{timeout:25_000}).toBe(true);
 
+  // 端から少し離して自動スクロールを止めてから目標行の現在座標を測る。
+  const safeY=await page.evaluate(() => Math.round(window.innerHeight*.45));
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:safeY}]});
+  const frozen=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.scrollY)).toBe(frozen);
   const destination=await target.boundingBox();
   expect(destination).toBeTruthy();
   await cdp.send('Input.dispatchTouchEvent',{
-    type:'touchMove',touchPoints:[{x,y:destination!.y+destination!.height*.55}],
+    type:'touchMove',touchPoints:[{x,y:destination!.y+destination!.height*.80}],
   });
-  await expect(page.getByTestId('v25-wb-drop-indicator')).toBeVisible();
-  const highlightedBeforeDrop=await page.locator('tr[data-v25-dnd-row].outline-emerald-600').evaluateAll(
-    (els) => els.map(el => ({ id:(el as HTMLElement).dataset.v25DndRow, y:el.getBoundingClientRect().y }))
-  );
-  console.log('LONG_DRAG_BEFORE_DROP', JSON.stringify(highlightedBeforeDrop));
+  await expect(target).toHaveClass(/outline-emerald-600/);
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  console.log('LONG_DRAG_AFTER_DROP', JSON.stringify(await source.evaluate(el => ({prior:(el.previousElementSibling as HTMLElement)?.dataset.v25DndRow,next:(el.nextElementSibling as HTMLElement)?.dataset.v25DndRow,group:(el.previousElementSibling?.closest('tr[data-work-item]') as HTMLElement)?.dataset.workItem}))));
   await expect(page.locator('tr[data-v25-dnd-row="line:wall-extra-70"] + tr[data-v25-dnd-row="slot:roof"]')).toBeVisible();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
   const stopped=await page.evaluate(() => window.scrollY);

@@ -41,15 +41,39 @@ async function assertMatchingHeader(page: Page) {
   const metrics = await page.evaluate(() => {
     const original = document.querySelector('[data-testid="v25-workbench-grid"] thead')!;
     const mirror = document.querySelector('[data-testid="v25-page-floating-column-header"] thead')!;
+    const colorProbe = document.createElement('span');
+    colorProbe.style.backgroundColor = '#E6EDF3';
+    colorProbe.style.color = '#24374B';
+    colorProbe.style.border = '1px solid #CBD5E1';
+    document.body.appendChild(colorProbe);
+    const expected = {
+      background: getComputedStyle(colorProbe).backgroundColor,
+      color: getComputedStyle(colorProbe).color,
+      border: getComputedStyle(colorProbe).borderBottomColor,
+    };
+    colorProbe.remove();
     const sourceCells = Array.from(original.querySelectorAll('th'));
     const mirroredCells = Array.from(mirror.querySelectorAll('th'));
     return {
+      expected,
+      sourceClass: original.className,
+      mirrorClass: mirror.className,
+      overlayClass: document.querySelector('[data-testid="v25-page-floating-column-header"]')!.className,
+      sectionClass: document.querySelector('[data-testid="v25-section-base"]')!.className,
+      workItemClass: document.querySelector('[data-testid="v25-work-item-heading"]')?.className ?? null,
       count: sourceCells.length,
       mirroredCount: mirroredCells.length,
-      source: sourceCells.map((c) => ({ key: c.dataset.v25Column, width: c.getBoundingClientRect().width, background: getComputedStyle(c).backgroundColor, color: getComputedStyle(c).color, size: parseFloat(getComputedStyle(c).fontSize), height: c.getBoundingClientRect().height })),
-      mirror: mirroredCells.map((c) => ({ key: c.dataset.v25Column, width: c.getBoundingClientRect().width, background: getComputedStyle(c).backgroundColor, color: getComputedStyle(c).color, size: parseFloat(getComputedStyle(c).fontSize), height: c.getBoundingClientRect().height })),
+      source: sourceCells.map((c) => ({ key: c.dataset.v25Column, width: c.getBoundingClientRect().width, background: getComputedStyle(c).backgroundColor, color: getComputedStyle(c).color, border: getComputedStyle(c).borderBottomColor, size: parseFloat(getComputedStyle(c).fontSize), height: c.getBoundingClientRect().height })),
+      mirror: mirroredCells.map((c) => ({ key: c.dataset.v25Column, width: c.getBoundingClientRect().width, background: getComputedStyle(c).backgroundColor, color: getComputedStyle(c).color, border: getComputedStyle(c).borderBottomColor, size: parseFloat(getComputedStyle(c).fontSize), height: c.getBoundingClientRect().height })),
     };
   });
+  expect(metrics.sourceClass).toContain('bg-[#E6EDF3]');
+  expect(metrics.sourceClass).toContain('text-[#24374B]');
+  expect(metrics.mirrorClass).toBe(metrics.sourceClass);
+  expect(metrics.overlayClass).toContain('bg-[#E6EDF3]');
+  expect(metrics.overlayClass).toContain('border-[#CBD5E1]');
+  expect(metrics.sectionClass).toContain('bg-emerald-900');
+  expect(metrics.workItemClass).toContain('bg-emerald-100');
   expect(metrics.count).toBeGreaterThan(5);
   expect(metrics.mirroredCount).toBe(metrics.count);
   for (let index = 0; index < metrics.count; index++) {
@@ -60,7 +84,11 @@ async function assertMatchingHeader(page: Page) {
     // Modern Chromium may report Tailwind colors in Lab/OKLCH rather than rgb.
     // Verify the intended classes and exact native/floating computed-color parity.
     expect(src.background).not.toBe('transparent');
+    expect(src.background).toBe(metrics.expected.background);
+    expect(src.color).toBe(metrics.expected.color);
+    expect(src.border).toBe(metrics.expected.border);
     expect(mirror.background).toBe(src.background);
+    expect(mirror.border).toBe(src.border);
     expect(mirror.color).toBe(src.color);
     expect(src.size).toBeGreaterThanOrEqual(12);
     expect(mirror.size).toBe(src.size);
@@ -77,10 +105,13 @@ test('PC｜ページ縦スクロールで固定・保存欄が見えても維持
   await expect(page.locator('[data-testid="v25-wb-save-area"]')).toHaveCount(1);
   await expect(page.locator(FLOAT)).toHaveCount(1);
   await expect(page.locator(FLOAT)).toBeHidden();
+  await mkdir('e2e/artifacts', { recursive: true });
+  await page.screenshot({ path: 'e2e/artifacts/pr693-pc-normal.png', fullPage: false });
   await scrollPastNativeHeader(page);
   await assertMatchingHeader(page);
   await mkdir('e2e/artifacts', { recursive: true });
   await page.screenshot({ path: 'e2e/artifacts/pr690-pc-floating.png', fullPage: false });
+  await page.screenshot({ path: 'e2e/artifacts/pr693-pc-floating.png', fullPage: false });
 
   // Former failure: save controls become visible below the fold, long before the table ends.
   await page.evaluate(() => {
@@ -149,6 +180,7 @@ test('PC狭幅｜横スクロール同期・原価ON/OFF・列幅変更・デザ
   await expect(floating).toBeVisible();
   await assertMatchingHeader(page);
   await page.screenshot({ path: 'e2e/artifacts/pr690-pc-cost-off.png', fullPage: false });
+  await page.screenshot({ path: 'e2e/artifacts/pr693-pc-cost-off.png', fullPage: false });
 
   await page.getByTestId('v25-wb-show-cost').check({ timeout: 12000 });
   await expect(grid.locator('th')).toHaveCount(10);
@@ -176,6 +208,7 @@ test('スマートフォン｜ページ縦スクロールの見出し追従と�
     await expect(page.locator(FLOAT)).toBeVisible();
     await mkdir('e2e/artifacts', { recursive: true });
     await page.screenshot({ path: 'e2e/artifacts/pr690-mobile-floating.png', fullPage: false });
+    await page.screenshot({ path: 'e2e/artifacts/pr693-mobile-floating.png', fullPage: false });
   } finally {
     await context.close();
   }

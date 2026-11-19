@@ -174,6 +174,12 @@ describe('明細行 ↑↓／ドラッグの工事項目移動（DB・金額計�
     expect(grip).toContain('touch-none');
     expect(grip).toContain('document.elementFromPoint(');
     expect(grip).toContain('onPointerCancel={clear}');
+    expect(grip).toContain('window.requestAnimationFrame(scrollStep)');
+    expect(grip).toContain('window.cancelAnimationFrame(scrollFrame.current)');
+    expect(grip).toContain('window.scrollBy({ top: delta, behavior:');
+    expect(grip).toContain('document.elementFromPoint(x, y)');
+    expect(grip).toContain('const EDGE_PX = 72;');
+    expect(grip).toContain('if (distance < 8) return;');
     expect(grip).not.toContain('draggable=');
     expect(ui).toContain('setState(initial);\n              setViewOrder([]);');
     expect(ui).toContain('const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;');

@@ -83,6 +83,7 @@ jobs:
           name: pr690-v25-floating-header-screenshots
           path: |
             e2e/artifacts/pr690-*.png
+            e2e/artifacts/pr693-*.png
             test-results/
           retention-days: 14
           if-no-files-found: ignore

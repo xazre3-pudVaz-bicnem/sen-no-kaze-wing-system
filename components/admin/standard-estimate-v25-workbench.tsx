@@ -1146,7 +1146,7 @@ function WorkbenchBody({
             onChange={(event) => setState((current) => ({ ...current, adjustment_reason: event.target.value }))} />
         </div>
         <span className="text-[10px] text-slate-500">列幅は明細行の列境界（右端6px）でもドラッグできます</span>
-        <div className="ml-auto shrink-0" data-testid="v25-wb-column-display-position">
+        <div className="relative z-50 ml-auto shrink-0" data-testid="v25-wb-column-display-position">
           <V25ColumnDisplayMenu prefs={columnPrefs.prefs} setVisible={columnPrefs.setVisible}
             setCostVisible={columnPrefs.setCostVisible} showAll={columnPrefs.showAll} reset={columnPrefs.reset} />
         </div>

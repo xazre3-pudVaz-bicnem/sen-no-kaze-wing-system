@@ -15,7 +15,8 @@ async function scrollPastNativeHeader(page: Page) {
   await page.evaluate(() => {
     const source = document.querySelector('[data-testid="v25-workbench-grid"] thead');
     if (!source) throw new Error('Actual v2.5 thead missing');
-    window.scrollBy(0, source.getBoundingClientRect().bottom + 130);
+    const bottom = source.getBoundingClientRect().bottom;
+    if (bottom > 0) window.scrollTo({ top: window.scrollY + bottom + 130, behavior: 'instant' });
   });
   await expect(page.locator(FLOAT)).toBeVisible();
 }
@@ -84,7 +85,7 @@ test('PC｜ページ縦スクロールで固定・保存欄が見えても維持
   // Former failure: save controls become visible below the fold, long before the table ends.
   await page.evaluate(() => {
     const save = document.querySelector('[data-testid="v25-wb-save-area"]')!;
-    window.scrollBy(0, save.getBoundingClientRect().top - window.innerHeight + 70);
+    window.scrollTo({ top: window.scrollY + save.getBoundingClientRect().top - window.innerHeight + 70, behavior: 'instant' });
   });
   const nearEnd = await getBounds(page);
   console.log('[PR690 SAVE AREA]', JSON.stringify(nearEnd));
@@ -97,7 +98,7 @@ test('PC｜ページ縦スクロールで固定・保存欄が見えても維持
 
   await page.evaluate(() => {
     const grid = document.querySelector('[data-testid="v25-excel-grid-scroll"]')!;
-    window.scrollBy(0, grid.getBoundingClientRect().bottom + 85);
+    window.scrollTo({ top: window.scrollY + grid.getBoundingClientRect().bottom + 85, behavior: 'instant' });
   });
   await expect(page.locator(FLOAT)).toBeHidden();
   const beyond = await getBounds(page);
@@ -136,6 +137,7 @@ test('PC狭幅｜横スクロール同期・原価ON/OFF・列幅変更・デザ
   await nameHandle.press('ArrowRight');
   await expect.poll(async () => grid.locator('th[data-v25-column="name"]').evaluate((c) => c.getBoundingClientRect().width))
     .toBeGreaterThan(widthBefore);
+  await scrollPastNativeHeader(page);
   await expect(floating).toBeVisible();
   await assertMatchingHeader(page);
 
@@ -143,12 +145,14 @@ test('PC狭幅｜横スクロール同期・原価ON/OFF・列幅変更・デザ
   await page.getByTestId('v25-grid-column-menu').locator('summary').click();
   await page.getByTestId('v25-wb-show-cost').uncheck();
   await expect(grid.locator('th')).toHaveCount(7);
+  await scrollPastNativeHeader(page);
   await expect(floating).toBeVisible();
   await assertMatchingHeader(page);
   await page.screenshot({ path: 'e2e/artifacts/pr690-pc-cost-off.png', fullPage: false });
 
   await page.getByTestId('v25-wb-show-cost').check();
   await expect(grid.locator('th')).toHaveCount(10);
+  await scrollPastNativeHeader(page);
   await expect(floating).toBeVisible();
   await assertMatchingHeader(page);
   await page.screenshot({ path: 'e2e/artifacts/pr690-pc-cost-on.png', fullPage: false });

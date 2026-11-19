@@ -227,3 +227,101 @@ test('PC長い明細：画面上端から逆方向へ自動スクロールし、
   await page.getByRole('button',{name:'変更を破棄'}).click();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
 });
+
+
+test('PC：Escape時にポインターキャプチャと自動スクロールを解放し、同じ行を再ドラッグできる', async ({ page }) => {
+  test.setTimeout(120_000);
+  await ready(page);
+  const source=row(page,'slot','roof');
+  const handle=source.getByTestId('v25-wb-row-drag-handle');
+  const target=row(page,'line','sashLine');
+  await handle.scrollIntoViewIfNeeded();
+  const grip=await handle.boundingBox();
+  expect(grip).toBeTruthy();
+  const x=grip!.x+grip!.width/2, y=grip!.y+grip!.height/2;
+  const edge=await page.evaluate(() => window.innerHeight-12);
+  await page.evaluate(() => {
+    document.addEventListener('pointerdown', (event) => {
+      (window as typeof window & { __pr691PointerId?: number }).__pr691PointerId=event.pointerId;
+    }, { capture:true, once:true });
+  });
+
+  await page.mouse.move(x,y);
+  await page.mouse.down();
+  await page.mouse.move(x,edge,{steps:15});
+  const hasCapture=() => handle.evaluate((element) => {
+    const pid=(window as typeof window & { __pr691PointerId?: number }).__pr691PointerId;
+    return pid !== undefined && (element as HTMLButtonElement).hasPointerCapture(pid);
+  });
+  await expect.poll(hasCapture).toBe(true);
+  await expect.poll(async () => page.evaluate(() => window.scrollY),{timeout:15_000}).toBeGreaterThan(300);
+  await page.keyboard.press('Escape');
+  await expect.poll(hasCapture).toBe(false);
+  await expect(page.getByTestId('v25-wb-drop-indicator')).toHaveCount(0);
+  const stopped=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => window.scrollY)).toBe(stopped);
+  await page.mouse.up();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+  await expect(page.locator('tr[data-work-item="work:roof"] + '+id('slot','roof'))).toBeVisible();
+
+  // The same handle must remain usable after Escape.
+  await handle.scrollIntoViewIfNeeded();
+  await target.scrollIntoViewIfNeeded();
+  const next=await handle.boundingBox(), dest=await target.boundingBox();
+  expect(next && dest).toBeTruthy();
+  const nextX=next!.x+next!.width/2;
+  await page.mouse.move(nextX,next!.y+next!.height/2);
+  await page.mouse.down();
+  await page.mouse.move(nextX,dest!.y+dest!.height*.8,{steps:12});
+  await expect(target).toHaveClass(/outline-emerald-600/);
+  await page.mouse.up();
+  await expect(page.locator(id('line','sashLine')+' + '+id('slot','roof'))).toBeVisible();
+  await page.getByRole('button',{name:'変更を破棄'}).click();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+});
+
+test('PC：pointercancelでキャプチャを解放し、工事項目・順序・未保存状態を変更しない', async ({ page }) => {
+  await ready(page);
+  const handle=row(page,'slot','roof').getByTestId('v25-wb-row-drag-handle');
+  const target=row(page,'line','sashLine');
+  await handle.scrollIntoViewIfNeeded();
+  await target.scrollIntoViewIfNeeded();
+  const grip=await handle.boundingBox(), dest=await target.boundingBox();
+  expect(grip && dest).toBeTruthy();
+  const x=grip!.x+grip!.width/2;
+  await page.evaluate(() => {
+    document.addEventListener('pointerdown',(event) => {
+      (window as typeof window & { __pr691PointerId?: number }).__pr691PointerId=event.pointerId;
+    }, {capture:true,once:true});
+  });
+  await page.mouse.move(x,grip!.y+grip!.height/2);
+  await page.mouse.down();
+  await page.mouse.move(x,dest!.y+dest!.height*.8,{steps:12});
+  await expect(page.getByTestId('v25-wb-drop-indicator')).toBeVisible();
+  await handle.evaluate((element) => {
+    const pid=(window as typeof window & { __pr691PointerId?: number }).__pr691PointerId;
+    if (pid === undefined) throw new Error('Missing captured pointer id');
+    if (!(element as HTMLButtonElement).hasPointerCapture(pid)) throw new Error('Pointer not captured before cancel');
+    element.dispatchEvent(new PointerEvent('pointercancel', { bubbles:true, pointerId:pid, pointerType:'mouse', isPrimary:true }));
+    if ((element as HTMLButtonElement).hasPointerCapture(pid)) throw new Error('Pointer still captured after cancel');
+  });
+  await page.mouse.up();
+  await expect(page.getByTestId('v25-wb-drop-indicator')).toHaveCount(0);
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+  await expect(page.locator('tr[data-work-item="work:roof"] + '+id('slot','roof'))).toBeVisible();
+  await expect(page.locator('tr[data-work-item="work:sash_wood"] + '+id('slot','sash'))).toBeVisible();
+
+  // A subsequent genuine drag still works.
+  await handle.scrollIntoViewIfNeeded();
+  await target.scrollIntoViewIfNeeded();
+  const again=await handle.boundingBox(), destination=await target.boundingBox();
+  expect(again && destination).toBeTruthy();
+  const againX=again!.x+again!.width/2;
+  await page.mouse.move(againX,again!.y+again!.height/2);
+  await page.mouse.down();
+  await page.mouse.move(againX,destination!.y+destination!.height*.8,{steps:12});
+  await page.mouse.up();
+  await expect(page.locator(id('line','sashLine')+' + '+id('slot','roof'))).toBeVisible();
+  await page.getByRole('button',{name:'変更を破棄'}).click();
+});

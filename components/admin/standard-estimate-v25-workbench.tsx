@@ -4,6 +4,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type Rea
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Package, Trash2 } from 'lucide-react';
+import { V25RowDragHandle } from './v25-row-drag-handle';
+import { v25ArrowRowTarget, v25PlanMixedRowMove, type V25MoveSide, type V25MoveGroup } from './standard-estimate-v25-row-move';
 import {
   publishStandardEstimateV25RevisionAction,
   refreshStandardEstimateV25CostsAction,
@@ -58,7 +60,7 @@ import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-
 import { v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
 import {
   v25PersistedMixedRowOrder, v25ReconcileMixedRowOrder, v25InsertMixedRow,
-  v25MixedOrderEquals, v25MixedRowsForWorkGroup, v25MoveMixedRowWithinGroup,
+  v25MixedOrderEquals, v25MixedRowsForWorkGroup,
   v25MixedRowIdentity, type V25MixedRowRef,
 } from '@/lib/domain/standard-estimate-v25-row-order';
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
@@ -135,8 +137,8 @@ export function deleteV25WorkbenchRow(state: V25EditorState, kind: 'slot' | 'lin
 }
 
 /** 品名を確認してからだけ行を削除する。削除は画面上の下書きstateに限定する。 */
-function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
-  name: string; disabled: boolean; testId: string; onConfirm: () => void;
+function V25RowDeleteButton({ name, disabled, testId, onConfirm, inMenu = false }: {
+  name: string; disabled: boolean; testId: string; onConfirm: () => void; inMenu?: boolean;
 }) {
   return (
     <ConfirmActionButton destructive data-testid={testId} disabled={disabled}
@@ -145,8 +147,11 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm }: {
       confirmLabel="削除する" onConfirm={onConfirm}
       aria-label={`「${name}」を削除`}
       title={disabled ? '位置名を確定または取り消してから削除してください' : `${name}を削除`}
-      className="flex size-6 shrink-0 items-center justify-center rounded text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40">
+      className={inMenu
+        ? 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40'
+        : 'flex size-6 shrink-0 items-center justify-center rounded text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-40'}>
       <Trash2 className="size-3.5" aria-hidden="true" />
+      {inMenu && <span>削除</span>}
     </ConfirmActionButton>
   );
 }
@@ -418,6 +423,11 @@ function WorkbenchBody({
   const [state, setState] = useState<V25EditorState>(initial);
   // PR #686 の共通 row_order を表示順の正本にする。↑↓＋は未保存中だけ上書きし、保存時に連番化する。
   const [viewOrder, setViewOrder] = useState<V25MixedRowRef[]>([]);
+  // ドラッグ中の一時的な移動先。保存データ・Revisionには含めない。
+  const [dropPreview, setDropPreview] = useState<{
+    sourceId: string; targetId: string; side: V25MoveSide;
+    top: number; left: number; width: number;
+  } | null>(null);
   const [percents, setPercents] = useState(() => ({
     sales_fee_rate: rateToPercent(initial.sales_fee_rate),
     expense_rate: rateToPercent(initial.expense_rate),
@@ -516,15 +526,49 @@ function WorkbenchBody({
     ).flatMap((group) => v25MixedRowsForWorkGroup(initialMixedOrder, group))
   );
   const orderDirty = !v25MixedOrderEquals(renderedMixedOrder, initialRenderedOrder);
-  const moveViewRow = (
-    row: V25MixedRowRef, direction: -1 | 1,
-    group: ReturnType<typeof v25WorkGroupsForDisplay>[number]
+  const moveContext = (code: StandardLineSectionCode) => ({ modelSlug, specCode, sectionCode: code, sectionOf });
+  const rowMoveLocked = readOnly || positionActionsLocked || groupEditor !== null;
+  const plannedMove = (
+    row: V25MixedRowRef, target: V25MixedRowRef, side: V25MoveSide, groups: readonly V25MoveGroup[]
+  ) => v25PlanMixedRowMove(state, mixedOrder, groups, row, target, side, moveContext(row.section));
+  const applyRowMove = (
+    row: V25MixedRowRef, target: V25MixedRowRef, side: V25MoveSide, groups: readonly V25MoveGroup[]
   ) => {
-    if (readOnly || positionActionsLocked || groupEditor !== null) return;
-    setViewOrder((current) => v25MoveMixedRowWithinGroup(
-      v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),
-      group, row, direction
-    ));
+    if (rowMoveLocked) return;
+    const next = plannedMove(row, target, side, groups);
+    if (!next) return;
+    // 並び順と工事項目を同一イベントで更新。数量・価格・位置・原価Versionは不変。
+    setState(next.state);
+    setViewOrder(next.order);
+    setDropPreview(null);
+  };
+  const moveViewRow = (
+    row: V25MixedRowRef, direction: -1 | 1, groups: readonly V25MoveGroup[]
+  ) => {
+    const target = v25ArrowRowTarget(mixedOrder, groups, row, direction);
+    if (target) applyRowMove(row, target.row, target.side, groups);
+  };
+  const previewRowMove = (
+    source: V25MixedRowRef, targetId: string | null, side: V25MoveSide,
+    groups: readonly V25MoveGroup[]
+  ): boolean => {
+    if (rowMoveLocked || !targetId) { setDropPreview(null); return false; }
+    const target = mixedOrder.find((row) => v25MixedRowIdentity(row) === targetId);
+    if (!target || !plannedMove(source, target, side, groups)) {
+      setDropPreview(null);
+      return false;
+    }
+    const rowEl = Array.from(tableRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-v25-dnd-row]') ?? [])
+      .find((el) => el.dataset.v25DndRow === targetId);
+    if (!rowEl) { setDropPreview(null); return false; }
+    const rect = rowEl.getBoundingClientRect();
+    const top = side === 'before' ? rect.top : rect.bottom;
+    setDropPreview((current) => current?.sourceId === v25MixedRowIdentity(source) &&
+      current.targetId === targetId && current.side === side &&
+      current.top === top && current.left === rect.left && current.width === rect.width
+      ? current
+      : { sourceId: v25MixedRowIdentity(source), targetId, side, top, left: rect.left, width: rect.width });
+    return true;
   };
   const calc = useMemo(
     () => calculateV25Workbench(rule, taxRule, state, baseLines, costs, (optionId) => candidateById.get(optionId)?.section),

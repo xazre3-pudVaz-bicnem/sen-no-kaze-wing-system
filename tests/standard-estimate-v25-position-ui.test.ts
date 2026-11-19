@@ -18,6 +18,10 @@ const products: V25WorkbenchCandidate[] = [
     section: 'option', manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
   { id: 'wall', name: '外壁', categoryId: 'wall-cat', categoryName: '外壁', categoryCode: 'exterior-wall', singleSelect: false,
     section: 'interior_exterior', manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
+  { id: 'site1', name: '別途工事A', categoryId: 'site-cat', categoryName: '別途工事', categoryCode: 'sitework', singleSelect: false, priceUnit: '式',
+    section: 'sitework', manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
+  { id: 'site2', name: '別途工事B', categoryId: 'site-cat', categoryName: '別途工事', categoryCode: 'sitework', singleSelect: false, priceUnit: '式',
+    section: 'sitework', manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
 ];
 const get = (id: string) => products.find((product) => product.id === id);
 const row = (key: string, override: Partial<V25EditorState['slots'][number]> = {}): V25EditorState['slots'][number] => ({
@@ -218,6 +222,31 @@ describe('商品入替時の位置別サッシ数量・販売単位の保護', (
     expect(saved.option_id).toBe('s2');
     expect(saved.manual_unit_price).toBe(180000);
     expect(validateV25EditorState(result.state, (id) => get(id)?.section)).toBeNull();
+  });
+
+  it('位置別の別途工事を入れ替えても手入力価格モード・売価・位置・数量を保持する', () => {
+    for (const mode of ['manual', 'por'] as const) {
+      const before = state([row('site', {
+        option_id: 'site1', slot_code: 'site-pos', slot_label: '屋外工事',
+        selectable_option_ids: ['site2'], quantity: '1',
+        price_mode: mode, manual_unit_price: mode === 'manual' ? '180000' : '',
+        row_order: 2, work_item: '別途工事',
+      })]);
+      const result = replaceV25PositionStandard(before, 'site', get('site2')!, {}, ['site1'], get);
+      expect(result.error).toBeNull();
+      expect(result.state.slots[0]).toMatchObject({
+        option_id: 'site2', slot_code: 'site-pos', slot_label: '屋外工事',
+        quantity: '1', price_mode: mode, row_order: 2,
+        manual_unit_price: before.slots[0].manual_unit_price,
+        work_item: '別途工事', selectable_option_ids: ['site1'],
+      });
+      expect(validateV25EditorState(result.state, (id) => get(id)?.section)).toBeNull();
+      const saved = buildV25SavePayload(result.state).slots[0];
+      expect(saved.price_mode).toBe(mode);
+      expect(saved.manual_unit_price).toBe(mode === 'manual' ? 180000 : null);
+      expect(saved.slot_code).toBe('site-pos');
+      expect(saved.quantity).toBe('1');
+    }
   });
 
   it('位置別サッシの単位不一致・未登録では確定しない', () => {

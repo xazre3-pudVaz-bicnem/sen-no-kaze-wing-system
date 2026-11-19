@@ -117,7 +117,7 @@ describe('明細行 ↑↓／ドラッグの工事項目移動（DB・金額計�
       lines:dragAcross!.state.lines.map((x,i)=>({...x,row_order:saved.lines[i].row_order})),
     };
     expect(ids(rendered(reloaded,rows(reloaded)))).toEqual(ids(display));
-    expect(saved.slots.map(x=>x.quantity)).toEqual([4,4,4]);
+    expect(saved.slots.map(x=>x.quantity)).toEqual(['4','4','4']);
     expect(saved.lines.map(x=>x.unit_price)).toEqual([8000,8000]);
     expect(saved.slots.map(x=>x.work_item)).toEqual([labels.sash,labels.roof,labels.roof]);
     expect([...saved.slots,...saved.lines].map(x=>x.row_order).sort((a,b)=>(a??0)-(b??0))).toEqual([1,2,3,4,5]);

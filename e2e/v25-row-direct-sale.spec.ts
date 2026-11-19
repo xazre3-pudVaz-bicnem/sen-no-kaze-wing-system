@@ -94,7 +94,11 @@ test('PC：別途見積から売価を直接入力し、0円・空欄・不正�
   await price(page).fill('2500');
   await expect(manual.getByTestId('v25-wb-line-sale-amount')).toContainText('5,000');
 
-  await manual.getByTestId('v25-wb-line-menu').locator('summary').click();
+  const trigger=manual.getByTestId('v25-wb-line-menu').locator('summary');
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  await expect(menu(page)).toBeVisible();
+  await expect(menu(page).getByRole('button',{name:'別途見積にする'})).toBeVisible();
   await menu(page).getByRole('button',{name:'別途見積にする'}).click();
   await expect(price(page)).toHaveValue('');
   await expect(price(page)).toHaveAttribute('placeholder','別途見積');

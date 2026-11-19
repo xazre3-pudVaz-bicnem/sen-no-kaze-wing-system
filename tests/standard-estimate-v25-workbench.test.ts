@@ -303,6 +303,7 @@ describe('Excel 風の画面（描画）', () => {
     const html = render(false);
     expect(html).not.toContain('data-testid="v25-excel-toolbar"');
     expect(html).toContain('data-testid="v25-wb-column-display-position"');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('className="relative z-50 ml-auto shrink-0"');
     expect(html).toContain('data-testid="v25-excel-grid-scroll"');
     expect(html).toContain('overflow-x-auto rounded-b-md');
     expect(html).not.toContain('max-h-[70vh]');

@@ -57,8 +57,24 @@ jobs:
           cp e2e/fixtures/pr690-v25-floating-header-page.tsx.fixture app/pr690-local-floating/page.tsx
           test -f app/pr690-local-floating/page.tsx
 
-      - name: Test real workbench on desktop and mobile
-        run: npx playwright test e2e/pr690-v25-floating-header.spec.ts --project=desktop
+      - name: Test actual workbench using isolated localhost Webpack server
+        run: |
+          npm run dev -- --webpack --port 3100 > /tmp/pr690-next.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl --silent --fail --output /dev/null http://localhost:3100/pr690-local-floating; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            tail -n 150 /tmp/pr690-next.log
+            exit 1
+          fi
+          BASE_URL=http://localhost:3100 npx playwright test e2e/pr690-v25-floating-header.spec.ts --project=desktop
 
       - name: Upload screenshots and failure traces
         if: always()

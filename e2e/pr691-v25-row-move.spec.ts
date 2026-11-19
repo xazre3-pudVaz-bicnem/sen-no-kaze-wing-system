@@ -99,3 +99,81 @@ test('PC：別大区分へのドラッグ・ハンドルのタップは何も変
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
   await expect(page.locator('tr[data-work-item="work:sash_wood"] + '+id('slot','sash'))).toBeVisible();
 });
+
+
+test('PC長い明細：端でドラッグを保持すると画面外の工事項目まで自動スクロールし、途中で勝手に確定しない', async ({ page }) => {
+  test.setTimeout(150_000);
+  await ready(page);
+  const source=row(page,'slot','roof');
+  const target=row(page,'line','wall-extra-65');
+  const handle=source.getByTestId('v25-wb-row-drag-handle');
+  await handle.scrollIntoViewIfNeeded();
+  const grip=await handle.boundingBox();
+  expect(grip).toBeTruthy();
+  const x=grip!.x+grip!.width/2;
+  const y=grip!.y+grip!.height/2;
+  const before=await page.evaluate(() => window.scrollY);
+  const edge=await page.evaluate(() => window.innerHeight-12);
+  const targetBefore=await target.boundingBox();
+  expect(targetBefore && targetBefore.y > edge).toBeTruthy();
+
+  await page.mouse.move(x,y);
+  await page.mouse.down();
+  await page.mouse.move(x,edge,{steps:18});
+  // ポインターが静止してもrequestAnimationFrameでスクロールし続ける。
+  const reached=await page.evaluate(() => window.scrollY);
+  await expect.poll(async () => page.evaluate(() => window.scrollY), { timeout:15_000 })
+    .toBeGreaterThan(Math.max(before+180,reached+100));
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+
+  await expect.poll(async () => {
+    return target.evaluate((el) => {
+      const r=el.getBoundingClientRect();
+      return r.top >= 90 && r.bottom <= window.innerHeight-85;
+    });
+  },{timeout:25_000}).toBe(true);
+  const destination=await target.boundingBox();
+  expect(destination).toBeTruthy();
+  await page.mouse.move(x,destination!.y+destination!.height*.55,{steps:7});
+  await expect(page.getByTestId('v25-wb-drop-indicator')).toBeVisible();
+  await page.mouse.up();
+
+  await expect(page.locator(id('line','wall-extra-65')+' + '+id('slot','roof'))).toBeVisible();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  const afterDrop=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => window.scrollY)).toBe(afterDrop);
+  await page.getByRole('button',{name:'変更を破棄'}).click();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+  await expect(page.locator('tr[data-work-item="work:roof"] + '+id('slot','roof'))).toBeVisible();
+});
+
+test('PC長い明細：端スクロール中のEscキャンセル、通常スクロール・タップは並び順を変えない', async ({page}) => {
+  test.setTimeout(120_000);
+  await ready(page);
+  const handle=row(page,'slot','roof').getByTestId('v25-wb-row-drag-handle');
+  await handle.scrollIntoViewIfNeeded();
+  const box=await handle.boundingBox();
+  expect(box).toBeTruthy();
+  const x=box!.x+box!.width/2, y=box!.y+box!.height/2;
+  const edge=await page.evaluate(() => window.innerHeight-10);
+  await page.mouse.move(x,y);
+  await page.mouse.down();
+  await page.mouse.move(x,edge,{steps:12});
+  await expect.poll(async () => page.evaluate(() => window.scrollY),{timeout:15_000}).toBeGreaterThan(300);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('v25-wb-drop-indicator')).toHaveCount(0);
+  const cancelledAt=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.scrollY)).toBe(cancelledAt);
+  await page.mouse.up();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+  await page.mouse.move(x,edge);
+  const stationary=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.scrollY)).toBe(stationary);
+  // 通常のページwheelは妨げない。
+  await page.mouse.wheel(0,250);
+  await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThan(stationary);
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+});

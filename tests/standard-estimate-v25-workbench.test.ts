@@ -907,7 +907,12 @@ describe('v2.5数量保持：商品選択ポップアップの確定経路と#65
     categoryCode: 'exterior-wall', singleSelect: false, priceUnit: '面',
   };
   const wallOther: V25WorkbenchCandidate = { ...wall, id: 'wall-other', name: '外壁材B' };
-  const catalog = [roof, roofOther, wall, wallOther];
+  const sitework: V25WorkbenchCandidate = {
+    ...roof, id: 'sitework-original', name: '別途工事A', categoryId: 'cat-sitework',
+    categoryName: '別途工事', categoryCode: 'sitework', singleSelect: false, section: 'sitework', priceUnit: '式',
+  };
+  const siteworkOther: V25WorkbenchCandidate = { ...sitework, id: 'sitework-other', name: '別途工事B' };
+  const catalog = [roof, roofOther, wall, wallOther, sitework, siteworkOther];
   const get = (id: string) => catalog.find((p) => p.id === id);
   const getInCategory = (id: string) => catalog.filter((p) => p.categoryId === id);
   const row = (option_id: string, quantity: string, extra: Partial<V25EditorState['slots'][number]> = {}) => ({
@@ -1022,6 +1027,48 @@ describe('v2.5数量保持：商品選択ポップアップの確定経路と#65
     });
     expect(price(before)?.amount).toBe(211500);
     expect(price(after.state)?.amount).toBe(211500);
+  });
+
+  it('別途工事の商品入替では既存のmanual/porと手入力売価・数量・混在行順を保持する', () => {
+    for (const mode of ['manual', 'por'] as const) {
+      const before = editor(row(sitework.id, '1', {
+        price_mode: mode, manual_unit_price: mode === 'manual' ? '180000' : '',
+        row_order: 2, work_item: '別途工事', slot_label: '',
+      }));
+      before.lines = [{
+        key: 'line-1', line_key: 'saved-line', section_code: 'sitework',
+        group_label: '追加工事', name: '追加費用', quantity: '1', unit: '式',
+        price_mode: 'manual', unit_price: '25000', remark: '', review_required: false, row_order: 1,
+      }];
+      const originalPayload = buildV25SavePayload(before);
+      expect(validateV25EditorState(before, (id) => get(id)?.section)).toBeNull();
+
+      const changed = change(before, siteworkOther, { color: 'black' });
+      expect(changed.issue).toBeNull();
+      expect(changed.patch).not.toHaveProperty('price_mode');
+      expect(changed.patch).not.toHaveProperty('manual_unit_price');
+      expect(changed.patch).not.toHaveProperty('quantity');
+      expect(changed.state.slots[0]).toMatchObject({
+        option_id: siteworkOther.id, price_mode: mode,
+        manual_unit_price: before.slots[0].manual_unit_price,
+        quantity: '1', row_order: 2, work_item: '別途工事', baseline_key: 'saved-1',
+      });
+      expect(changed.state.lines).toEqual(before.lines);
+      expect(validateV25EditorState(changed.state, (id) => get(id)?.section)).toBeNull();
+      const payload = buildV25SavePayload(changed.state);
+      expect(payload.slots[0]).toMatchObject({
+        option_id: siteworkOther.id, price_mode: mode, quantity: '1', row_order: 2,
+        manual_unit_price: mode === 'manual' ? 180000 : null,
+      });
+      expect(payload.lines).toEqual(originalPayload.lines);
+      expect(payload.lines[0].row_order).toBe(1);
+      expect(buildV25SavePayload(JSON.parse(JSON.stringify(changed.state)))).toEqual(payload);
+    }
+    const unchanged = change(editor(row(sitework.id, '1', {
+      price_mode: 'manual', manual_unit_price: '180000',
+    })), sitework, { color: 'black' });
+    expect(unchanged.patch).toEqual({ variant_choices: { color: 'black' } });
+    expect(unchanged.state.slots[0].price_mode).toBe('manual');
   });
 
   it('同一商品は販売単位が未登録でも数量を変更しない（旧データの仕様変更を妨げない）', () => {

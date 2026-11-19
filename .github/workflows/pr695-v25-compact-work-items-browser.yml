@@ -1,0 +1,112 @@
+name: PR 695 V25 Compact Work Item Rows Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/standard-estimate-v25-workbench.tsx'
+      - 'e2e/pr695-v25-compact-work-items.spec.ts'
+      - 'tests/v25-work-item-ui.test.ts'
+      - '.github/workflows/pr695-v25-compact-work-items-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr695-compact-work-item-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-visual-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout disposable PR merge
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Require fully isolated local environment
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+
+      - name: Install test-only fixture route
+        run: |
+          mkdir -p app/pr691-e2e-row-move
+          cp e2e/fixtures/pr691-v25-row-move-page.tsx.fixture app/pr691-e2e-row-move/page.tsx
+
+      - name: Genuine main-before and PR-after PC/mobile screenshots and UI tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMPONENT=components/admin/standard-estimate-v25-workbench.tsx
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          cp "$COMPONENT" /tmp/pr695-after-workbench.tsx
+          # Baseline is the real checked-in main component (runner only);
+          # the isolated route, fake products and DB-free test suite remain unchanged.
+          git show "$BASE_SHA:$COMPONENT" > "$COMPONENT"
+          start_server() {
+            ./node_modules/.bin/next dev --webpack --port 3101 > /tmp/pr695-next.log 2>&1 &
+            server_pid=$!
+            ready=0
+            for i in $(seq 1 120); do
+              if curl --silent --fail --output /dev/null http://localhost:3101/pr691-e2e-row-move; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              tail -n 150 /tmp/pr695-next.log
+              exit 1
+            fi
+          }
+          stop_server() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap 'stop_server' EXIT
+          start_server
+          BASE_URL=http://localhost:3101 V25_VISUAL_BASELINE=1 \
+            npx playwright test e2e/pr695-v25-compact-work-items.spec.ts --project=desktop
+          stop_server
+          # Restore the PR component in the disposable runner and retest,
+          # preserving exactly the same fake product fixture and screenshots.
+          cp /tmp/pr695-after-workbench.tsx "$COMPONENT"
+          touch "$COMPONENT"
+          start_server
+          BASE_URL=http://localhost:3101 V25_VISUAL_BASELINE=0 \
+            npx playwright test e2e/pr695-v25-compact-work-items.spec.ts --project=desktop
+
+      - name: Upload before and after PC/mobile screenshots and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr695-v25-work-item-before-after
+          path: |
+            e2e/artifacts/pr695-*.png
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

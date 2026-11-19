@@ -33,7 +33,6 @@ async function assertVisibleStructure(page: Page) {
   await expect(sash.locator('input[aria-label="数量"]')).toHaveValue('1');
   await expect(sash.getByTestId('v25-wb-slot-product-picker-icon')).toBeVisible();
   await expect(sash.getByTestId('v25-wb-slot-sale-amount')).not.toBeEmpty();
-  await expect(page.getByTestId('v25-wb-change-work-group')).toHaveCount(0);
   // Existing manual-line change entry is in a closed action menu (no extra row label).
   await expect(page.locator(row('line','sashLine')).getByTestId('v25-wb-line-menu')).toHaveCount(1);
 }

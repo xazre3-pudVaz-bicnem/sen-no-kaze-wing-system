@@ -93,3 +93,24 @@ test('長い明細の最下部から＋メニューを開いても画面内に�
   await expect(panel(menu)).toBeHidden();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
 });
+
+test('行⋯から削除確認を開くとメニューの最上位レイヤーが閉じ、確認画面を操作できる', async ({page}) => {
+  await ready(page);
+  const line=page.locator('tr[data-v25-dnd-row="line:roofLine"]');
+  const menu=line.getByTestId('v25-wb-line-menu');
+  await menu.locator('summary').click();
+  await menu.getByTestId('v25-wb-line-delete').click();
+  const dialog=page.getByRole('dialog',{name:'この明細を削除しますか？'});
+  await expect(dialog).toBeVisible();
+  await expect(menu.getByTestId('v25-wb-menu-backdrop')).toBeHidden();
+  await dialog.getByRole('button',{name:'キャンセル'}).click();
+  await expect(line).toBeVisible();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+  await menu.locator('summary').click();
+  await menu.getByTestId('v25-wb-line-delete').click();
+  await dialog.getByRole('button',{name:'削除する'}).click();
+  await expect(line).toHaveCount(0);
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  await page.getByRole('button',{name:'変更を破棄'}).click();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+});

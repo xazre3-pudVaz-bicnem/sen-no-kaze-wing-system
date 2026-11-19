@@ -6,6 +6,7 @@ on:
     paths:
       - 'components/admin/standard-estimate-v25-workbench.tsx'
       - 'e2e/v25-row-menu-portal.spec.ts'
+      - 'e2e/v25-row-menu-portal-mobile.spec.ts'
       - '.github/workflows/v25-row-menu-portal-browser.yml'
 
 permissions:
@@ -46,7 +47,7 @@ jobs:
           mkdir -p app/pr691-e2e-row-move
           cp e2e/fixtures/pr691-v25-row-move-page.tsx.fixture app/pr691-e2e-row-move/page.tsx
       - name: Isolated PC and smartphone menu regression
-        run: npx playwright test e2e/v25-row-menu-portal.spec.ts --project=desktop --project=mobile
+        run: npx playwright test e2e/v25-row-menu-portal.spec.ts e2e/v25-row-menu-portal-mobile.spec.ts --project=desktop --project=mobile
       - name: Upload failure traces
         if: always()
         uses: actions/upload-artifact@v4

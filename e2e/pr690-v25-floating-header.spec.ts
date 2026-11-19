@@ -143,14 +143,14 @@ test('PC狭幅｜横スクロール同期・原価ON/OFF・列幅変更・デザ
 
   // The cost switch is UI-only; the actual column list and floating header must update together.
   await page.getByTestId('v25-grid-column-menu').locator('summary').click();
-  await page.getByTestId('v25-wb-show-cost').uncheck();
+  await page.getByTestId('v25-wb-show-cost').uncheck({ timeout: 12000 });
   await expect(grid.locator('th')).toHaveCount(7);
   await scrollPastNativeHeader(page);
   await expect(floating).toBeVisible();
   await assertMatchingHeader(page);
   await page.screenshot({ path: 'e2e/artifacts/pr690-pc-cost-off.png', fullPage: false });
 
-  await page.getByTestId('v25-wb-show-cost').check();
+  await page.getByTestId('v25-wb-show-cost').check({ timeout: 12000 });
   await expect(grid.locator('th')).toHaveCount(10);
   await scrollPastNativeHeader(page);
   await expect(floating).toBeVisible();

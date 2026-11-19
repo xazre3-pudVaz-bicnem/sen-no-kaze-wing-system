@@ -1,0 +1,74 @@
+name: PR 691 Isolated Row Move Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/standard-estimate-v25-workbench.tsx'
+      - 'components/admin/standard-estimate-v25-row-move.ts'
+      - 'components/admin/v25-row-drag-handle.tsx'
+      - 'e2e/pr691-v25-row-move.spec.ts'
+      - 'e2e/pr691-v25-row-move-mobile.spec.ts'
+      - 'e2e/fixtures/pr691-v25-row-move-page.tsx.fixture'
+      - '.github/workflows/pr691-row-move-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr691-row-move-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  row-move-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout disposable PR merge
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install isolated Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Refuse production database and external browser URLs
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+
+      - name: Install v2.5 fixture route only on disposable local runner
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          mkdir -p app/pr691-e2e-row-move
+          cp e2e/fixtures/pr691-v25-row-move-page.tsx.fixture app/pr691-e2e-row-move/page.tsx
+
+      - name: Chromium mouse and real touch regression
+        run: npx playwright test e2e/pr691-v25-row-move.spec.ts e2e/pr691-v25-row-move-mobile.spec.ts --project=desktop --project=mobile
+
+      - name: Upload failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr691-row-move-browser
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

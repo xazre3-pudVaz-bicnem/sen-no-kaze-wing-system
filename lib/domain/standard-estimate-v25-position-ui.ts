@@ -3,7 +3,7 @@
  * DB・保存形式・価格計算には触れない。失敗した操作は元の state を返し、行を増減させない。
  */
 import { V25_SLOT_CODE_PATTERN, type V25EditorState, type V25SlotRow } from './standard-estimate-v25-view';
-import { canUsePositionSlot, type V25WorkbenchCandidate } from './standard-estimate-v25-workbench';
+import { canUsePositionSlot, v25ProductReplacementIssue, type V25WorkbenchCandidate } from './standard-estimate-v25-workbench';
 
 type CandidateOf = (optionId: string) => V25WorkbenchCandidate | undefined;
 export type V25PositionResult = { state: V25EditorState; error: string | null };
@@ -194,12 +194,16 @@ export function replaceV25PositionStandard(
       error: null,
     };
   }
-  const problem = v25ValidPositionAlternatives(selectableIds, standard, candidateOf);
+  const problem = v25ProductReplacementIssue(
+    source, previous, standard, state.slots, candidateOf,
+    (categoryId) => [previous, standard, ...selectableIds.map(candidateOf).filter((item): item is V25WorkbenchCandidate => Boolean(item))]
+      .filter((item) => item.categoryId === categoryId)
+  ) ?? v25ValidPositionAlternatives(selectableIds, standard, candidateOf);
   if (problem) return { state, error: problem };
   return { state: { ...state, slots: state.slots.map((slot) => slot.key === key
     ? {
         ...slot, option_id: standard.id, variant_choices: { ...choices },
-        quantity: '1', selectable_option_ids: [...selectableIds],
+        selectable_option_ids: [...selectableIds],
         ...(standard.section === 'sitework' ? { price_mode: 'por' as const } : {}),
       }
     : slot) }, error: null };

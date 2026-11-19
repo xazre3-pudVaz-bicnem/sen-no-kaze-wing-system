@@ -329,7 +329,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('workGroups.map((workGroup)');
     expect(source).toContain('data-testid="v25-work-item-heading"');
     expect(source).toContain('data-work-item={workGroup.key}');
-    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
+    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {');
     expect(source).toContain("if (rowRef.kind === 'slot')");
     expect(source).toContain('const line = workGroup.lines.find((item) => item.key === rowRef.key)');
     expect(source).toContain('data-v25-excel-col="name"');
@@ -375,7 +375,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
   });
 
   it('↑↓＋とドラッグは同じ行移動経路を使用し、工事項目間でも移動する', () => {
-    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
+    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {');
     expect(source).toContain('v25ArrowRowTarget(');
     expect(source).toContain('v25PlanMixedRowMove(');
     expect(source).toContain('data-testid="v25-wb-row-up"');

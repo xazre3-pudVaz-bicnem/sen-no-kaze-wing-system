@@ -132,17 +132,17 @@ test('PC長い明細：端でドラッグを保持すると画面外の工事項
       return r.top >= 90 && r.bottom <= window.innerHeight-85;
     });
   },{timeout:25_000}).toBe(true);
+  // 移動先を確定する前に端から離す。画面端でスクロール中に座標を測ると行がずれる。
+  const safeY=await page.evaluate(() => Math.round(window.innerHeight*.45));
+  await page.mouse.move(x,safeY,{steps:3});
+  const frozen=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.scrollY)).toBe(frozen);
   const destination=await target.boundingBox();
   expect(destination).toBeTruthy();
-  await page.mouse.move(x,destination!.y+destination!.height*.55,{steps:7});
-  await expect(page.getByTestId('v25-wb-drop-indicator')).toBeVisible();
-  const highlightedBeforeDrop=await page.locator('tr[data-v25-dnd-row].outline-emerald-600').evaluateAll(
-    (els) => els.map(el => ({ id:(el as HTMLElement).dataset.v25DndRow, y:el.getBoundingClientRect().y }))
-  );
-  console.log('LONG_DRAG_BEFORE_DROP', JSON.stringify(highlightedBeforeDrop));
+  await page.mouse.move(x,destination!.y+destination!.height*.80,{steps:2});
+  await expect(target).toHaveClass(/outline-emerald-600/);
   await page.mouse.up();
-  console.log('LONG_DRAG_AFTER_DROP', JSON.stringify(await source.evaluate(el => ({prior:(el.previousElementSibling as HTMLElement)?.dataset.v25DndRow,next:(el.nextElementSibling as HTMLElement)?.dataset.v25DndRow,group:(el.previousElementSibling?.closest('tr[data-work-item]') as HTMLElement)?.dataset.workItem}))));
-
   await expect(page.locator(id('line','wall-extra-65')+' + '+id('slot','roof'))).toBeVisible();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
   const afterDrop=await page.evaluate(() => window.scrollY);

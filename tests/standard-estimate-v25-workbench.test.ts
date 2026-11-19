@@ -366,7 +366,13 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("overlay.style.display = visible ? 'block' : 'none'");
     expect(source).toContain("overlay.setAttribute('aria-hidden', 'true')");
     expect(source).toContain('pointer-events-none fixed top-0 z-[45]');
-    expect(source).toContain('bg-slate-900 text-[12px] font-bold leading-4 text-white');
+    expect(source).toContain('bg-[#E6EDF3] text-[12px] font-bold leading-4 text-[#24374B]');
+    expect(source).toContain("overlay.className = 'pointer-events-none fixed top-0 z-[45] overflow-hidden border-b border-[#CBD5E1] bg-[#E6EDF3] shadow-sm';");
+    expect(source).toContain('border-[#CBD5E1] bg-[#E6EDF3]');
+    expect(source).not.toContain('border-slate-600 bg-slate-900');
+    // 大区分と工事項目の緑は列見出し淡色化の対象外。
+    expect(source).toContain('className="bg-emerald-900 text-white" data-testid={`v25-section-${code}`}');
+    expect(source).toContain('className="border-y border-emerald-200 bg-emerald-100 text-slate-800"');
     expect(source).toContain('h-[34px] sticky');
     expect(source).toContain("sourceHead.cloneNode(true) as HTMLTableSectionElement");
     // 原価列の切替後は同じ hook が再実行され、複製される列数は実ヘッダーに一致する。

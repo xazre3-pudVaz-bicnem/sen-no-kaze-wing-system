@@ -13,7 +13,27 @@ test('Pixel 7：別途見積セルから0円・売価直接入力、メニュー
   const input=manual.getByTestId('v25-wb-line-price-input');
   await expect(input).toBeVisible();
   await expect(input).toHaveAttribute('placeholder','別途見積');
-  await input.tap();
+  const grid=page.getByTestId('v25-excel-grid-scroll');
+  await grid.evaluate((element) => {
+    const input=element.querySelector<HTMLInputElement>('tr[data-v25-dnd-row="line:roofLine"] [data-testid="v25-wb-line-price-input"]');
+    if (!input) throw new Error('Sale price input not found');
+    const rect=input.getBoundingClientRect(), area=element.getBoundingClientRect();
+    element.scrollLeft += rect.left + rect.width/2 - (area.left + area.width*0.7);
+  });
+  // Require a real visible tap target, rather than using fill() to bypass sticky cells.
+  const touchPoint=await input.evaluate((element) => {
+    const rect=element.getBoundingClientRect();
+    const start=Math.max(1,rect.left+2), end=Math.min(window.innerWidth-1,rect.right-2);
+    const y=rect.top+rect.height/2;
+    for(let x=start;x<=end;x+=3) {
+      const hit=document.elementFromPoint(x,y);
+      if(hit===element || element.contains(hit)) return {x,y};
+    }
+    return null;
+  });
+  expect(touchPoint,'売価セルを実際にタップできる必要があります').not.toBeNull();
+  await page.touchscreen.tap(touchPoint!.x,touchPoint!.y);
+  await expect(input).toBeFocused();
   await input.fill('0');
   await expect(manual.getByTestId('v25-wb-line-sale-amount')).not.toContainText('未確定');
   await input.fill('3000');

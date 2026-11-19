@@ -20,7 +20,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
 }));
 const { StandardEstimateV25Workbench } = await import('@/components/admin/standard-estimate-v25-workbench');
 
-// 2026-11-16 の先方の依頼：Excel 風明細の商品の行の工事項目（自動の値・プルダウン・保存）の画面の部分
+// Excel風明細の商品の行の工事項目（自動の値・移動による更新・保存）の画面
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8').split('\r').join('');
 
 const slot = (key: string, optionId: string, extra: Partial<V25SlotRow> = {}): V25SlotRow => ({
@@ -47,7 +47,7 @@ describe('工事項目の自動の値と選択肢', () => {
     expect(v25AutoWorkItemLabel('kitchen', { sectionCode: 'option' })).toBe('');
   });
 
-  it('プルダウンの分類の項目は区分・モデル・仕様ごと（Excel の標準見積）', () => {
+  it('分類の候補は区分・モデル・仕様ごと（Excel の標準見積）', () => {
     expect(v25WorkItemLabelsForSection({ ...context, sectionCode: 'interior_exterior' })).toEqual([
       '1. サッシ・木製建具工事', '2. 屋根工事', '3. 外壁工事', '4. 内装仕上げ',
     ]);
@@ -98,7 +98,7 @@ describe('保存（工事項目は送り、並び順は送らない）', () => {
   });
 });
 
-describe('画面の描画（工事項目のプルダウン）', () => {
+describe('画面の描画（工事項目は表示のみ、移動で変更）', () => {
   const rule: PricingCalculationRule = {
     id: 'rule-1', formula_code: 'v2.5', rounding_mode: 'trunc',
     expense_target_sections: ['base', 'interior_exterior', 'option'], auto_price_sections: ['base', 'interior_exterior', 'option'],
@@ -121,30 +121,28 @@ describe('画面の描画（工事項目のプルダウン）', () => {
       costs: { pinned: {}, currentProduct: { roof1: 1000, sash1: 1000, light1: 1000 }, currentChoice: {} },
       rule, taxRule, preview: null, savedTotal: null,
     }));
-  const selects = (html: string) => [...html.matchAll(/<select[^>]*data-testid="v25-wb-slot-work-item-select"[^>]*>([\s\S]*?)<\/select>/g)].map((match) => ({
-    selected: /<option[^>]*selected=""[^>]*>([^<]*)<\/option>/.exec(match[1])?.[1] ?? null,
-    options: [...match[1].matchAll(/<option[^>]*>([^<]*)<\/option>/g)].map((option) => option[1]),
-  }));
+  const workLabels = (html: string) => [...html.matchAll(
+    /<span[^>]*data-testid="v25-wb-slot-work-item-label"[^>]*>([^<]*)<\/span>/g,
+  )].map((match) => match[1]);
 
-  it('今までの下書き（工事項目なし）は、カテゴリーからの自動の値を出し、未保存の案内を出す（分類できない商品は未設定）', () => {
+
+  it('旧下書きの自動工事項目は表示するが、移動用プルダウンは出さない', () => {
     const html = render(false, state([slot('a', 'roof1'), slot('b', 'light1')], [line('l', { section_code: 'option', group_label: '照明工事' })]));
-    expect(selects(html)).toEqual([
-      { selected: '2. 屋根工事', options: ['1. サッシ・木製建具工事', '2. 屋根工事', '3. 外壁工事', '4. 内装仕上げ'] },
-      { selected: '未設定', options: ['未設定', '1. 設備機器', '2. その他の設備', '3. 各種養生（床養生マット、壁ビニールシート等）', '照明工事'] },
-    ]);
+    expect(workLabels(html)).toEqual(['2. 屋根工事', '未設定']);
+    expect(html).not.toContain('data-testid="v25-wb-slot-work-item-select"');
     expect(html).toContain('data-testid="v25-wb-work-item-auto-unsaved"');
     expect(html).toContain('工事項目が未設定の商品 1 件は');
   });
 
   it('保存した工事項目はその値を出し、未保存の案内は出さない', () => {
     const html = render(false, state([slot('a', 'roof1', { work_item: '3. 外壁工事' })], []));
-    expect(selects(html)[0].selected).toBe('3. 外壁工事');
+    expect(workLabels(html)).toEqual(['3. 外壁工事']);
     expect(html).not.toContain('data-testid="v25-wb-work-item-auto-unsaved"');
   });
 
   it('公開済みの版（閲覧だけ）は保存した値だけを出す（自動の値は出さない）', () => {
     const html = render(true, state([slot('a', 'roof1'), slot('b', 'sash1', { work_item: '1. サッシ・木製建具工事' })], []));
-    expect(selects(html)).toEqual([]);
+    expect(workLabels(html)).toEqual(['1. サッシ・木製建具工事', '未設定']);
     expect(html).toContain('title="未設定">未設定</span>');
     expect(html).toContain('title="1. サッシ・木製建具工事">1. サッシ・木製建具工事</span>');
     expect(html).not.toContain('data-testid="v25-wb-work-item-auto-unsaved"');
@@ -154,14 +152,12 @@ describe('画面の描画（工事項目のプルダウン）', () => {
 describe('画面（Excel 風明細）', () => {
   const workbench = read('components/admin/standard-estimate-v25-workbench.tsx');
 
-  it('商品の行に工事項目のプルダウン。未設定ならカテゴリーからの自動の値を出し、自動の値があれば「未設定」は出さない', () => {
-    expect(workbench).toContain('data-testid="v25-wb-slot-work-item-select"');
-    expect(workbench).toContain('value={workItemOf(slot)}');
-    expect(workbench).toContain("onChange={(event) => setSlot(slot.key, { work_item: event.target.value })}");
-    expect(workbench).toContain('{!autoWorkItemOf(slot) && <option value="">未設定</option>}');
+  it('工事項目の編集プルダウンを廃止し、表示専用ラベルと自動分類を維持', () => {
+    expect(workbench).not.toContain('data-testid="v25-wb-slot-work-item-select"');
+    expect(workbench).toContain('data-testid="v25-wb-slot-work-item-label"');
     expect(workbench).toContain('const workItemOf = (slot: V25SlotRow) => slot.work_item?.trim() || autoWorkItemOf(slot);');
-    // 公開済みの版（閲覧だけ）は保存した値だけ
     expect(workbench).toContain("if (readOnly) return '';");
+    expect(workbench).toContain('v25PlanMixedRowMove(');
   });
 
   it('見出しの分け方と保存は同じ工事項目（表示の値）を使う。混在の保存順を全行に付ける', () => {

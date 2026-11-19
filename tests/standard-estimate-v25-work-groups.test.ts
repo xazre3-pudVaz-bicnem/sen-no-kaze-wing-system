@@ -329,7 +329,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('workGroups.map((workGroup)');
     expect(source).toContain('data-testid="v25-work-item-heading"');
     expect(source).toContain('data-work-item={workGroup.key}');
-    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
+    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {');
     expect(source).toContain("if (rowRef.kind === 'slot')");
     expect(source).toContain('const line = workGroup.lines.find((item) => item.key === rowRef.key)');
     expect(source).toContain('data-v25-excel-col="name"');
@@ -374,17 +374,19 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('columnPrefs.reset');
   });
 
-  it('↑↓＋は商品と自由入力を混在表示し、工事項目の境界を跨がず列数を変えない', () => {
-    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef, rowIndex) => {');
-    expect(source).toContain('v25MoveMixedRowWithinGroup(');
+  it('↑↓＋とドラッグは同じ行移動経路を使用し、工事項目間でも移動する', () => {
+    expect(source).toContain('v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {');
+    expect(source).toContain('v25ArrowRowTarget(');
+    expect(source).toContain('v25PlanMixedRowMove(');
     expect(source).toContain('data-testid="v25-wb-row-up"');
     expect(source).toContain('data-testid="v25-wb-row-down"');
     expect(source).toContain('testId="v25-wb-row-insert"');
+    expect(source).toContain('<V25RowDragHandle');
+    expect(source).toContain('data-testid="v25-wb-drop-indicator"');
+    expect(source).not.toContain('data-testid="v25-wb-manual-move-up"');
+    expect(source).not.toContain('data-testid="v25-wb-manual-move-down"');
     expect(source).toContain('testId="v25-wb-line-menu"');
-    expect(source).toContain('data-testid="v25-wb-manual-move-up"');
-    expect(source).toContain('data-testid="v25-wb-manual-move-down"');
-    expect(source).toContain('disabled={positionActionsLocked || groupEditor !== null || rowIndex === 0}');
-    expect(source).toContain('rowIndex === v25MixedRowsForWorkGroup(mixedOrder, workGroup).length - 1');
+    expect(source).toContain('<V25RowDeleteButton inMenu');
     expect(source).toContain('testId="v25-wb-line-delete"');
     expect(source).toContain('data-v25-excel-col="name"');
     expect(source).toContain('data-testid="v25-wb-change-work-group"');

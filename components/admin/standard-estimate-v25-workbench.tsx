@@ -175,6 +175,7 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
   const menuRef = useRef<HTMLDetailsElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const place = (summary: HTMLElement) => {
     const rect = summary.getBoundingClientRect();
@@ -192,7 +193,7 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
 
   useEffect(() => {
     const details = menuRef.current;
-    if (!placement || !details?.open) return;
+    if (!placement || !menuOpen || !details?.open) return;
     const dismiss = () => { details.open = false; };
     const onScroll = (event: Event) => {
       // パネル内スクロールは選択操作の一部。表やページのスクロール時は閉じる。
@@ -216,12 +217,13 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
       window.removeEventListener('resize', dismiss);
       document.removeEventListener('keydown', onEscape, true);
     };
-  }, [placement]);
+  }, [placement, menuOpen]);
 
   return (
     <details ref={menuRef} id={menuId} className="group relative inline-block" data-testid={testId}
       onToggle={(event) => {
         if (disabled && event.currentTarget.open) { event.currentTarget.open = false; return; }
+        setMenuOpen(event.currentTarget.open);
         if (!event.currentTarget.open) setPlacement(null);
         else if (!placement) {
           const summary = event.currentTarget.querySelector('summary');
@@ -244,7 +246,7 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
           if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
           if (!menuRef.current?.open) place(event.currentTarget);
         }}>{triggerText}</summary>
-      {placement && createPortal(
+      {placement && menuOpen && createPortal(
         <>
           <div className="fixed inset-0 z-[79]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
             onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />

@@ -204,7 +204,7 @@ export function replaceV25PositionStandard(
     ? {
         ...slot, option_id: standard.id, variant_choices: { ...choices },
         selectable_option_ids: [...selectableIds],
-        ...(standard.section === 'sitework' ? { price_mode: 'por' as const } : {}),
+        // 既存の手入力価格・別途見積モードはそのまま保持する。
       }
     : slot) }, error: null };
 }

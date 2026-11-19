@@ -68,7 +68,7 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
   });
 
   it('「…」と区分の行追加メニューは元のsummaryを明示保存し、ポップアップ閉鎖で元の行に戻す', () => {
-    expect(workbench).toContain("const menuTrigger = button.closest('details')?.querySelector<HTMLElement>('summary')");
+    expect(workbench).toContain("const menuTrigger = v25MenuDetailsForAction(button)?.querySelector<HTMLElement>('summary')");
     expect(workbench).toContain('setDialogOpener(menuTrigger ?? button);');
     expect(workbench).toContain('const [dialogOpener, setDialogOpener] = useState<HTMLElement | null>(null);');
     expect((workbench.match(/rememberRowMenuOpener\(event\.currentTarget\)/g) ?? [])).toHaveLength(6);

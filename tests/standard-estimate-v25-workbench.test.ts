@@ -305,6 +305,7 @@ describe('Excel 風の画面（描画）', () => {
 
   it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
     const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
     expect(html).not.toContain('data-testid="v25-excel-toolbar"');
     expect(html).toContain('data-testid="v25-wb-column-display-position"');
     expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('className="relative z-50 ml-auto shrink-0"');
@@ -317,8 +318,9 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('sticky left-7 top-0 z-40');
     expect(html).not.toContain('sticky left-[8rem] top-0 z-40');
     expect(html).toContain('sticky top-0 z-30');
-    expect(html).toContain('data-testid="v25-wb-menu-panel"');
-    expect(html).toContain('fixed z-[60]');
+    expect(source).toContain('data-testid="v25-wb-menu-panel"');
+    expect(source).toContain('fixed z-[80]');
+    expect(source).toContain('createPortal(');
     expect(html).not.toContain('sticky left-[6.25rem]');
     expect(html).toContain('bg-emerald-900');
     expect(html).not.toContain('data-v25-excel-col="group"');

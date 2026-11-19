@@ -1,7 +1,8 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Package, Trash2 } from 'lucide-react';
 import { V25RowDragHandle } from './v25-row-drag-handle';
@@ -157,9 +158,24 @@ function V25RowDeleteButton({ name, disabled, testId, onConfirm, inMenu = false 
   );
 }
 
+/** Portalの項目から対応するdetailsに戻る。DOMのclosest('details')はPortalを跨げない。 */
+function v25MenuDetailsForAction(element: HTMLElement): HTMLDetailsElement | null {
+  const owner = element.closest<HTMLElement>('[data-v25-menu-owner]')?.dataset.v25MenuOwner;
+  const details = owner ? document.getElementById(owner) : element.closest('details');
+  return details instanceof HTMLDetailsElement ? details : null;
+}
+
+function closeV25RowMenuAction(element: HTMLElement) {
+  const details = v25MenuDetailsForAction(element);
+  if (details) details.open = false;
+}
+
 function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', disabled = false }: { label: string; testId: string; children: ReactNode; triggerText?: string; disabled?: boolean }) {
+  const menuId = useId();
   const menuRef = useRef<HTMLDetailsElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<V25MenuPlacement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const place = (summary: HTMLElement) => {
     const rect = summary.getBoundingClientRect();
@@ -177,14 +193,17 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
 
   useEffect(() => {
     const details = menuRef.current;
-    if (!placement || !details?.open) return;
+    if (!placement || !menuOpen || !details?.open) return;
     const dismiss = () => { details.open = false; };
     const onScroll = (event: Event) => {
-      if (details.contains(event.target as Node)) return;
+      // パネル内スクロールは選択操作の一部。表やページのスクロール時は閉じる。
+      if (panelRef.current?.contains(event.target as Node)) return;
       dismiss();
     };
     const onEscape = (event: KeyboardEvent) => {
       if (!details.open || event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return;
+      // 削除確認などのモーダルのEscapeはモーダル自身に任せる。
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       dismiss();
@@ -198,12 +217,13 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
       window.removeEventListener('resize', dismiss);
       document.removeEventListener('keydown', onEscape, true);
     };
-  }, [placement]);
+  }, [placement, menuOpen]);
 
   return (
-    <details ref={menuRef} className="group relative inline-block" data-testid={testId}
+    <details ref={menuRef} id={menuId} className="group relative inline-block" data-testid={testId}
       onToggle={(event) => {
         if (disabled && event.currentTarget.open) { event.currentTarget.open = false; return; }
+        setMenuOpen(event.currentTarget.open);
         if (!event.currentTarget.open) setPlacement(null);
         else if (!placement) {
           const summary = event.currentTarget.querySelector('summary');
@@ -218,7 +238,7 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
       }}>
       <summary className={triggerText === '⋯'
         ? 'flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden'
-        : triggerText === '＋' 
+        : triggerText === '＋'
           ? 'flex size-4 cursor-pointer list-none items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-semibold text-emerald-900 hover:bg-slate-100 [&::-webkit-details-marker]:hidden'
           : 'flex h-6 cursor-pointer list-none items-center justify-center rounded border border-emerald-400/70 px-2 text-[10px] font-semibold text-white hover:bg-emerald-800 [&::-webkit-details-marker]:hidden'}
         aria-label={label} title={label} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : 0}
@@ -226,16 +246,23 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
           if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
           if (!menuRef.current?.open) place(event.currentTarget);
         }}>{triggerText}</summary>
-      {placement && <div className="fixed inset-0 z-[59]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
-        onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />}
-      <div className={'fixed z-[60] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg ' + (placement ? '' : 'invisible')}
-        style={placement ?? undefined} data-testid="v25-wb-menu-panel">
-        {children}
-      </div>
+      {/* 閉じている間はSSRの明細操作要素を残し、表示・操作は一切させない。 */}
+      {!menuOpen && <div hidden aria-hidden="true">{children}</div>}
+      {placement && menuOpen && createPortal(
+        <>
+          <div className="fixed inset-0 z-[79]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (menuRef.current) menuRef.current.open = false; }} />
+          <div ref={panelRef} data-v25-menu-owner={menuId}
+            className="fixed z-[80] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg"
+            style={placement} data-testid="v25-wb-menu-panel">
+            {children}
+          </div>
+        </>,
+        document.body,
+      )}
     </details>
   );
 }
-
 
 /**
  * ページ縦スクロールを保持したまま、明細が画面上端を通過している間だけ列見出しを表示する。
@@ -471,7 +498,7 @@ function WorkbenchBody({
   const [dialogOpener, setDialogOpener] = useState<HTMLElement | null>(null);
   const rememberDialogOpener = (button: HTMLElement) => { setDialogOpener(button); };
   const rememberRowMenuOpener = (button: HTMLElement) => {
-    const menuTrigger = button.closest('details')?.querySelector<HTMLElement>('summary');
+    const menuTrigger = v25MenuDetailsForAction(button)?.querySelector<HTMLElement>('summary');
     setDialogOpener(menuTrigger ?? button);
   };
 
@@ -1051,14 +1078,14 @@ function WorkbenchBody({
           <button type="button" data-testid="v25-wb-insert-slot" disabled={locked}
             className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
             onClick={(event) => {
-              event.currentTarget.closest('details')?.removeAttribute('open');
+              closeV25RowMenuAction(event.currentTarget);
               rememberRowMenuOpener(event.currentTarget);
               setPickerDirty(false); setPicker({ section: row.section, targetKey: null, insertAfter: row });
             }}>直下に商品台帳から追加</button>
           <button type="button" data-testid="v25-wb-insert-line" disabled={locked}
             className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
             onClick={(event) => {
-              event.currentTarget.closest('details')?.removeAttribute('open');
+              closeV25RowMenuAction(event.currentTarget);
               addLine(row.section, row, group.label);
             }}>直下に手入力明細を追加</button>
         </V25WorkbenchRowMenu>
@@ -1328,12 +1355,12 @@ function WorkbenchBody({
                         <button type="button" className="block w-full px-3 py-1.5 text-left text-ink hover:bg-slate-50"
                           onClick={(event) => {
                             rememberRowMenuOpener(event.currentTarget);
-                            event.currentTarget.closest('details')?.removeAttribute('open');
+                            closeV25RowMenuAction(event.currentTarget);
                             setPickerDirty(false); setPicker({ section: code, targetKey: null });
                           }}>商品台帳から追加</button>
                         <button type="button" className="block w-full px-3 py-1.5 text-left text-ink hover:bg-slate-50"
                           onClick={(event) => {
-                            event.currentTarget.closest('details')?.removeAttribute('open');
+                            closeV25RowMenuAction(event.currentTarget);
                             addLine(code);
                           }}>直接入力</button>
                       </V25WorkbenchRowMenu>
@@ -1500,13 +1527,13 @@ function WorkbenchBody({
                               <div className="flex items-center justify-center gap-2">
                                 <V25WorkbenchRowMenu testId="v25-wb-slot-menu" label={(candidate?.name ?? '商品') + 'の操作'}>
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { rememberRowMenuOpener(event.currentTarget); event.currentTarget.closest('details')?.removeAttribute('open'); setPickerDirty(false); setPicker({ section: code, targetKey: slot.key });  }}>商品台帳から選択</button>
+                                    onClick={(event) => { rememberRowMenuOpener(event.currentTarget); closeV25RowMenuAction(event.currentTarget); setPickerDirty(false); setPicker({ section: code, targetKey: slot.key });  }}>商品台帳から選択</button>
                                   {candidate && candidate.id === slot.option_id && !candidate.retired && !candidate.unavailable && (
                                     <Link href={'/admin/options/' + encodeURIComponent(slot.option_id)}
                                       target="_blank" rel="noopener noreferrer" prefetch={false}
                                       data-testid="v25-wb-slot-edit-catalog"
                                       className="block w-full px-3 py-1.5 text-left text-navy hover:bg-slate-50"
-                                      onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); }}>
+                                      onClick={(event) => { closeV25RowMenuAction(event.currentTarget); }}>
                                       この商品を台帳で編集 ↗
                                     </Link>
                                   )}
@@ -1517,7 +1544,7 @@ function WorkbenchBody({
                                       onClick={(event) => {
                                         if (pending || positionInputActive) return;
                                         rememberRowMenuOpener(event.currentTarget);
-                                        event.currentTarget.closest('details')?.removeAttribute('open');
+                                        closeV25RowMenuAction(event.currentTarget);
                                         setDuplicateFor({ slotKey: slot.key, label: '', error: null });
                                       }}>別の位置に複製</button>
                                   )}
@@ -1528,21 +1555,21 @@ function WorkbenchBody({
                                       onClick={(event) => {
                                         if (positionActionsLocked) return;
                                         rememberRowMenuOpener(event.currentTarget);
-                                        event.currentTarget.closest('details')?.removeAttribute('open');
+                                        closeV25RowMenuAction(event.currentTarget);
                                         openPosition(slot);
                                       }}>位置を設定</button>
                                   )}
                                   {slot.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'manual' }); }}>金額を入力する</button>
+                                    onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setSlot(slot.key, { price_mode: 'manual' }); }}>金額を入力する</button>
                                   )}
                                   {slot.price_mode !== 'por' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'por' }); }}>別途見積にする</button>
+                                    onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setSlot(slot.key, { price_mode: 'por' }); }}>別途見積にする</button>
                                   )}
                                   {code !== 'sitework' && slot.price_mode !== 'auto' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'auto' }); }}>自動計算に戻す</button>
+                                    onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setSlot(slot.key, { price_mode: 'auto' }); }}>自動計算に戻す</button>
                                   )}
                                 <V25RowDeleteButton inMenu
                                   testId="v25-wb-slot-delete" name={candidate?.name || '商品'}
@@ -1621,21 +1648,21 @@ function WorkbenchBody({
                                     className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
                                     onClick={(event) => {
                                       rememberRowMenuOpener(event.currentTarget);
-                                      event.currentTarget.closest('details')?.removeAttribute('open');
+                                      closeV25RowMenuAction(event.currentTarget);
                                       setGroupEditor({ lineKey: line.key, originalLabel: line.group_label, value: line.group_label });
                                     }}>工事項目を変更</button>
                                   {line.price_mode !== 'manual' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { price_mode: 'manual' }); }}>金額を入力する</button>
+                                    onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setLine(line.key, { price_mode: 'manual' }); }}>金額を入力する</button>
                                   )}
                                   {line.price_mode !== 'por' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { price_mode: 'por' }); }}>別途見積にする</button>
+                                    onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setLine(line.key, { price_mode: 'por' }); }}>別途見積にする</button>
                                   )}
                                   {line.review_required && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     title="要見直し → 見直し済みにする"
-                                    onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { review_required: false }); }}>見直し済みにする</button>
+                                    onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setLine(line.key, { review_required: false }); }}>見直し済みにする</button>
                                   )}
                                 <V25RowDeleteButton inMenu
                                   testId="v25-wb-line-delete" name={line.name.trim() || '名称未入力の明細'}

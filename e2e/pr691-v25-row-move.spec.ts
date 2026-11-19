@@ -68,7 +68,8 @@ test('PC：入力欄の操作とドラッグを分離。右端…内の削除は
   await expect(page.getByTestId('v25-wb-drop-indicator')).toHaveCount(0);
   const menu=line.getByTestId('v25-wb-line-menu');
   await menu.locator('summary').click();
-  const del=menu.getByTestId('v25-wb-line-delete');
+  // Portal描画された項目は元行のDOM子ではない。表示中のパネルから特定する。
+  const del=page.getByTestId('v25-wb-menu-panel').getByTestId('v25-wb-line-delete');
   await expect(del).toBeVisible();
   await del.click();
   const dialog=page.getByRole('dialog',{name:'この明細を削除しますか？'});

@@ -67,7 +67,6 @@ import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
 import {
   v25AutoWorkItemLabel,
   v25WorkGroupsForDisplay,
-  v25WorkItemLabelsForSection,
 } from '@/components/admin/standard-estimate-v25-work-groups';
 import {
   V25ColumnDisplayMenu,
@@ -486,15 +485,6 @@ function WorkbenchBody({
     return v25AutoWorkItemLabel(candidate?.categoryCode, { modelSlug, specCode, sectionCode: candidate?.section });
   };
   const workItemOf = (slot: V25SlotRow) => slot.work_item?.trim() || autoWorkItemOf(slot);
-  // プルダウンの選択肢：その区分の分類の項目、同じ区分の手入力明細の工事項目（group_label）、今の値
-  const workItemOptions = (code: StandardLineSectionCode, current: string) => [
-    ...new Set([
-      ...v25WorkItemLabelsForSection({ modelSlug, specCode, sectionCode: code }),
-      ...state.lines.filter((line) => line.section_code === code).map((line) => line.group_label.trim()),
-      current.trim(),
-    ].filter(Boolean)),
-  ];
-
   // 保存した共通 display_order から商品・自由入力の混在順を再構成する。
   // 工事項目ごとの見出しは #687 の現行仕様を維持し、見出し内だけ ↑↓ できる。
   const persistedMixedOrder = useMemo(
@@ -1441,25 +1431,13 @@ function WorkbenchBody({
                                 </div>
                               )}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
-                              {/* 工事項目（2026-11-16 の先方の依頼）：未設定ならカテゴリーからの自動の値。プルダウンで変えられ、保存・見積書の摘要に残る */}
+                              {/* 工事項目は移動操作で更新する。未分類商品の表示・自動設定・既存保存処理は維持。 */}
                               <div className="mt-px flex min-w-0 items-baseline gap-x-1 text-[10px] text-slate-600" data-testid="v25-wb-slot-work-item">
                                 <span className="shrink-0">工事項目：</span>
-                                {readOnly ? (
-                                  <span className="min-w-0 truncate" title={slot.work_item?.trim() || '未設定'}>{slot.work_item?.trim() || '未設定'}</span>
-                                ) : (
-                                  <select
-                                    className="h-5 min-w-0 max-w-[14rem] rounded border border-slate-300 bg-white px-0.5 py-0 text-[10px] text-ink"
-                                    aria-label={`${candidate?.name ?? '商品'}の工事項目`}
-                                    data-testid="v25-wb-slot-work-item-select"
-                                    disabled={pending}
-                                    title={workItemOf(slot) || '未設定'}
-                                    value={workItemOf(slot)}
-                                    onChange={(event) => setSlot(slot.key, { work_item: event.target.value })}>
-                                    {/* 自動の値があるカテゴリーは未設定にしない（開き直すと自動の値に戻るため） */}
-                                    {!autoWorkItemOf(slot) && <option value="">未設定</option>}
-                                    {workItemOptions(code, workItemOf(slot)).map((label) => <option key={label} value={label}>{label}</option>)}
-                                  </select>
-                                )}
+                                <span className="min-w-0 truncate" data-testid="v25-wb-slot-work-item-label"
+                                  title={(readOnly ? slot.work_item?.trim() : workItemOf(slot)) || '未設定'}>
+                                  {(readOnly ? slot.work_item?.trim() : workItemOf(slot)) || '未設定'}
+                                </span>
                               </div>
                               {status && status !== 'current' && (
                                 <div className="mt-0.5" data-testid="v25-wb-slot-cost-alert">

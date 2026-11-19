@@ -318,7 +318,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).not.toContain('sticky left-[8rem] top-0 z-40');
     expect(html).toContain('sticky top-0 z-30');
     expect(html).toContain('data-testid="v25-wb-menu-panel"');
-    expect(html).toContain('fixed z-[60]');
+    expect(html).toContain('popover="manual"');
     expect(html).not.toContain('sticky left-[6.25rem]');
     expect(html).toContain('bg-emerald-900');
     expect(html).not.toContain('data-v25-excel-col="group"');
@@ -615,6 +615,10 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain("window.addEventListener('resize', dismiss)");
     expect(source).toContain("document.addEventListener('keydown', onEscape, true)");
     expect(source).toContain('data-testid="v25-wb-menu-backdrop"');
+    expect(source).toContain("document.addEventListener('pointerdown', onOutside, true)");
+    expect(source).toContain("document.addEventListener('click', onOutside, true)");
+    expect(source).toContain('panelRef.current?.showPopover()');
+    expect(source).toContain('backdropRef.current?.showPopover()');
     expect(source).toContain("event.stopImmediatePropagation()");
     expect(source).toContain("event.key === 'Escape'");
     expect(source).toContain('maxHeight: Math.max(80');

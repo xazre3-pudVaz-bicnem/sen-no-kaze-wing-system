@@ -45,3 +45,50 @@ test('Pixel 7：タッチは左ハンドルのみで開始し、別工事項目�
   await expect(name).toHaveValue('スマートフォンでも入力可能');
   await expect(page.getByTestId('v25-wb-drop-indicator')).toHaveCount(0);
 });
+
+
+test('Pixel 7長い明細：実タッチを画面下端で保持すると画面外までスクロールし、指を離して停止', async ({page}) => {
+  test.setTimeout(150_000);
+  await page.goto('/pr691-e2e-row-move');
+  const source=page.locator('tr[data-v25-dnd-row="slot:roof"]');
+  const target=page.locator('tr[data-v25-dnd-row="line:wall-extra-70"]');
+  const grip=source.getByTestId('v25-wb-row-drag-handle');
+  await grip.scrollIntoViewIfNeeded();
+  const box=await grip.boundingBox();
+  expect(box).toBeTruthy();
+  const x=box!.x+box!.width/2;
+  const startY=box!.y+box!.height/2;
+  const endY=await page.evaluate(() => window.innerHeight-14);
+  const targetBefore=await target.boundingBox();
+  expect(targetBefore && targetBefore.y > endY).toBeTruthy();
+
+  const cdp=await page.context().newCDPSession(page);
+  const before=await page.evaluate(() => window.scrollY);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y:startY}]});
+  for(let i=1;i<=16;i++){
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:startY+(endY-startY)*i/16}]});
+  }
+  const reached=await page.evaluate(() => window.scrollY);
+  await expect.poll(async () => page.evaluate(() => window.scrollY),{timeout:15_000})
+    .toBeGreaterThan(Math.max(before+160,reached+100));
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+  await expect.poll(async () => target.evaluate((el) => {
+    const r=el.getBoundingClientRect();
+    return r.top>=100 && r.bottom<=window.innerHeight-85;
+  }),{timeout:25_000}).toBe(true);
+
+  const destination=await target.boundingBox();
+  expect(destination).toBeTruthy();
+  await cdp.send('Input.dispatchTouchEvent',{
+    type:'touchMove',touchPoints:[{x,y:destination!.y+destination!.height*.55}],
+  });
+  await expect(page.getByTestId('v25-wb-drop-indicator')).toBeVisible();
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await expect(page.locator('tr[data-v25-dnd-row="line:wall-extra-70"] + tr[data-v25-dnd-row="slot:roof"]')).toBeVisible();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  const stopped=await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.scrollY)).toBe(stopped);
+  await page.getByRole('button',{name:'変更を破棄'}).click();
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
+});

@@ -1132,6 +1132,12 @@ function WorkbenchBody({
 
   return (
     <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
+      {dropPreview && <div data-testid="v25-wb-drop-indicator" role="status" aria-label="ここに移動"
+        className="pointer-events-none fixed z-[48] h-[3px] bg-emerald-600 shadow-[0_0_0_1px_white]"
+        style={{ top: dropPreview.top - 1, left: dropPreview.left, width: dropPreview.width }}>
+        <span className="absolute -top-5 left-1 rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-white">ここへ移動</span>
+      </div>}
+
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
       {!readOnly && dirty && <p className="text-xs font-semibold text-amber-800" data-testid="v25-wb-unsaved-position">明細に反映済み・下書き未保存（保存は「下書きを保存」から）</p>}
       {!readOnly && unsavedAutoWorkItems > 0 && (
@@ -1200,11 +1206,6 @@ function WorkbenchBody({
       </div>
 
 
-      {dropPreview && <div data-testid="v25-wb-drop-indicator" role="status" aria-label="ここに移動"
-        className="pointer-events-none fixed z-[48] h-[3px] bg-emerald-600 shadow-[0_0_0_1px_white]"
-        style={{ top: dropPreview.top - 1, left: dropPreview.left, width: dropPreview.width }}>
-        <span className="absolute -top-5 left-1 rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-white">ここへ移動</span>
-      </div>}
       <div ref={gridRef} className="overflow-x-auto rounded-b-md border border-slate-300 bg-white" data-testid="v25-excel-grid-scroll">
         <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
           style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}

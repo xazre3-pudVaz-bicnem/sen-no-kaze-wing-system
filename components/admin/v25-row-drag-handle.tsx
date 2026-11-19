@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { GripVertical } from 'lucide-react';
 import type { V25MoveSide } from './standard-estimate-v25-row-move';
 
@@ -8,15 +8,20 @@ type DragSession = {
   pointerId: number;
   originX: number;
   originY: number;
+  x: number;
+  y: number;
   dragging: boolean;
-  targetId: string | null;
-  side: V25MoveSide;
+  table: HTMLTableElement;
 };
 
+const EDGE_PX = 72;
+const MIN_SCROLL_PX = 4;
+const MAX_SCROLL_PX = 18;
+
 /**
- * 左端の専用ハンドルからのみポインター操作を開始する。
- * mouse / touch / pen 共通。入力欄・行全体にはリスナーやtouch-noneを付けない。
- * 移動先は実際の表の行だけを拾い、実行可否は呼び出し元の正式な行移動計画で再確認する。
+ * 専用ハンドルだけがタッチ/マウスを捕捉する。
+ * 実際にドラッグ（8px以上）している間、表が画面外へ続く場合だけ
+ * viewportの端でページを自動スクロールする。入力・ページの通常スクロールには介入しない。
  */
 export function V25RowDragHandle({
   rowId, section, disabled, onPreview, onDrop,
@@ -28,59 +33,118 @@ export function V25RowDragHandle({
   onDrop: (targetId: string, side: V25MoveSide) => void;
 }) {
   const drag = useRef<DragSession | null>(null);
+  const scrollFrame = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
+  const stopScroll = () => {
+    if (scrollFrame.current !== null) {
+      window.cancelAnimationFrame(scrollFrame.current);
+      scrollFrame.current = null;
+    }
+  };
+  // ロングリスト中の行がスクロールで入れ替わっても毎回現在座標で再判定。
+  const hitRow = (x: number, y: number): { targetId: string; side: V25MoveSide } | null => {
+    const current = drag.current;
+    if (!current || !current.dragging || disabled) {
+      onPreview(null, 'before');
+      return null;
+    }
+    const hit = document.elementFromPoint(x, y);
+    const targetRow = hit?.closest<HTMLTableRowElement>('tr[data-v25-dnd-row]');
+    const targetId = targetRow?.dataset.v25DndRow;
+    if (!targetRow || !current.table.contains(targetRow) ||
+        targetRow.dataset.v25DndSection !== section || !targetId || targetId === rowId) {
+      onPreview(null, 'before');
+      return null;
+    }
+    const bounds = targetRow.getBoundingClientRect();
+    const side: V25MoveSide = y < bounds.top + bounds.height / 2 ? 'before' : 'after';
+    return onPreview(targetId, side) ? { targetId, side } : null;
+  };
+
+  /** テーブルの見えている区間・実際のページ端だけに発動を限定する。 */
+  const scrollDelta = (session: DragSession): number => {
+    const rect = session.table.getBoundingClientRect();
+    const { x, y } = session;
+    const height = window.innerHeight;
+    if (x < Math.max(0, rect.left) || x > Math.min(window.innerWidth, rect.right) ||
+        y <= 0 || y >= height || y < rect.top || y > rect.bottom) return 0;
+
+    if (y < EDGE_PX && rect.top < 0 && window.scrollY > 0) {
+      return -(MIN_SCROLL_PX + (1 - y / EDGE_PX) * (MAX_SCROLL_PX - MIN_SCROLL_PX));
+    }
+    if (y > height - EDGE_PX && rect.bottom > height &&
+        window.scrollY < document.documentElement.scrollHeight - height - 1) {
+      return MIN_SCROLL_PX + ((y - (height - EDGE_PX)) / EDGE_PX) * (MAX_SCROLL_PX - MIN_SCROLL_PX);
+    }
+    return 0;
+  };
+
+  const scrollStep = () => {
+    scrollFrame.current = null;
+    const session = drag.current;
+    if (!session?.dragging || disabled) return;
+    const delta = scrollDelta(session);
+    if (!delta) return;
+    const before = window.scrollY;
+    window.scrollBy({ top: delta, behavior: 'instant' });
+    if (window.scrollY === before) return;
+    // ポインターが静止していてもスクロール後に別の行を指しているので再ヒットテスト。
+    hitRow(session.x, session.y);
+    scrollFrame.current = window.requestAnimationFrame(scrollStep);
+  };
+
   const clear = () => {
+    stopScroll();
     drag.current = null;
     setDragging(false);
     onPreview(null, 'before');
   };
+  // ハンドルが削除/再描画された場合のスクロールループ残存も防止。
+  useEffect(() => () => {
+    if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current);
+  }, []);
+
   const down = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (disabled || drag.current || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const table = event.currentTarget.closest('table');
+    if (!table) return;
     event.preventDefault();
     event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       pointerId: event.pointerId, originX: event.clientX, originY: event.clientY,
-      dragging: false, targetId: null, side: 'before',
+      x: event.clientX, y: event.clientY, dragging: false, table,
     };
   };
   const move = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const session = drag.current;
     if (!session || session.pointerId !== event.pointerId || disabled) return;
+    session.x = event.clientX;
+    session.y = event.clientY;
     if (!session.dragging) {
-      const distance = Math.hypot(event.clientX - session.originX, event.clientY - session.originY);
-      if (distance < 8) return; // タップ・微小なタッチの揺れは並び替えしない
+      const distance = Math.hypot(session.x - session.originX, session.y - session.originY);
+      if (distance < 8) return; // タップ・微小なタッチの揺れは変更しない
       session.dragging = true;
       setDragging(true);
     }
-    const hit = document.elementFromPoint(event.clientX, event.clientY);
-    const targetRow = hit?.closest<HTMLTableRowElement>('tr[data-v25-dnd-row]');
-    const targetId = targetRow?.dataset.v25DndRow ?? null;
-    if (!targetRow || targetRow.dataset.v25DndSection !== section || !targetId || targetId === rowId) {
-      session.targetId = null;
-      onPreview(null, 'before');
-      return;
-    }
-    const bounds = targetRow.getBoundingClientRect();
-    const side: V25MoveSide = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
-    if (onPreview(targetId, side)) {
-      session.targetId = targetId;
-      session.side = side;
+    hitRow(session.x, session.y);
+    if (scrollDelta(session)) {
+      if (scrollFrame.current === null) scrollFrame.current = window.requestAnimationFrame(scrollStep);
     } else {
-      session.targetId = null;
+      stopScroll();
     }
   };
   const up = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const session = drag.current;
     if (!session || session.pointerId !== event.pointerId) return;
-    const target = session.dragging && !disabled ? session.targetId : null;
-    const side = session.side;
+    // 移動先が動いている場合、過去のヒット結果で確定しない。
+    const target = session.dragging && !disabled ? hitRow(event.clientX, event.clientY) : null;
     clear();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (target) onDrop(target, side);
+    if (target) onDrop(target.targetId, target.side);
   };
 
   return (

@@ -177,6 +177,6 @@ describe('画面（Excel 風明細）', () => {
 
   it('新しく選んだ商品は未設定から始め（表示・保存はカテゴリーからの自動の値）、同じカテゴリーへの入れ替えは工事項目を変えない', () => {
     expect(workbench).toContain("            work_item: '',");
-    expect(workbench).toContain('// 入れ替えは同じカテゴリーの商品だけなので、工事項目はそのまま');
+    expect(workbench).toContain('// 入れ替えは数量・位置・行順・工事項目を保持。変更候補だけ同カテゴリに整理する。');
   });
 });

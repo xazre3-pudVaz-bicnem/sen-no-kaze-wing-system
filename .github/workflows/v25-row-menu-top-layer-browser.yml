@@ -1,0 +1,58 @@
+name: V25 Row Menu Top Layer Isolated Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/standard-estimate-v25-workbench.tsx'
+      - 'tests/standard-estimate-v25-workbench.test.ts'
+      - 'e2e/pr-v25-row-menu-top-layer.spec.ts'
+      - '.github/workflows/v25-row-menu-top-layer-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v25-row-menu-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Prohibit production connections
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+      - name: Create fixture route on disposable runner only
+        run: |
+          mkdir -p app/pr691-e2e-row-move
+          cp e2e/fixtures/pr691-v25-row-move-page.tsx.fixture app/pr691-e2e-row-move/page.tsx
+      - name: Test desktop and emulated mobile Chromium
+        run: npx playwright test e2e/pr-v25-row-menu-top-layer.spec.ts --project=desktop --project=mobile
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v25-row-menu-top-layer-browser
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

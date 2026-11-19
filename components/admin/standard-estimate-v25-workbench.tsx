@@ -246,6 +246,8 @@ function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', dis
           if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
           if (!menuRef.current?.open) place(event.currentTarget);
         }}>{triggerText}</summary>
+      {/* 閉じている間はSSRの明細操作要素を残し、表示・操作は一切させない。 */}
+      {!menuOpen && <div hidden aria-hidden="true">{children}</div>}
       {placement && menuOpen && createPortal(
         <>
           <div className="fixed inset-0 z-[79]" aria-hidden="true" data-testid="v25-wb-menu-backdrop"

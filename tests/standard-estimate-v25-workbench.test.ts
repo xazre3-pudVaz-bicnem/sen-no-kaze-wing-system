@@ -368,6 +368,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('}, [headerLayoutKey]);');
     expect(source).toContain('{visible.cost_unit && <th');
     expect(read('components/admin/v25-grid-preferences.tsx')).toContain('原価を表示');
+    expect(read('components/admin/v25-grid-preferences.tsx')).toContain('relative z-50'); // 見出しより前面に列表示メニューを出す
     // 表の後ろに見積の保存領域が残り、別スクロールではなくページで到達できる。
     expect(source).toContain('data-testid="v25-wb-save"');
     expect(source).toContain('data-testid="v25-wb-publish"');

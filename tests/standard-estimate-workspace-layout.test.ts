@@ -43,6 +43,6 @@ describe('標準見積：広い編集領域と一覧切り替え', () => {
     expect(workbench).toContain('gridRect.bottom > headerHeight');
     expect(workbench).not.toContain('saveAreaReached');
     expect(workbench).toContain('sticky left-0 top-0 z-40');
-    expect(workbench).toContain('fixed z-[60]');
+    expect(workbench).toContain('popover="manual"');
   });
 });

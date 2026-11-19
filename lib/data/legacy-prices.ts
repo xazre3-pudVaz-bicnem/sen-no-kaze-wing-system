@@ -89,7 +89,7 @@ const categoryCodes = cache(async (): Promise<Map<string, string>> => {
 });
 
 /** 商品へ商品価格を足す（non-hq では本部商品の外＝旧フリー商品だけ。ほかは 0） */
-export async function withLegacyOptionPrices<T extends { id: string }>(rows: T[], scope: LegacyPriceScope): Promise<(T & { price: number })[]> {
+export async function withLegacyOptionPrices<T extends { id: string }>(rows: T[], scope: LegacyPriceScope, requireAll = false): Promise<(T & { price: number })[]> {
   if (!rows.length) return rows as (T & { price: number })[];
   const prices = await readByIds<{ id: string; price: number; category_id: string }>(
     await priceDb(),
@@ -100,6 +100,7 @@ export async function withLegacyOptionPrices<T extends { id: string }>(rows: T[]
   );
   const codes = scope === 'non-hq' ? await categoryCodes() : null;
   const byId = new Map(prices.map((row) => [row.id, row]));
+  if (requireAll && (scope !== 'all' || rows.some((row) => !Number.isSafeInteger(byId.get(row.id)?.price)))) throw new Error('商品価格を確認できませんでした');
   return rows.map((row) => {
     const found = byId.get(row.id);
     const visible = found && (codes === null || !isHqCostProduct(codes.get(found.category_id)));
@@ -108,7 +109,7 @@ export async function withLegacyOptionPrices<T extends { id: string }>(rows: T[]
 }
 
 /** 選択肢へ追加金額を足す（non-hq では旧フリー商品の選択肢だけ。ほかは 0） */
-export async function withLegacyChoicePrices<T extends { id: string }>(rows: T[], scope: LegacyPriceScope): Promise<(T & { extra_price: number })[]> {
+export async function withLegacyChoicePrices<T extends { id: string }>(rows: T[], scope: LegacyPriceScope, requireAll = false): Promise<(T & { extra_price: number })[]> {
   if (!rows.length) return rows as (T & { extra_price: number })[];
   const db = await priceDb();
   const prices = await readByIds<{ id: string; extra_price: number; group_id: string }>(
@@ -127,6 +128,7 @@ export async function withLegacyChoicePrices<T extends { id: string }>(rows: T[]
     visibleGroups = new Set(groups.filter((group) => freeOptions.has(group.option_id)).map((group) => group.id));
   }
   const byId = new Map(prices.map((row) => [row.id, row]));
+  if (requireAll && (scope !== 'all' || rows.some((row) => !Number.isSafeInteger(byId.get(row.id)?.extra_price)))) throw new Error('選択肢の金額を確認できませんでした');
   return rows.map((row) => {
     const found = byId.get(row.id);
     const visible = found && (visibleGroups === null || visibleGroups.has(found.group_id));

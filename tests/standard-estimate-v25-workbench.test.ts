@@ -1042,6 +1042,9 @@ describe('v2.5数量保持：商品選択ポップアップの確定経路と#65
       }];
       const originalPayload = buildV25SavePayload(before);
       expect(validateV25EditorState(before, (id) => get(id)?.section)).toBeNull();
+      const beforeSitework = calculateV25Workbench(rule, taxRule, before, [], costData,
+        (id) => get(id)?.section).result?.sections.find((section) => section.code === 'sitework');
+      if (mode === 'manual') expect(beforeSitework?.lines[0].amount).toBe(180000);
 
       const changed = change(before, siteworkOther, { color: 'black' });
       expect(changed.issue).toBeNull();
@@ -1054,6 +1057,11 @@ describe('v2.5数量保持：商品選択ポップアップの確定経路と#65
         quantity: '1', row_order: 2, work_item: '別途工事', baseline_key: 'saved-1',
       });
       expect(changed.state.lines).toEqual(before.lines);
+      const afterSitework = calculateV25Workbench(rule, taxRule, changed.state, [], costData,
+        (id) => get(id)?.section).result?.sections.find((section) => section.code === 'sitework');
+      expect(afterSitework?.lines).toEqual(beforeSitework?.lines);
+      expect(afterSitework?.subtotal).toBe(beforeSitework?.subtotal);
+      expect(afterSitework?.has_por).toBe(beforeSitework?.has_por);
       expect(validateV25EditorState(changed.state, (id) => get(id)?.section)).toBeNull();
       const payload = buildV25SavePayload(changed.state);
       expect(payload.slots[0]).toMatchObject({

@@ -37,6 +37,8 @@ const initial:V25EditorState={
   lines:[
     line('sashLine','1. サッシ・木製建具工事',2),
     line('roofLine','2. 屋根工事',4),
+    // 本番に近い長い明細。最初のグループは従来どおりにしてPC/タッチ既存試験も維持。
+    ...Array.from({ length: 90 }, (_, i) => line('wall-extra-' + i, '3. 外壁工事', 7 + i)),
   ],
 };
 const rule: PricingCalculationRule={

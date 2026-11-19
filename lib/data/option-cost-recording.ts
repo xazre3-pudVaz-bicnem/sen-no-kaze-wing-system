@@ -115,14 +115,19 @@ export async function recordPublishedOptionCost(
   if (copy.error) return { status: 'error', message: errorMessage(copy.error) };
   if (current.data && Number(current.data.standard_cost) === price) return { status: 'unchanged' };
 
-  const result = await db.rpc('set_option_hq_standard_cost', {
-    p_option_id: optionId,
-    p_standard_cost: price,
-    p_expected_lock_version: copy.data?.lock_version ?? 0,
-    p_change_reason: RECORD_REASON[kind],
-  });
+  let result;
+  try {
+    result = await db.rpc('set_option_hq_standard_cost', {
+      p_option_id: optionId,
+      p_standard_cost: price,
+      p_expected_lock_version: copy.data?.lock_version ?? 0,
+      p_change_reason: RECORD_REASON[kind],
+    });
+  } finally {
+    // 通信結果が不明でもDB側で記録された可能性がある。
+    refreshSalePrices();
+  }
   if (result.error) return { status: 'error', message: errorMessage(result.error) };
-  refreshSalePrices();
   return { status: 'recorded' };
 }
 
@@ -170,19 +175,22 @@ export async function recordPublishedChoiceCosts(
     const amount = Number(choice.extra_price ?? 0);
     const current = currentByChoice.get(choice.id as string);
     if (current && Number(current.cost_adjustment) === amount) continue;
-    const result = await db.rpc('set_option_variant_cost_adjustment', {
-      p_variant_choice_id: choice.id,
-      p_cost_adjustment: amount,
-      p_expected_current_version_id: current?.id ?? null,
-      p_change_reason: RECORD_REASON[kind],
-    });
+    let result;
+    try {
+      result = await db.rpc('set_option_variant_cost_adjustment', {
+        p_variant_choice_id: choice.id,
+        p_cost_adjustment: amount,
+        p_expected_current_version_id: current?.id ?? null,
+        p_change_reason: RECORD_REASON[kind],
+      });
+    } finally {
+      refreshSalePrices();
+    }
     if (result.error) {
-      if (recorded) refreshSalePrices();
       return { status: 'error', message: errorMessage(result.error) };
     }
     recorded = true;
   }
-  if (recorded) refreshSalePrices();
   return { status: recorded ? 'recorded' : 'unchanged' };
 }
 

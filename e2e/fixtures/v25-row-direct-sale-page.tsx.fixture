@@ -1,0 +1,65 @@
+import { StandardEstimateV25Workbench } from '@/components/admin/standard-estimate-v25-workbench';
+import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
+import type { V25EditorState } from '@/lib/domain/standard-estimate-v25-view';
+import type { V25WorkbenchCandidate, V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
+
+/**
+ * CIでのみ app/pr691-e2e-row-move/page.tsx にコピー。公開ルートには存在しない。
+ * 正式DBやRevisionを一切参照・変更せず、実WorkBenchの移動コントロールを操作する。
+ */
+const section = 'interior_exterior' as const;
+const candidates: V25WorkbenchCandidate[] = [
+  { id:'e2e-sash',name:'検査用サッシ',categoryId:'cat-sash',categoryName:'サッシ',categoryCode:'sash',section,
+    singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },
+  { id:'e2e-sash-alt',name:'検査用サッシ別商品',categoryId:'cat-sash',categoryName:'サッシ',categoryCode:'sash',section,
+    singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },
+  { id:'e2e-roof',name:'検査用屋根',categoryId:'cat-roof',categoryName:'屋根',categoryCode:'roof',section,
+    singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },
+  { id:'e2e-wall',name:'検査用外壁',categoryId:'cat-wall',categoryName:'外壁',categoryCode:'exterior-wall',section,
+    singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },
+  { id:'e2e-site',name:'検査用別途',categoryId:'cat-site',categoryName:'別途',categoryCode:'sitework',section:'sitework',
+    singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },
+];
+const slot=(key:string,option_id:string,work_item:string,row_order:number)=>({
+  key,baseline_key:key,option_id,work_item,row_order,variant_choices:{},quantity:'1',
+  price_mode:'manual' as const,manual_unit_price:'25000',slot_code:'',slot_label:'',selectable_option_ids:[],
+});
+const line=(key:string,label:string,row_order:number,section_code:'interior_exterior'|'sitework'='interior_exterior')=>({
+  key,line_key:key,section_code,group_label:label,row_order,name:key,quantity:'1',unit:'式',
+  price_mode:'manual' as const,unit_price:'8000',remark:'',review_required:false,
+});
+const initial:V25EditorState={
+  sales_fee_rate:'1.07',markup_rate:'1.5',expense_rate:'0.15',adjustment:'0',adjustment_reason:'',
+  slots:[
+    slot('sash','e2e-sash','1. サッシ・木製建具工事',1),
+    slot('roof','e2e-roof','2. 屋根工事',3),
+    slot('wall','e2e-wall','3. 外壁工事',5),
+    slot('site','e2e-site','別途工事',6),
+  ],
+  lines:[
+    line('sashLine','1. サッシ・木製建具工事',2),
+    { ...line('roofLine','2. 屋根工事',4), price_mode:'por' as const, unit_price:'' },
+    // 本番に近い長い明細。最初のグループは従来どおりにしてPC/タッチ既存試験も維持。
+    ...Array.from({ length: 90 }, (_, i) => line('wall-extra-' + i, '3. 外壁工事', 7 + i)),
+  ],
+};
+const rule: PricingCalculationRule={
+  id:'e2e-rule',formula_code:'v2.5',rounding_mode:'trunc',
+  expense_target_sections:['base','interior_exterior','option'],
+  auto_price_sections:['base','interior_exterior','option'],
+};
+const taxRule: PricingTaxRule={id:'e2e-tax',tax_mode:'full_single_rate',tax_rate:'0.100000',rounding_mode:'trunc'};
+const costs:V25WorkbenchCosts={pinned:{},currentProduct:{},currentChoice:{}};
+export default function RowMoveFixture(){
+  return (
+    <main className="mx-auto max-w-6xl p-4" data-testid="pr691-local-fixture">
+      <h1 className="mb-3 text-lg font-bold">隔離テスト用 行メニューと売価直接入力</h1>
+      <StandardEstimateV25Workbench
+        resetKey="v25-row-direct-sale-1" revisionId="00000000-0000-4000-8000-000000000691"
+        lockVersion={1} modelSlug="wing-01" specCode="hotel"
+        readOnly={false} baseLines={[]} candidates={candidates} initial={initial}
+        costs={costs} rule={rule} taxRule={taxRule} preview={null} savedTotal={null}
+      />
+    </main>
+  );
+}

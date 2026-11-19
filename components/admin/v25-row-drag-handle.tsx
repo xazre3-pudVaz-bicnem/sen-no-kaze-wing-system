@@ -12,7 +12,20 @@ type DragSession = {
   y: number;
   dragging: boolean;
   table: HTMLTableElement;
+  captureTarget: HTMLButtonElement;
 };
+
+/** Release on every exit path, including Escape, pointercancel and unmount. */
+function releaseCapture(session: DragSession | null) {
+  if (!session) return;
+  try {
+    if (session.captureTarget.hasPointerCapture(session.pointerId)) {
+      session.captureTarget.releasePointerCapture(session.pointerId);
+    }
+  } catch {
+    // A removed/disabled element can no longer own the capture.
+  }
+}
 
 const EDGE_PX = 72;
 const MIN_SCROLL_PX = 4;
@@ -96,13 +109,20 @@ export function V25RowDragHandle({
 
   const clear = () => {
     stopScroll();
+    const session = drag.current;
+    // Clear first: releasePointerCapture may dispatch lostpointercapture synchronously.
     drag.current = null;
+    releaseCapture(session);
     setDragging(false);
     onPreview(null, 'before');
   };
-  // ハンドルが削除/再描画された場合のスクロールループ残存も防止。
+  // Unmount while dragging must not leave a captured pointer or animation frame.
   useEffect(() => () => {
     if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current);
+    scrollFrame.current = null;
+    const session = drag.current;
+    drag.current = null;
+    releaseCapture(session);
   }, []);
 
   const down = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -115,6 +135,7 @@ export function V25RowDragHandle({
     drag.current = {
       pointerId: event.pointerId, originX: event.clientX, originY: event.clientY,
       x: event.clientX, y: event.clientY, dragging: false, table,
+      captureTarget: event.currentTarget,
     };
   };
   const move = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -141,9 +162,6 @@ export function V25RowDragHandle({
     // 移動先が動いている場合、過去のヒット結果で確定しない。
     const target = session.dragging && !disabled ? hitRow(event.clientX, event.clientY) : null;
     clear();
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
     if (target) onDrop(target.targetId, target.side);
   };
 

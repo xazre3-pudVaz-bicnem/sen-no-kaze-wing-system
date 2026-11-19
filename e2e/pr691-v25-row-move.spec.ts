@@ -75,6 +75,9 @@ test('PC：入力欄の操作とドラッグを分離。右端…内の削除は
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button',{name:'キャンセル'}).click();
   await expect(line).toBeVisible();
+  // Opening the confirmation dialog now closes the top-layer row menu.
+  // Reopen it deliberately before the second delete attempt.
+  await menu.locator('summary').click();
   await del.click();
   await dialog.getByRole('button',{name:'削除する'}).click();
   await expect(line).toHaveCount(0);

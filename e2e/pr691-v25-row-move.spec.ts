@@ -136,7 +136,12 @@ test('PC長い明細：端でドラッグを保持すると画面外の工事項
   expect(destination).toBeTruthy();
   await page.mouse.move(x,destination!.y+destination!.height*.55,{steps:7});
   await expect(page.getByTestId('v25-wb-drop-indicator')).toBeVisible();
+  const highlightedBeforeDrop=await page.locator('tr[data-v25-dnd-row].outline-emerald-600').evaluateAll(
+    (els) => els.map(el => ({ id:(el as HTMLElement).dataset.v25DndRow, y:el.getBoundingClientRect().y }))
+  );
+  console.log('LONG_DRAG_BEFORE_DROP', JSON.stringify(highlightedBeforeDrop));
   await page.mouse.up();
+  console.log('LONG_DRAG_AFTER_DROP', JSON.stringify(await source.evaluate(el => ({prior:(el.previousElementSibling as HTMLElement)?.dataset.v25DndRow,next:(el.nextElementSibling as HTMLElement)?.dataset.v25DndRow,group:(el.previousElementSibling?.closest('tr[data-work-item]') as HTMLElement)?.dataset.workItem}))));
 
   await expect(page.locator(id('line','wall-extra-65')+' + '+id('slot','roof'))).toBeVisible();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();

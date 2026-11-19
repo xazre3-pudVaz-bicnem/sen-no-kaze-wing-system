@@ -1564,8 +1564,7 @@ function WorkbenchBody({
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setSlot(slot.key, { price_mode: 'auto' }); }}>自動計算に戻す</button>
                                   )}
-                                </V25WorkbenchRowMenu>
-                                <V25RowDeleteButton
+                                <V25RowDeleteButton inMenu
                                   testId="v25-wb-slot-delete" name={candidate?.name || '商品'}
                                   disabled={positionActionsLocked}
                                   onConfirm={() => {
@@ -1573,6 +1572,7 @@ function WorkbenchBody({
                                     setState((current) => deleteV25WorkbenchRow(current, 'slot', slot.key));
                                   }}
                                 />
+                                </V25WorkbenchRowMenu>
                               </div>
                             )}
                           </td>
@@ -1635,18 +1635,7 @@ function WorkbenchBody({
                           <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-0.5">
-                                <span className="flex w-4 shrink-0 flex-col" data-testid="v25-wb-manual-reorder">
-                                  <button type="button" aria-label={`${line.name || '明細'}を上へ移動`} title="同じ工事項目内で上へ"
-                                    data-testid="v25-wb-manual-move-up"
-                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-                                    disabled={positionActionsLocked || groupEditor !== null || rowIndex === 0}
-                                    onClick={() => moveViewRow(rowRef, -1, workGroup)}>▲</button>
-                                  <button type="button" aria-label={`${line.name || '明細'}を下へ移動`} title="同じ工事項目内で下へ"
-                                    data-testid="v25-wb-manual-move-down"
-                                    className="flex h-3 w-4 items-center justify-center rounded text-[9px] leading-none text-emerald-900 hover:bg-emerald-100 disabled:opacity-30"
-                                    disabled={positionActionsLocked || groupEditor !== null || rowIndex === v25MixedRowsForWorkGroup(mixedOrder, workGroup).length - 1}
-                                    onClick={() => moveViewRow(rowRef, 1, workGroup)}>▼</button>
-                                </span>
+
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
                                   <button type="button" data-testid="v25-wb-change-work-group" disabled={positionActionsLocked}
                                     className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
@@ -1668,8 +1657,7 @@ function WorkbenchBody({
                                     title="要見直し → 見直し済みにする"
                                     onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setLine(line.key, { review_required: false }); }}>見直し済みにする</button>
                                   )}
-                                </V25WorkbenchRowMenu>
-                                <V25RowDeleteButton
+                                <V25RowDeleteButton inMenu
                                   testId="v25-wb-line-delete" name={line.name.trim() || '名称未入力の明細'}
                                   disabled={positionActionsLocked}
                                   onConfirm={() => {
@@ -1677,6 +1665,7 @@ function WorkbenchBody({
                                     setState((current) => deleteV25WorkbenchRow(current, 'line', line.key));
                                   }}
                                 />
+                                </V25WorkbenchRowMenu>
                               </div>
                             )}
                           </td>

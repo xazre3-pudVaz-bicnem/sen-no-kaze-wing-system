@@ -256,7 +256,7 @@ function useV25PageFloatingHeader(headerLayoutKey: string) {
     const overlay = document.createElement('div');
     overlay.dataset.testid = 'v25-page-floating-column-header';
     overlay.setAttribute('aria-hidden', 'true');
-    overlay.className = 'pointer-events-none fixed top-0 z-[45] overflow-hidden bg-slate-900 shadow-md';
+    overlay.className = 'pointer-events-none fixed top-0 z-[45] overflow-hidden border-b border-[#CBD5E1] bg-[#E6EDF3] shadow-sm';
     overlay.style.display = 'none';
 
     const mirrorTable = table.cloneNode(false) as HTMLTableElement;
@@ -1219,45 +1219,45 @@ function WorkbenchBody({
         <table ref={tableRef} className="table-fixed w-full border-collapse text-[11px]"
           style={{ minWidth: `${Math.ceil(v25GridWidth(columnPrefs.prefs) / 16) * 16}px` }}
           data-testid="v25-workbench-grid" onKeyDown={handleExcelNavigation}>
-          <thead className="bg-slate-900 text-[12px] font-bold leading-4 text-white" data-testid="v25-wb-column-header">
+          <thead className="bg-[#E6EDF3] text-[12px] font-bold leading-4 text-[#24374B]" data-testid="v25-wb-column-header">
             <tr>
-              <th data-v25-column="name" style={{ width: columnPrefs.prefs.widths.name }} className="h-[34px] sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-slate-600 bg-slate-900 px-2 py-1 text-left font-bold">品名
+              <th data-v25-column="name" style={{ width: columnPrefs.prefs.widths.name }} className="h-[34px] sticky left-0 top-0 z-40 w-[20rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-2 py-1 text-left font-bold">品名
                 <V25WidthHandle id="name" width={columnPrefs.prefs.widths.name}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              <th data-v25-column="quantity" style={{ width: columnPrefs.prefs.widths.quantity }} className="h-[34px] sticky top-0 z-30 w-14 border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-right font-bold">数量
+              <th data-v25-column="quantity" style={{ width: columnPrefs.prefs.widths.quantity }} className="h-[34px] sticky top-0 z-30 w-14 border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">数量
                 <V25WidthHandle id="quantity" width={columnPrefs.prefs.widths.quantity}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              <th data-v25-column="unit" style={{ width: columnPrefs.prefs.widths.unit }} className="h-[34px] sticky top-0 z-30 w-14 border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-left font-bold">単位
+              <th data-v25-column="unit" style={{ width: columnPrefs.prefs.widths.unit }} className="h-[34px] sticky top-0 z-30 w-14 border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-left font-bold">単位
                 <V25WidthHandle id="unit" width={columnPrefs.prefs.widths.unit}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              {visible.cost_unit && <th data-v25-column="cost_unit" style={{ width: columnPrefs.prefs.widths.cost_unit }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-right font-bold">原価単価
+              {visible.cost_unit && <th data-v25-column="cost_unit" style={{ width: columnPrefs.prefs.widths.cost_unit }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">原価単価
                 <V25WidthHandle id="cost_unit" width={columnPrefs.prefs.widths.cost_unit}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              {visible.cost_amount && <th data-v25-column="cost_amount" style={{ width: columnPrefs.prefs.widths.cost_amount }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-right font-bold">原価金額
+              {visible.cost_amount && <th data-v25-column="cost_amount" style={{ width: columnPrefs.prefs.widths.cost_amount }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">原価金額
                 <V25WidthHandle id="cost_amount" width={columnPrefs.prefs.widths.cost_amount}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              {visible.sale_unit && <th data-v25-column="sale_unit" style={{ width: columnPrefs.prefs.widths.sale_unit }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-right font-bold">売価単価
+              {visible.sale_unit && <th data-v25-column="sale_unit" style={{ width: columnPrefs.prefs.widths.sale_unit }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">売価単価
                 <V25WidthHandle id="sale_unit" width={columnPrefs.prefs.widths.sale_unit}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              <th data-v25-column="sale_amount" style={{ width: columnPrefs.prefs.widths.sale_amount }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-right font-bold">売価金額
+              <th data-v25-column="sale_amount" style={{ width: columnPrefs.prefs.widths.sale_amount }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">売価金額
                 <V25WidthHandle id="sale_amount" width={columnPrefs.prefs.widths.sale_amount}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>
-              {visible.gross && <th data-v25-column="gross" style={{ width: columnPrefs.prefs.widths.gross }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-right font-bold">粗利
+              {visible.gross && <th data-v25-column="gross" style={{ width: columnPrefs.prefs.widths.gross }} className="h-[34px] sticky top-0 z-30 w-[5.75rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-right font-bold">粗利
                 <V25WidthHandle id="gross" width={columnPrefs.prefs.widths.gross}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              {visible.note && <th data-v25-column="note" style={{ width: columnPrefs.prefs.widths.note }} className="h-[34px] sticky top-0 z-30 w-[8rem] border-b border-r border-slate-600 bg-slate-900 px-1 py-1 text-left font-bold">仕様・備考
+              {visible.note && <th data-v25-column="note" style={{ width: columnPrefs.prefs.widths.note }} className="h-[34px] sticky top-0 z-30 w-[8rem] border-b border-r border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-left font-bold">仕様・備考
                 <V25WidthHandle id="note" width={columnPrefs.prefs.widths.note}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>}
-              <th data-v25-column="actions" style={{ width: columnPrefs.prefs.widths.actions }} className="h-[34px] sticky right-0 top-0 z-40 w-[4.5rem] border-b border-l border-slate-600 bg-slate-900 px-1 py-1 text-center font-bold">操作
+              <th data-v25-column="actions" style={{ width: columnPrefs.prefs.widths.actions }} className="h-[34px] sticky right-0 top-0 z-40 w-[4.5rem] border-b border-l border-[#CBD5E1] bg-[#E6EDF3] px-1 py-1 text-center font-bold">操作
                 <V25WidthHandle id="actions" width={columnPrefs.prefs.widths.actions}
                   onResizeStart={columnPrefs.startResize} onWidth={columnPrefs.setWidth} onAutoWidth={autoWidth} />
               </th>

@@ -161,7 +161,7 @@ export function v25ProductReplacementIssue(
   }
 
   const quantity = slot.quantity.trim();
-  if (!/^\\d+(?:\\.\\d{1,4})?$/.test(quantity) || !Number.isFinite(Number(quantity)) ||
+  if (!/^\d+(?:\.\d{1,4})?$/.test(quantity) || !Number.isFinite(Number(quantity)) ||
     Number(quantity) <= 0 || Number(quantity) > 99999) {
     return '既存数量が有効ではありません。数量を確認してから商品を変更してください';
   }

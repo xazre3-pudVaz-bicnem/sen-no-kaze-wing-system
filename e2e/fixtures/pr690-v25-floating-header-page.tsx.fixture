@@ -1,0 +1,66 @@
+'use client';
+
+import { StandardEstimateV25Workbench } from '@/components/admin/standard-estimate-v25-workbench';
+import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
+import type { V25EditorState } from '@/lib/domain/standard-estimate-v25-view';
+import type { V25WorkbenchBaseLine, V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
+
+// Only a disposable localhost fixture. These are synthetic numbers, not a DB Revision.
+const rule: PricingCalculationRule = {
+  id: 'local-rule', formula_code: 'v2.5', rounding_mode: 'trunc',
+  expense_target_sections: ['base', 'interior_exterior', 'option'],
+  auto_price_sections: ['base', 'interior_exterior', 'option'],
+};
+const taxRule: PricingTaxRule = {
+  id: 'local-tax', tax_mode: 'full_single_rate', tax_rate: '0.100000', rounding_mode: 'trunc',
+};
+const baseLines: V25WorkbenchBaseLine[] = [
+  { id: 'local-base', section: '構造体', name: '隔離試験用の本体', quantity: '1', unit: '式', standard_cost: 100000 },
+];
+const costs: V25WorkbenchCosts = { pinned: {}, currentProduct: {}, currentChoice: {} };
+const initial: V25EditorState = {
+  sales_fee_rate: '1.07',
+  markup_rate: '1.5',
+  expense_rate: '0.15',
+  adjustment: '0',
+  adjustment_reason: '',
+  slots: [],
+  lines: Array.from({ length: 60 }, (_, index) => ({
+    key: 'test-line-' + index,
+    line_key: 'test-line-' + index,
+    section_code: 'sitework' as const,
+    group_label: '',
+    name: '隔離試験・明細 ' + (index + 1),
+    quantity: '1',
+    unit: '式',
+    price_mode: 'manual' as const,
+    unit_price: '1000',
+    remark: '',
+    review_required: false,
+  })),
+};
+export default function FloatingHeaderFixture() {
+  return (
+    <main className="mx-auto w-full max-w-[90rem] px-4 py-6" data-testid="pr690-floating-fixture">
+      <div className="mb-4">
+        <h1 className="text-xl font-bold">標準見積v2.5 列見出し固定・隔離試験</h1>
+        <p className="text-sm">実際の見積明細コンポーネント・合成データ・本番DB非接続</p>
+      </div>
+      <StandardEstimateV25Workbench
+        resetKey="local-fixture-revision:1"
+        revisionId="00000000-0000-4000-8000-000000000001"
+        lockVersion={1}
+        readOnly={false}
+        baseLines={baseLines}
+        candidates={[]}
+        initial={initial}
+        costs={costs}
+        rule={rule}
+        taxRule={taxRule}
+        preview={null}
+        savedTotal={null}
+      />
+      <div className="h-[100vh]" data-testid="pr690-after-workbench" aria-hidden="true" />
+    </main>
+  );
+}

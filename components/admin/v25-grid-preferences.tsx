@@ -173,7 +173,7 @@ export function V25ColumnDisplayMenu({
 }) {
   const costOn = prefs.visible.cost_unit && prefs.visible.cost_amount && prefs.visible.gross;
   return (
-    <details className="relative z-20" data-testid="v25-grid-column-menu">
+    <details className="relative z-50" data-testid="v25-grid-column-menu">
       <summary className="cursor-pointer rounded border border-slate-300 bg-white px-2 py-1 font-medium text-slate-700 hover:bg-slate-50">
         列の表示
       </summary>

@@ -121,40 +121,47 @@ describe('画面の描画（工事項目は表示のみ、移動で変更）', (
       costs: { pinned: {}, currentProduct: { roof1: 1000, sash1: 1000, light1: 1000 }, currentChoice: {} },
       rule, taxRule, preview: null, savedTotal: null,
     }));
-  const workLabels = (html: string) => [...html.matchAll(
-    /<span[^>]*data-testid="v25-wb-slot-work-item-label"[^>]*>([^<]*)<\/span>/g,
-  )].map((match) => match[1]);
-
-
-  it('旧下書きの自動工事項目は表示するが、移動用プルダウンは出さない', () => {
-    const html = render(false, state([slot('a', 'roof1'), slot('b', 'light1')], [line('l', { section_code: 'option', group_label: '照明工事' })]));
-    expect(workLabels(html)).toEqual(['2. 屋根工事', '未設定']);
+  it('商品行の重複工事項目ラベルはなくし、旧下書きの工事項目見出し・自動分類の案内を維持', () => {
+    const html = render(false, state([slot('a', 'roof1'), slot('b', 'light1')], [
+      line('l', { section_code: 'option', group_label: '照明工事' }),
+    ]));
+    expect(html).toContain('data-testid="v25-work-item-heading"');
+    expect(html).toContain('>2. 屋根工事</td>');
+    expect(html).not.toContain('data-testid="v25-wb-slot-work-item"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-work-item-label"');
     expect(html).not.toContain('data-testid="v25-wb-slot-work-item-select"');
     expect(html).toContain('data-testid="v25-wb-work-item-auto-unsaved"');
     expect(html).toContain('工事項目が未設定の商品 1 件は');
+    expect((html.match(/data-testid="v25-wb-slot"/g) ?? []).length).toBe(2);
   });
 
-  it('保存した工事項目はその値を出し、未保存の案内は出さない', () => {
+  it('保存済み工事項目は小見出しに残し、商品行では繰り返さない', () => {
     const html = render(false, state([slot('a', 'roof1', { work_item: '3. 外壁工事' })], []));
-    expect(workLabels(html)).toEqual(['3. 外壁工事']);
+    expect(html).toContain('>3. 外壁工事</td>');
+    expect(html).not.toContain('data-testid="v25-wb-slot-work-item');
     expect(html).not.toContain('data-testid="v25-wb-work-item-auto-unsaved"');
   });
 
-  it('公開済みの版（閲覧だけ）は保存した値だけを出す（自動の値は出さない）', () => {
+  it('公開済みreadOnlyでも重複ラベルを出さず、見出し・商品・数量表示は維持', () => {
     const html = render(true, state([slot('a', 'roof1'), slot('b', 'sash1', { work_item: '1. サッシ・木製建具工事' })], []));
-    expect(workLabels(html)).toEqual(['1. サッシ・木製建具工事', '未設定']);
-    expect(html).toContain('title="未設定">未設定</span>');
-    expect(html).toContain('title="1. サッシ・木製建具工事">1. サッシ・木製建具工事</span>');
+    expect(html).toContain('data-testid="v25-work-item-heading"');
+    expect(html).toContain('>1. サッシ・木製建具工事</td>');
+    expect(html).not.toContain('data-testid="v25-wb-slot-work-item');
+    expect(html).toContain('data-testid="v25-wb-slot-unit"');
     expect(html).not.toContain('data-testid="v25-wb-work-item-auto-unsaved"');
   });
+
 });
 
 describe('画面（Excel 風明細）', () => {
   const workbench = read('components/admin/standard-estimate-v25-workbench.tsx');
 
-  it('工事項目の編集プルダウンを廃止し、表示専用ラベルと自動分類を維持', () => {
+  it('商品行での表示を削除しても、工事項目の所属・移動・手動変更入口と自動分類を維持', () => {
     expect(workbench).not.toContain('data-testid="v25-wb-slot-work-item-select"');
-    expect(workbench).toContain('data-testid="v25-wb-slot-work-item-label"');
+    expect(workbench).not.toContain('data-testid="v25-wb-slot-work-item-label"');
+    expect(workbench).not.toContain('data-testid="v25-wb-slot-work-item"');
+    expect(workbench).toContain('data-testid="v25-work-item-heading"');
+    expect(workbench).toContain('data-testid="v25-wb-change-work-group"');
     expect(workbench).toContain('const workItemOf = (slot: V25SlotRow) => slot.work_item?.trim() || autoWorkItemOf(slot);');
     expect(workbench).toContain("if (readOnly) return '';");
     expect(workbench).toContain('v25PlanMixedRowMove(');

@@ -1441,14 +1441,6 @@ function WorkbenchBody({
                                 </div>
                               )}
                               {mixedUnset && <span className="block text-[10px] font-semibold text-amber-800" data-testid="v25-wb-position-unset">位置未設定</span>}
-                              {/* 工事項目は移動操作で更新する。未分類商品の表示・自動設定・既存保存処理は維持。 */}
-                              <div className="mt-px flex min-w-0 items-baseline gap-x-1 text-[10px] text-slate-600" data-testid="v25-wb-slot-work-item">
-                                <span className="shrink-0">工事項目：</span>
-                                <span className="min-w-0 truncate" data-testid="v25-wb-slot-work-item-label"
-                                  title={(readOnly ? slot.work_item?.trim() : workItemOf(slot)) || '未設定'}>
-                                  {(readOnly ? slot.work_item?.trim() : workItemOf(slot)) || '未設定'}
-                                </span>
-                              </div>
                               {status && status !== 'current' && (
                                 <div className="mt-0.5" data-testid="v25-wb-slot-cost-alert">
                                   <Badge tone={COST_TONE[status]} title={V25_COST_STATUS_LABEL[status]}>{COST_COMPACT_LABEL[status]}</Badge>

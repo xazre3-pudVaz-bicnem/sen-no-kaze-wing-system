@@ -9,9 +9,9 @@ import type { V25WorkbenchCandidate, V25WorkbenchCosts } from '@/lib/domain/stan
  */
 const section = 'interior_exterior' as const;
 const candidates: V25WorkbenchCandidate[] = [
-  { id:'e2e-sash',name:'検査用サッシ',categoryId:'cat-sash',categoryName:'サッシ',categoryCode:'sash',section,
+  { id:'e2e-sash',name:'検査用サッシ',categoryId:'cat-sash',categoryName:'サッシ',categoryCode:'sash',priceUnit:'台',section,
     singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },
-  { id:'e2e-sash-alt',name:'検査用サッシ別商品',categoryId:'cat-sash',categoryName:'サッシ',categoryCode:'sash',section,
+  { id:'e2e-sash-alt',name:'検査用サッシ別商品',categoryId:'cat-sash',categoryName:'サッシ',categoryCode:'sash',priceUnit:'台',section,
     singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },
   { id:'e2e-roof',name:'検査用屋根',categoryId:'cat-roof',categoryName:'屋根',categoryCode:'roof',section,
     singleSelect:false,manufacturer:'',modelNo:'',variantGroups:[],defaultChoices:{} },

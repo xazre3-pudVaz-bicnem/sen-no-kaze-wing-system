@@ -58,6 +58,7 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
       }
     >
       <ProductSelectionSettingsTabs
+        key={initialTab}
         initialTab={initialTab}
         matrix={
           matrix ? (

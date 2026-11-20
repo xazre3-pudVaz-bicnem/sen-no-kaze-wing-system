@@ -227,8 +227,11 @@ export function ProductLedgerActionsMenu({
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4"
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => handleModalKeyDown(event, closeLifecycleDialog)}
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeLifecycleDialog();
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              event.preventDefault(); // 背景クリックの既定フォーカス移動より前に、復帰先を維持する
+              closeLifecycleDialog();
+            }
           }}
         >
           <section
@@ -274,8 +277,11 @@ export function ProductLedgerActionsMenu({
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4"
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => handleModalKeyDown(event, closeDeleteDialog)}
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeDeleteDialog();
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              event.preventDefault();
+              closeDeleteDialog();
+            }
           }}
         >
           <section

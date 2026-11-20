@@ -155,6 +155,15 @@ test('スマートフォン｜現在仕様の重複表示防止と固定見出�
     await grid.evaluate((el)=>{el.scrollLeft=165;el.dispatchEvent(new Event('scroll'));});
     await expect.poll(()=>float.evaluate((el)=>el.scrollLeft)).toBeGreaterThan(100);
     await expect(page.getByTestId('v25-wb-slot-work-item-label')).toHaveCount(0);
+    // Pixel 7実タップでも初期入力フォーカス・Escape後の見出しボタン復帰を確かめる。
+    const edit = page.locator('tr[data-work-item="work:sash_wood"]').getByTestId('v25-wb-edit-work-group');
+    await edit.tap();
+    const dialog = page.getByTestId('v25-wb-work-group-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('v25-wb-work-group-input')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(edit).toBeFocused();
   } finally {
     await context.close();
   }

@@ -1,4 +1,9 @@
-import type { MatrixEditorRow } from '@/components/admin/matrix-editor';
+type MatrixSnapshot = {
+  id: string;
+  lock_version: number;
+  fire_selectable: boolean;
+  selectable_items: string[];
+};
 
 export type MatrixSettingsDraft = {
   fire: boolean;
@@ -19,7 +24,7 @@ function sameItems(a: string[], b: string[]) {
 }
 
 /** JSONの破損・他画面の行・既に保存済みの変更は復元しない。古い版の未保存変更は保持する。 */
-export function restoreMatrixSettingsDrafts(raw: string | null, rows: MatrixEditorRow[]): MatrixSettingsDraftCache {
+export function restoreMatrixSettingsDrafts(raw: string | null, rows: MatrixSnapshot[]): MatrixSettingsDraftCache {
   const empty: MatrixSettingsDraftCache = { selectedId: '', drafts: {} };
   if (!raw) return empty;
 

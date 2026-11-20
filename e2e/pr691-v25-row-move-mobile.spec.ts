@@ -1,4 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+// 画面の準備（React のハイドレーション）が済むまで待ってから実タッチを送る。読み込み直後に送ると、
+// 指を置いた操作は準備の後に処理されるが、指を動かした操作は届かず、ドラッグが始まらないことがある
+// （明細の行が重くなると準備が遅くなり、時間の競争で落ちる。2026-11-20 に手入力明細の原価の欄を足したときに CI で発生）
+const waitForWorkbenchReady = (page: Page) =>
+  expect(page.locator('[data-testid="standard-estimate-v25-workbench"][data-v25-ready="true"]')).toBeVisible({ timeout: 30_000 });
 
 test.beforeEach(async ({ baseURL }) => {
   if (!baseURL || !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(baseURL)) {
@@ -9,6 +15,7 @@ test.beforeEach(async ({ baseURL }) => {
 test('Pixel 7：タッチは左ハンドルのみで開始し、別工事項目へ安全に移動・破棄できる', async ({ page }) => {
   test.setTimeout(150_000);
   await page.goto('/pr691-e2e-row-move');
+  await waitForWorkbenchReady(page);
   const root=page.getByTestId('pr691-local-fixture');
   await expect(root).toBeVisible();
 
@@ -50,6 +57,7 @@ test('Pixel 7：タッチは左ハンドルのみで開始し、別工事項目�
 test('Pixel 7長い明細：実タッチを画面下端で保持すると画面外までスクロールし、指を離して停止', async ({page}) => {
   test.setTimeout(150_000);
   await page.goto('/pr691-e2e-row-move');
+  await waitForWorkbenchReady(page);
   const source=page.locator('tr[data-v25-dnd-row="slot:roof"]');
   const target=page.locator('tr[data-v25-dnd-row="line:wall-extra-70"]');
   const grip=source.getByTestId('v25-wb-row-drag-handle');
@@ -103,6 +111,7 @@ test('Pixel 7長い明細：実タッチを画面下端で保持すると画面�
 test('Pixel 7長い明細：ハンドル以外の実タッチスクロールは通常どおり動作し並び順を変更しない', async ({page}) => {
   test.setTimeout(90_000);
   await page.goto('/pr691-e2e-row-move');
+  await waitForWorkbenchReady(page);
   await expect(page.getByTestId('pr691-local-fixture')).toBeVisible();
   await page.evaluate(() => window.scrollTo(0,0));
   const before=await page.evaluate(() => window.scrollY);
@@ -125,6 +134,7 @@ test('Pixel 7長い明細：ハンドル以外の実タッチスクロールは�
 test('Pixel 7：実touchcancelでキャプチャと自動スクロール停止、変更なし・再ドラッグ可能', async ({page}) => {
   test.setTimeout(150_000);
   await page.goto('/pr691-e2e-row-move');
+  await waitForWorkbenchReady(page);
   await expect(page.getByTestId('pr691-local-fixture')).toBeVisible();
   const source=page.locator('tr[data-v25-dnd-row="slot:roof"]');
   const target=page.locator('tr[data-v25-dnd-row="line:sashLine"]');

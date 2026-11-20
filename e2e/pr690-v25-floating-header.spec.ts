@@ -12,6 +12,9 @@ test.beforeEach(async ({ baseURL }) => {
 });
 
 async function scrollPastNativeHeader(page: Page) {
+  // 画面の準備（React のハイドレーション）が済むまで待つ。済む前にスクロールすると、スクロールの処理が動かず固定の見出しが出ない
+  // （明細の行が重くなると準備が遅くなり、時間の競争で落ちる。2026-11-20 に手入力明細の原価の欄を足したときに CI で発生）
+  await expect(page.locator('[data-testid="standard-estimate-v25-workbench"][data-v25-ready="true"]')).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => {
     const source = document.querySelector('[data-testid="v25-workbench-grid"] thead');
     if (!source) throw new Error('Actual v2.5 thead missing');

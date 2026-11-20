@@ -355,7 +355,7 @@ begin
     jsonb_build_object('option_id', p3, 'quantity', 1, 'price_mode', 'manual', 'manual_unit_price', 30000),
     jsonb_build_object('option_id', p4, 'quantity', 1, 'price_mode', 'por'));
   v_lines := jsonb_build_array(
-    jsonb_build_object('section_code', 'sitework', 'name', '設置工事', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 50000),
+    jsonb_build_object('section_code', 'sitework', 'name', '設置工事', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 50000, 'cost_unit_price', 30000),
     jsonb_build_object('section_code', 'sitework', 'name', '外構工事', 'quantity', 1, 'unit', '式', 'price_mode', 'por'));
   v_out := pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 5, %L::jsonb)).lock_version::text', v_a2,
     pg_temp.sev_payload(v_slots, v_lines)));
@@ -416,7 +416,7 @@ begin
   -- 「要見直し」が 1 行でも残っていれば公開しない（画面だけでなく DB で止める）
   perform pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 8, %L::jsonb)).lock_version::text', v_a2,
     pg_temp.sev_payload(v_slots, jsonb_build_array(
-      jsonb_build_object('section_code', 'sitework', 'name', '設置工事', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 50000, 'review_required', true),
+      jsonb_build_object('section_code', 'sitework', 'name', '設置工事', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 50000, 'cost_unit_price', 30000, 'review_required', true),
       jsonb_build_object('section_code', 'sitework', 'name', '外構工事', 'quantity', 1, 'unit', '式', 'price_mode', 'por')), -1000, '端数調整')));
   perform pg_temp.sev_expect_eq('要見直しの明細が残っていれば、編集画面の確認でも公開できないと分かる', '1/false',
     (pg_temp.sev_preview(u_editor, v_a2) ->> 'review_required_lines') || '/' || (pg_temp.sev_preview(u_editor, v_a2) ->> 'publishable'));

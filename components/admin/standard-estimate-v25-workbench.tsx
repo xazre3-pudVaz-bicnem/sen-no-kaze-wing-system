@@ -19,6 +19,8 @@ import {
   V25_COST_STATUS_LABEL,
   buildV25SavePayload,
   slotCostStatus,
+  v25LineCostAmount,
+  v25LineCostValue,
   v25PublishBlockers,
   validateV25EditorState,
   type V25CostStatus,
@@ -119,6 +121,23 @@ export function v25DisplayedCostAndGross(
   const costAmount = Number(amount);
   const gross = line?.amount == null || !Number.isSafeInteger(line.amount) ? null : line.amount - costAmount;
   return { costAmount, gross };
+}
+
+/**
+ * 手入力明細の原価（2026-11-20 の先方の依頼「手入力明細の原価入力復活」）の表示用の値。
+ * 原価金額 = trunc(数量 × 原価単価)、粗利 = 売価金額 − 原価金額（DB と同じ式。DB の計算・保存値は変更しない）。
+ * 別途見積・原価未設定（空）・売価未入力では推測値を出さない（原価を 0 円にも売価と同じにもしない）
+ */
+export function v25ManualLineCostAndGross(
+  line: Pick<V25LineRow, 'price_mode' | 'quantity' | 'cost_unit_price'>,
+  saleAmount: number | null | undefined,
+): { unitCost: number | null; costAmount: number | null; gross: number | null; missing: boolean } {
+  if (line.price_mode !== 'manual') return { unitCost: null, costAmount: null, gross: null, missing: false };
+  const value = v25LineCostValue(line.cost_unit_price);
+  const unitCost = value !== null && Number.isSafeInteger(value) ? value : null;
+  const costAmount = v25LineCostAmount(line.quantity, line.cost_unit_price);
+  const gross = costAmount === null || saleAmount == null || !Number.isSafeInteger(saleAmount) ? null : saleAmount - costAmount;
+  return { unitCost, costAmount, gross, missing: value === null };
 }
 
 /** 位置名の編集中や保存などの処理中は、行削除と位置設定の操作を保護する。 */
@@ -422,6 +441,16 @@ type WorkbenchProps = {
   preview: V25Preview | null;
   /** 保存済みの税込合計（DB の計算。未確定を含むなら null） */
   savedTotal: number | null;
+  /**
+   * 保存済みの調整後税別額・内部原価の合計（DB。本部だけ）。金額内訳の原価合計・粗利・粗利率に使う。
+   * 渡さないときは今までどおり「未算定」（2026-11-20 の先方の依頼「手入力明細の原価入力復活」）
+   */
+  savedCost?: { subtotal: number; costTotal: number; hasPor: boolean } | null;
+  /**
+   * 手入力明細の原価単価を DB が持てるか（20261110150000 の後）。false なら原価の欄・件数を出さない
+   * （入れた原価が捨てられたり、粗利を原価 0 円で出したりしないため。省略は true）
+   */
+  lineCostsAvailable?: boolean;
 };
 
 /**
@@ -450,10 +479,18 @@ function WorkbenchBody({
   taxRule,
   preview,
   savedTotal,
+  savedCost,
+  lineCostsAvailable = true,
   notice,
   onNotice,
 }: WorkbenchProps & { notice: Notice | null; onNotice: (notice: Notice | null) => void }) {
   const router = useRouter();
+  // 画面の準備（ハイドレーション）が済んだ印。描き直しをせずに属性だけを付ける。
+  // ブラウザの試験は、読み込み直後の実タッチ（指を動かした分）が React に届かない時間の競争を避けるため、この印を待ってから操作する
+  const workbenchRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    workbenchRef.current?.setAttribute('data-v25-ready', 'true');
+  }, []);
   const [state, setState] = useState<V25EditorState>(initial);
   // PR #686 の共通 row_order を表示順の正本にする。↑↓＋は未保存中だけ上書きし、保存時に連番化する。
   const [viewOrder, setViewOrder] = useState<V25MixedRowRef[]>([]);
@@ -631,6 +668,15 @@ function WorkbenchBody({
   // 画面と保存・公開の内容をそろえるため、未保存の変更として扱う（保存するまで公開しない）
   const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;
   const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;
+  // 原価単価が未入力の手入力明細（別途見積でない行。画面の今の状態。公開には原価単価が要る：2026-11-06 の先方回答 ⑤-2）
+  const missingLineCosts = lineCostsAvailable
+    ? state.lines.filter((line) => line.price_mode === 'manual' && v25LineCostValue(line.cost_unit_price) === null).length
+    : 0;
+  // 保存済み（DB）の原価が未設定の行：商品の原価未設定・売価を入力した商品の行（原価を持てない）・原価単価が未入力の手入力明細。
+  // 1 件でもあれば粗利・粗利率は「未確定」（0 円として計算しない：2026-11-06 の先方回答）
+  const savedCostMissing = preview
+    ? preview.incomplete.length + (preview.missing_line_costs?.length ?? 0) + initial.slots.filter((slot) => slot.price_mode === 'manual').length
+    : null;
   const positionMixes = useMemo(() => v25PositionMixes(state.slots, (id) => candidateById.get(id)), [state.slots, candidateById]);
   // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
   const slotRuleIssues = useMemo(
@@ -1175,7 +1221,7 @@ function WorkbenchBody({
   };
 
   return (
-    <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
+    <section className="space-y-3" data-testid="standard-estimate-v25-workbench" ref={workbenchRef}>
       {dropPreview && <div data-testid="v25-wb-drop-indicator" role="status" aria-label="ここに移動"
         className="pointer-events-none fixed z-[48] h-[3px] bg-emerald-600 shadow-[0_0_0_1px_white]"
         style={{ top: dropPreview.top - 1, left: dropPreview.left, width: dropPreview.width }}>
@@ -1597,6 +1643,10 @@ function WorkbenchBody({
                       const line = workGroup.lines.find((item) => item.key === rowRef.key);
                       if (!line) return null;
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
+                      // 原価の列が無い DB では原価を扱わない（別途見積の行と同じく — を出す）
+                      const lineCost = lineCostsAvailable
+                        ? v25ManualLineCostAndGross(line, unpricedKeys.has(line.key) ? null : result?.amount)
+                        : null;
                       return (
                         <tr key={v25MixedRowIdentity(rowRef)} id={`v25-manual-row-${line.key}`} tabIndex={-1}
                           data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
@@ -1620,8 +1670,23 @@ function WorkbenchBody({
                             <Input data-v25-excel-col="unit" value={line.unit} disabled={readOnly} aria-label="単位" className="h-6 min-h-6! rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
-                          {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {/* 手入力明細の原価単価（税別）：売価と別に入力し、売価は変えない。空は原価未設定（0 円と区別）。別途見積の行は原価を持たない */}
+                          {visible.cost_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${line.price_mode === 'manual' && lineCost && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-cost-cell">
+                            {line.price_mode !== 'manual' || !lineCost ? (
+                              <span className="block px-1 text-muted">—</span>
+                            ) : readOnly ? (
+                              <span className="block px-1 tabular-nums" data-testid="v25-wb-line-cost-value">{lineCost.unitCost === null ? '未設定' : yen(lineCost.unitCost)}</span>
+                            ) : (
+                              <Input data-v25-excel-col="cost" data-testid="v25-wb-line-cost-input"
+                                value={line.cost_unit_price ?? ''} inputMode="numeric" aria-label="明細の原価単価（税別）"
+                                placeholder="未入力" title="原価単価（税別）。未定なら空欄、0 円なら 0 を入力"
+                                className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setLine(line.key, { cost_unit_price: event.target.value })} />
+                            )}
+                          </td>}
+                          {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500" data-testid="v25-wb-line-cost-amount">
+                            {line.price_mode !== 'manual' || !lineCost ? '—' : lineCost.missing ? <Badge tone="warn">原価未設定</Badge> : yen(lineCost.costAmount)}
+                          </td>}
                           {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${!readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
                             {readOnly && line.price_mode === 'por' ? (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
@@ -1643,7 +1708,7 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          {visible.gross && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
+                          {visible.gross && <td className={`border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums ${v25GrossToneClass(lineCost?.gross)}`} data-testid="v25-wb-line-gross">{yen(lineCost?.gross)}</td>}
                           {visible.note && <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
@@ -1731,6 +1796,10 @@ function WorkbenchBody({
         adjustmentValue={state.adjustment}
         onAdjustmentChange={(value) => setState((current) => ({ ...current, adjustment: value }))}
         readOnly={readOnly}
+        savedProfit={savedCost === undefined || !lineCostsAvailable ? undefined : savedCost && savedCostMissing !== null
+          ? { ...savedCost, missingCostCount: savedCostMissing, unsaved: !readOnly && dirty }
+          : null}
+        missingLineCostCount={readOnly ? 0 : missingLineCosts}
       />
 
       {calc.error && <Alert tone="warn">画面の試算ができません：{calc.error}</Alert>}

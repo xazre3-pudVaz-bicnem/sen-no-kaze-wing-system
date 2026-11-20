@@ -40,6 +40,8 @@ export async function getStandardEstimateV25Header(supabase: SupabaseClient, rev
 
 export type StandardEstimateV25Data = {
   initial: V25EditorState;
+  /** 手入力明細の原価単価の列を読めたか（20261110150000 の後の DB）。false なら画面は原価の欄を出さない */
+  lineCostsAvailable: boolean;
   savedSlotAmounts: Record<string, { amount: number | null; sale_unit_price: number | null }>;
   savedLineAmounts: Record<string, number | null>;
   preview: V25Preview | null;
@@ -63,12 +65,13 @@ export async function loadStandardEstimateV25(
       .select(slotColumns(withPositions, withRowOrder))
       .eq('revision_id', revision.id)
       .order('sort_order');
-  const lineColumns = (withRowOrder: boolean) =>
-    `line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order${withRowOrder ? ', display_order' : ''}`;
-  const readLines = (withRowOrder: boolean) =>
+  // 手入力明細の原価単価（2026-11-20 の先方の依頼。20261110150000）の列も読む。migration が無い DB では読まずに続ける
+  const lineColumns = (withRowOrder: boolean, withCost: boolean) =>
+    `line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order${withRowOrder ? ', display_order' : ''}${withCost ? ', cost_unit_price' : ''}`;
+  const readLines = (withRowOrder: boolean, withCost: boolean) =>
     supabase
       .from('standard_estimate_revision_v25_lines')
-      .select(lineColumns(withRowOrder))
+      .select(lineColumns(withRowOrder, withCost))
       .eq('revision_id', revision.id)
       .order('sort_order');
   const [firstSlotsResult, slotOptionsResult, firstLinesResult, previewResult, calcResult, taxResult] = await Promise.all([
@@ -78,7 +81,7 @@ export async function loadStandardEstimateV25(
       .select('slot_code, option_id, sort_order')
       .eq('revision_id', revision.id)
       .order('sort_order'),
-    readLines(true),
+    readLines(true, true),
     supabase.rpc('preview_standard_estimate_v25_revision', { p_revision_id: revision.id }),
     header.calc_rule_version_id
       ? supabase.from('pricing_calculation_rule_versions').select('code').eq('id', header.calc_rule_version_id).maybeSingle()
@@ -94,7 +97,15 @@ export async function loadStandardEstimateV25(
   let slotsResult = firstSlotsResult;
   if (slotsResult.error && missingColumn(slotsResult.error)) slotsResult = await readSlots(true, false);
   if (slotsResult.error && missingColumn(slotsResult.error)) slotsResult = await readSlots(false, false);
-  const linesResult = firstLinesResult.error && missingColumn(firstLinesResult.error) ? await readLines(false) : firstLinesResult;
+  let linesResult = firstLinesResult;
+  // 原価の列を読めたか（20261110150000 の後か）。読めなければ画面は原価の欄を出さず、保存でも原価の項目を送らない
+  // （migration の前の DB で原価を入れても捨てられ、粗利を原価 0 円として出すのを防ぐ。独立レビューの指摘）
+  let lineCostsAvailable = true;
+  if (linesResult.error && missingColumn(linesResult.error)) {
+    lineCostsAvailable = false;
+    linesResult = await readLines(true, false);
+  }
+  if (linesResult.error && missingColumn(linesResult.error)) linesResult = await readLines(false, false);
   if (slotsResult.error) throw new Error(`標準見積の商品を取得できませんでした: ${slotsResult.error.code ?? 'unknown'}`);
   if (slotOptionsResult.error && !isMissingRelation(slotOptionsResult.error)) {
     throw new Error(`標準見積の選べる商品を取得できませんでした: ${slotOptionsResult.error.code ?? 'unknown'}`);
@@ -134,6 +145,7 @@ export async function loadStandardEstimateV25(
     remark: string | null;
     review_required: boolean;
     display_order?: number | null;
+    cost_unit_price?: number | null;
   };
   const slots = (slotsResult.data ?? []) as unknown as SlotRow[];
   const lines = (linesResult.error ? [] : (linesResult.data ?? [])) as unknown as LineRow[];
@@ -179,11 +191,16 @@ export async function loadStandardEstimateV25(
       remark: line.remark ?? '',
       review_required: line.review_required,
       row_order: line.display_order ?? null,
+      // 原価単価（空は原価未設定。0 円は "0"）。原価の列が無い DB では持たない（保存で項目を送らず、DB の今の値を残す）
+      ...(lineCostsAvailable
+        ? { cost_unit_price: line.cost_unit_price === null || line.cost_unit_price === undefined ? '' : String(line.cost_unit_price) }
+        : {}),
     })),
   };
 
   return {
     initial,
+    lineCostsAvailable,
     savedSlotAmounts: Object.fromEntries(slots.map((slot) => [slot.baseline_key, { amount: slot.amount, sale_unit_price: slot.sale_unit_price }])),
     savedLineAmounts: Object.fromEntries(lines.map((line) => [line.line_key, line.amount])),
     preview: previewUnavailable ? null : ((previewResult.data ?? null) as V25Preview | null),

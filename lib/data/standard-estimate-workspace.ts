@@ -139,12 +139,17 @@ export interface StandardEstimateWorkspace {
     total: number;
     hasPor: boolean;
     pricingModel: PricingModel;
+    /** 調整後の税別額と内部原価の合計（DB の保存値。本部だけ。粗利の表示に使う：2026-11-20 の先方の依頼） */
+    subtotal: number;
+    costTotal: number;
   };
   /** v2.5 の Revision のときだけ（v2.5 以前・未適用の DB では null） */
   v25: {
     /** 表示用分類に必要な商品モデル。価格・保存の判定には使用しない。 */
     modelSlug: string | null;
     initial: V25EditorState;
+    /** 手入力明細の原価単価の列を読めたか（20261110150000 の後の DB）。false なら原価の欄・粗利を出さない */
+    lineCostsAvailable: boolean;
     preview: V25Preview | null;
     baseLines: V25WorkbenchBaseLine[];
     /** 既存見積が参照する本体マスターの固定Revision（取得できた場合のみ表示用）。 */
@@ -165,7 +170,7 @@ export async function loadStandardEstimateWorkspace(
   if (!revisionId) return null;
   const { data: revision, error } = await supabase
     .from('standard_estimate_revisions')
-    .select('id, version, status, base_master_revision_id, sales_fee_rate, expense_rate, markup_rate, standard_adjustment_amount, standard_adjustment_reason, total, has_por, lock_version')
+    .select('id, version, status, base_master_revision_id, sales_fee_rate, expense_rate, markup_rate, standard_adjustment_amount, standard_adjustment_reason, subtotal, total, cost_total, has_por, lock_version')
     .eq('id', revisionId)
     .maybeSingle();
   if (error) throw new Error(`標準見積を取得できませんでした: ${error.code ?? 'unknown'}`);
@@ -180,6 +185,8 @@ export async function loadStandardEstimateWorkspace(
     total: revision.total,
     hasPor: revision.has_por,
     pricingModel,
+    subtotal: revision.subtotal,
+    costTotal: revision.cost_total,
   };
   if (!header || pricingModel !== 'v2.5' || !header.calc_rule_version_id || !header.tax_rule_version_id) {
     return { revision: summary, v25: null };
@@ -380,6 +387,7 @@ export async function loadStandardEstimateWorkspace(
     v25: {
       modelSlug: model?.slug ?? null,
       initial: v25.initial,
+      lineCostsAvailable: v25.lineCostsAvailable,
       preview: v25.preview,
       baseMasterReference,
       baseLines: ((baseResult.data ?? []) as { id: string; section: string; name: string; quantity: number | string; unit: string | null; unit_price: number }[]).map(

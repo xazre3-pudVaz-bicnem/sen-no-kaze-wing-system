@@ -11,6 +11,14 @@ type Props = {
   adjustmentValue?: string;
   onAdjustmentChange?: (value: string) => void;
   readOnly?: boolean;
+  /**
+   * 保存済み（DB）の調整後税別額・内部原価の合計（本部だけ。2026-11-20 の先方の依頼「手入力明細の原価入力復活」）。
+   * 渡さない（undefined）ときは今までどおり「未算定」。null は保存済みの金額を確認できない（未確定）。
+   * missingCostCount が 1 以上なら粗利・粗利率は「未確定」（原価を 0 円として計算しない：2026-11-06 の先方回答）
+   */
+  savedProfit?: { subtotal: number; costTotal: number; hasPor: boolean; missingCostCount: number; unsaved?: boolean } | null;
+  /** 画面の今の状態で、原価単価が未入力の手入力明細の行数（売価は試算に含む。公開には原価単価が要る） */
+  missingLineCostCount?: number;
 };
 
 const SECTION_LABELS: Record<PricingSectionCode, string> = {
@@ -35,6 +43,8 @@ export function StandardEstimateV25AmountBreakdown({
   adjustmentValue,
   onAdjustmentChange,
   readOnly = true,
+  savedProfit,
+  missingLineCostCount = 0,
 }: Props) {
   const omitted = unpricedCount + incompleteCostCount;
   const partiallyUnknown = omitted > 0 || Boolean(result?.has_por);
@@ -57,6 +67,11 @@ export function StandardEstimateV25AmountBreakdown({
           {result?.has_por ? '別途見積が含まれています。' : ''}
           {omitted > 0 ? `売価未入力 ${unpricedCount} 件、商品原価未設定 ${incompleteCostCount} 件は試算から除外されています。` : ''}
           金額がすべて確定した状態ではありません。
+        </p>
+      )}
+      {missingLineCostCount > 0 && (
+        <p role="status" className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-amber-900" data-testid="v25-amount-breakdown-line-cost-missing">
+          原価単価が未入力の手入力明細が {missingLineCostCount} 行あります（売価は試算に含めています）。公開には原価単価（税別。0 円なら 0）が必要です。
         </p>
       )}
 
@@ -131,14 +146,55 @@ export function StandardEstimateV25AmountBreakdown({
         </table>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5" data-testid="v25-amount-breakdown-profit-pending">
-        <span className="font-medium text-slate-700">原価合計・粗利・粗利率</span>
-        <span className="font-semibold text-slate-700">未算定</span>
+      {savedProfit === undefined ? (
+        <>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5" data-testid="v25-amount-breakdown-profit-pending">
+            <span className="font-medium text-slate-700">原価合計・粗利・粗利率</span>
+            <span className="font-semibold text-slate-700">未算定</span>
+          </div>
+          <p className="mt-1 text-[10px] leading-5 text-slate-500">
+            v2.5の試算結果では、手動売価の明細などに正式な原価がありません。
+            原価・粗利を推測表示せず、金額正本と粗利定義の確認後に対応します。
+          </p>
+        </>
+      ) : (
+        <V25SavedProfit profit={savedProfit} />
+      )}
+    </section>
+  );
+}
+
+/**
+ * 保存済み（DB）の原価合計・粗利・粗利率（本部だけ）。粗利 = 調整後税別額 − 内部原価の合計（原価側の経費を含む）、
+ * 粗利率 = 粗利 ÷ 調整後税別額（旧標準見積と同じ定義・同じ表示の丸め）。別途見積の行は売価・原価とも含めない。
+ * 原価が未設定の行が 1 件でもあれば「未確定」（原価を 0 円として粗利を出さない：2026-11-06 の先方回答）
+ */
+function V25SavedProfit({ profit }: { profit: NonNullable<Props['savedProfit']> | null }) {
+  const known = profit !== null && profit.missingCostCount === 0;
+  const gross = known ? profit.subtotal - profit.costTotal : null;
+  // 粗利率の表示は旧標準見積の画面と同じ（小数 1 桁に四捨五入。standard-estimate-editor）
+  const ratio = known && gross !== null && profit.subtotal > 0 ? `${Math.round((gross / profit.subtotal) * 1000) / 10}%` : '—';
+  const grossTone = gross === null || gross === 0 ? 'text-slate-700' : gross > 0 ? 'text-emerald-800' : 'text-red-700';
+  return (
+    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5" data-testid="v25-amount-breakdown-profit">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="font-medium text-slate-700">原価合計・粗利・粗利率（保存済み・社内用）</span>
+        {known && profit && gross !== null ? (
+          <span className="font-semibold tabular-nums text-slate-900" data-testid="v25-amount-breakdown-profit-values">
+            原価合計 {formatYen(profit.costTotal)}・粗利 <span className={grossTone}>{formatYen(gross)}</span>・粗利率 {ratio}
+          </span>
+        ) : (
+          <span className="font-semibold text-amber-800" data-testid="v25-amount-breakdown-profit-unknown">未確定</span>
+        )}
       </div>
       <p className="mt-1 text-[10px] leading-5 text-slate-500">
-        v2.5の試算結果では、手動売価の明細などに正式な原価がありません。
-        原価・粗利を推測表示せず、金額正本と粗利定義の確認後に対応します。
+        {profit === null
+          ? '保存済みの金額を確認できないため、粗利・粗利率は未確定です。'
+          : profit.missingCostCount > 0
+            ? `原価が未設定の行が ${profit.missingCostCount} 件あるため、粗利・粗利率は未確定です（0 円として計算しません）。`
+            : `粗利 = 調整後税別額 − 原価合計（原価側の経費を含む）。${profit.hasPor ? '別途見積の行は売価・原価とも含めていません。' : ''}`}
+        {profit?.unsaved ? '保存していない変更は含みません（保存すると更新されます）。' : ''}
       </p>
-    </section>
+    </div>
   );
 }

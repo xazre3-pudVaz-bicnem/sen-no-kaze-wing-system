@@ -55,7 +55,9 @@ create function pg_temp.rwo_line(p_line_key uuid, p_name text, p_group_label tex
 language sql as $fn$
   select jsonb_build_object('line_key', p_line_key, 'section_code', 'option', 'group_label', p_group_label, 'name', p_name,
                             'quantity', '2', 'unit', '式', 'price_mode', 'manual', 'unit_price', p_unit_price, 'remark', null,
-                            'review_required', false)
+                            'review_required', false,
+                            -- 公開には手入力明細の原価単価が要る（20261110150000。売価の計算には関わらない）
+                            'cost_unit_price', p_unit_price * 6 / 10)
          || case when p_row_order is null then '{}'::jsonb else jsonb_build_object('row_order', p_row_order) end;
 $fn$;
 

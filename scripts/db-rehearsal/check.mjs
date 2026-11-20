@@ -37,6 +37,7 @@ import { runtimeV25FormalQuotes } from './runtime-v25-formal-quotes.mjs';
 import { runtimeV25StandardQuoteDrafts } from './runtime-v25-standard-quote-drafts.mjs';
 import { runtimeV25SlotQuantity } from './runtime-v25-slot-quantity.mjs';
 import { runtimeV25RowOrderWorkItems } from './runtime-v25-row-order-work-items.mjs';
+import { runtimeV25ManualLineCosts } from './runtime-v25-manual-line-costs.mjs';
 import { runtimeCasePlanPositionSlots } from './runtime-case-plan-position-slots.mjs';
 import { runtimeAnonChildRows } from './runtime-anon-child-rows.mjs';
 
@@ -100,6 +101,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25SlotQuantity(client));
     // 標準見積 v2.5 の商品行と手入力明細の混在の並び順・工事項目の保存（2026-11-16 の先方の依頼）
     runtime = mergeRuntime(runtime, await runtimeV25RowOrderWorkItems(client));
+    // 標準見積 v2.5 の手入力明細の原価単価（2026-11-20 の先方の依頼「手入力明細の原価入力復活」）
+    runtime = mergeRuntime(runtime, await runtimeV25ManualLineCosts(client));
     // 案件の画面のプランボードに、位置・用途の選択枠ごとの商品を出す（v2.5 PR-S2b）
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
     // 子の行の読み取りの条件：匿名・お客様は親が公開中の行だけ（依頼 A）、代理店以上は親が読める行だけ（H2-C ①）

@@ -1006,7 +1006,8 @@ function WorkbenchBody({
     insertAfter: V25MixedRowRef | null = null,
     workGroupLabel = ''
   ) => {
-    if (readOnly || positionActionsLocked || groupEditor !== null) return;
+    // 新規工事項目ダイアログ内からの追加を許可。ほかの行操作はモーダル中に実行できない。
+    if (readOnly || positionActionsLocked) return;
     const addedKey = newKey('line');
     setViewOrder((current) => v25InsertMixedRow(
       v25ReconcileMixedRowOrder(current.length ? current : persistedMixedOrder, state, sectionOf),

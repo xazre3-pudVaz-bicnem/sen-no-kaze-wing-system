@@ -324,7 +324,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(subtotal).not.toContain('afterSaleAmount');
   });
 
-  it('工事項目の重複表示を無くし、明示的なメニュー確定までgroup_labelを変更しない', () => {
+  it('工事項目の重複表示を無くし、見出し操作で追加・名称編集できる', () => {
     expect(source).toContain('const workGroups = v25WorkGroupsForDisplay(');
     expect(source).toContain('workGroups.map((workGroup)');
     expect(source).toContain('data-testid="v25-work-item-heading"');
@@ -334,14 +334,17 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('const line = workGroup.lines.find((item) => item.key === rowRef.key)');
     expect(source).toContain('data-v25-excel-col="name"');
     expect(source).not.toContain('data-v25-excel-col="group"');
-    expect(source).toContain('data-testid="v25-wb-change-work-group"');
+    expect(source).not.toContain('data-testid="v25-wb-change-work-group"');
+    expect(source).toContain('data-testid="v25-wb-edit-work-group"');
+    expect(source).toContain('data-testid={`v25-wb-add-work-group-${code}`}');
     expect(source).toContain('data-testid="v25-wb-work-group-dialog"');
     expect(source).toContain('value={groupEditor.value}');
-    expect(source).toContain('setGroupEditor({ lineKey: line.key, originalLabel: line.group_label, value: line.group_label })');
-    expect(source).toContain("if (groupEditor.value !== groupEditor.originalLabel) setLine(groupEditor.lineKey, { group_label: groupEditor.value })");
+    expect(source).toContain("mode: 'add', section: code");
+    expect(source).toContain("mode: 'rename', section: code");
+    expect(source).toContain('setState((current) => v25RenameWorkGroup(current, sourceGroup, label))');
+    expect(source).toContain("addLine(groupEditor.section, null, label)");
     expect(source).toContain('onClose={() => setGroupEditor(null)}');
     expect(source).toContain('dirty={groupEditor.value !== groupEditor.originalLabel}');
-    expect(source).toContain("setJumpToKey({ key: groupEditor.lineKey })");
     expect(source).toContain('{!collapsed.has(code) && sectionSubtotal(code, STANDARD_SECTION_LABEL[code])}');
   });
 
@@ -354,7 +357,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('event.shiftKey ? -1 : 1');
     expect(source).toContain('next.focus(); next.select();');
     expect(source).not.toContain('setEditingWorkGroup');
-    expect(source).toContain('setLine(groupEditor.lineKey, { group_label: groupEditor.value })');
+    expect(source).toContain('v25RenameWorkGroup(current, sourceGroup, label)');
     expect(source).toContain('const setLine = (key: string, patch: Partial<V25LineRow>)');
     expect(source).toContain('lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line))');
   });
@@ -389,7 +392,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('<V25RowDeleteButton inMenu');
     expect(source).toContain('testId="v25-wb-line-delete"');
     expect(source).toContain('data-v25-excel-col="name"');
-    expect(source).toContain('data-testid="v25-wb-change-work-group"');
+    expect(source).not.toContain('data-testid="v25-wb-change-work-group"');
     expect(source).toContain('data-v25-column="actions"');
     expect(source).toContain('style={{ width: columnPrefs.prefs.widths.actions }}');
   });

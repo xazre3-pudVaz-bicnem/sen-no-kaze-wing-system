@@ -46,6 +46,48 @@ describe('商品台帳の一覧操作', () => {
     expect(menu).toContain("event.stopPropagation()");
   });
 
+
+  it('商品一覧のPC・スマホ・カードメニューから安全に販売停止・再開ができる', () => {
+    expect(client).toContain('lifecycleEnabled={lifecycleEnabled}');
+    expect(client).toContain('archivedAt={o.archived_at}');
+    expect(client).toContain('discontinuedAt={o.discontinued_at}');
+    expect(client).toContain('expectedUpdatedAt={o.updated_at}');
+    expect((client.match(/<ProductLedgerActionsMenu [^\n]*lifecycleEnabled=\{lifecycleEnabled\}/g) ?? []).length).toBe(3);
+
+    expect(menu).toContain("import { setProductLifecycleAction } from '@/lib/actions/product-lifecycle'");
+    expect(menu).toContain("productSalesState({ status, archived_at: archivedAt, discontinued_at: discontinuedAt })");
+    expect(menu).toContain("isPublished && lifecycleEnabled && salesState === 'registered'");
+    expect(menu).toContain("isPublished && lifecycleEnabled && salesState === 'stopped'");
+    expect(menu).toContain('data-testid="ledger-row-lifecycle-action"');
+    expect(menu).toContain("setLifecycleDialog(canStop ? 'retire' : 'resume')");
+    expect(menu).toContain('販売を停止する');
+    expect(menu).toContain('販売を再開する');
+    expect(menu).toContain('role="dialog"');
+    expect(menu).toContain('aria-modal="true"');
+    expect(menu).toContain('name="expected_updated_at" value={expectedUpdatedAt}');
+    expect(menu).toContain('name="action" value={lifecycleDialog}');
+    expect(menu).toContain('name="resume_confirmed" value="1" required');
+    expect(menu).toContain('仕様・供給・価格を確認しました');
+    expect(menu).toContain('onClick={(event) => event.stopPropagation()}');
+    expect(menu).toContain('closeLifecycleDialog()');
+    expect(menu).toContain('function handleModalKeyDown(event: ReactKeyboardEvent<HTMLDivElement>');
+    expect(menu).toContain('event.stopPropagation();');
+    expect(menu).toContain("event.key === 'Escape'");
+    expect(menu).toContain("event.key !== 'Tab'");
+    expect(menu).toContain('last.focus();');
+    expect(menu).toContain('first.focus();');
+    expect(menu).toContain('onKeyDown={(event) => handleModalKeyDown(event, closeLifecycleDialog)}');
+    expect(menu).toContain('onKeyDown={(event) => handleModalKeyDown(event, closeDeleteDialog)}');
+    expect((menu.match(/onClick=\{\(event\) => event.stopPropagation\(\)\}/g) ?? []).length).toBeGreaterThanOrEqual(3);
+
+    const lifecycleAction = fs.readFileSync(path.resolve(process.cwd(), 'lib/actions/product-lifecycle.ts'), 'utf8');
+    expect(lifecycleAction).toContain("await requireCatalogEditor(ledgerPath)");
+    expect(lifecycleAction).toContain("action === 'resume' && formData.get('resume_confirmed') !== '1'");
+    expect(lifecycleAction).toContain('expectedUpdatedAt');
+    expect(lifecycleAction).toContain('store.setProductLifecycle({ id, action, expectedUpdatedAt })');
+    expect(menu).not.toContain('name="mode" value="discontinue"');
+  });
+
   it('削除確認は中央モーダルで下書きと登録済み商品の違いを明示する', () => {
     expect(menu).toContain("import { createPortal } from 'react-dom'");
     expect(menu).toContain('role="dialog"');

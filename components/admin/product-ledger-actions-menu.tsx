@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { EllipsisVertical, Trash2 } from 'lucide-react';
 import { deleteDraftProductFromLedgerAction } from '@/lib/actions/product-ledger';
 import { deleteUnusedPublishedOptionAction } from '@/lib/actions/unused-published-product-delete';
+import { setProductLifecycleAction } from '@/lib/actions/product-lifecycle';
+import { productSalesState } from '@/lib/domain/product-lifecycle';
 import type { ProductOption } from '@/lib/domain/types';
 
 type Props = {
@@ -14,7 +16,43 @@ type Props = {
   status: ProductOption['status'];
   canEdit: boolean;
   configurationUsageCount: number | null;
+  lifecycleEnabled: boolean;
+  archivedAt: string | null | undefined;
+  discontinuedAt: string | null | undefined;
+  expectedUpdatedAt: string;
 };
+
+/**
+ * Portal のイベントは React の親（台帳の<tr>）に伝播する。
+ * ダイアログ内の Enter/Space が商品詳細のショートカットを実行しないよう隔離し、
+ * aria-modal の Tab/Shift+Tab が背面に抜けないよう循環させる。
+ */
+function handleModalKeyDown(event: ReactKeyboardEvent<HTMLDivElement>, closeDialog: () => void) {
+  event.stopPropagation();
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeDialog();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+
+  const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+    'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => element.getClientRects().length > 0);
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) {
+    event.preventDefault();
+    return;
+  }
+  if (event.shiftKey && (document.activeElement === first || !event.currentTarget.contains(document.activeElement))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || !event.currentTarget.contains(document.activeElement))) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 export function ProductLedgerActionsMenu({
   optionId,
@@ -22,13 +60,22 @@ export function ProductLedgerActionsMenu({
   status,
   canEdit,
   configurationUsageCount,
+  lifecycleEnabled,
+  archivedAt,
+  discontinuedAt,
+  expectedUpdatedAt,
 }: Props) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [lifecycleDialog, setLifecycleDialog] = useState<'retire' | 'resume' | null>(null);
 
   const closeDeleteDialog = () => {
     setDeleteDialogOpen(false);
+    queueMicrotask(() => detailsRef.current?.querySelector<HTMLElement>('summary')?.focus());
+  };
+  const closeLifecycleDialog = () => {
+    setLifecycleDialog(null);
     queueMicrotask(() => detailsRef.current?.querySelector<HTMLElement>('summary')?.focus());
   };
 
@@ -46,6 +93,10 @@ export function ProductLedgerActionsMenu({
         closeDeleteDialog();
         return;
       }
+      if (lifecycleDialog) {
+        closeLifecycleDialog();
+        return;
+      }
       if (!details.open) return;
       details.removeAttribute('open');
       details.querySelector<HTMLElement>('summary')?.focus();
@@ -57,10 +108,10 @@ export function ProductLedgerActionsMenu({
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteDialogOpen]);
+  }, [deleteDialogOpen, lifecycleDialog]);
 
   useEffect(() => {
-    if (!deleteDialogOpen) return;
+    if (!deleteDialogOpen && !lifecycleDialog) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -69,12 +120,15 @@ export function ProductLedgerActionsMenu({
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [deleteDialogOpen]);
+  }, [deleteDialogOpen, lifecycleDialog]);
 
   if (!canEdit) return null;
 
   const isDraft = status === 'draft';
   const isPublished = status === 'published';
+  const salesState = productSalesState({ status, archived_at: archivedAt, discontinued_at: discontinuedAt });
+  const canStop = isPublished && lifecycleEnabled && salesState === 'registered';
+  const canResume = isPublished && lifecycleEnabled && salesState === 'stopped';
   const canDeleteDraft = isDraft && configurationUsageCount === 0;
   const deleteAction = isDraft ? deleteDraftProductFromLedgerAction : deleteUnusedPublishedOptionAction;
   const editHref = `/admin/options/${optionId}?return_to=%2Fadmin%2Fledger`;
@@ -111,6 +165,20 @@ export function ProductLedgerActionsMenu({
           >
             この商品をもとに新規登録
           </Link>
+
+          {(canStop || canResume) && (
+            <button
+              type="button"
+              data-testid="ledger-row-lifecycle-action"
+              className="flex w-full items-center rounded-md px-2.5 py-2 text-left text-ink-soft hover:bg-sand hover:text-ink"
+              onClick={() => {
+                detailsRef.current?.removeAttribute('open');
+                setLifecycleDialog(canStop ? 'retire' : 'resume');
+              }}
+            >
+              {canStop ? '販売を停止する' : '販売を再開する'}
+            </button>
+          )}
 
           {(isDraft || isPublished) && <div className="my-1 border-t border-line" />}
 
@@ -154,11 +222,66 @@ export function ProductLedgerActionsMenu({
         </div>
       </details>
 
+      {lifecycleDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => handleModalKeyDown(event, closeLifecycleDialog)}
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              event.preventDefault(); // 背景クリックの既定フォーカス移動より前に、復帰先を維持する
+              closeLifecycleDialog();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`lifecycle-product-title-${optionId}`}
+            aria-describedby={`lifecycle-product-description-${optionId}`}
+            className="w-full max-w-md rounded-2xl border border-line bg-white p-5 shadow-2xl sm:p-6"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id={`lifecycle-product-title-${optionId}`} className="text-lg font-semibold text-ink">
+              {lifecycleDialog === 'retire' ? '販売を停止しますか' : '販売を再開しますか'}
+            </h2>
+            <p id={`lifecycle-product-description-${optionId}`} className="mt-3 text-sm leading-6 text-ink-soft">
+              {lifecycleDialog === 'retire'
+                ? <>「{optionName}」を新しい見積・シミュレーターの選択候補から外します。標準構成に含まれる場合は、その仕様の新しい受付が停止します。保存済みの内容や発行済み見積は変更されません。</>
+                : <>「{optionName}」を新しい見積で再び選択可能にします。仕様・供給・価格を確認してから再開してください。</>}
+            </p>
+            <form action={setProductLifecycleAction} className="mt-5 space-y-4">
+              <input type="hidden" name="id" value={optionId} />
+              <input type="hidden" name="action" value={lifecycleDialog} />
+              <input type="hidden" name="expected_updated_at" value={expectedUpdatedAt} />
+              {lifecycleDialog === 'resume' && (
+                <label className="flex items-start gap-2 text-sm font-medium text-ink">
+                  <input type="checkbox" name="resume_confirmed" value="1" required className="mt-1" />
+                  仕様・供給・価格を確認しました
+                </label>
+              )}
+              <div className="flex justify-end gap-2">
+                <button ref={cancelButtonRef} type="button" className="btn-secondary btn-sm min-w-24" onClick={closeLifecycleDialog}>キャンセル</button>
+                <button type="submit" className="btn-primary btn-sm min-w-24">
+                  {lifecycleDialog === 'retire' ? '販売を停止する' : '販売を再開する'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>,
+        document.body,
+      )}
+
       {deleteDialogOpen && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeDeleteDialog();
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => handleModalKeyDown(event, closeDeleteDialog)}
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              event.preventDefault();
+              closeDeleteDialog();
+            }
           }}
         >
           <section

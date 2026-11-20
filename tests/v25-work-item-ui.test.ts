@@ -124,6 +124,27 @@ describe('工事項目の見出し単位の追加と名称編集', () => {
     });
   });
 
+  it('保存行順が分かる工事項目は、名前を変更しても同じ表示位置を維持する', () => {
+    const before = state(
+      [slot('sash', 'sash1', { row_order: 1 }),
+       slot('roof', 'roof1', { row_order: 2, work_item: '2. 屋根工事' })],
+      [line('l-roof', { group_label: '2. 屋根工事', row_order: 3 }),
+       line('l-other', { group_label: '4. 内装仕上げ', row_order: 4 })]
+    );
+    const toGroups = (input: V25EditorState) =>
+      v25WorkGroupsForDisplay(input.slots, input.lines, categoryOf, (line) => line.group_label, scope);
+    const roof = toGroups(before).find((group) => group.key === 'work:roof')!;
+    const after = v25RenameWorkGroup(before, roof, '2. 屋根・板金工事');
+    expect(toGroups(before).map((group) => group.label)).toEqual([
+      '1. サッシ・木製建具工事', '2. 屋根工事', '4. 内装仕上げ',
+    ]);
+    expect(toGroups(after).map((group) => group.label)).toEqual([
+      '1. サッシ・木製建具工事', '2. 屋根・板金工事', '4. 内装仕上げ',
+    ]);
+    expect(after.slots[1].row_order).toBe(2);
+    expect(after.lines[0].row_order).toBe(3);
+  });
+
   it('空見出しではなく手入力行を同時追加し、品名を埋めれば既存の保存payloadに入る', () => {
     const newLine = line('new', { group_label: '5. 造作工事', name: '', price_mode: 'por', unit_price: '' });
     const before = state([], []);

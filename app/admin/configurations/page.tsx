@@ -12,7 +12,7 @@ import { RegionFilter } from '@/components/admin/region-filter';
 
 export default async function AdminConfigurationsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  await requireStaff('/admin/configurations');
+  const actor = await requireStaff('/admin/configurations');
   const store = await getStore();
   const [configurations, models] = await Promise.all([store.listAllConfigurations(), store.listModels({ includeDraft: true })]);
   const nameOf = new Map(models.map((m) => [m.id, m.name]));
@@ -74,6 +74,11 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
       <p className="text-xs text-muted">
         地域は設置予定地を優先し、未登録時のみ顧客住所で判定します。「未定」は地域絞り込みの対象外です。
       </p>
+      {actor.role !== 'admin' && (
+        <p className="mb-3 text-xs text-muted" data-testid="configuration-detail-access-note">
+          保存プランの一覧は閲覧できますが、各プランの詳細確認は本部管理者のみ可能です。
+        </p>
+      )}
       <Table minWidth="56rem">
         <thead className="bg-sand/60"><tr><Th>更新日時</Th><Th>保存名</Th><Th>モデル</Th><Th>顧客</Th><Th>設置予定地</Th><Th>状態</Th><Th right>合計（税込）</Th><Th></Th></tr></thead>
         <tbody className="divide-y divide-line">
@@ -91,7 +96,11 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
               </Td>
               <Td><Badge>{CONFIGURATION_STATUS_LABELS[c.status]}</Badge></Td>
               <Td right>{formatYen(c.total)}</Td>
-              <Td right><Link href={`/admin/configurations/${c.id}`} className="btn-secondary btn-sm">確認</Link></Td>
+              <Td right>
+                {actor.role === 'admin'
+                  ? <Link href={`/admin/configurations/${c.id}`} className="btn-secondary btn-sm">確認</Link>
+                  : <span className="text-xs text-muted" data-testid="configuration-detail-admin-only">本部管理者のみ</span>}
+              </Td>
             </tr>
           ))}
           {shown.length === 0 && <tr><Td className="text-center text-muted">条件に合う保存データはありません</Td></tr>}

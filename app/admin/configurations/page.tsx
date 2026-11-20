@@ -22,7 +22,7 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
   const validOptionId = optionId !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(optionId);
   const [matchingIds, filteredOption] = validOptionId
     ? await Promise.all([getProductConfigurationIdsForOption(optionId), store.getOption(optionId)])
-    : [new Set<string>(), null];
+    : [new Set<string>(), null] as const;
   const optionConfigurations = optionId === null
     ? configurations
     : configurations.filter((configuration) => matchingIds.has(configuration.id));

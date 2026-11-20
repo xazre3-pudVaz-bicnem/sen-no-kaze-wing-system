@@ -121,7 +121,8 @@ describe('標準見積v2.5 設定・金額・本体参照・位置表示', () =>
     expect(workbench).toContain('保存済み {savedTotal !== null');
     expect(workbench).toContain('bg-lime-100');
     expect(workbench).toContain('data-testid="v25-work-item-heading"');
-    expect(workbench).toContain('data-testid="v25-wb-change-work-group"');
-    expect(workbench).toContain('setJumpToKey({ key: groupEditor.lineKey })');
+    expect(workbench).toContain('data-testid="v25-wb-edit-work-group"');
+    expect(workbench).toContain('data-testid="v25-wb-work-group-dialog"');
+    expect(workbench).not.toContain('data-testid="v25-wb-change-work-group"');
   });
 });

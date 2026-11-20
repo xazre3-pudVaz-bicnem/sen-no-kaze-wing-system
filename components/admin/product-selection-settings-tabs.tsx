@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 type SettingsTab = 'matrix' | 'categories';
 
@@ -14,6 +14,9 @@ export function ProductSelectionSettingsTabs({
   categories: ReactNode;
 }) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
+
+  // クエリ変更でカテゴリー詳細を開いても子の未保存状態を破棄しない。
+  useEffect(() => setTab(initialTab), [initialTab]);
 
   const tabs: { id: SettingsTab; label: string; caption: string }[] = [
     { id: 'matrix', label: '仕様別の選択可否', caption: '機種・仕様・サイズごと' },

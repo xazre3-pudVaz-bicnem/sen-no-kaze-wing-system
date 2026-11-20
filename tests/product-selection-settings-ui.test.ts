@@ -48,4 +48,16 @@ describe('商品選択設定の2タブUI', () => {
     expect(categories).toContain('{canEdit && <button');
     expect(categories).toContain('{canEdit && <Link');
   });
+
+  it('クライアント内の詳細編集・戻る操作で未保存ドラフトを黙って破棄しない', () => {
+    const page = read('app/admin/categories/page.tsx');
+    const tabs = read('components/admin/product-selection-settings-tabs.tsx');
+    const matrix = read('components/admin/selection-matrix-panel.tsx');
+    expect(page).not.toContain('key={initialTab}');
+    expect(tabs).toContain('useEffect(() => setTab(initialTab), [initialTab])');
+    expect(matrix).toContain('restoreMatrixSettingsDrafts(window.sessionStorage.getItem(draftKey), initialRows)');
+    expect(matrix).toContain('window.sessionStorage.setItem(draftKey, serializeMatrixSettingsDrafts({ drafts, selectedId }))');
+    expect(matrix).toContain('expected_lock_version: changes.lockVersion');
+    expect(matrix).toContain('staleDraft');
+  });
 });

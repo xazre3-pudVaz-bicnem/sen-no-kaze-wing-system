@@ -1,0 +1,68 @@
+name: PR 702 Ledger Lifecycle Dialogs Isolated Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/product-ledger-actions-menu.tsx'
+      - 'components/admin/product-ledger-client.tsx'
+      - 'e2e/pr702-ledger-action-dialogs.spec.ts'
+      - '.github/workflows/pr702-ledger-action-dialogs-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr702-ledger-dialogs-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      WING_LOCAL_DIR: '.wing-local/e2e'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout PR candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Assert isolated localhost and no production DB
+        run: |
+          test "$WING_LOCAL_MODE" = '1'
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+
+      - name: Verify actual ledger modal controls with desktop and Pixel 7
+        run: |
+          mkdir -p e2e/artifacts
+          npx playwright test e2e/pr702-ledger-action-dialogs.spec.ts --project=desktop
+
+      - name: Upload browser screenshots and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr702-ledger-lifecycle-dialogs-evidence
+          path: |
+            e2e/artifacts/pr702-*.png
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

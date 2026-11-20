@@ -9,7 +9,7 @@ import type { OptionCategory } from '@/lib/domain/types';
 
 type VisibilityFilter = 'all' | 'visible' | 'hidden';
 
-export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId }: { categories: OptionCategory[]; editingCategoryId?: string | null }) {
+export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId, canEdit = true }: { categories: OptionCategory[]; editingCategoryId?: string | null; canEdit?: boolean }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -38,7 +38,7 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
   const visibleCount = categories.filter((category) => isVisible(category)).length;
 
   const saveVisibility = (category: OptionCategory, visible: boolean) => {
-    if (pending) return;
+    if (pending || !canEdit) return;
     setNotice(null);
     setSavingId(category.id);
     const data = customerCategoryVisibilityFormData(category, visible);
@@ -81,6 +81,7 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
           同じカテゴリー内の特定商品だけを非表示にする場合は、商品側のシミュレーター表示設定を使います。
         </p>
       </div>
+      {!canEdit && <p className="text-xs font-medium text-muted">閲覧のみ：カテゴリーの変更は総代理店以上が行えます。</p>}
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex min-w-[14rem] flex-1 items-center gap-2 text-sm">
           <span className="shrink-0 font-medium">検索</span>
@@ -154,21 +155,21 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
                           <input
                             type="checkbox"
                             checked={draftVisible(category)}
-                            disabled={pending}
+                            disabled={pending || !canEdit}
                             onChange={(event) => setDrafts((current) => ({ ...current, [category.id]: event.target.checked }))}
                             aria-label={category.name + ' をお客様のシミュレーターに表示'}
                           />
                           <span>{draftVisible(category) ? '表示する' : '表示しない'}</span>
                         </label>
-                        <button
+                        {canEdit && <button
                           type="button"
                           className="rounded-md border border-line px-3 py-1 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={pending || draftVisible(category) === isVisible(category)}
                           onClick={() => saveVisibility(category, draftVisible(category))}
                         >
                           {savingId === category.id ? '保存中…' : '保存'}
-                        </button>
-                        <Link
+                        </button>}
+                        {canEdit && <Link
                           href={'/admin/categories?edit=' + encodeURIComponent(category.id) + '#category-editor'}
                           aria-current={editingCategoryId === category.id ? 'true' : undefined}
                           className={editingCategoryId === category.id
@@ -176,7 +177,7 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
                             : 'rounded-md border border-line px-3 py-1 text-sm font-medium text-ink-soft hover:bg-sand'}
                         >
                           詳細編集
-                        </Link>
+                        </Link>}
                       </div>
                     </div>
                   ))}
@@ -187,10 +188,10 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
         })}
         {grouped.length === 0 && <p className="px-4 py-5 text-sm text-muted">該当するカテゴリーはありません。</p>}
       </div>
-      <p className="text-xs text-muted">
+      {canEdit && <p className="text-xs text-muted">
         チェックを変更した後、その行の「保存」で反映します。必須カテゴリーや標準構成の商品を非表示にする前に、
         シミュレーターの初期状態・見積金額・保存の動作を確認してください。
-      </p>
+      </p>}
     </section>
   );
 }

@@ -8,6 +8,8 @@ import { buildV25SavePayload, type V25EditorState, type V25LineRow, type V25Slot
 import type { V25WorkbenchCandidate } from '@/lib/domain/standard-estimate-v25-workbench';
 import {
   v25AutoWorkItemLabel,
+  v25RenameWorkGroup,
+  v25WorkGroupNameError,
   v25WorkGroupsForDisplay,
   v25WorkItemLabelsForSection,
 } from '@/components/admin/standard-estimate-v25-work-groups';
@@ -83,6 +85,70 @@ describe('工事項目の見出しの分け方', () => {
       ['1. サッシ・木製建具工事', ['s2']],
       ['2. 屋根工事', ['s1']],
     ]);
+  });
+});
+
+describe('工事項目の見出し単位の追加と名称編集', () => {
+  const scope = { ...context, sectionCode: 'interior_exterior' as const };
+  const categoryOf = (id: string) => ({ roof1: 'roof', sash1: 'sash' } as Record<string, string>)[id];
+
+  it('商品と手入力行の見出し名を一括変更するが、数量・単価・位置・ID・別の区分は変更しない', () => {
+    const before = state(
+      [slot('s1', 'roof1', { quantity: '23.5', slot_code: '', work_item: '' }),
+       slot('s2', 'sash1', { quantity: '1', work_item: '1. サッシ・木製建具工事' })],
+      [line('l1', { group_label: '2. 屋根工事', quantity: '3', unit_price: '1200' }),
+       line('l2', { section_code: 'option', group_label: '2. 屋根工事' })]
+    );
+    const groups = v25WorkGroupsForDisplay(
+      before.slots.filter((item) => item.option_id === 'roof1'),
+      before.lines.filter((item) => item.section_code === 'interior_exterior'),
+      categoryOf, (row) => row.group_label, scope
+    );
+    const roof = groups.find((item) => item.key === 'work:roof');
+    expect(roof).toBeDefined();
+    const after = v25RenameWorkGroup(before, roof!, '2. 屋根・板金工事');
+    expect(after.slots[0]).toEqual({ ...before.slots[0], work_item: '2. 屋根・板金工事' });
+    expect(after.lines[0]).toEqual({ ...before.lines[0], group_label: '2. 屋根・板金工事' });
+    expect(after.slots[1]).toEqual(before.slots[1]);
+    expect(after.lines[1]).toEqual(before.lines[1]);
+    expect(before.slots[0].work_item).toBe('');
+    expect(buildV25SavePayload(after).slots[0].work_item).toBe('2. 屋根・板金工事');
+    expect(buildV25SavePayload(after).lines[0].group_label).toBe('2. 屋根・板金工事');
+    const renamed = v25WorkGroupsForDisplay(
+      after.slots.filter((item) => item.option_id === 'roof1'),
+      after.lines.filter((item) => item.section_code === 'interior_exterior'),
+      categoryOf, (row) => row.group_label, scope
+    );
+    expect(renamed.find((group) => group.label === '2. 屋根・板金工事')).toMatchObject({
+      slots: [{ key: 's1' }], lines: [{ key: 'l1' }],
+    });
+  });
+
+  it('空見出しではなく手入力行を同時追加し、品名を埋めれば既存の保存payloadに入る', () => {
+    const newLine = line('new', { group_label: '5. 造作工事', name: '', price_mode: 'por', unit_price: '' });
+    const before = state([], []);
+    const added = { ...before, lines: [newLine] };
+    const groups = v25WorkGroupsForDisplay([], added.lines, () => null, (row) => row.group_label, scope);
+    expect(groups.map((group) => group.label)).toEqual(['5. 造作工事']);
+    expect(v25WorkGroupNameError('5. 造作工事', [], scope)).toBeNull();
+    expect(buildV25SavePayload(added).lines[0]).toMatchObject({
+      group_label: '5. 造作工事', price_mode: 'por',
+    });
+    expect(added.lines[0].name).toBe('');
+  });
+
+  it('空・長すぎる名称・既存名称との重複・未分類表示用名称を拒否する', () => {
+    const groups = v25WorkGroupsForDisplay(
+      [slot('roof', 'roof1')], [line('manual', { group_label: '5. 造作工事' })],
+      categoryOf, (row) => row.group_label, scope
+    );
+    expect(v25WorkGroupNameError('  ', groups, scope)).toContain('入力');
+    expect(v25WorkGroupNameError('長'.repeat(121), groups, scope)).toContain('120文字');
+    expect(v25WorkGroupNameError('2. 屋根工事', groups, scope)).toContain('すでに');
+    expect(v25WorkGroupNameError('5. 造作工事', groups, scope)).toContain('すでに');
+    expect(v25WorkGroupNameError('工事項目未分類の商品', groups, scope)).toContain('予約');
+    expect(v25WorkGroupNameError('2. 屋根工事', groups, scope, 'work:roof')).toBeNull();
+    expect(v25WorkGroupNameError('2.屋根工事', groups, scope, 'work:roof')).toContain('標準');
   });
 });
 

@@ -54,7 +54,7 @@ describe('商品選択設定の2タブUI', () => {
     const tabs = read('components/admin/product-selection-settings-tabs.tsx');
     const matrix = read('components/admin/selection-matrix-panel.tsx');
     expect(page).not.toContain('key={initialTab}');
-    expect(tabs).toContain('useEffect(() => setTab(initialTab), [initialTab])');
+    expect(tabs).toContain('const tab = selection.urlTab === initialTab ? selection.tab : initialTab;');
     expect(matrix).toContain('restoreMatrixSettingsDrafts(window.sessionStorage.getItem(draftKey), initialRows)');
     expect(matrix).toContain('window.sessionStorage.setItem(draftKey, serializeMatrixSettingsDrafts({ drafts, selectedId }))');
     expect(matrix).toContain('expected_lock_version: changes.lockVersion');

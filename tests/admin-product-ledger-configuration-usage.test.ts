@@ -51,7 +51,13 @@ describe('商品台帳の保存済み構成利用状況', () => {
   });
 
   it('保存プランの既存一覧で対象商品の参照先だけ絞り込み、地域条件と共存させる', () => {
-    expect(configurationsPage).toContain("await requireStaff('/admin/configurations')");
+    expect(configurationsPage).toContain("const actor = await requireStaff('/admin/configurations')");
+    expect(configurationsPage).toContain("actor.role !== 'admin'");
+    expect(configurationsPage).toContain('data-testid="configuration-detail-access-note"');
+    expect(configurationsPage).toContain('保存プランの一覧は閲覧できますが、各プランの詳細確認は本部管理者のみ可能です。');
+    expect(configurationsPage).toContain("actor.role === 'admin'");
+    expect(configurationsPage).toContain('data-testid="configuration-detail-admin-only"');
+    expect(configurationsPage).toContain('本部管理者のみ');
     expect(configurationsPage).toContain('getProductConfigurationIdsForOption(optionId)');
     expect(configurationsPage).toContain("typeof sp.option_id === 'string'");
     expect(configurationsPage).toContain('optionId === null');
@@ -60,7 +66,9 @@ describe('商品台帳の保存済み構成利用状況', () => {
     expect(configurationsPage).toContain('data-testid="configuration-option-filter"');
     expect(configurationsPage).toContain('total={optionConfigurations.length} matched={shown.length}');
     expect(configurationsPage).toContain('href="/admin/configurations"');
+    expect(configurationsPage).toContain('actor.role === \'admin\'');
     expect(configurationsPage).toContain('href={`/admin/configurations/${c.id}`}');
+    expect(configurationsPage).toContain('await requireStaff');
     expect(regionFilter).toContain('new URLSearchParams(sp.toString())');
     expect(configurationDetail).toContain('await requireAdmin()');
   });

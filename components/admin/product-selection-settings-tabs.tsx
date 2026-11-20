@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 type SettingsTab = 'matrix' | 'categories';
 
@@ -13,10 +13,10 @@ export function ProductSelectionSettingsTabs({
   matrix: ReactNode;
   categories: ReactNode;
 }) {
-  const [tab, setTab] = useState<SettingsTab>(initialTab);
-
-  // クエリ変更でカテゴリー詳細を開いても子の未保存状態を破棄しない。
-  useEffect(() => setTab(initialTab), [initialTab]);
+  // クエリの初期タブが変わっても子の状態は再マウントさせない。
+  // 明示的なタブ選択と、最新URLが要求するタブを区別する。
+  const [selection, setSelection] = useState({ urlTab: initialTab, tab: initialTab });
+  const tab = selection.urlTab === initialTab ? selection.tab : initialTab;
 
   const tabs: { id: SettingsTab; label: string; caption: string }[] = [
     { id: 'matrix', label: '仕様別の選択可否', caption: '機種・仕様・サイズごと' },
@@ -34,7 +34,7 @@ export function ProductSelectionSettingsTabs({
             role="tab"
             aria-selected={tab === item.id}
             aria-controls={'settings-panel-' + item.id}
-            onClick={() => setTab(item.id)}
+            onClick={() => setSelection({ urlTab: initialTab, tab: item.id })}
             className={
               'min-w-0 rounded-lg px-2 py-3 text-center transition sm:px-4 ' +
               (tab === item.id

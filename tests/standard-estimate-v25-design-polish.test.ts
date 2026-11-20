@@ -30,7 +30,9 @@ describe('標準見積v2.5 選択中の仕様／全仕様一覧の安全な切�
     expect(selector).toContain('bg-emerald-50');
     expect(selector).toContain('border-emerald-800');
     expect(selector).toContain('aria-current="page"');
-    expect(selector).toContain('公開中 第2版');
+    expect(selector).toContain('公開 第2版');
+    expect(selector).toContain('公開価格（税込）');
+    expect(selector).toContain('¥100');
     expect(selector).toContain('下書き 第3版');
     expect(selector).toContain('href="/admin/estimate-templates?master=master-1"');
     expect(selector).toContain('非防火');

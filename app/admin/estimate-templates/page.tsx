@@ -69,7 +69,6 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
           {selected && workspace ? (
             <>
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <h2 className="text-sm font-semibold text-slate-900">{selected.identity}</h2>
                 <Badge tone={workspace.revision.status === 'draft' ? 'warn' : 'success'}>
                   第{workspace.revision.version}版・{workspace.revision.status === 'draft' ? '下書き' : '公開中'}
                 </Badge>

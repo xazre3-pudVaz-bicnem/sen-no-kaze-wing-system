@@ -1886,7 +1886,8 @@ function WorkbenchBody({
                         return;
                       }
                       if (label !== groupEditor.originalLabel) {
-                        setState((current) => v25RenameWorkGroup(current, sourceGroup, label));
+                        // 名前を変えても表示順が飛ばないよう、変更直前の混在行順を確定する。
+                        setState((current) => v25RenameWorkGroup(v25WithRowOrder(current, renderedMixedOrder), sourceGroup, label));
                         const first = sourceGroup.slots[0]?.key ?? sourceGroup.lines[0]?.key;
                         if (first) setJumpToKey({ key: first });
                       }

@@ -69,6 +69,8 @@ import {
 import { v25StepPercent } from '@/lib/domain/standard-estimate-v25-rate-step';
 import {
   v25AutoWorkItemLabel,
+  v25WorkGroupNameError,
+  v25RenameWorkGroup,
   v25WorkGroupsForDisplay,
 } from '@/components/admin/standard-estimate-v25-work-groups';
 import {
@@ -495,9 +497,11 @@ function WorkbenchBody({
   const [selectableDraftIds, setSelectableDraftIds] = useState<string[] | null>(null);
   const [selectableWindowType, setSelectableWindowType] = useState('');
   const [selectableQuery, setSelectableQuery] = useState('');
-  // グループ名は行内で常時表示せず、メニューから明示的に確定した場合だけ書き換える。
-  // ダイアログ内の入力中に再分類しないので、Tab/Enterで明細のフォーカスが外れることもない。
-  const [groupEditor, setGroupEditor] = useState<{ lineKey: string; originalLabel: string; value: string } | null>(null);
+  // 工事項目の追加と見出し単位の名称変更。空見出しは作らず、初回明細の追加で保存する。
+  const [groupEditor, setGroupEditor] = useState<{
+    mode: 'add' | 'rename'; section: StandardLineSectionCode; groupKey?: string;
+    originalLabel: string; value: string;
+  } | null>(null);
   const [pending, startTransition] = useTransition();
   // 未確定の位置名をDBへ保存／公開してしまわないよう、確定か取消まで操作を止める。
   const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;
@@ -631,6 +635,19 @@ function WorkbenchBody({
   // 画面と保存・公開の内容をそろえるため、未保存の変更として扱う（保存するまで公開しない）
   const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;
   const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;
+  const editorGroups = groupEditor ? v25WorkGroupsForDisplay(
+    state.slots.filter((slot) => sectionOf(slot.option_id) === groupEditor.section),
+    state.lines.filter((line) => line.section_code === groupEditor.section),
+    (id) => candidateById.get(id)?.categoryCode,
+    (line) => line.group_label,
+    { modelSlug, specCode, sectionCode: groupEditor.section },
+    workItemOf,
+  ) : [];
+  const groupNameError = groupEditor ? v25WorkGroupNameError(
+    groupEditor.value, editorGroups,
+    { modelSlug, specCode, sectionCode: groupEditor.section },
+    groupEditor.mode === 'rename' ? groupEditor.groupKey : null,
+  ) : null;
   const positionMixes = useMemo(() => v25PositionMixes(state.slots, (id) => candidateById.get(id)), [state.slots, candidateById]);
   // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
   const slotRuleIssues = useMemo(
@@ -1358,6 +1375,7 @@ function WorkbenchBody({
                     code,
                     STANDARD_SECTION_LABEL[code],
                     readOnly ? undefined : (
+                      <div className="flex flex-wrap items-center gap-2">
                       <V25WorkbenchRowMenu testId={`v25-wb-add-row-${code}`}
                         label={`${STANDARD_SECTION_LABEL[code]}へ行を追加`} triggerText="＋ 行を追加">
                         <button type="button" className="block w-full px-3 py-1.5 text-left text-ink hover:bg-slate-50"
@@ -1372,6 +1390,14 @@ function WorkbenchBody({
                             addLine(code);
                           }}>直接入力</button>
                       </V25WorkbenchRowMenu>
+                      <button type="button" data-testid={`v25-wb-add-work-group-${code}`}
+                        className="rounded border border-emerald-300 px-2 py-0.5 font-semibold text-white hover:bg-emerald-800 disabled:opacity-40"
+                        disabled={positionActionsLocked}
+                        onClick={(event) => {
+                          rememberDialogOpener(event.currentTarget);
+                          setGroupEditor({ mode: 'add', section: code, originalLabel: '', value: '' });
+                        }}>＋ 工事項目</button>
+                      </div>
                     )
                   )}
                   {!collapsed.has(code) && workGroups.map((workGroup) => (
@@ -1379,7 +1405,21 @@ function WorkbenchBody({
                       <tr className="border-y border-emerald-200 bg-emerald-100 text-slate-800"
                         data-testid="v25-work-item-heading" data-work-item={workGroup.key}>
                         <td colSpan={columnCount} className="px-3 py-1 text-[11px] font-semibold">
-                          {workGroup.label}
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="min-w-0 break-words">{workGroup.label}</span>
+                            {!readOnly && (
+                              <button type="button" data-testid="v25-wb-edit-work-group"
+                                aria-label={`${workGroup.label}の名称を編集`}
+                                title="工事項目名を編集"
+                                className="shrink-0 rounded border border-emerald-300 px-1.5 py-0.5 text-[10px] text-emerald-950 hover:bg-emerald-200 disabled:opacity-40"
+                                disabled={positionActionsLocked}
+                                onClick={(event) => {
+                                  rememberDialogOpener(event.currentTarget);
+                                  setGroupEditor({ mode: 'rename', section: code, groupKey: workGroup.key,
+                                    originalLabel: workGroup.label, value: workGroup.label });
+                                }}>編集</button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                       {v25MixedRowsForWorkGroup(mixedOrder, workGroup).map((rowRef) => {
@@ -1655,13 +1695,6 @@ function WorkbenchBody({
                               <div className="flex items-center justify-center gap-0.5">
 
                                 <V25WorkbenchRowMenu testId="v25-wb-line-menu" label={(line.name || '明細') + 'の操作'}>
-                                  <button type="button" data-testid="v25-wb-change-work-group" disabled={positionActionsLocked}
-                                    className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-40"
-                                    onClick={(event) => {
-                                      rememberRowMenuOpener(event.currentTarget);
-                                      closeV25RowMenuAction(event.currentTarget);
-                                      setGroupEditor({ lineKey: line.key, originalLabel: line.group_label, value: line.group_label });
-                                    }}>工事項目を変更</button>
                                   {line.price_mode !== 'por' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setLine(line.key, { price_mode: 'por' }); }}>別途見積にする</button>
@@ -1816,28 +1849,47 @@ function WorkbenchBody({
           onClose={() => setGroupEditor(null)} returnFocusTo={dialogOpener}
           dirty={groupEditor.value !== groupEditor.originalLabel}>
           {(requestClose) => (
-            <div role="dialog" aria-modal="true" aria-label="工事項目を変更" data-testid="v25-wb-work-group-dialog"
-              className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div role="dialog" aria-modal="true" aria-label={groupEditor.mode === 'add' ? '工事項目を追加' : '工事項目名を編集'}
+              data-testid="v25-wb-work-group-dialog" className="w-full max-w-lg rounded-xl bg-white shadow-xl"
+              onClick={(event) => event.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h3 className="text-sm font-semibold">工事項目を変更</h3>
-                <button type="button" data-v25-dialog-close aria-label="工事項目の編集を閉じる" className="text-xl text-muted" onClick={requestClose}>×</button>
+                <h3 className="text-sm font-semibold">{groupEditor.mode === 'add' ? '工事項目を追加' : '工事項目名を編集'}</h3>
+                <button type="button" data-v25-dialog-close aria-label="工事項目の編集を閉じる"
+                  className="text-xl text-muted" onClick={requestClose}>×</button>
               </div>
               <div className="space-y-2 px-4 py-3 text-xs">
-                <p>現在の工事項目：{groupEditor.originalLabel || '未設定'}</p>
+                {groupEditor.mode === 'rename' && <p>現在の工事項目：{groupEditor.originalLabel}</p>}
                 <label className="block space-y-1">
-                  <span className="font-medium">工事項目名（空欄で未設定）</span>
-                  <Input autoFocus data-testid="v25-wb-work-group-input" aria-label="工事項目名" value={groupEditor.value}
-                    placeholder="例：2. 屋根工事（独自名称も可）" className="h-9 w-full text-sm"
+                  <span className="font-medium">工事項目名</span>
+                  <Input autoFocus maxLength={120} data-testid="v25-wb-work-group-input" aria-label="工事項目名"
+                    value={groupEditor.value} placeholder="例：5. 造作工事" className="h-9 w-full text-sm"
                     onChange={(event) => setGroupEditor((current) => current ? { ...current, value: event.target.value } : null)} />
                 </label>
-                <p className="text-slate-500">確定すると該当の小見出しに移動します。下書き保存までDBには反映されません。</p>
+                {groupNameError && <p role="alert" className="text-red-700" data-testid="v25-wb-work-group-error">{groupNameError}</p>}
+                <p className="text-slate-500">{groupEditor.mode === 'add'
+                  ? '最初の手入力明細を同時に追加します。品名を入力して下書き保存してください。'
+                  : 'この見出しに属する商品・手入力明細の工事項目名をまとめて変更します。下書き保存までDBには反映されません。'}</p>
               </div>
               <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
                 <Button type="button" variant="secondary" onClick={requestClose}>キャンセル</Button>
-                <Button type="button" data-testid="v25-wb-work-group-confirm" disabled={pending}
+                <Button type="button" data-testid="v25-wb-work-group-confirm" disabled={pending || Boolean(groupNameError)}
                   onClick={() => {
-                    if (groupEditor.value !== groupEditor.originalLabel) setLine(groupEditor.lineKey, { group_label: groupEditor.value });
-                    setJumpToKey({ key: groupEditor.lineKey });
+                    if (groupNameError) return;
+                    const label = groupEditor.value.trim();
+                    if (groupEditor.mode === 'add') {
+                      addLine(groupEditor.section, null, label);
+                    } else {
+                      const sourceGroup = editorGroups.find((group) => group.key === groupEditor.groupKey);
+                      if (!sourceGroup) {
+                        onNotice({ tone: 'danger', text: '工事項目が見つかりません。画面を確認してください。' });
+                        return;
+                      }
+                      if (label !== groupEditor.originalLabel) {
+                        setState((current) => v25RenameWorkGroup(current, sourceGroup, label));
+                        const first = sourceGroup.slots[0]?.key ?? sourceGroup.lines[0]?.key;
+                        if (first) setJumpToKey({ key: first });
+                      }
+                    }
                     setGroupEditor(null);
                   }}>確定</Button>
               </div>

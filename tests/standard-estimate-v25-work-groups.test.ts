@@ -357,7 +357,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('event.shiftKey ? -1 : 1');
     expect(source).toContain('next.focus(); next.select();');
     expect(source).not.toContain('setEditingWorkGroup');
-    expect(source).toContain('v25RenameWorkGroup(current, sourceGroup, label)');
+    expect(source).toContain('v25RenameWorkGroup(v25WithRowOrder(current, renderedMixedOrder), sourceGroup, label)');
     expect(source).toContain('const setLine = (key: string, patch: Partial<V25LineRow>)');
     expect(source).toContain('lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line))');
   });

@@ -5,6 +5,7 @@ import { createMatrixRowAction, setMatrixRowStatusAction, updateMatrixRowAction 
 import type { MatrixItem, MatrixSize, MatrixSpec, OptionCategory, OptionCategoryMatrixItem } from '@/lib/domain/types';
 import type { MatrixEditorRow } from '@/components/admin/matrix-editor';
 import { Alert, Button, Field, Select } from '@/components/ui';
+import { restoreMatrixSettingsDrafts, serializeMatrixSettingsDrafts, type MatrixSettingsDraft } from '@/lib/domain/matrix-settings-draft-cache';
 
 type Props = {
   rows: MatrixEditorRow[];
@@ -15,10 +16,10 @@ type Props = {
   categories: OptionCategory[];
   categoryItems: OptionCategoryMatrixItem[];
   canEdit: boolean;
+  actorId: string;
 };
 
 type Notice = { tone: 'success' | 'danger'; text: string } | null;
-type RowDraft = { fire: boolean; items: string[] };
 
 function sameItems(a: string[], b: string[]) {
   if (a.length !== b.length) return false;
@@ -28,11 +29,12 @@ function sameItems(a: string[], b: string[]) {
 }
 
 export function SelectionMatrixPanel({
-  rows: initialRows, items, specs, sizes, models, categories, categoryItems, canEdit,
+  rows: initialRows, items, specs, sizes, models, categories, categoryItems, canEdit, actorId,
 }: Props) {
   const [rows, setRows] = useState(initialRows);
   const [selectedId, setSelectedId] = useState(initialRows.find((row) => row.status === 'active')?.id ?? initialRows[0]?.id ?? '');
-  const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
+  const [drafts, setDrafts] = useState<Record<string, MatrixSettingsDraft>>({});
+  const [restoring, setRestoring] = useState(canEdit);
   const [notice, setNotice] = useState<Notice>(null);
   const [pending, startTransition] = useTransition();
   const [newRow, setNewRow] = useState({
@@ -43,18 +45,52 @@ export function SelectionMatrixPanel({
   });
 
   const activeItems = useMemo(() => items.filter((item) => item.status === 'active'), [items]);
+  const draftKey = 'wing:matrix-settings:draft:v1:' + actorId;
+
+  // Next.jsのLink遷移はbeforeunloadを発火しないため、同じタブ内の一時保管から復元する。
+  // 保存済みの値へ上書きするのではなく、未保存ドラフトとしてだけ扱う。
+  useEffect(() => {
+    if (!canEdit) return;
+    try {
+      const restored = restoreMatrixSettingsDrafts(window.sessionStorage.getItem(draftKey), initialRows);
+      if (Object.keys(restored.drafts).length > 0) {
+        setDrafts(restored.drafts);
+        if (restored.selectedId) setSelectedId(restored.selectedId);
+        setNotice({ tone: 'success', text: 'このブラウザタブの未保存変更を復元しました。内容を確認してから保存してください。' });
+      }
+    } catch {
+      setNotice({ tone: 'danger', text: '未保存変更の一時保管を利用できません。画面を移動する前に保存してください。' });
+    } finally {
+      setRestoring(false);
+    }
+    // 初回のブラウザタブ単位の復元だけを行い、propsの更新ではドラフトを上書きしない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actorId, canEdit]);
+
+  useEffect(() => {
+    if (!canEdit || restoring) return;
+    try {
+      if (Object.keys(drafts).length) {
+        window.sessionStorage.setItem(draftKey, serializeMatrixSettingsDrafts({ drafts, selectedId }));
+      } else {
+        window.sessionStorage.removeItem(draftKey);
+      }
+    } catch {
+      // ストレージが使えないブラウザでは既存のbeforeunloadによる警告を維持する。
+    }
+  }, [actorId, canEdit, drafts, restoring, selectedId, draftKey]);
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
-  const draftOf = (row: MatrixEditorRow): RowDraft =>
-    drafts[row.id] ?? { fire: row.fire_selectable, items: row.selectable_items };
+  const draftOf = (row: MatrixEditorRow): MatrixSettingsDraft =>
+    drafts[row.id] ?? { fire: row.fire_selectable, items: row.selectable_items, lockVersion: row.lock_version };
   const isDirty = (row: MatrixEditorRow) => {
     const draft = drafts[row.id];
-    return Boolean(draft && (draft.fire !== row.fire_selectable || !sameItems(draft.items, row.selectable_items)));
+    return Boolean(draft && (draft.fire !== row.fire_selectable || !sameItems(draft.items, row.selectable_items) || draft.lockVersion !== row.lock_version));
   };
 
   useEffect(() => {
     if (!rows.some((row) => {
       const draft = drafts[row.id];
-      return draft && (draft.fire !== row.fire_selectable || !sameItems(draft.items, row.selectable_items));
+      return draft && (draft.fire !== row.fire_selectable || !sameItems(draft.items, row.selectable_items) || draft.lockVersion !== row.lock_version);
     })) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -83,15 +119,20 @@ export function SelectionMatrixPanel({
   const specCodes = [...new Set(modelRows.map((row) => row.spec_code))];
   const draft = selected ? draftOf(selected) : null;
   const retired = selected?.status === 'retired';
+  const staleDraft = Boolean(selected && draft && draft.lockVersion !== selected.lock_version);
 
   const save = (row: MatrixEditorRow) => {
     const changes = draftOf(row);
+    if (changes.lockVersion !== row.lock_version) {
+      setNotice({ tone: 'danger', text: '他の画面で仕様行が更新されています。未保存変更を破棄し、最新の設定を確認してから編集してください。' });
+      return;
+    }
     startTransition(async () => {
       const result = await updateMatrixRowAction({
         row_id: row.id,
         fire_selectable: changes.fire,
         selectable_items: changes.items,
-        expected_lock_version: row.lock_version,
+        expected_lock_version: changes.lockVersion,
       });
       if (!result.ok) {
         setNotice({ tone: 'danger', text: result.error });
@@ -127,6 +168,10 @@ export function SelectionMatrixPanel({
   };
 
   const addRow = () => {
+    if (rows.some(isDirty)) {
+      setNotice({ tone: 'danger', text: '未保存の仕様設定があります。保存または変更を破棄してから行を追加してください。' });
+      return;
+    }
     if (!window.confirm('新しい仕様行を追加します。既存と同じ機種・仕様でサイズ違いの行を増やすと、お客様の選択肢に影響する可能性があります。続行しますか？')) return;
     startTransition(async () => {
       const result = await createMatrixRowAction({ ...newRow, selectable_items: [] });
@@ -161,7 +206,7 @@ export function SelectionMatrixPanel({
             <Select
               id="selection-matrix-model"
               value={selected?.base_model_id ?? ''}
-              disabled={pending || modelIds.length === 0}
+              disabled={pending || restoring || modelIds.length === 0}
               onChange={(event) => chooseRow(rows.find((row) => row.base_model_id === event.target.value)?.id ?? '')}
             >
               {modelIds.map((id) => <option key={id} value={id}>{models.find((model) => model.id === id)?.name ?? id}</option>)}
@@ -171,7 +216,7 @@ export function SelectionMatrixPanel({
             <Select
               id="selection-matrix-spec"
               value={selected?.spec_code ?? ''}
-              disabled={pending || !selected}
+              disabled={pending || restoring || !selected}
               onChange={(event) => chooseRow(modelRows.find((row) => row.spec_code === event.target.value)?.id ?? '')}
             >
               {specCodes.map((code) => <option key={code} value={code}>{labelSpec(code)}</option>)}
@@ -181,7 +226,7 @@ export function SelectionMatrixPanel({
             <Select
               id="selection-matrix-size"
               value={selected?.size_code ?? ''}
-              disabled={pending || !selected}
+              disabled={pending || restoring || !selected}
               onChange={(event) => chooseRow(specRows.find((row) => row.size_code === event.target.value)?.id ?? '')}
             >
               {specRows.map((row) => (
@@ -194,6 +239,7 @@ export function SelectionMatrixPanel({
         </div>
       </div>
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
+      {staleDraft && <Alert tone="warn">別の画面でこの仕様が更新されています。復元した変更は自動保存されません。内容を確認し、変更を破棄してから再編集してください。</Alert>}
       {selected && draft ? (
         <section className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5" aria-label="仕様別の設定">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -207,7 +253,7 @@ export function SelectionMatrixPanel({
             <input
               type="checkbox"
               checked={draft.fire}
-              disabled={!canEdit || retired || pending}
+              disabled={!canEdit || retired || pending || restoring || staleDraft}
               onChange={(event) => setDrafts((current) => ({
                 ...current, [selected.id]: { ...draft, fire: event.target.checked },
               }))}
@@ -224,7 +270,7 @@ export function SelectionMatrixPanel({
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={!canEdit || retired || pending}
+                    disabled={!canEdit || retired || pending || restoring || staleDraft}
                     onChange={() => setDrafts((current) => ({
                       ...current,
                       [selected.id]: {
@@ -251,14 +297,14 @@ export function SelectionMatrixPanel({
           {canEdit && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex gap-2">
-                <Button type="button" disabled={!isDirty(selected) || pending || retired} onClick={() => save(selected)}>この仕様を保存</Button>
-                <Button type="button" variant="ghost" disabled={!isDirty(selected) || pending} onClick={() => setDrafts((current) => {
+                <Button type="button" disabled={!isDirty(selected) || pending || retired || restoring || staleDraft} onClick={() => save(selected)}>この仕様を保存</Button>
+                <Button type="button" variant="ghost" disabled={!isDirty(selected) || pending || restoring} onClick={() => setDrafts((current) => {
                   const next = { ...current };
                   delete next[selected.id];
                   return next;
                 })}>変更を破棄</Button>
               </div>
-              <Button type="button" size="sm" variant="ghost" disabled={pending || isDirty(selected)} onClick={() => changeStatus(selected, retired ? 'active' : 'retired')}>
+              <Button type="button" size="sm" variant="ghost" disabled={pending || restoring || isDirty(selected)} onClick={() => changeStatus(selected, retired ? 'active' : 'retired')}>
                 {retired ? '行を再開' : '行を停止'}
               </Button>
             </div>
@@ -293,7 +339,7 @@ export function SelectionMatrixPanel({
             </label>
           </div>
           <div className="mt-4">
-            <Button type="button" variant="secondary" disabled={pending || !newRow.base_model_id} onClick={addRow}>行を追加する</Button>
+            <Button type="button" variant="secondary" disabled={pending || restoring || !newRow.base_model_id || rows.some(isDirty)} onClick={addRow}>行を追加する</Button>
           </div>
         </details>
       )}

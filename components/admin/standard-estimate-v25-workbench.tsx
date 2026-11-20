@@ -170,6 +170,14 @@ function closeV25RowMenuAction(element: HTMLElement) {
   if (details) details.open = false;
 }
 
+/** 手入力売価の編集時だけ変換。PORの空欄はPORのまま、0は有効な手入力額。
+ * 無効な非空入力もmanual側で保持し、既存validateV25EditorStateで保存を拒否する。
+ * 空欄へ戻した既存manualはmanualのままにし、保存検証を回避しない。
+ */
+export function v25LineSalePricePatch(line: Pick<V25LineRow, 'price_mode'>, input: string): Pick<V25LineRow, 'price_mode' | 'unit_price'> {
+  return { unit_price: input, price_mode: input.length > 0 ? 'manual' : line.price_mode };
+}
+
 function V25WorkbenchRowMenu({ label, testId, children, triggerText = '⋯', disabled = false }: { label: string; testId: string; children: ReactNode; triggerText?: string; disabled?: boolean }) {
   const menuId = useId();
   const menuRef = useRef<HTMLDetailsElement>(null);
@@ -1526,8 +1534,6 @@ function WorkbenchBody({
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-2">
                                 <V25WorkbenchRowMenu testId="v25-wb-slot-menu" label={(candidate?.name ?? '商品') + 'の操作'}>
-                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { rememberRowMenuOpener(event.currentTarget); closeV25RowMenuAction(event.currentTarget); setPickerDirty(false); setPicker({ section: code, targetKey: slot.key });  }}>商品台帳から選択</button>
                                   {candidate && candidate.id === slot.option_id && !candidate.retired && !candidate.unavailable && (
                                     <Link href={'/admin/options/' + encodeURIComponent(slot.option_id)}
                                       target="_blank" rel="noopener noreferrer" prefetch={false}
@@ -1548,7 +1554,7 @@ function WorkbenchBody({
                                         setDuplicateFor({ slotKey: slot.key, label: '', error: null });
                                       }}>別の位置に複製</button>
                                   )}
-                                  {positionAllowed && (!isSash || Boolean(slotCode)) && (
+                                  {positionAllowed && !(isSash || isLighting) && (
                                     <button type="button" data-testid="v25-wb-slot-position-menu"
                                       disabled={positionActionsLocked}
                                       className="block w-full px-3 py-1.5 text-left hover:bg-slate-50 disabled:opacity-50"
@@ -1571,6 +1577,7 @@ function WorkbenchBody({
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setSlot(slot.key, { price_mode: 'auto' }); }}>自動計算に戻す</button>
                                   )}
+                                <div role="separator" className="my-1 border-t border-slate-200" data-testid="v25-wb-slot-delete-separator" />
                                 <V25RowDeleteButton inMenu
                                   testId="v25-wb-slot-delete" name={candidate?.name || '商品'}
                                   disabled={positionActionsLocked}
@@ -1595,7 +1602,7 @@ function WorkbenchBody({
                           data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
                           className={`border-b border-slate-200 align-middle focus:outline-2 focus:outline-offset-[-2px] focus:outline-amber-500 ${dropPreview?.targetId === v25MixedRowIdentity(rowRef) ? 'outline outline-2 outline-emerald-600' : ''}`}
                           data-testid="v25-wb-line">
-                          <td className={`sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
+                          <td className={`sm:sticky left-0 z-10 border-r border-slate-200 px-1 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <div className="flex min-w-0 items-center gap-1">
                               {!readOnly && mixedRowControls(rowRef, workGroups, workGroup)}
                               <Input data-v25-excel-col="name" value={line.name} disabled={readOnly} aria-label="品名" placeholder="品名"
@@ -1615,13 +1622,16 @@ function WorkbenchBody({
                           </td>
                           {visible.cost_unit && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
                           {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right text-muted">—</td>}
-                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
-                            {line.price_mode === 'manual' ? (
-                              <Input data-v25-excel-col="sale" value={line.unit_price} disabled={readOnly} inputMode="numeric" aria-label="明細の売価単価"
-                                className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
-                                onChange={(event) => setLine(line.key, { unit_price: event.target.value })} />
-                            ) : (
+                          {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${!readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
+                            {readOnly && line.price_mode === 'por' ? (
                               <span className="block px-1 text-[10px] text-amber-800">別途見積</span>
+                            ) : (
+                              <Input data-v25-excel-col="sale" data-testid="v25-wb-line-price-input"
+                                value={line.price_mode === 'por' ? '' : line.unit_price} disabled={readOnly}
+                                inputMode="numeric" aria-label="明細の売価単価"
+                                placeholder={line.price_mode === 'por' ? '別途見積' : '売価単価'}
+                                className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus-visible:ring-1"
+                                onChange={(event) => setLine(line.key, v25LineSalePricePatch(line, event.target.value))} />
                             )}
                           </td>}
                           <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums font-semibold text-slate-900" data-testid="v25-wb-line-sale-amount">
@@ -1639,7 +1649,8 @@ function WorkbenchBody({
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
                           </td>}
 
-                          <td className="sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
+                          {/* スマホでは左右の固定列が売価単価セルのタップ領域を覆うため、手入力行だけ横スクロール可能にする。 */}
+                          <td className="sm:sticky right-0 z-10 bg-slate-100 px-0.5 py-px text-center">
                             {!readOnly && (
                               <div className="flex items-center justify-center gap-0.5">
 
@@ -1651,10 +1662,6 @@ function WorkbenchBody({
                                       closeV25RowMenuAction(event.currentTarget);
                                       setGroupEditor({ lineKey: line.key, originalLabel: line.group_label, value: line.group_label });
                                     }}>工事項目を変更</button>
-                                  {line.price_mode !== 'manual' && (
-                                  <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setLine(line.key, { price_mode: 'manual' }); }}>金額を入力する</button>
-                                  )}
                                   {line.price_mode !== 'por' && (
                                   <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
                                     onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setLine(line.key, { price_mode: 'por' }); }}>別途見積にする</button>
@@ -1664,6 +1671,7 @@ function WorkbenchBody({
                                     title="要見直し → 見直し済みにする"
                                     onClick={(event) => { closeV25RowMenuAction(event.currentTarget); setLine(line.key, { review_required: false }); }}>見直し済みにする</button>
                                   )}
+                                <div role="separator" className="my-1 border-t border-slate-200" data-testid="v25-wb-line-delete-separator" />
                                 <V25RowDeleteButton inMenu
                                   testId="v25-wb-line-delete" name={line.name.trim() || '名称未入力の明細'}
                                   disabled={positionActionsLocked}

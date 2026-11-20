@@ -1,0 +1,94 @@
+'use client';
+
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { StandardEstimateV25Selector } from '@/components/admin/standard-estimate-v25-selector';
+import { StandardEstimateWorkspaceLayout } from '@/components/admin/standard-estimate-workspace-layout';
+import type { StandardEstimateWorkspaceEntry } from '@/lib/data/standard-estimate-workspace';
+
+// This fixture is copied to app/__pr683_local/page.tsx ONLY by the
+// disposable GitHub Actions runner. It is never deployed to Vercel.
+// Values imitate a READ-ONLY snapshot of the ten published model specs;
+// no user, authentication, price calculation, Supabase or database write.
+const modelSpecs = [
+  ['Wing', 'ホテル仕様', '3,640×4,550', '非防火', 6939959, 2, 3, false],
+  ['Wing', 'ホテル仕様', '3,640×4,550', '防火', 5571173, 1, 2, true],
+  ['Wing', '住居用', '3,640×4,550', '非防火', 4051965, 1, null, true],
+  ['Wing', '住居用', '3,640×4,550', '防火', 4112807, 1, null, true],
+  ['Wing', '事務所用', '3,640×4,550', '非防火', 3006983, 1, 2, false],
+  ['Wing', '事務所用', '3,640×4,550', '防火', 3075293, 1, 2, false],
+  ['BOX', 'ホテル仕様', '2,100×4,550', '非防火', 2679597, 1, 2, true],
+  ['BOX', '水回りBOX', '2,100×4,550', '非防火', 2679597, 1, null, true],
+  ['BOX', '水回りBOX', '2,100×4,550', '防火', 2672610, 1, null, true],
+  ['Flat', '事務所用', '2,100×4,550', '非防火', 1903674, 1, 2, false],
+] as const;
+
+const entries: StandardEstimateWorkspaceEntry[] = modelSpecs.map((
+  [model, purpose, size, fire, total, version, draftVersion, hasPor], index
+) => ({
+  masterId: 'pr683-spec-' + index,
+  name: model + ' ' + purpose,
+  modelId: 'model-' + model,
+  specCode: 'spec-' + index,
+  identity: [model, purpose, size, fire].join(' / '),
+  published: {
+    revisionId: 'pr683-published-' + index,
+    version,
+    total,
+    hasPor,
+    pricingModel: 'v2.5',
+  },
+  draft: draftVersion === null ? null : {
+    revisionId: 'pr683-draft-' + index,
+    version: draftVersion,
+    lockVersion: 1,
+    pricingModel: 'v2.5',
+  },
+}));
+
+export default function Pr683VisualFixture() {
+  const params = useSearchParams();
+  const [dirty, setDirty] = useState(false);
+  const selected = entries.find((entry) => entry.masterId === params.get('master')) ?? entries[0];
+
+  return (
+    <main className="mx-auto w-full max-w-[1400px] px-4 py-6" data-testid="pr683-visual-fixture">
+      <header className="mb-3 space-y-1">
+        <h1 className="text-lg font-bold">見積書管理 ｜ 標準見積 v2.5</h1>
+        <p className="text-xs text-slate-600">本番DB非接続・テストデータによる表示と切り替えの検証</p>
+      </header>
+      <StandardEstimateWorkspaceLayout
+        sidebar={<StandardEstimateV25Selector entries={entries} selectedId={selected.masterId} />}
+        selectedName={selected.identity}
+      >
+        <section className="min-w-0 space-y-3" data-testid="pr683-editor-placeholder">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <span className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs" data-testid="pr683-editor-revision">
+              第{selected.draft?.version ?? selected.published?.version ?? 1}版・{selected.draft ? '下書き' : '公開中'}
+            </span>
+            <span className="text-xs">v2.5</span>
+            <span className="text-xs text-navy underline">版の詳細（配置のみ）</span>
+          </div>
+          <button className="rounded border px-3 py-1.5 text-sm"
+            type="button" data-testid="pr683-set-dirty" onClick={() => setDirty((old) => !old)}>
+            {dirty ? 'テスト未保存状態を解除' : 'テスト未保存状態にする'}
+          </button>
+          {dirty && (
+            <p className="text-xs font-medium text-amber-800" data-testid="v25-wb-unsaved-position">
+              テスト用の未保存変更があります
+            </p>
+          )}
+          <div className="min-w-0 rounded-lg border border-slate-300 bg-white p-3" data-testid="pr683-fake-estimate-sheet">
+            <h2 className="mb-2 text-base font-semibold">見積明細（高さ計測用の仮表示）</h2>
+            <div className="grid grid-cols-3 border-b py-2 text-xs text-slate-700">
+              <span>工事項目</span><span>数量</span><span>金額</span>
+            </div>
+            <div className="grid grid-cols-3 py-2 text-xs text-slate-700">
+              <span>本体工事</span><span>1 式</span><span>読取専用の配置目印</span>
+            </div>
+          </div>
+        </section>
+      </StandardEstimateWorkspaceLayout>
+    </main>
+  );
+}

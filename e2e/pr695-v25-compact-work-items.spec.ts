@@ -47,27 +47,26 @@ test('PC｜現在仕様の工事項目見出し・重複表示防止・Portal操
     fullPage:false,
   });
 
-  // The manual-line work-item change entry remains usable, but it only edits
-  // local draft state. No save action or production database is invoked.
+  // 見出しの編集で配下の商品・手入力行をまとめて変更する。保存は行わない。
   const manual = page.locator(row('line','sashLine'));
-  await manual.getByTestId('v25-wb-line-menu').locator('summary').click();
-  // Portal menu actions are children of document.body, not the original row.
-  const menuPanel=page.getByTestId('v25-wb-menu-panel');
-  await expect(menuPanel).toBeVisible();
-  await menuPanel.getByTestId('v25-wb-change-work-group').click();
+  await expect(manual.getByTestId('v25-wb-line-menu')).toHaveCount(1);
+  await page.locator('tr[data-work-item="work:sash_wood"]').getByTestId('v25-wb-edit-work-group').click();
   const dialog = page.getByTestId('v25-wb-work-group-dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByTestId('v25-wb-work-group-input').fill('3. 外壁工事');
+  await dialog.getByTestId('v25-wb-work-group-input').fill('1. 建具（現場加工）');
   await dialog.getByTestId('v25-wb-work-group-confirm').click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  const renamed = page.locator('tr[data-work-item="manual:1. 建具（現場加工）"]');
+  await expect(renamed).toContainText('1. 建具（現場加工）');
   await expect.poll(() => manual.evaluate((el) => {
     let candidate = el.previousElementSibling;
     while (candidate && !candidate.matches('[data-testid="v25-work-item-heading"]')) {
       candidate = candidate.previousElementSibling;
     }
     return candidate?.textContent?.trim() ?? '';
-  })).toContain('3. 外壁工事');
+  })).toContain('1. 建具（現場加工）');
+  await expect(page.locator(row('slot','sash'))).toBeVisible();
   await page.getByRole('button', {name:'変更を破棄'}).click();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
   await expect(page.locator(row('line','sashLine'))).toBeVisible();

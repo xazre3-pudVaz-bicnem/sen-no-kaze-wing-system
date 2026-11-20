@@ -35,7 +35,7 @@ test('PC・スマートフォン｜保存プランへの導線と本部管理者
   await page.goto('/admin/ledger');
   await page.getByRole('button', {name:'検索'}).click();
   await page.getByPlaceholder('商品名・メーカー・シリーズ・型番で検索').fill('ウッドデッキ');
-  const desktopLink=page.getByTestId('ledger-configuration-usage-link');
+  const desktopLink=page.locator('[data-testid="ledger-configuration-usage-link"]:visible');
   await expect(desktopLink).toHaveCount(1);
   await expect(desktopLink).toContainText('保存プラン 1件');
   const href=(await desktopLink.getAttribute('href'))!;
@@ -89,7 +89,7 @@ test('PC・スマートフォン｜保存プランへの導線と本部管理者
     await mobilePage.goto('/admin/ledger');
     await mobilePage.getByRole('button',{name:'検索'}).click();
     await mobilePage.getByPlaceholder('商品名・メーカー・シリーズ・型番で検索').fill('ウッドデッキ');
-    const mobileLink=mobilePage.getByTestId('ledger-configuration-usage-link');
+    const mobileLink=mobilePage.locator('[data-testid="ledger-configuration-usage-link"]:visible');
     await expect(mobileLink).toHaveCount(1);
     await mobileLink.click();
     await expect(mobilePage).toHaveURL(/\/admin\/configurations\?option_id=/);

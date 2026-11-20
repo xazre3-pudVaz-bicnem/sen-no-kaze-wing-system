@@ -83,6 +83,36 @@ export interface V25LineRow {
   review_required: boolean;
   /** 版の中で商品の行と手入力明細を通して並べる順（1 始まり。DB の display_order）。保存前の下書き・新しい行は null・省略 */
   row_order?: number | null;
+  /**
+   * 原価単価（税別・円。入力中の文字列。DB の cost_unit_price）。空・省略は原価未設定（0 円と区別する。0 円なら "0"）。
+   * 売価とは別に入力し、売価は変えない。別途見積の行は保存しない（2026-11-20 の先方の依頼「手入力明細の原価入力復活」）
+   */
+  cost_unit_price?: string;
+}
+
+/** 手入力明細の原価単価の上限（DB の save_standard_estimate_v25_draft・見積の明細の単価の上限と同じ 1 億円） */
+export const V25_LINE_COST_MAX = 100_000_000;
+/** 原価金額（数量 × 原価単価）の上限（DB の integer の上限） */
+const V25_LINE_AMOUNT_MAX = 2_147_483_647n;
+
+/** 手入力明細の原価単価の入力を数にする（空・省略は原価未設定の null。0 円は 0。整数でなければ NaN にして保存の確かめで止める） */
+export function v25LineCostValue(input: string | undefined): number | null {
+  const value = (input ?? '').trim();
+  if (!value) return null;
+  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
+}
+
+/**
+ * 原価金額 = trunc(数量 × 原価単価)（DB と同じ。数量は小数 4 桁まで。浮動小数点を使わない）。
+ * 原価未設定・数量や原価単価の形が正しくない・整数の上限を超えるときは null
+ */
+export function v25LineCostAmount(quantity: string, costUnitPrice: string | undefined): number | null {
+  const cost = v25LineCostValue(costUnitPrice);
+  const count = quantity.trim();
+  if (cost === null || !Number.isSafeInteger(cost) || cost < 0 || cost > V25_LINE_COST_MAX || !/^\d+(?:\.\d{1,4})?$/.test(count)) return null;
+  const [whole, fraction = ''] = count.split('.');
+  const amount = (BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0'))) * BigInt(cost) / 10000n;
+  return amount > V25_LINE_AMOUNT_MAX ? null : Number(amount);
 }
 
 export interface V25EditorState {
@@ -120,6 +150,8 @@ export interface V25Preview {
   rules_current: boolean;
   /** v2.5 以前から引き継いだ明細のうち「要見直し」が残っている行数（1 行でもあれば公開できない） */
   review_required_lines?: number;
+  /** 原価単価が未入力の手入力明細（別途見積でない行。1 行でもあれば公開できない。20261110150000 より前の DB には無い） */
+  missing_line_costs?: { line_key: string; name: string }[];
   publishable: boolean;
   calc_error: string | null;
   incomplete: { option_id: string; name: string; reason: 'missing_standard_cost' | 'missing_variant_cost' }[];
@@ -206,6 +238,16 @@ export function validateV25EditorState(
     if (line.price_mode === 'manual' && !NON_NEGATIVE_INTEGER.test(line.unit_price.trim())) {
       return `${label}の売価単価（税別・経費別、0 円以上の整数）を入力してください`;
     }
+    // 原価単価（任意。空は原価未設定。公開には別途見積でない行の原価単価が要る）
+    if (line.price_mode === 'manual') {
+      const cost = v25LineCostValue(line.cost_unit_price);
+      if (cost !== null && (!Number.isSafeInteger(cost) || cost > V25_LINE_COST_MAX)) {
+        return `${label}の原価単価（税別）は 0〜100,000,000 円の整数で入力してください（未定なら空欄）`;
+      }
+      if (cost !== null && v25LineCostAmount(line.quantity, line.cost_unit_price) === null) {
+        return `${label}の原価金額（数量 × 原価単価）が大きすぎます`;
+      }
+    }
   }
   return null;
 }
@@ -250,6 +292,8 @@ export function buildV25SavePayload(input: V25EditorState) {
       unit: line.unit.trim() || null,
       price_mode: line.price_mode,
       unit_price: line.price_mode === 'manual' ? Number(line.unit_price.trim()) : null,
+      // 原価単価（空は原価未設定の null。0 円は 0）。別途見積の行は原価を持たない。項目は常に送る（省略すると DB は今の原価を残す）
+      cost_unit_price: line.price_mode === 'manual' ? v25LineCostValue(line.cost_unit_price) : null,
       remark: line.remark.trim() || null,
       review_required: line.review_required,
       row_order: ordered ? line.row_order ?? null : null,
@@ -265,6 +309,11 @@ export function v25PublishBlockers(preview: V25Preview | null, dirty: boolean): 
   if (!preview.rules_current) blockers.push('計算ルール・税ルールが更新されています。最新原価を取り込んでください');
   if ((preview.review_required_lines ?? 0) > 0) {
     blockers.push(`「要見直し」の明細が ${preview.review_required_lines} 行残っています。商品台帳の商品に置き換えるか、金額を確認して見直し済みにしてください`);
+  }
+  const missingCosts = preview.missing_line_costs ?? [];
+  if (missingCosts.length > 0) {
+    const names = missingCosts.slice(0, 5).map((line) => `「${line.name}」`).join('・');
+    blockers.push(`原価単価が未入力の明細が ${missingCosts.length} 行あります（${names}${missingCosts.length > 5 ? ' ほか' : ''}）。原価単価（税別。0 円なら 0）を入力して保存してください`);
   }
   for (const item of preview.incomplete) {
     blockers.push(

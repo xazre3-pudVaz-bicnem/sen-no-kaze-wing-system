@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * 標準見積 v2.5 の下書きの保存の payload（save_standard_estimate_v25_draft に渡す形）の確かめ。
  * Server Action（lib/actions/standard-estimate-v25.ts）から使う。DB の RPC でも同じ決まりで確かめる。
- * z.object は知らないキーを捨てるので、payload に項目を足したら、ここにも足す（2026-11-16：row_order・work_item）
+ * z.object は知らないキーを捨てるので、payload に項目を足したら、ここにも足す（2026-11-16：row_order・work_item、2026-11-20：lines の cost_unit_price）
  */
 const decimal = z.union([z.string(), z.number()]).transform((value) => String(value).trim()).pipe(z.string().regex(/^\d+(\.\d{1,4})?$/, '数の形式が正しくありません'));
 
@@ -44,6 +44,8 @@ export const v25SavePayloadSchema = z.object({
         remark: z.string().trim().max(500).nullable(),
         review_required: z.boolean(),
         row_order: z.number().int().min(1).max(100000).nullable().optional(),
+        // 原価単価（税別。null は原価未設定。2026-11-20 の先方の依頼。DB でも同じ決まりで確かめる）
+        cost_unit_price: z.number().int().min(0).max(100_000_000).nullable().optional(),
       })
     )
     .max(300),

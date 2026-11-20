@@ -48,7 +48,7 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
   return (
     <AdminPage
       title="商品選択設定"
-      lead="機種・仕様別の選択可否と、お客様への共通表示を2つのタブで管理します。設定と保存先は従来どおり別々です。"
+      lead="機種・仕様別の選択可否と、お客様への共通表示を2つのタブで管理します。設定と保存先は従来どおり別々です。防火仕様は商品カテゴリーではなく、標準見積・本体仕様の条件として管理します。"
       actions={
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/base-masters" className="btn-secondary btn-sm">本体マスター</Link>

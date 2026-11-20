@@ -43,3 +43,27 @@ export async function getProductConfigurationUsageCounts(): Promise<ProductConfi
 
   return countDistinctConfigurations((data ?? []) as ConfigurationItemUsageRow[]);
 }
+
+/**
+ * 特定商品を直接参照する保存プランIDの集合。既存の保存プラン一覧で絞り込むためのread-only取得。
+ * 標準見積・Quote・Snapshotは集計に含めず、保存プランの閲覧権限は遷移先ページが判定する。
+ */
+export async function getProductConfigurationIdsForOption(optionId: string): Promise<Set<string>> {
+  if (isLocalMode()) {
+    const db = loadDb();
+    return new Set(
+      db.configurationItems
+        .filter((row) => row.option_id === optionId)
+        .map((row) => row.configuration_id)
+    );
+  }
+
+  const db = await createClient();
+  const { data, error } = await db
+    .from('configuration_items')
+    .select('configuration_id')
+    .eq('option_id', optionId);
+  if (error) throw new Error('商品を使っている保存プランを取得できませんでした');
+
+  return new Set((data ?? []).map((row) => row.configuration_id));
+}

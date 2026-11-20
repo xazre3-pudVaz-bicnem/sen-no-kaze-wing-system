@@ -97,6 +97,28 @@ test('PC｜現在仕様の工事項目見出し・重複表示防止・Portal操
   await expect(page.getByTestId('v25-wb-slot-work-item')).toHaveCount(0);
 });
 
+test('PC｜工事項目の追加・重複防止・変更破棄', async ({ page }) => {
+  await page.setViewportSize({ width: 1060, height: 760 });
+  await openWorkbench(page);
+  await page.getByTestId('v25-wb-add-work-group-interior_exterior').click();
+  const dialog = page.getByTestId('v25-wb-work-group-dialog');
+  await expect(dialog).toBeVisible();
+  const name = dialog.getByTestId('v25-wb-work-group-input');
+  await name.fill('2. 屋根工事');
+  await expect(dialog.getByTestId('v25-wb-work-group-error')).toContainText('すでに');
+  await expect(dialog.getByTestId('v25-wb-work-group-confirm')).toBeDisabled();
+  await name.fill('5. 造作工事');
+  await dialog.getByTestId('v25-wb-work-group-confirm').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('tr[data-work-item="manual:5. 造作工事"]')).toBeVisible();
+  const added = page.locator('tr[data-v25-dnd-row^="line:line-new-"]');
+  await expect(added).toHaveCount(1);
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  await page.getByRole('button', { name: '変更を破棄' }).click();
+  await expect(added).toHaveCount(0);
+  await expect(page.locator('tr[data-work-item="manual:5. 造作工事"]')).toHaveCount(0);
+});
+
 test('スマートフォン｜現在仕様の重複表示防止と固定見出しの横同期', async ({ browser }) => {
   test.setTimeout(120_000);
   const context=await browser.newContext({...devices['Pixel 7']});

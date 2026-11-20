@@ -17,6 +17,7 @@ interface Props {
   selectedIds: string[];
   baselineSelectedIds: string[];
   getPriceLabel: (option: ProductOption) => string;
+  getPriceTone?: (option: ProductOption) => 'increase' | 'decrease' | 'neutral';
   getAttributes?: (category: OptionCategory, option: ProductOption) => ProductListAttribute[];
   onOpenProduct: (option: ProductOption) => void;
   getDisabledReason?: (option: ProductOption) => string | null;
@@ -37,6 +38,7 @@ export function ProductList({
   selectedIds,
   baselineSelectedIds,
   getPriceLabel,
+  getPriceTone,
   getAttributes = defaultProductListAttributes,
   onOpenProduct,
   getDisabledReason,
@@ -61,9 +63,10 @@ export function ProductList({
         const checked = selected.has(option.id);
         const isBaseline = baseline.has(option.id);
         const displayPrice = getPriceLabel(option);
+        const priceTone = getPriceTone?.(option) ?? 'neutral';
         // 同じ案内がバッジと価格欄に二重表示される場合だけ省略。
         // 数値・別途見積・追加費用のラベルは変更も非表示もしない。
-        const redundantBasicPlanText = isBaseline && displayPrice === '基本プランの商品';
+        const redundantBasicPlanText = isBaseline && (displayPrice === '基本プランの商品' || displayPrice === '基本プランに含む');
         const disabledReason = checked ? null : getDisabledReason?.(option) ?? null;
         const attributes = getAttributes(category, option).filter(
           (item) => item.label.trim().length > 0 && item.value.trim().length > 0
@@ -142,7 +145,7 @@ export function ProductList({
                   )}
 
                   <div className="mt-auto pt-2.5">
-                    {!redundantBasicPlanText && <p className="min-w-0 text-xs font-semibold text-ink [overflow-wrap:anywhere] sm:text-[0.82rem]" data-testid={`product-card-price-${option.code}`}>{displayPrice}</p>}
+                    {!redundantBasicPlanText && <p className={cn("min-w-0 text-xs font-semibold [overflow-wrap:anywhere] sm:text-[0.82rem]", priceTone === "increase" ? "text-red-700" : priceTone === "decrease" ? "text-blue-700" : "text-ink")} data-price-tone={priceTone} data-testid={`product-card-price-${option.code}`}>{displayPrice}</p>}
                     {disabledReason && <p className="mt-1 text-[0.65rem] leading-snug text-warn">{disabledReason}</p>}
                     <button
                       type="button"

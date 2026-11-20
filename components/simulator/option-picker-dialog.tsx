@@ -20,6 +20,8 @@ import { Button } from '@/components/ui';
 import { ProductDetail } from './product-detail';
 import { ProductList } from './product-list';
 import { productChoicePoints } from '@/lib/domain/simulator-product-choice-guide';
+import { simulatorCardPricePresentation } from '@/lib/domain/simulator-card-price-presentation';
+import type { SimulatorCardDelta } from '@/lib/domain/simulator-card-price-delta';
 import { cn } from '@/lib/utils';
 
 /**
@@ -67,6 +69,8 @@ interface Props {
   baselineVariantIds: string[];
   onClose: () => void;
   onApply: (nextSelectedInCategory: string[], variantIds: string[]) => void;
+  /** 候補を実際に選んだ仮プランの税込見積総額を正式計算で評価（画面表示専用）。 */
+  getCandidateDelta?: (nextSelectedInCategory: string[], variantIds: string[]) => SimulatorCardDelta;
   /**
    * 位置・用途の選択枠（v2.5 PR-S2）の選び直し。その位置で 1 つだけ選び、外せない（位置ごとに必ず 1 つ）。
    * options はその位置で選べる商品、selectedIds・baselineSelectedIds はその位置の今の商品と標準の商品
@@ -92,6 +96,7 @@ export function OptionPickerDialog({
   baselineVariantIds,
   onClose,
   onApply,
+  getCandidateDelta,
   slot = null,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -203,8 +208,18 @@ export function OptionPickerDialog({
       variantChoices,
     });
 
+  const candidatePresentation = (option: ProductOption, optionVariants: string[]) =>
+    getCandidateDelta
+      ? simulatorCardPricePresentation(getCandidateDelta(
+          nextSelectedForOption(option), nextVariantsForOption(option, optionVariants)
+        ))
+      : null;
+
   const priceLabel = (option: ProductOption) =>
+    candidatePresentation(option, optionVariantIds(option))?.label ??
     totalPriceLabel(priceBreakdown(option, optionVariantIds(option)).state);
+  const priceTone = (option: ProductOption) =>
+    candidatePresentation(option, optionVariantIds(option))?.tone ?? 'neutral';
 
   const detailBreakdown = detailOption
     ? priceBreakdown(detailOption, draftVariantIds)
@@ -218,6 +233,7 @@ export function OptionPickerDialog({
   const totalPriceDetailLabel = detailBreakdown
     ? totalPriceLabel(detailBreakdown.state)
     : '0円';
+  const detailCandidate = detailOption ? candidatePresentation(detailOption, draftVariantIds) : null;
 
   const openDetail = (option: ProductOption) => {
     const groups = variantGroups
@@ -381,6 +397,7 @@ export function OptionPickerDialog({
             selectedIds={displaySelectedIds}
             baselineSelectedIds={displayBaselineSelectedIds}
             getPriceLabel={priceLabel}
+            getPriceTone={getCandidateDelta ? priceTone : undefined}
             getDisabledReason={(option) => {
               if (displaySelectedIds.includes(option.id)) return null;
               if (isWashbasinCategory) {
@@ -419,6 +436,12 @@ export function OptionPickerDialog({
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+              {getCandidateDelta ? (
+                <div className="min-w-[12rem] rounded-lg border border-line bg-ivory/55 px-4 py-2 text-center" data-testid="product-detail-total-delta">
+                  <p className="text-[0.68rem] font-semibold text-brown">基本プランとの差額（税込）</p>
+                  <p className={cn('mt-1 text-sm font-bold', detailCandidate?.tone === 'increase' ? 'text-red-700' : detailCandidate?.tone === 'decrease' ? 'text-blue-700' : 'text-ink')} data-price-tone={detailCandidate?.tone ?? 'neutral'}>{detailCandidate?.label ?? '金額確認中'}</p>
+                </div>
+              ) : (
               <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-white text-center text-[0.68rem]">
                 <div className="min-w-[6.5rem] px-2.5 py-1.5">
                   <dt className="text-muted">商品追加額</dt>
@@ -433,6 +456,7 @@ export function OptionPickerDialog({
                   <dd className="mt-0.5 text-sm font-bold text-brown">{totalPriceDetailLabel}</dd>
                 </div>
               </dl>
+              )}
 
               <Button type="button" onClick={applyDetail} disabled={requiredVariantMissing} data-testid="product-detail-apply">
                 この内容に変更する

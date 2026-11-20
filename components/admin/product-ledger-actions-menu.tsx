@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { EllipsisVertical, Trash2 } from 'lucide-react';
 import { deleteDraftProductFromLedgerAction } from '@/lib/actions/product-ledger';
@@ -21,6 +21,38 @@ type Props = {
   discontinuedAt: string | null | undefined;
   expectedUpdatedAt: string;
 };
+
+/**
+ * Portal のイベントは React の親（台帳の<tr>）に伝播する。
+ * ダイアログ内の Enter/Space が商品詳細のショートカットを実行しないよう隔離し、
+ * aria-modal の Tab/Shift+Tab が背面に抜けないよう循環させる。
+ */
+function handleModalKeyDown(event: ReactKeyboardEvent<HTMLDivElement>, closeDialog: () => void) {
+  event.stopPropagation();
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeDialog();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+
+  const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+    'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => element.getClientRects().length > 0);
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) {
+    event.preventDefault();
+    return;
+  }
+  if (event.shiftKey && (document.activeElement === first || !event.currentTarget.contains(document.activeElement))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || !event.currentTarget.contains(document.activeElement))) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 export function ProductLedgerActionsMenu({
   optionId,
@@ -194,6 +226,7 @@ export function ProductLedgerActionsMenu({
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4"
           onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => handleModalKeyDown(event, closeLifecycleDialog)}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeLifecycleDialog();
           }}
@@ -239,6 +272,8 @@ export function ProductLedgerActionsMenu({
       {deleteDialogOpen && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => handleModalKeyDown(event, closeDeleteDialog)}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeDeleteDialog();
           }}

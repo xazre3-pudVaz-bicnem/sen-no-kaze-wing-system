@@ -204,3 +204,47 @@ export function v25WorkGroupsForDisplay(
     .sort((a, b) => a.order - b.order || a.first - b.first)
     .map(({ key, label, slots: itemSlots, lines: itemLines }) => ({ key, label, slots: itemSlots, lines: itemLines }));
 }
+
+
+/** 見出し編集・追加の入力検査。UIからの新規項目は既存の大区分内に限定する。 */
+export function v25WorkGroupNameError(
+  value: string,
+  groups: readonly V25DisplayWorkGroup[],
+  context: V25WorkItemContext,
+  editingKey: string | null = null,
+): string | null {
+  const label = value.trim();
+  if (!label) return '工事項目名を入力してください';
+  if (label.length > 120) return '工事項目名は120文字以内で入力してください';
+  if (/[\r\n]/u.test(label)) return '工事項目名に改行は使用できません';
+  if (label === '工事項目未設定（手入力）' || label === '工事項目未分類の商品') {
+    return 'その名前は未設定・未分類の表示用に予約されています';
+  }
+  const target = v25WorkItemForManual(label, context);
+  // 標準ラベルの空白・記号だけを変えても表示名は標準へ正規化されるため、誤解を防ぐ。
+  if (target.key === editingKey && target.label !== label && !target.key.startsWith('manual:')) {
+    return '標準の工事項目名と同じ扱いになるため、別の名称を指定してください';
+  }
+  const normalize = (text: string) => text.normalize('NFKC').replace(/\s/gu, '');
+  if (groups.some((group) => group.key !== editingKey &&
+    (group.key === target.key || normalize(group.label) === normalize(label)))) {
+    return '同じ工事項目がすでにあります';
+  }
+  return null;
+}
+
+/** 見出しに属する商品・手入力の全行だけを書き換える。数量・価格・位置・行ID・順序は保持。 */
+export function v25RenameWorkGroup(
+  state: import('@/lib/domain/standard-estimate-v25-view').V25EditorState,
+  group: V25DisplayWorkGroup,
+  label: string,
+): import('@/lib/domain/standard-estimate-v25-view').V25EditorState {
+  const newLabel = label.trim();
+  const slotKeys = new Set(group.slots.map((slot) => slot.key));
+  const lineKeys = new Set(group.lines.map((line) => line.key));
+  return {
+    ...state,
+    slots: state.slots.map((slot) => slotKeys.has(slot.key) ? { ...slot, work_item: newLabel } : slot),
+    lines: state.lines.map((line) => lineKeys.has(line.key) ? { ...line, group_label: newLabel } : line),
+  };
+}

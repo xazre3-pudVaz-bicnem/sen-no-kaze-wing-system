@@ -64,6 +64,8 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
     expect(layer).toContain(': document.activeElement instanceof HTMLElement ? document.activeElement : null;');
     expect(layer).toContain("if (opener?.isConnected) opener.focus({ preventScroll: true })");
     expect(layer).toContain('data-v25-dialog-close');
+    expect(layer).toContain("layer.querySelector<HTMLElement>('[data-v25-dialog-initial-focus]')");
+    expect(workbench).toContain('data-v25-dialog-initial-focus maxLength={120}');
     expect(layer).toContain('role="alertdialog"');
   });
 

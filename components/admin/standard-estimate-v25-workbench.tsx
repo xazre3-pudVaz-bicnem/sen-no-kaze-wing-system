@@ -62,7 +62,7 @@ import { StandardEstimateV25AmountBreakdown } from '@/components/admin/standard-
 import { StandardEstimateV25ProductPicker } from '@/components/admin/standard-estimate-v25-product-picker';
 import { V25DialogLayer } from '@/components/admin/standard-estimate-v25-dialog-layer';
 import { v25PositionLabelSuggestions } from '@/lib/domain/standard-estimate-v25-position-label-suggestions';
-import { v25WithRowOrder } from '@/lib/domain/standard-estimate-v25-row-persistence';
+import { v25HasRowOrder, v25WithRowOrder, type V25RowRef } from '@/lib/domain/standard-estimate-v25-row-persistence';
 import {
   v25PersistedMixedRowOrder, v25ReconcileMixedRowOrder, v25InsertMixedRow,
   v25MixedOrderEquals, v25MixedRowsForWorkGroup,
@@ -95,6 +95,17 @@ const newKey = (prefix: string) => `${prefix}-new-${(rowSeq += 1)}`;
 const NO_WINDOW_TYPE = '__none';
 
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
+
+/** 見出し名の編集だけでは既存の混在 row_order を再採番しない。明示的な行追加・移動時だけ画面順へ更新する。 */
+export function v25SaveOrderKeepingRenames(
+  state: V25EditorState,
+  renderedOrder: readonly V25RowRef[],
+  hasExplicitOrderEdit: boolean,
+): V25EditorState {
+  return hasExplicitOrderEdit || !v25HasRowOrder(state)
+    ? v25WithRowOrder(state, renderedOrder)
+    : state;
+}
 
 /** 金額を変更せず、計算済み粗利の符号だけで表示色を選ぶ。 */
 export function v25GrossToneClass(amount: number | null | undefined): string {
@@ -1101,9 +1112,9 @@ function WorkbenchBody({
     }
     // 工事項目（2026-11-16 の先方の依頼）：未設定の商品の行は、表示しているカテゴリーからの自動の値で保存する
     const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };
-    // #686/#687: 商品と手入力の表示順で row_order を全行（1始まり）へ採番。
-    // 工事項目を自動で埋める保存経路はそのまま、金額・数量は変更しない。
-    const orderedToSave = v25WithRowOrder(toSave, renderedMixedOrder);
+    // 明示した追加・移動では画面順を保存。見出し名のみの変更時は元の row_order を保持。
+    // 未採番の旧下書きだけは従来どおり画面順を採番する。
+    const orderedToSave = v25SaveOrderKeepingRenames(toSave, renderedMixedOrder, viewOrder.length > 0);
     run(() => saveStandardEstimateV25DraftAction({
       revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(orderedToSave),
     }));
@@ -1931,7 +1942,7 @@ function WorkbenchBody({
                 {groupEditor.mode === 'rename' && <p>現在の工事項目：{groupEditor.originalLabel}</p>}
                 <label className="block space-y-1">
                   <span className="font-medium">工事項目名</span>
-                  <Input autoFocus maxLength={120} data-testid="v25-wb-work-group-input" aria-label="工事項目名"
+                  <Input autoFocus data-v25-dialog-initial-focus maxLength={120} data-testid="v25-wb-work-group-input" aria-label="工事項目名"
                     value={groupEditor.value} placeholder="例：5. 造作工事" className="h-9 w-full text-sm"
                     onChange={(event) => setGroupEditor((current) => current ? { ...current, value: event.target.value } : null)} />
                 </label>
@@ -1955,8 +1966,8 @@ function WorkbenchBody({
                         return;
                       }
                       if (label !== groupEditor.originalLabel) {
-                        // 名前を変えても表示順が飛ばないよう、変更直前の混在行順を確定する。
-                        setState((current) => v25RenameWorkGroup(v25WithRowOrder(current, renderedMixedOrder), sourceGroup, label));
+                        // 名称変更では行順を触らない。保存時も明示的な行移動がなければ既存順を保持する。
+                        setState((current) => v25RenameWorkGroup(current, sourceGroup, label));
                         const first = sourceGroup.slots[0]?.key ?? sourceGroup.lines[0]?.key;
                         if (first) setJumpToKey({ key: first });
                       }

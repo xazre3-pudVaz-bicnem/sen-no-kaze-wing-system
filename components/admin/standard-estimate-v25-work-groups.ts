@@ -227,7 +227,8 @@ export function v25WorkGroupNameError(
   if (!label) return '工事項目名を入力してください';
   if (label.length > 120) return '工事項目名は120文字以内で入力してください';
   if (/[\r\n]/u.test(label)) return '工事項目名に改行は使用できません';
-  if (label === '工事項目未設定（手入力）' || label === '工事項目未分類の商品') {
+  const normalize = (text: string) => text.normalize('NFKC').replace(/\s/gu, '');
+  if (['工事項目未設定（手入力）', '工事項目未分類の商品'].some((reserved) => normalize(label) === normalize(reserved))) {
     return 'その名前は未設定・未分類の表示用に予約されています';
   }
   const target = v25WorkItemForManual(label, context);
@@ -235,7 +236,6 @@ export function v25WorkGroupNameError(
   if (target.key === editingKey && target.label !== label && !target.key.startsWith('manual:')) {
     return '標準の工事項目名と同じ扱いになるため、別の名称を指定してください';
   }
-  const normalize = (text: string) => text.normalize('NFKC').replace(/\s/gu, '');
   if (groups.some((group) => group.key !== editingKey &&
     (group.key === target.key || normalize(group.label) === normalize(label)))) {
     return '同じ工事項目がすでにあります';

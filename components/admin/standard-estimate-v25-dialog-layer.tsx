@@ -39,7 +39,9 @@ export function V25DialogLayer({ onClose, dirty = false, returnFocusTo, classNam
     queueMicrotask(() => {
       const layer = layerRef.current;
       if (!layer) return;
-      (layer.querySelector<HTMLElement>('[data-v25-dialog-close]') ??
+      // 入力開始が目的のダイアログだけ、閉じるボタンより入力欄を優先する。
+      (layer.querySelector<HTMLElement>('[data-v25-dialog-initial-focus]') ??
+        layer.querySelector<HTMLElement>('[data-v25-dialog-close]') ??
         layer.querySelector<HTMLElement>(FOCUSABLE))?.focus({ preventScroll: true });
     });
     return () => {

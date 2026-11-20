@@ -20,7 +20,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   refreshStandardEstimateV25CostsAction: vi.fn(),
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
-const { StandardEstimateV25Workbench } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25SaveOrderKeepingRenames } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 // Excel風明細の商品の行の工事項目（自動の値・移動による更新・保存）の画面
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8').split('\r').join('');
@@ -145,6 +145,36 @@ describe('工事項目の見出し単位の追加と名称編集', () => {
     expect(after.lines[0].row_order).toBe(3);
   });
 
+  it('名称変更のみでは保存前・保存payloadの全行row_orderを保持し、明示的な移動だけ採番する', () => {
+    const before = state(
+      [slot('sash', 'sash1', { row_order: 1, work_item: '1. サッシ・木製建具工事' }),
+       slot('roof', 'roof1', { row_order: 3, work_item: '2. 屋根工事', quantity: '23.5', manual_unit_price: '9000' })],
+      [line('roof-line', { row_order: 2, group_label: '2. 屋根工事', quantity: '3', unit_price: '1200', cost_unit_price: '1000' }),
+       line('other', { row_order: 4, group_label: '4. 内装仕上げ' })],
+    );
+    const group = v25WorkGroupsForDisplay(before.slots, before.lines, categoryOf,
+      (row) => row.group_label, scope).find((item) => item.key === 'work:roof')!;
+    const renamed = v25RenameWorkGroup(before, group, '2. 屋根・板金工事');
+    const rendered = [
+      { kind: 'slot' as const, key: 'sash' }, { kind: 'slot' as const, key: 'roof' },
+      { kind: 'line' as const, key: 'roof-line' }, { kind: 'line' as const, key: 'other' },
+    ];
+    // 現行の画面見出し順は sash=1, roof=3, roof-line=2 になり得るが、名称だけでは変更しない。
+    const unchanged = v25SaveOrderKeepingRenames(renamed, rendered, false);
+    expect(unchanged.slots.map((row) => row.row_order)).toEqual([1, 3]);
+    expect(unchanged.lines.map((row) => row.row_order)).toEqual([2, 4]);
+    expect(unchanged.slots[1]).toEqual({ ...before.slots[1], work_item: '2. 屋根・板金工事' });
+    expect(unchanged.lines[0]).toEqual({ ...before.lines[0], group_label: '2. 屋根・板金工事' });
+    const payload = buildV25SavePayload(unchanged);
+    expect(payload.slots.map((row) => row.row_order)).toEqual([1, 3]);
+    expect(payload.lines.map((row) => row.row_order)).toEqual([2, 4]);
+    expect(payload.slots[1].quantity).toBe('23.5');
+    expect(payload.lines[0].cost_unit_price).toBe(1000);
+    const reordered = v25SaveOrderKeepingRenames(renamed, rendered, true);
+    expect(reordered.slots.map((row) => row.row_order)).toEqual([1, 2]);
+    expect(reordered.lines.map((row) => row.row_order)).toEqual([3, 4]);
+  });
+
   it('空見出しではなく手入力行を同時追加し、品名を埋めれば既存の保存payloadに入る', () => {
     const newLine = line('new', { group_label: '5. 造作工事', name: '', price_mode: 'por', unit_price: '' });
     const before = state([], []);
@@ -168,6 +198,10 @@ describe('工事項目の見出し単位の追加と名称編集', () => {
     expect(v25WorkGroupNameError('2. 屋根工事', groups, scope)).toContain('すでに');
     expect(v25WorkGroupNameError('5. 造作工事', groups, scope)).toContain('すでに');
     expect(v25WorkGroupNameError('工事項目未分類の商品', groups, scope)).toContain('予約');
+    expect(v25WorkGroupNameError('工事項目未設定（手入力）', groups, scope)).toContain('予約');
+    expect(v25WorkGroupNameError('工事項目未設定(手入力)', groups, scope)).toContain('予約');
+    expect(v25WorkGroupNameError(' 工事項目 未設定 ( 手入力 ) ', groups, scope)).toContain('予約');
+    expect(v25WorkGroupNameError('工事項目 未分類の商品', groups, scope)).toContain('予約');
     expect(v25WorkGroupNameError('2. 屋根工事', groups, scope, 'work:roof')).toBeNull();
     expect(v25WorkGroupNameError('2.屋根工事', groups, scope, 'work:roof')).toContain('標準');
   });
@@ -259,7 +293,7 @@ describe('画面（Excel 風明細）', () => {
   it('見出しの分け方と保存は同じ工事項目（表示の値）を使う。混在の保存順を全行に付ける', () => {
     expect(workbench).toContain("(line) => line.group_label, { modelSlug, specCode, sectionCode: code },\n                workItemOf,");
     expect(workbench).toContain('const toSave: V25EditorState = { ...state, slots: state.slots.map((slot) => ({ ...slot, work_item: workItemOf(slot) })) };');
-    expect(workbench).toContain('const orderedToSave = v25WithRowOrder(toSave, renderedMixedOrder);');
+    expect(workbench).toContain('const orderedToSave = v25SaveOrderKeepingRenames(toSave, renderedMixedOrder, viewOrder.length > 0);');
     expect(workbench).toContain('payload: buildV25SavePayload(orderedToSave)');
     expect(workbench).not.toContain('buildV25SavePayload(v25WithRowOrder(');
   });

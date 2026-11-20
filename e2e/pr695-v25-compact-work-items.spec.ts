@@ -55,6 +55,7 @@ test('PC｜現在仕様の工事項目見出し・重複表示防止・Portal操
   await page.locator('tr[data-work-item="work:sash_wood"]').getByTestId('v25-wb-edit-work-group').click();
   const dialog = page.getByTestId('v25-wb-work-group-dialog');
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId('v25-wb-work-group-input')).toBeFocused();
   await dialog.getByTestId('v25-wb-work-group-input').fill('1. 建具（現場加工）');
   await dialog.getByTestId('v25-wb-work-group-confirm').click();
   await expect(dialog).toHaveCount(0);
@@ -102,10 +103,19 @@ test('PC｜現在仕様の工事項目見出し・重複表示防止・Portal操
 test('PC｜工事項目の追加・重複防止・変更破棄', async ({ page }) => {
   await page.setViewportSize({ width: 1060, height: 760 });
   await openWorkbench(page);
-  await page.getByTestId('v25-wb-add-work-group-interior_exterior').click();
+  const addButton = page.getByTestId('v25-wb-add-work-group-interior_exterior');
+  await addButton.click();
   const dialog = page.getByTestId('v25-wb-work-group-dialog');
   await expect(dialog).toBeVisible();
   const name = dialog.getByTestId('v25-wb-work-group-input');
+  await expect(name).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(addButton).toBeFocused();
+  await addButton.click();
+  await expect(name).toBeFocused();
+  await name.fill('工事項目未設定(手入力)');
+  await expect(dialog.getByTestId('v25-wb-work-group-error')).toContainText('予約');
   await name.fill('2. 屋根工事');
   await expect(dialog.getByTestId('v25-wb-work-group-error')).toContainText('すでに');
   await expect(dialog.getByTestId('v25-wb-work-group-confirm')).toBeDisabled();

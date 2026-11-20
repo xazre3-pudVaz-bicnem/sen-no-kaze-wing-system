@@ -54,13 +54,14 @@ describe('商品台帳の保存済み構成利用状況', () => {
     expect(configurationsPage).toContain("const actor = await requireStaff('/admin/configurations')");
     expect(configurationsPage).toContain("actor.role !== 'admin'");
     expect(configurationsPage).toContain('data-testid="configuration-detail-access-note"');
-    expect(configurationsPage).toContain('保存プランの一覧は閲覧できますが、各プランの詳細確認は本部管理者のみ可能です。');
+    expect(configurationsPage).toContain('各プランの詳細確認は本部管理者のみ可能です。');
     expect(configurationsPage).toContain("actor.role === 'admin'");
     expect(configurationsPage).toContain('data-testid="configuration-detail-admin-only"');
     expect(configurationsPage).toContain('本部管理者のみ');
     expect(configurationsPage).toContain('getProductConfigurationIdsForOption(optionId)');
-    expect(configurationsPage).toContain("typeof sp.option_id === 'string'");
-    expect(configurationsPage).toContain('optionId === null');
+    expect(configurationsPage).toContain('parseConfigurationOptionFilter(sp.option_id)');
+    expect(configurationsPage).toContain('const optionConfigurations = !hasOptionFilter');
+    expect(configurationsPage).toContain('件数と一覧はこのアカウントで閲覧できる保存プランに限ります');
     expect(configurationsPage).toContain('configurations.filter((configuration) => matchingIds.has(configuration.id))');
     expect(configurationsPage).toContain('const shown = optionConfigurations.filter');
     expect(configurationsPage).toContain('data-testid="configuration-option-filter"');

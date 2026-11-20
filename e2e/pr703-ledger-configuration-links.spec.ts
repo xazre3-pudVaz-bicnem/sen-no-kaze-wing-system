@@ -43,6 +43,13 @@ test('PC・スマートフォン｜保存プランへの導線と本部管理者
   await desktopLink.click();
   await expect(page).toHaveURL(new RegExp('\\/admin\\/configurations\\?option_id='));
   await expect(page.getByTestId('configuration-option-filter')).toContainText('保存プラン 1件');
+  // 同じ商品IDを2回指定しても「フィルタなし」に戻さず0件を表示する。
+  const duplicatedOptionId = new URL(href, 'http://localhost').searchParams.get('option_id')!;
+  await page.goto(href + '&option_id=' + duplicatedOptionId);
+  await expect(page.getByTestId('configuration-option-filter')).toContainText('商品IDが正しくありません');
+  await expect(page.getByRole('row').filter({ hasText: savedName })).toHaveCount(0);
+  await page.goto(href);
+  await expect(page.getByTestId('configuration-option-filter')).toContainText('保存プラン 1件');
   const row=page.getByRole('row').filter({hasText:savedName});
   await expect(row).toHaveCount(1);
   await expect(page.getByTestId('configuration-detail-access-note')).toBeVisible();

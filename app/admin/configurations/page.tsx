@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { matchesRegion, parseAddress, readRegionFilter } from '@/lib/domain/address';
 import { RegionFilter } from '@/components/admin/region-filter';
+import { parseConfigurationOptionFilter } from '@/lib/domain/configuration-option-filter';
 
 export default async function AdminConfigurationsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
@@ -18,12 +19,13 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
   const nameOf = new Map(models.map((m) => [m.id, m.name]));
   // 商品台帳の「保存プラン N件」から来た場合だけ、保存済み構成の直接参照で絞り込む。
   // 不正な商品IDでは全件表示に戻さず0件にする。リクエストの権限は従来のrequireStaffを維持。
-  const optionId = typeof sp.option_id === 'string' ? sp.option_id.trim() : null;
-  const validOptionId = optionId !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(optionId);
+  // 重複指定（配列）や不正値は「指定なし」に戻さず、絞り込み0件にする。
+  const { hasFilter: hasOptionFilter, optionId } = parseConfigurationOptionFilter(sp.option_id);
+  const validOptionId = optionId !== null;
   const [matchingIds, filteredOption] = validOptionId
     ? await Promise.all([getProductConfigurationIdsForOption(optionId), store.getOption(optionId)])
     : [new Set<string>(), null] as const;
-  const optionConfigurations = optionId === null
+  const optionConfigurations = !hasOptionFilter
     ? configurations
     : configurations.filter((configuration) => matchingIds.has(configuration.id));
 
@@ -53,10 +55,10 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
   const shown = optionConfigurations.filter((configuration) => matchesRegion(locationOf(configuration).address, filter));
 
   return (
-    <AdminPage title="保存済み仕様" lead={optionId === null
+    <AdminPage title="保存済み仕様" lead={!hasOptionFilter
       ? `シミュレーター等で保存されている仕様 ${configurations.length} 件。状態は既存Configurationの値をそのまま表示します。`
       : `対象商品を使用している保存プラン ${optionConfigurations.length} 件。`}>
-      {optionId !== null && (
+      {hasOptionFilter && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/35 px-4 py-3 text-sm" data-testid="configuration-option-filter">
           <div>
             <p className="font-semibold text-ink">
@@ -76,7 +78,7 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
       </p>
       {actor.role !== 'admin' && (
         <p className="mb-3 text-xs text-muted" data-testid="configuration-detail-access-note">
-          保存プランの一覧は閲覧できますが、各プランの詳細確認は本部管理者のみ可能です。
+          件数と一覧はこのアカウントで閲覧できる保存プランに限ります（原則、ご自身が保存したプラン）。他のお客様の保存プランは含まれません。各プランの詳細確認は本部管理者のみ可能です。
         </p>
       )}
       <Table minWidth="56rem">

@@ -341,7 +341,7 @@ describe('標準見積v2.5：全列結合の独立小計行／列表示・編集
     expect(source).toContain('value={groupEditor.value}');
     expect(source).toContain("mode: 'add', section: code");
     expect(source).toContain("mode: 'rename', section: code");
-    expect(source).toContain('setState((current) => v25RenameWorkGroup(current, sourceGroup, label))');
+    expect(source).toContain('v25RenameWorkGroup(v25WithRowOrder(current, renderedMixedOrder), sourceGroup, label)');
     expect(source).toContain("addLine(groupEditor.section, null, label)");
     expect(source).toContain('onClose={() => setGroupEditor(null)}');
     expect(source).toContain('dirty={groupEditor.value !== groupEditor.originalLabel}');

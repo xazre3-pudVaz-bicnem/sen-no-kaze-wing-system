@@ -42,7 +42,6 @@ import {
   pickSaleView,
   v25PositionSlotCategoryIds,
   v25PositionSlots,
-  v25SlotUnitForDisplay,
   type StandardEstimateSaleView,
 } from '@/lib/domain/standard-estimate-sale-view';
 import {
@@ -59,6 +58,7 @@ import {
   LEGACY_EXTERIOR_CODES,
   makeDefaultExteriorFaces,
   normalizeExteriorFaces,
+  standardExteriorWallOptions,
   type ExteriorFaceCode,
   type ExteriorFaceSelection,
 } from '@/lib/domain/exterior-wall';
@@ -78,6 +78,8 @@ import {
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
+import { createSimulatorCardDeltaEvaluator, type SimulatorCardDelta, type SimulatorCardPriceInput, type SimulatorCardPriceSource, type SimulatorCardTarget } from '@/lib/domain/simulator-card-price-delta';
+import { simulatePickerCategoryCandidate, simulatorCandidatePriceDelta } from '@/lib/domain/simulator-candidate-price-delta';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
 import { latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft, restoredDraftFinishLevel, validSimulatorDraftId, workSimulatorDraftKey, writeBrowserWorkDraft, type ResumeCandidate } from '@/lib/domain/simulator-browser-drafts';
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
@@ -1033,7 +1035,10 @@ export function SimulatorApp({
     () => explainBlocked(activeSpecCtx, [...selected, ...slotOptionIdsInUse]),
     [activeSpecCtx, selected, slotOptionIdsInUse]
   );
-  const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
+  const activeSpecSelection = useMemo(
+    () => specSelections.find((row) => row.code === specCode)?.ids ?? [],
+    [specSelections, specCode]
+  );
   const baselineVariantIds = useMemo(
     () => standardVariantIdsFor(specCode, activeSpecSelection),
     [activeSpecSelection, specCode, standardVariantIdsFor]
@@ -1050,28 +1055,134 @@ export function SimulatorApp({
     [activeSlotSelections, bundle.variantChoices, bundle.variantGroups, optionById, positionSlots]
   );
   const slotsAtStandard = slotRows.every((row) => sameSlotSelection(row.selection, row.standard));
-  /** 設備の一覧の位置ごとのタイル（差額は、その位置の標準の売価との差。表に無い組み合わせは目安） */
+  /**
+   * 商品カードの差額は、選択候補の単価差ではなく、現行の御見積書・上部総額と
+   * 同じ価格計算経路で「対象だけを標準に戻した税込総額」と比較する（PR #680）。
+   * 注文範囲内の位置コードは現在の選択からではなく、公開版の枠から求める。
+   */
+  const cardDeltaContext = useMemo(() => {
+    const source: SimulatorCardPriceSource = v25PricePending
+      ? { kind: 'v25-pending' }
+      : activeSaleView
+        ? {
+            kind: 'sale-view',
+            view: activeSaleView,
+            unitLookup: v25Units,
+            activeSlotCodes: positionSlots.filter(slotInScope(finishLevel)).map((slot) => slot.slot_code),
+          }
+        : activeEstimateTemplate && !v25Pricing
+          ? { kind: 'legacy-template', template: activeEstimateTemplate, finishLevel }
+          : { kind: 'legacy', baseOverride };
+
+    const baselineFaces = makeDefaultExteriorFaces(
+      standardExteriorWallOptions(activeSpecCtx.options, exteriorWallCat?.id),
+      bundle.variantGroups,
+      bundle.variantChoices,
+      activeSpecSelection,
+      baselineVariantIds
+    );
+    const priceInput: SimulatorCardPriceInput = {
+      bundle,
+      source,
+      current: {
+        optionIds: selected,
+        variantChoiceIds: variantIds,
+        exteriorFaces,
+        slotSelections: activeSlotSelections,
+      },
+      standard: {
+        optionIds: activeSpecSelection,
+        variantChoiceIds: baselineVariantIds,
+        exteriorFaces: baselineFaces,
+        slotSelections: standardSlotSelectionsFor(finishLevel),
+      },
+    };
+    return { priceInput, evaluator: createSimulatorCardDeltaEvaluator(priceInput) };
+  }, [
+    activeEstimateTemplate, activeSaleView, activeSlotSelections, activeSpecCtx.options,
+    activeSpecSelection, baseOverride, baselineVariantIds, bundle, exteriorFaces,
+    exteriorWallCat?.id, finishLevel, positionSlots, selected, slotInScope,
+    standardSlotSelectionsFor, v25PricePending, v25Pricing, v25Units, variantIds,
+  ]);
+  const getCardDelta = useCallback((target: SimulatorCardTarget): SimulatorCardDelta =>
+    // 公開済み価格がない場合は、たとえ商品の選択が標準と同じでも価格未確定とする。
+    v25PricePending ? { kind: 'pending', reason: 'no-published-price' } : cardDeltaContext.evaluator.evaluate(target),
+  [cardDeltaContext, v25PricePending]);
+
+
+  /** 商品候補をクリックした場合の正式な税込総額。現在カードの差額は使い回さない。 */
+  const getPickerCandidateDelta = useCallback((
+    categoryId: string, nextInCategory: string[], nextVariants: string[]
+  ): SimulatorCardDelta => {
+    if (v25PricePending) return { kind: 'pending', reason: 'no-published-price' };
+    const candidate = simulatePickerCategoryCandidate({
+      bundle, ruleContext: activeSpecCtx, current: cardDeltaContext.priceInput.current,
+      categoryId, nextInCategory, nextVariants, positionCategoryIds,
+    });
+    if (!candidate) return { kind: 'pending', reason: 'incomplete-selection' };
+    return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
+      { kind: 'category', categoryId }, candidate);
+  }, [activeSpecCtx, bundle, cardDeltaContext, positionCategoryIds, v25PricePending]);
+
+  const getSlotCandidateDelta = useCallback((
+    slotCode: string, nextIds: string[], nextVariants: string[]
+  ): SimulatorCardDelta => {
+    if (v25PricePending) return { kind: 'pending', reason: 'no-published-price' };
+    const optionId = nextIds.length === 1 ? nextIds[0] : null;
+    const slot = positionSlots.find((row) => row.slot_code === slotCode);
+    if (!optionId || !slot?.selectable_option_ids.includes(optionId)) {
+      return { kind: 'pending', reason: 'incomplete-selection' };
+    }
+    const groupIds = new Set(bundle.variantGroups.filter((group) => group.option_id === optionId).map((group) => group.id));
+    const choices = nextVariants.filter((id) => groupIds.has(bundle.variantChoices.find((choice) => choice.id === id)?.group_id ?? ''));
+    const current = cardDeltaContext.priceInput.current;
+    const candidate = {
+      ...current,
+      slotSelections: [
+        ...(current.slotSelections ?? []).filter((row) => row.slot_code !== slotCode),
+        { slot_code: slotCode, option_id: optionId, variant_choice_ids: choices },
+      ],
+    };
+    return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
+      { kind: 'slot', slotCode }, candidate);
+  }, [bundle.variantChoices, bundle.variantGroups, cardDeltaContext, positionSlots, v25PricePending]);
+
+  const getExteriorFaceCandidateDelta = useCallback((
+    faceCode: ExteriorFaceCode, nextFaces: ExteriorFaceSelection[]
+  ): SimulatorCardDelta => {
+    if (v25PricePending) return { kind: 'pending', reason: 'no-published-price' };
+    // Legacy one-item exterior-wall plans cannot be converted to four priced faces for a preview.
+    if (exteriorFaces.length !== 4 || nextFaces.length !== 4 || !exteriorWallCat) {
+      return { kind: 'pending', reason: 'incomplete-selection' };
+    }
+    const front = nextFaces.find((row) => row.face_code === 'front');
+    if (!front) return { kind: 'pending', reason: 'incomplete-selection' };
+    const wallIds = new Set(bundle.options.filter((row) => row.category_id === exteriorWallCat.id).map((row) => row.id));
+    const groupIds = new Set(bundle.variantGroups.filter((row) => wallIds.has(row.option_id)).map((row) => row.id));
+    const current = cardDeltaContext.priceInput.current;
+    const candidate = {
+      ...current,
+      exteriorFaces: nextFaces,
+      optionIds: [...current.optionIds.filter((id) => !wallIds.has(id)), front.option_id],
+      variantChoiceIds: [...current.variantChoiceIds.filter((id) => !groupIds.has(bundle.variantChoices.find((choice) => choice.id === id)?.group_id ?? '')), ...front.variant_choice_ids],
+    };
+    return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
+      { kind: 'exterior-face', faceCode }, candidate);
+  }, [bundle.options, bundle.variantGroups, bundle.variantChoices, cardDeltaContext, exteriorFaces.length, exteriorWallCat, v25PricePending]);
+
+  /** 位置ごとの商品画像・商品名。金額判定は EquipmentBoard が共通評価器で行う。 */
   const slotTiles = useMemo<EquipmentSlotTile[]>(
     () =>
-      slotRows.map((row) => {
-        const option = displayOptionById?.get(row.selection.option_id) ?? optionById.get(row.selection.option_id) ?? null;
-        const changed = !sameSlotSelection(row.selection, row.standard);
-        const current = activeSaleView ? v25SlotUnitForDisplay(activeSaleView, row.selection, v25Units) : null;
-        const standard = activeSaleView ? v25SlotUnitForDisplay(activeSaleView, row.standard, v25Units) : null;
-        const delta = current !== null && standard !== null ? current - standard : null;
-        return {
-          slotCode: row.slot.slot_code,
-          categoryId: row.categoryId,
-          label: row.slot.slot_label,
-          option,
-          variantNames: row.selection.variant_choice_ids
-            .map((id) => bundle.variantChoices.find((choice) => choice.id === id)?.name)
-            .filter((value): value is string => Boolean(value)),
-          state: current === null ? 'price-on-request' : changed ? 'changed' : 'standard',
-          deltaLabel: !changed || delta === null ? null : delta === 0 ? '追加費用なし' : delta > 0 ? `+${formatYen(delta)}` : formatYen(delta),
-        };
-      }),
-    [activeSaleView, bundle.variantChoices, displayOptionById, optionById, slotRows, v25Units]
+      slotRows.map((row) => ({
+        slotCode: row.slot.slot_code,
+        categoryId: row.categoryId,
+        label: row.slot.slot_label,
+        option: displayOptionById?.get(row.selection.option_id) ?? optionById.get(row.selection.option_id) ?? null,
+        variantNames: row.selection.variant_choice_ids
+          .map((id) => bundle.variantChoices.find((choice) => choice.id === id)?.name)
+          .filter((value): value is string => Boolean(value)),
+      })),
+    [bundle.variantChoices, displayOptionById, optionById, slotRows]
   );
   // 位置の選び直しの画面：その位置で選べる商品（標準の商品を先頭に、本部が決めた順。選べなくなった商品は出さない）
   const slotPickerRow = slotPicker ? (slotRows.find((row) => row.slot.slot_code === slotPicker) ?? null) : null;
@@ -1942,14 +2053,11 @@ export function SimulatorApp({
           options={displayScopedOptions}
           selected={selected}
           baselineSelected={activeSpecSelection}
-          selectedVariantIds={variantIds}
-          baselineVariantIds={baselineVariantIds}
-          variantGroups={bundle.variantGroups}
-          variantChoices={displayVariantChoices}
           readOnly={readOnly}
           onPickCategory={openPicker}
           slotTiles={slotTiles}
           onPickSlot={openSlotPicker}
+          getCardDelta={getCardDelta}
         />
 
         {displayIssues.length > 0 && (
@@ -2016,6 +2124,7 @@ export function SimulatorApp({
           selectedVariantIds={variantIds}
           baselineVariantIds={baselineVariantIds}
           onClose={() => setPicker(null)}
+          getCandidateDelta={(next, nextVariants) => getPickerCandidateDelta(picker, next, nextVariants)}
           onApply={(next, nextVariants) => applyPicker(picker, next, nextVariants)}
         />
       )}
@@ -2032,6 +2141,7 @@ export function SimulatorApp({
           selectedVariantIds={slotPickerRow.selection.variant_choice_ids}
           baselineVariantIds={slotPickerRow.standard.variant_choice_ids}
           onClose={() => setSlotPicker(null)}
+          getCandidateDelta={(next, nextVariants) => getSlotCandidateDelta(slotPickerRow.slot.slot_code, next, nextVariants)}
           onApply={(next, nextVariants) => applySlotPicker(slotPickerRow.slot.slot_code, next, nextVariants)}
         />
       )}
@@ -2048,6 +2158,7 @@ export function SimulatorApp({
           current={exteriorFaces}
           initialFace={exteriorFacePicker}
           onClose={() => setExteriorFacePicker(null)}
+          getCandidateFaceDelta={getExteriorFaceCandidateDelta}
           onApply={applyExteriorFaces}
         />
       )}

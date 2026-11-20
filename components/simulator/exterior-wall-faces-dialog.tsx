@@ -16,6 +16,8 @@ import { visibleVariantGroups } from '@/lib/domain/preset';
 import { Button } from '@/components/ui';
 import { ProductList } from './product-list';
 import { productChoicePoints } from '@/lib/domain/simulator-product-choice-guide';
+import { simulatorCardPricePresentation } from '@/lib/domain/simulator-card-price-presentation';
+import type { SimulatorCardDelta } from '@/lib/domain/simulator-card-price-delta';
 import { VariantPicker } from './variant-picker';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +36,7 @@ interface Props {
   initialFace: ExteriorFaceCode;
   onClose: () => void;
   onApply: (faces: ExteriorFaceSelection[]) => void;
+  getCandidateFaceDelta?: (face: ExteriorFaceCode, faces: ExteriorFaceSelection[]) => SimulatorCardDelta;
 }
 
 export function ExteriorWallFacesDialog({
@@ -49,6 +52,7 @@ export function ExteriorWallFacesDialog({
   initialFace,
   onClose,
   onApply,
+  getCandidateFaceDelta,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const availableOptions = selectableOptions ?? options;
@@ -77,6 +81,19 @@ export function ExteriorWallFacesDialog({
   const replaceFace = (next: ExteriorFaceSelection) => {
     setFaces((prev) => EXTERIOR_FACES.map((face) => (face.code === next.face_code ? next : prev.find((x) => x.face_code === face.code) ?? next)));
   };
+
+  const candidateFaceSelection = (optionId: string): ExteriorFaceSelection[] =>
+    EXTERIOR_FACES.map((face) => face.code === activeFace
+      ? { face_code: face.code, option_id: optionId,
+          variant_choice_ids: defaultVariantIdsForExteriorOption(optionId, variantGroups, variantChoices) }
+      : faces.find((row) => row.face_code === face.code) ??
+        { face_code: face.code, option_id: optionId, variant_choice_ids: [] });
+  const candidateFacePrice = (optionId: string) => getCandidateFaceDelta
+    ? simulatorCardPricePresentation(getCandidateFaceDelta(activeFace, candidateFaceSelection(optionId)))
+    : null;
+  const activeFacePrice = getCandidateFaceDelta
+    ? simulatorCardPricePresentation(getCandidateFaceDelta(activeFace, faces))
+    : null;
 
   const chooseProduct = (optionId: string) => {
     replaceFace({
@@ -185,18 +202,27 @@ export function ExteriorWallFacesDialog({
             selectedIds={activeOption ? [activeOption.id] : []}
             baselineSelectedIds={baselineSelectedIds}
             getPriceLabel={(option) =>
-              option.price_on_request
+              candidateFacePrice(option.id)?.label ?? (option.price_on_request
                 ? '別途見積'
                 : option.price === 0
                   ? '追加費用なし'
-                  : `+${formatYen(option.price)}`
+                  : `+${formatYen(option.price)}`)
             }
+            getPriceTone={getCandidateFaceDelta ? (option) => candidateFacePrice(option.id)?.tone ?? 'neutral' : undefined}
             onOpenProduct={(option) => chooseProduct(option.id)}
             emptyMessage="現在選択できる外壁商品はありません"
             actionLabel="選ぶ"
           />
         </div>
 
+        {getCandidateFaceDelta && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-ivory/55 px-3 py-2 text-xs" data-testid="exterior-face-total-delta">
+            <span>この面の基本プランとの差額（税込）</span>
+            <strong className={cn('text-sm', activeFacePrice?.tone === 'increase' ? 'text-red-700' : activeFacePrice?.tone === 'decrease' ? 'text-blue-700' : 'text-ink')} data-price-tone={activeFacePrice?.tone ?? 'neutral'}>
+              {activeFacePrice?.label ?? '金額確認中'}
+            </strong>
+          </div>
+        )}
         {activeOption && activeGroups.length > 0 && (
           <VariantPicker
             groups={activeGroups}

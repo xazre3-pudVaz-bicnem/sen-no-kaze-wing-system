@@ -485,6 +485,12 @@ function WorkbenchBody({
   onNotice,
 }: WorkbenchProps & { notice: Notice | null; onNotice: (notice: Notice | null) => void }) {
   const router = useRouter();
+  // 画面の準備（ハイドレーション）が済んだ印。描き直しをせずに属性だけを付ける。
+  // ブラウザの試験は、読み込み直後の実タッチ（指を動かした分）が React に届かない時間の競争を避けるため、この印を待ってから操作する
+  const workbenchRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    workbenchRef.current?.setAttribute('data-v25-ready', 'true');
+  }, []);
   const [state, setState] = useState<V25EditorState>(initial);
   // PR #686 の共通 row_order を表示順の正本にする。↑↓＋は未保存中だけ上書きし、保存時に連番化する。
   const [viewOrder, setViewOrder] = useState<V25MixedRowRef[]>([]);
@@ -1215,7 +1221,7 @@ function WorkbenchBody({
   };
 
   return (
-    <section className="space-y-3" data-testid="standard-estimate-v25-workbench">
+    <section className="space-y-3" data-testid="standard-estimate-v25-workbench" ref={workbenchRef}>
       {dropPreview && <div data-testid="v25-wb-drop-indicator" role="status" aria-label="ここに移動"
         className="pointer-events-none fixed z-[48] h-[3px] bg-emerald-600 shadow-[0_0_0_1px_white]"
         style={{ top: dropPreview.top - 1, left: dropPreview.left, width: dropPreview.width }}>

@@ -7,6 +7,8 @@ test.beforeEach(async ({ page, baseURL }) => {
   }
   await page.goto('/v25-e2e-line-cost');
   await expect(page.getByTestId('v25-line-cost-local-fixture')).toBeVisible();
+  // 画面の準備（ハイドレーション）が済むまで待ってから実際にタップする
+  await expect(page.locator('[data-testid="standard-estimate-v25-workbench"][data-v25-ready="true"]')).toBeVisible({ timeout: 30_000 });
 });
 
 test('Pixel 7：原価単価のセルを実際にタップして入力でき、原価金額・粗利が出る。空に戻すと原価未設定', async ({ page }) => {

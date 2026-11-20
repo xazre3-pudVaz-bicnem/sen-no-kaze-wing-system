@@ -142,6 +142,7 @@ declare
   k5 uuid;
   k6 uuid;
   k7 uuid;
+  k8 uuid;
   v_legacy2 uuid;
   v_lines jsonb;
   v_quote uuid;
@@ -188,7 +189,8 @@ begin
 
   -- 旧標準見積：手入力明細に原価を登録して公開する（取付費 auto 6,000 円 × 2・養生 manual 原価 0 円 売価 0 円・
   -- 足場 auto 10,001 円 × 1.5（内外装）・外構工事 別途見積（別途工事）・運搬費 manual 原価 3,000 円 売価 5,000 円・
-  -- 清掃費 manual 原価 2,000 円 売価 3,000 円・設置工事 auto 30,000 円（別途工事））。次の版で運搬費の原価だけ 3,500 円にする
+  -- 清掃費 manual 原価 2,000 円 売価 3,000 円・設置工事 auto 30,000 円（別途工事）・大型工事 manual 原価 150,000,000 円 売価 200,000,000 円）。
+  -- 次の版で運搬費の原価だけ 3,500 円にする
   v_legacy := pg_temp.lc_run_as('authenticated', u_editor, format($q$ select public.create_standard_estimate_draft(%L)::text $q$, v_bmr));
   select r.standard_estimate_master_id into v_master from public.standard_estimate_revisions r where r.id::text = v_legacy;
   v_out := pg_temp.lc_run_as('authenticated', u_editor, format($q$ select (public.save_standard_estimate_draft(%L, 1, 0.15, 1.5, 0, null,
@@ -199,7 +201,8 @@ begin
       {"section_code":"sitework","name":"外構工事","quantity":1,"unit":"式","price_mode":"por"},
       {"section_code":"option","name":"運搬費","quantity":1,"unit":"式","price_mode":"manual","cost_unit_price":3000,"unit_price":5000},
       {"section_code":"option","name":"清掃費","quantity":1,"unit":"式","price_mode":"manual","cost_unit_price":2000,"unit_price":3000},
-      {"section_code":"sitework","name":"設置工事","quantity":1,"unit":"式","price_mode":"auto","cost_unit_price":30000}]'::jsonb,
+      {"section_code":"sitework","name":"設置工事","quantity":1,"unit":"式","price_mode":"auto","cost_unit_price":30000},
+      {"section_code":"option","name":"大型工事","quantity":1,"unit":"式","price_mode":"manual","cost_unit_price":150000000,"unit_price":200000000}]'::jsonb,
     %s)).lock_version::text $q$, v_legacy, (select lock_version from public.standard_estimate_revisions where id::text = v_legacy)));
   v_out := pg_temp.lc_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_revision(%L, %s)).status', v_legacy,
     (select lock_version from public.standard_estimate_revisions where id::text = v_legacy)));
@@ -219,8 +222,8 @@ begin
 
   -- ---------- 旧標準見積から v2.5 の下書きへ：登録された原価を写す（⑤-5） ----------
   v_rev := pg_temp.lc_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L, null)::text', v_master))::uuid;
-  perform pg_temp.lc_expect_eq('LC-1 旧標準見積（公開中の版）から写した手入力明細に、登録された原価単価・原価金額も写す（0 円は 0 円、別途見積・別途工事は原価なし）',
-    '取付費:6000:12000/養生:0:0/足場:10001:15001/外構工事:-:-/運搬費:3500:3500/清掃費:2000:2000/設置工事:-:-', pg_temp.lc_costs(v_rev));
+  perform pg_temp.lc_expect_eq('LC-1 旧標準見積（公開中の版）から写した手入力明細に、登録された原価単価・原価金額も写す（0 円は 0 円、別途見積・別途工事・1 億円超は原価なし）',
+    '取付費:6000:12000/養生:0:0/足場:10001:15001/外構工事:-:-/運搬費:3500:3500/清掃費:2000:2000/設置工事:-:-/大型工事:-:-', pg_temp.lc_costs(v_rev));
   select l.line_key into k1 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '取付費';
   select l.line_key into k2 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '養生';
   select l.line_key into k3 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '足場';
@@ -228,6 +231,7 @@ begin
   select l.line_key into k5 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '運搬費';
   select l.line_key into k6 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '清掃費';
   select l.line_key into k7 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '設置工事';
+  select l.line_key into k8 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '大型工事';
 
   -- ---------- 原価単価の保存：数・0 円・未入力（null）・別途見積 ----------
   -- 商品の行は同じ識別子で保存する（売価の指紋を保存の前後で比べるため）
@@ -418,13 +422,14 @@ begin
     pg_temp.lc_line(k_new, 'option', '新規の材料', '3', 'manual', 1000, 'null'),
     pg_temp.lc_line(k5, 'option', '運搬費', '1', 'manual', 5000, 'null'),
     pg_temp.lc_line(k6, 'option', '清掃費', '1', 'manual', 3000, 'null') || '{"unit": "m2"}'::jsonb,
-    pg_temp.lc_line(k7, 'sitework', '設置工事', '1', 'manual', 45000, 'null'))));
+    pg_temp.lc_line(k7, 'sitework', '設置工事', '1', 'manual', 45000, 'null'),
+    pg_temp.lc_line(k8, 'option', '大型工事', '1', 'manual', 200000000, 'null'))));
   v_sale_a := pg_temp.lc_sale(v_rev2);
   perform public.standard_estimate_v25_set_writer(true);
   v_out := public.standard_estimate_v25_fill_line_costs_from_legacy(v_rev2)::text;
   perform public.standard_estimate_v25_set_writer(false);
-  perform pg_temp.lc_expect_eq('LC-22 旧標準見積から写したまま変えていない行だけに写す（売価を変えた行・新しい行・別途見積・旧の版で原価が違う行・単位が違う行・別途工事は未設定のまま）',
-    '2|取付費:6000:12000/養生:0:0/足場:-:-/外構工事:-:-/新規の材料:-:-/運搬費:-:-/清掃費:-:-/設置工事:-:-', v_out || '|' || pg_temp.lc_costs(v_rev2));
+  perform pg_temp.lc_expect_eq('LC-22 旧標準見積から写したまま変えていない行だけに写す（売価を変えた行・新しい行・別途見積・旧の版で原価が違う行・単位が違う行・別途工事・1 億円超は未設定のまま）',
+    '2|取付費:6000:12000/養生:0:0/足場:-:-/外構工事:-:-/新規の材料:-:-/運搬費:-:-/清掃費:-:-/設置工事:-:-/大型工事:-:-', v_out || '|' || pg_temp.lc_costs(v_rev2));
   v_sale_b := pg_temp.lc_sale(v_rev2);
   v_cost_a := pg_temp.lc_cost_totals(v_rev2);
   perform public.standard_estimate_v25_set_writer(true);

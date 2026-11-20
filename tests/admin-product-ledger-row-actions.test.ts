@@ -52,7 +52,7 @@ describe('商品台帳の一覧操作', () => {
     expect(client).toContain('archivedAt={o.archived_at}');
     expect(client).toContain('discontinuedAt={o.discontinued_at}');
     expect(client).toContain('expectedUpdatedAt={o.updated_at}');
-    expect((client.match(/lifecycleEnabled=\{lifecycleEnabled\}/g) ?? []).length).toBe(3);
+    expect((client.match(/<ProductLedgerActionsMenu [^\n]*lifecycleEnabled=\{lifecycleEnabled\}/g) ?? []).length).toBe(3);
 
     expect(menu).toContain("import { setProductLifecycleAction } from '@/lib/actions/product-lifecycle'");
     expect(menu).toContain("productSalesState({ status, archived_at: archivedAt, discontinued_at: discontinuedAt })");

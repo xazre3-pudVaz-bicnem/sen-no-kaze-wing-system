@@ -71,8 +71,8 @@ describe('標準見積 v2.5 ポップアップの閉鎖規則', () => {
     expect(workbench).toContain("const menuTrigger = v25MenuDetailsForAction(button)?.querySelector<HTMLElement>('summary')");
     expect(workbench).toContain('setDialogOpener(menuTrigger ?? button);');
     expect(workbench).toContain('const [dialogOpener, setDialogOpener] = useState<HTMLElement | null>(null);');
-    // 商品変更は品名横の単独アイコンへ一本化したため、行メニューの起動元は5箇所。
-    expect((workbench.match(/rememberRowMenuOpener\(event\.currentTarget\)/g) ?? [])).toHaveLength(5);
+    // 工事項目の操作は見出しへ集約したため、行メニューの起動元は4箇所。
+    expect((workbench.match(/rememberRowMenuOpener\(event\.currentTarget\)/g) ?? [])).toHaveLength(4);
     expect(workbench).toContain("rememberDialogOpener(event.currentTarget); setPickerDirty(false); setPicker({ section: code, targetKey: slot.key });");
     expect((workbench.match(/returnFocusTo=\{dialogOpener\}/g) ?? [])).toHaveLength(6);
     // 子の「変更候補を選ぶ」は親画面内の元ボタンへ戻すため、明示オーバーライドを渡さない。

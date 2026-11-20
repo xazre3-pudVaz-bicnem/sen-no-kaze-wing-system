@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react';
 import { createMatrixRowAction, setMatrixRowStatusAction, updateMatrixRowAction } from '@/lib/actions/matrix';
 import type { MatrixItem, MatrixSize, MatrixSpec, OptionCategory, OptionCategoryMatrixItem } from '@/lib/domain/types';
 import type { MatrixEditorRow } from '@/components/admin/matrix-editor';
@@ -21,6 +21,11 @@ type Props = {
 
 type Notice = { tone: 'success' | 'danger'; text: string } | null;
 
+// 初回はSSR/ハイドレーションともプレースホルダーを表示し、復元後にチェック欄を描画する。
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
+
 function sameItems(a: string[], b: string[]) {
   if (a.length !== b.length) return false;
   const first = [...a].sort();
@@ -31,10 +36,26 @@ function sameItems(a: string[], b: string[]) {
 export function SelectionMatrixPanel({
   rows: initialRows, items, specs, sizes, models, categories, categoryItems, canEdit, actorId,
 }: Props) {
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
+  const draftKey = 'wing:matrix-settings:draft:v1:' + actorId;
+  const [restoration] = useState(() => {
+    const empty = { selectedId: '', drafts: {} as Record<string, MatrixSettingsDraft> };
+    if (!canEdit || typeof window === 'undefined') return { cache: empty, failed: false };
+    try {
+      return {
+        cache: restoreMatrixSettingsDrafts(window.sessionStorage.getItem(draftKey), initialRows),
+        failed: false,
+      };
+    } catch {
+      return { cache: empty, failed: true };
+    }
+  });
+
   const [rows, setRows] = useState(initialRows);
-  const [selectedId, setSelectedId] = useState(initialRows.find((row) => row.status === 'active')?.id ?? initialRows[0]?.id ?? '');
-  const [drafts, setDrafts] = useState<Record<string, MatrixSettingsDraft>>({});
-  const [restoring, setRestoring] = useState(canEdit);
+  const [selectedId, setSelectedId] = useState(
+    restoration.cache.selectedId || initialRows.find((row) => row.status === 'active')?.id || initialRows[0]?.id || ''
+  );
+  const [drafts, setDrafts] = useState<Record<string, MatrixSettingsDraft>>(restoration.cache.drafts);
   const [notice, setNotice] = useState<Notice>(null);
   const [pending, startTransition] = useTransition();
   const [newRow, setNewRow] = useState({
@@ -45,30 +66,9 @@ export function SelectionMatrixPanel({
   });
 
   const activeItems = useMemo(() => items.filter((item) => item.status === 'active'), [items]);
-  const draftKey = 'wing:matrix-settings:draft:v1:' + actorId;
-
-  // Next.jsのLink遷移はbeforeunloadを発火しないため、同じタブ内の一時保管から復元する。
-  // 保存済みの値へ上書きするのではなく、未保存ドラフトとしてだけ扱う。
+  // クライアント側で復元できてから書き込むため、ハイドレーション中に原本を消さない。
   useEffect(() => {
-    if (!canEdit) return;
-    try {
-      const restored = restoreMatrixSettingsDrafts(window.sessionStorage.getItem(draftKey), initialRows);
-      if (Object.keys(restored.drafts).length > 0) {
-        setDrafts(restored.drafts);
-        if (restored.selectedId) setSelectedId(restored.selectedId);
-        setNotice({ tone: 'success', text: 'このブラウザタブの未保存変更を復元しました。内容を確認してから保存してください。' });
-      }
-    } catch {
-      setNotice({ tone: 'danger', text: '未保存変更の一時保管を利用できません。画面を移動する前に保存してください。' });
-    } finally {
-      setRestoring(false);
-    }
-    // 初回のブラウザタブ単位の復元だけを行い、propsの更新ではドラフトを上書きしない。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actorId, canEdit]);
-
-  useEffect(() => {
-    if (!canEdit || restoring) return;
+    if (!canEdit || !hydrated) return;
     try {
       if (Object.keys(drafts).length) {
         window.sessionStorage.setItem(draftKey, serializeMatrixSettingsDrafts({ drafts, selectedId }));
@@ -76,9 +76,10 @@ export function SelectionMatrixPanel({
         window.sessionStorage.removeItem(draftKey);
       }
     } catch {
-      // ストレージが使えないブラウザでは既存のbeforeunloadによる警告を維持する。
+      // ストレージ利用不可の場合もbeforeunloadの警告は維持する。
     }
-  }, [actorId, canEdit, drafts, restoring, selectedId, draftKey]);
+  }, [canEdit, drafts, hydrated, selectedId, draftKey]);
+
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
   const draftOf = (row: MatrixEditorRow): MatrixSettingsDraft =>
     drafts[row.id] ?? { fire: row.fire_selectable, items: row.selectable_items, lockVersion: row.lock_version };
@@ -193,6 +194,10 @@ export function SelectionMatrixPanel({
       (entry) => entry.matrix_item_code === code && entry.category_id === category.id
     ));
 
+  if (!hydrated) {
+    return <p className="text-sm text-muted" data-testid="selection-matrix-loading">設定を読み込んでいます…</p>;
+  }
+
   return (
     <div className="space-y-4" data-testid="selection-matrix-panel">
       <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
@@ -206,7 +211,7 @@ export function SelectionMatrixPanel({
             <Select
               id="selection-matrix-model"
               value={selected?.base_model_id ?? ''}
-              disabled={pending || restoring || modelIds.length === 0}
+              disabled={pending || !hydrated || modelIds.length === 0}
               onChange={(event) => chooseRow(rows.find((row) => row.base_model_id === event.target.value)?.id ?? '')}
             >
               {modelIds.map((id) => <option key={id} value={id}>{models.find((model) => model.id === id)?.name ?? id}</option>)}
@@ -216,7 +221,7 @@ export function SelectionMatrixPanel({
             <Select
               id="selection-matrix-spec"
               value={selected?.spec_code ?? ''}
-              disabled={pending || restoring || !selected}
+              disabled={pending || !hydrated || !selected}
               onChange={(event) => chooseRow(modelRows.find((row) => row.spec_code === event.target.value)?.id ?? '')}
             >
               {specCodes.map((code) => <option key={code} value={code}>{labelSpec(code)}</option>)}
@@ -226,7 +231,7 @@ export function SelectionMatrixPanel({
             <Select
               id="selection-matrix-size"
               value={selected?.size_code ?? ''}
-              disabled={pending || restoring || !selected}
+              disabled={pending || !hydrated || !selected}
               onChange={(event) => chooseRow(specRows.find((row) => row.size_code === event.target.value)?.id ?? '')}
             >
               {specRows.map((row) => (
@@ -238,6 +243,8 @@ export function SelectionMatrixPanel({
           </Field>
         </div>
       </div>
+      {restoration.failed && <Alert tone="warn">このブラウザでは一時保管を利用できません。移動前に設定を保存してください。</Alert>}
+      {Object.keys(restoration.cache.drafts).length > 0 && Object.keys(drafts).length > 0 && <Alert tone="info">このブラウザタブの未保存変更を復元しました。保存または破棄するまで保持します。</Alert>}
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
       {staleDraft && <Alert tone="warn">別の画面でこの仕様が更新されています。復元した変更は自動保存されません。内容を確認し、変更を破棄してから再編集してください。</Alert>}
       {selected && draft ? (
@@ -253,7 +260,7 @@ export function SelectionMatrixPanel({
             <input
               type="checkbox"
               checked={draft.fire}
-              disabled={!canEdit || retired || pending || restoring || staleDraft}
+              disabled={!canEdit || retired || pending || !hydrated || staleDraft}
               onChange={(event) => setDrafts((current) => ({
                 ...current, [selected.id]: { ...draft, fire: event.target.checked },
               }))}
@@ -270,7 +277,7 @@ export function SelectionMatrixPanel({
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={!canEdit || retired || pending || restoring || staleDraft}
+                    disabled={!canEdit || retired || pending || !hydrated || staleDraft}
                     onChange={() => setDrafts((current) => ({
                       ...current,
                       [selected.id]: {
@@ -297,14 +304,14 @@ export function SelectionMatrixPanel({
           {canEdit && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex gap-2">
-                <Button type="button" disabled={!isDirty(selected) || pending || retired || restoring || staleDraft} onClick={() => save(selected)}>この仕様を保存</Button>
-                <Button type="button" variant="ghost" disabled={!isDirty(selected) || pending || restoring} onClick={() => setDrafts((current) => {
+                <Button type="button" disabled={!isDirty(selected) || pending || retired || !hydrated || staleDraft} onClick={() => save(selected)}>この仕様を保存</Button>
+                <Button type="button" variant="ghost" disabled={!isDirty(selected) || pending || !hydrated} onClick={() => setDrafts((current) => {
                   const next = { ...current };
                   delete next[selected.id];
                   return next;
                 })}>変更を破棄</Button>
               </div>
-              <Button type="button" size="sm" variant="ghost" disabled={pending || restoring || isDirty(selected)} onClick={() => changeStatus(selected, retired ? 'active' : 'retired')}>
+              <Button type="button" size="sm" variant="ghost" disabled={pending || !hydrated || isDirty(selected)} onClick={() => changeStatus(selected, retired ? 'active' : 'retired')}>
                 {retired ? '行を再開' : '行を停止'}
               </Button>
             </div>
@@ -339,7 +346,7 @@ export function SelectionMatrixPanel({
             </label>
           </div>
           <div className="mt-4">
-            <Button type="button" variant="secondary" disabled={pending || restoring || !newRow.base_model_id || rows.some(isDirty)} onClick={addRow}>行を追加する</Button>
+            <Button type="button" variant="secondary" disabled={pending || !hydrated || !newRow.base_model_id || rows.some(isDirty)} onClick={addRow}>行を追加する</Button>
           </div>
         </details>
       )}

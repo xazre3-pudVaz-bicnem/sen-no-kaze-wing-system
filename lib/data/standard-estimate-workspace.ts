@@ -148,6 +148,8 @@ export interface StandardEstimateWorkspace {
     /** 表示用分類に必要な商品モデル。価格・保存の判定には使用しない。 */
     modelSlug: string | null;
     initial: V25EditorState;
+    /** 手入力明細の原価単価の列を読めたか（20261110150000 の後の DB）。false なら原価の欄・粗利を出さない */
+    lineCostsAvailable: boolean;
     preview: V25Preview | null;
     baseLines: V25WorkbenchBaseLine[];
     /** 既存見積が参照する本体マスターの固定Revision（取得できた場合のみ表示用）。 */
@@ -385,6 +387,7 @@ export async function loadStandardEstimateWorkspace(
     v25: {
       modelSlug: model?.slug ?? null,
       initial: v25.initial,
+      lineCostsAvailable: v25.lineCostsAvailable,
       preview: v25.preview,
       baseMasterReference,
       baseLines: ((baseResult.data ?? []) as { id: string; section: string; name: string; quantity: number | string; unit: string | null; unit_price: number }[]).map(

@@ -292,8 +292,12 @@ export function buildV25SavePayload(input: V25EditorState) {
       unit: line.unit.trim() || null,
       price_mode: line.price_mode,
       unit_price: line.price_mode === 'manual' ? Number(line.unit_price.trim()) : null,
-      // 原価単価（空は原価未設定の null。0 円は 0）。別途見積の行は原価を持たない。項目は常に送る（省略すると DB は今の原価を残す）
-      cost_unit_price: line.price_mode === 'manual' ? v25LineCostValue(line.cost_unit_price) : null,
+      // 原価単価（空は原価未設定の null。0 円は 0）。別途見積の行は原価を持たない。
+      // 原価を知らない行（cost_unit_price が無い。原価の列が無い DB から読んだ行・原価に触れていない新しい行）は項目を送らない。
+      // 項目が無ければ DB は同じ line_key の今の原価を残す（原価を読めなかった画面の保存で、写した原価を消さないため）
+      ...(line.price_mode === 'por'
+        ? { cost_unit_price: null }
+        : line.cost_unit_price === undefined ? {} : { cost_unit_price: v25LineCostValue(line.cost_unit_price) }),
       remark: line.remark.trim() || null,
       review_required: line.review_required,
       row_order: ordered ? line.row_order ?? null : null,

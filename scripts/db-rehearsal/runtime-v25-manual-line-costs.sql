@@ -89,6 +89,32 @@ language sql as $fn$
          || '|' || (select r.cost_total::text from public.standard_estimate_revisions r where r.id = p_rev);
 $fn$;
 
+-- 案件見積の下書きの明細を保存の形にする（経費の行は除く。p_prices の品名の行は売価・原価を入れて manual にする）
+create function pg_temp.lc_draft_lines(p_draft uuid, p_prices jsonb) returns jsonb
+language sql as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'line_key', i.line_key, 'section_code', c.section_code, 'name', i.name, 'description', i.description,
+           'unit', i.unit, 'remark', i.remark, 'quantity', i.quantity,
+           'price_mode', case when p_prices ? i.name then 'manual' else i.price_mode end,
+           'cost_unit_price', coalesce((p_prices -> i.name ->> 'cost')::integer, c.cost_unit_price),
+           'unit_price', coalesce((p_prices -> i.name ->> 'sale')::integer, i.unit_price)
+         ) order by i.sort_order, i.line_key), '[]'::jsonb)
+    from public.quote_draft_items i
+    join public.quote_draft_item_costs c on c.draft_id = i.draft_id and c.line_key = i.line_key
+   where i.draft_id = p_draft and c.line_role = 'line';
+$fn$;
+
+-- 本部として案件見積の下書きを保存する（率・経費の方法は下書きのまま）
+create function pg_temp.lc_draft_save(p_user uuid, p_draft uuid, p_lines jsonb) returns text
+language sql as $fn$
+  select pg_temp.lc_run_as('authenticated', p_user, format(
+    $q$ select public.save_standard_quote_draft(%L, %s, %s, %s, %s, %L::jsonb, %L::jsonb, 0, null, null)::text $q$,
+    p_draft, d.lock_version, n.sales_fee_rate, n.expense_rate, n.markup_rate, n.expense_methods, p_lines))
+    from public.quote_drafts d
+    join public.quote_draft_internals n on n.draft_id = d.id
+   where d.id = p_draft;
+$fn$;
+
 do $test$
 declare
   u_admin constant uuid := '68900000-0000-4000-8000-000000000001';
@@ -113,6 +139,13 @@ declare
   k2 uuid;
   k3 uuid;
   k4 uuid;
+  k5 uuid;
+  k6 uuid;
+  k7 uuid;
+  v_legacy2 uuid;
+  v_lines jsonb;
+  v_quote uuid;
+  v_draft_cost text;
   v_slots jsonb;
   v_sale_a text;
   v_sale_b text;
@@ -154,7 +187,8 @@ begin
   perform pg_temp.lc_run_as('authenticated', u_editor, format($q$ select (public.publish_base_master_draft(%L)).id::text $q$, v_bmr));
 
   -- 旧標準見積：手入力明細に原価を登録して公開する（取付費 auto 6,000 円 × 2・養生 manual 原価 0 円 売価 0 円・
-  -- 足場 auto 10,001 円 × 1.5（内外装）・外構工事 別途見積（別途工事））
+  -- 足場 auto 10,001 円 × 1.5（内外装）・外構工事 別途見積（別途工事）・運搬費 manual 原価 3,000 円 売価 5,000 円・
+  -- 清掃費 manual 原価 2,000 円 売価 3,000 円・設置工事 auto 30,000 円（別途工事））。次の版で運搬費の原価だけ 3,500 円にする
   v_legacy := pg_temp.lc_run_as('authenticated', u_editor, format($q$ select public.create_standard_estimate_draft(%L)::text $q$, v_bmr));
   select r.standard_estimate_master_id into v_master from public.standard_estimate_revisions r where r.id::text = v_legacy;
   v_out := pg_temp.lc_run_as('authenticated', u_editor, format($q$ select (public.save_standard_estimate_draft(%L, 1, 0.15, 1.5, 0, null,
@@ -162,20 +196,38 @@ begin
     '[{"section_code":"option","name":"取付費","quantity":2,"unit":"式","price_mode":"auto","cost_unit_price":6000},
       {"section_code":"option","name":"養生","quantity":1,"unit":"式","price_mode":"manual","cost_unit_price":0,"unit_price":0},
       {"section_code":"interior_exterior","name":"足場","quantity":1.5,"unit":"式","price_mode":"auto","cost_unit_price":10001},
-      {"section_code":"sitework","name":"外構工事","quantity":1,"unit":"式","price_mode":"por"}]'::jsonb,
+      {"section_code":"sitework","name":"外構工事","quantity":1,"unit":"式","price_mode":"por"},
+      {"section_code":"option","name":"運搬費","quantity":1,"unit":"式","price_mode":"manual","cost_unit_price":3000,"unit_price":5000},
+      {"section_code":"option","name":"清掃費","quantity":1,"unit":"式","price_mode":"manual","cost_unit_price":2000,"unit_price":3000},
+      {"section_code":"sitework","name":"設置工事","quantity":1,"unit":"式","price_mode":"auto","cost_unit_price":30000}]'::jsonb,
     %s)).lock_version::text $q$, v_legacy, (select lock_version from public.standard_estimate_revisions where id::text = v_legacy)));
   v_out := pg_temp.lc_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_revision(%L, %s)).status', v_legacy,
     (select lock_version from public.standard_estimate_revisions where id::text = v_legacy)));
-  perform pg_temp.lc_expect_eq('LC-0 前提：手入力明細に原価を登録した旧標準見積を公開できる', 'published', v_out);
+  v_legacy2 := pg_temp.lc_run_as('authenticated', u_editor, format('select public.start_next_standard_estimate_revision(%L)::text', v_master))::uuid;
+  select jsonb_agg(jsonb_build_object('line_key', l.line_key, 'section_code', l.section_code, 'name', l.name, 'quantity', l.quantity, 'unit', l.unit,
+                                      'price_mode', l.price_mode,
+                                      'cost_unit_price', case when l.name = '運搬費' then 3500 else l.cost_unit_price end,
+                                      'unit_price', l.unit_price) order by l.sort_order)
+    into v_lines
+    from public.standard_estimate_revision_lines l where l.revision_id = v_legacy2;
+  perform pg_temp.lc_run_as('authenticated', u_editor, format($q$ select (public.save_standard_estimate_draft(%L, 1, 0.15, 1.5, 0, null,
+    '{"base":"rate","interior_exterior":"rate","option":"rate","sitework":"none"}'::jsonb, %L::jsonb, %s)).id::text $q$,
+    v_legacy2, v_lines, (select lock_version from public.standard_estimate_revisions where id = v_legacy2)));
+  v_out := v_out || '/' || pg_temp.lc_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_revision(%L, %s)).status', v_legacy2,
+    (select lock_version from public.standard_estimate_revisions where id = v_legacy2)));
+  perform pg_temp.lc_expect_eq('LC-0 前提：手入力明細に原価を登録した旧標準見積を 2 版公開できる（運搬費の原価だけ 3,000 → 3,500）', 'published/published', v_out);
 
   -- ---------- 旧標準見積から v2.5 の下書きへ：登録された原価を写す（⑤-5） ----------
   v_rev := pg_temp.lc_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L, null)::text', v_master))::uuid;
-  perform pg_temp.lc_expect_eq('LC-1 旧標準見積から写した手入力明細に、登録された原価単価・原価金額も写す（0 円は 0 円、別途見積は原価なし）',
-    '取付費:6000:12000/養生:0:0/足場:10001:15001/外構工事:-:-', pg_temp.lc_costs(v_rev));
+  perform pg_temp.lc_expect_eq('LC-1 旧標準見積（公開中の版）から写した手入力明細に、登録された原価単価・原価金額も写す（0 円は 0 円、別途見積・別途工事は原価なし）',
+    '取付費:6000:12000/養生:0:0/足場:10001:15001/外構工事:-:-/運搬費:3500:3500/清掃費:2000:2000/設置工事:-:-', pg_temp.lc_costs(v_rev));
   select l.line_key into k1 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '取付費';
   select l.line_key into k2 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '養生';
   select l.line_key into k3 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '足場';
   select l.line_key into k4 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '外構工事';
+  select l.line_key into k5 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '運搬費';
+  select l.line_key into k6 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '清掃費';
+  select l.line_key into k7 from public.standard_estimate_revision_v25_lines l where l.revision_id = v_rev and l.name = '設置工事';
 
   -- ---------- 原価単価の保存：数・0 円・未入力（null）・別途見積 ----------
   -- 商品の行は同じ識別子で保存する（売価の指紋を保存の前後で比べるため）
@@ -332,6 +384,18 @@ begin
                 from public.quote_draft_items i
                 join public.quote_draft_item_costs c on c.draft_id = i.draft_id and c.line_key = i.line_key
                where i.draft_id = v_draft and i.name in ('取付費', '養生', '足場', '新規の材料')), v_out));
+  -- 発行まで通す：別途見積の行（外構工事）に金額を入れて保存し、正式保存する（版の 0 円の明細「養生」は変えていないので止めない）
+  v_out := pg_temp.lc_draft_save(u_admin, v_draft, pg_temp.lc_draft_lines(v_draft, jsonb_build_object('外構工事', jsonb_build_object('sale', 30000, 'cost', 25000))));
+  v_draft_cost := pg_temp.lc_run_as('authenticated', u_admin, format($q$ select public.get_standard_quote_draft(%L) -> 'internals' ->> 'cost_total' $q$, v_draft));
+  v_out := pg_temp.lc_run_as('authenticated', u_admin, format('select public.finalize_quote_draft(%L, %s)::text', v_draft,
+    (select lock_version from public.quote_drafts where id = v_draft)));
+  v_quote := case when v_out ~ '^[0-9a-f-]{36}$' then v_out::uuid end;
+  perform pg_temp.lc_expect_eq('LC-20b 手入力明細の原価を写した下書きを正式保存できる（版の 0 円の明細は止めない）。見積の明細は版の売価、社内の記録の原価合計は下書きと同じ',
+    'true/足場:22501/取付費:27000/養生:0/新規の材料:3000/true',
+    (v_quote is not null)::text || '/' ||
+    coalesce((select string_agg(qi.name || ':' || qi.amount, '/' order by qi.sort_order)
+                from public.quote_items qi where qi.quote_id = v_quote and qi.name in ('取付費', '養生', '足場', '新規の材料')), v_out) || '/' ||
+    coalesce((select (s.cost_total::text = v_draft_cost)::text from public.quote_internal_snapshots s where s.quote_id = v_quote), '(no snapshot)'));
   -- 原価単価が未入力の手入力明細を含む版からは作らない（版の行の名前を示す）
   v_out := pg_temp.lc_save(u_editor, v_rev2, pg_temp.lc_payload(v_slots, jsonb_build_array(
     pg_temp.lc_line(k1, 'option', '取付費', '3', 'manual', 9000, 'null'))));
@@ -351,13 +415,16 @@ begin
     pg_temp.lc_line(k2, 'option', '養生', '1', 'manual', 0, 'null'),
     pg_temp.lc_line(k3, 'interior_exterior', '足場', '1.5', 'manual', 16000, 'null'),
     pg_temp.lc_line(k4, 'sitework', '外構工事', '1', 'por', null, 'null'),
-    pg_temp.lc_line(k_new, 'option', '新規の材料', '3', 'manual', 1000, 'null'))));
+    pg_temp.lc_line(k_new, 'option', '新規の材料', '3', 'manual', 1000, 'null'),
+    pg_temp.lc_line(k5, 'option', '運搬費', '1', 'manual', 5000, 'null'),
+    pg_temp.lc_line(k6, 'option', '清掃費', '1', 'manual', 3000, 'null') || '{"unit": "m2"}'::jsonb,
+    pg_temp.lc_line(k7, 'sitework', '設置工事', '1', 'manual', 45000, 'null'))));
   v_sale_a := pg_temp.lc_sale(v_rev2);
   perform public.standard_estimate_v25_set_writer(true);
   v_out := public.standard_estimate_v25_fill_line_costs_from_legacy(v_rev2)::text;
   perform public.standard_estimate_v25_set_writer(false);
-  perform pg_temp.lc_expect_eq('LC-22 旧標準見積から写したまま変えていない行だけに、登録された原価を写す（売価を変えた行・新しい行・別途見積は未設定のまま）',
-    '2|取付費:6000:12000/養生:0:0/足場:-:-/外構工事:-:-/新規の材料:-:-', v_out || '|' || pg_temp.lc_costs(v_rev2));
+  perform pg_temp.lc_expect_eq('LC-22 旧標準見積から写したまま変えていない行だけに写す（売価を変えた行・新しい行・別途見積・旧の版で原価が違う行・単位が違う行・別途工事は未設定のまま）',
+    '2|取付費:6000:12000/養生:0:0/足場:-:-/外構工事:-:-/新規の材料:-:-/運搬費:-:-/清掃費:-:-/設置工事:-:-', v_out || '|' || pg_temp.lc_costs(v_rev2));
   v_sale_b := pg_temp.lc_sale(v_rev2);
   v_cost_a := pg_temp.lc_cost_totals(v_rev2);
   perform public.standard_estimate_v25_set_writer(true);

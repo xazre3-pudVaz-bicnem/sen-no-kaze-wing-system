@@ -446,6 +446,11 @@ type WorkbenchProps = {
    * 渡さないときは今までどおり「未算定」（2026-11-20 の先方の依頼「手入力明細の原価入力復活」）
    */
   savedCost?: { subtotal: number; costTotal: number; hasPor: boolean } | null;
+  /**
+   * 手入力明細の原価単価を DB が持てるか（20261110150000 の後）。false なら原価の欄・件数を出さない
+   * （入れた原価が捨てられたり、粗利を原価 0 円で出したりしないため。省略は true）
+   */
+  lineCostsAvailable?: boolean;
 };
 
 /**
@@ -475,6 +480,7 @@ function WorkbenchBody({
   preview,
   savedTotal,
   savedCost,
+  lineCostsAvailable = true,
   notice,
   onNotice,
 }: WorkbenchProps & { notice: Notice | null; onNotice: (notice: Notice | null) => void }) {
@@ -657,7 +663,9 @@ function WorkbenchBody({
   const unsavedAutoWorkItems = state.slots.filter((slot) => !slot.work_item?.trim() && autoWorkItemOf(slot)).length;
   const dirty = editedDirty || unsavedAutoWorkItems > 0 || orderDirty;
   // 原価単価が未入力の手入力明細（別途見積でない行。画面の今の状態。公開には原価単価が要る：2026-11-06 の先方回答 ⑤-2）
-  const missingLineCosts = state.lines.filter((line) => line.price_mode === 'manual' && v25LineCostValue(line.cost_unit_price) === null).length;
+  const missingLineCosts = lineCostsAvailable
+    ? state.lines.filter((line) => line.price_mode === 'manual' && v25LineCostValue(line.cost_unit_price) === null).length
+    : 0;
   // 保存済み（DB）の原価が未設定の行：商品の原価未設定・売価を入力した商品の行（原価を持てない）・原価単価が未入力の手入力明細。
   // 1 件でもあれば粗利・粗利率は「未確定」（0 円として計算しない：2026-11-06 の先方回答）
   const savedCostMissing = preview
@@ -1629,7 +1637,10 @@ function WorkbenchBody({
                       const line = workGroup.lines.find((item) => item.key === rowRef.key);
                       if (!line) return null;
                       const result = resultByKey.get(calc.lineKeyOf[line.key] ?? '');
-                      const lineCost = v25ManualLineCostAndGross(line, unpricedKeys.has(line.key) ? null : result?.amount);
+                      // 原価の列が無い DB では原価を扱わない（別途見積の行と同じく — を出す）
+                      const lineCost = lineCostsAvailable
+                        ? v25ManualLineCostAndGross(line, unpricedKeys.has(line.key) ? null : result?.amount)
+                        : null;
                       return (
                         <tr key={v25MixedRowIdentity(rowRef)} id={`v25-manual-row-${line.key}`} tabIndex={-1}
                           data-v25-dnd-row={v25MixedRowIdentity(rowRef)} data-v25-dnd-section={code}
@@ -1654,8 +1665,8 @@ function WorkbenchBody({
                               onChange={(event) => setLine(line.key, { unit: event.target.value })} />
                           </td>
                           {/* 手入力明細の原価単価（税別）：売価と別に入力し、売価は変えない。空は原価未設定（0 円と区別）。別途見積の行は原価を持たない */}
-                          {visible.cost_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${line.price_mode === 'manual' && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-cost-cell">
-                            {line.price_mode !== 'manual' ? (
+                          {visible.cost_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${line.price_mode === 'manual' && lineCost && !readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-cost-cell">
+                            {line.price_mode !== 'manual' || !lineCost ? (
                               <span className="block px-1 text-muted">—</span>
                             ) : readOnly ? (
                               <span className="block px-1 tabular-nums" data-testid="v25-wb-line-cost-value">{lineCost.unitCost === null ? '未設定' : yen(lineCost.unitCost)}</span>
@@ -1668,7 +1679,7 @@ function WorkbenchBody({
                             )}
                           </td>}
                           {visible.cost_amount && <td className="border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums text-slate-500" data-testid="v25-wb-line-cost-amount">
-                            {line.price_mode !== 'manual' ? '—' : lineCost.missing ? <Badge tone="warn">原価未設定</Badge> : yen(lineCost.costAmount)}
+                            {line.price_mode !== 'manual' || !lineCost ? '—' : lineCost.missing ? <Badge tone="warn">原価未設定</Badge> : yen(lineCost.costAmount)}
                           </td>}
                           {visible.sale_unit && <td className={`border-r border-slate-200 px-0.5 py-px text-right text-slate-800 ${!readOnly ? 'bg-amber-50' : 'bg-slate-100'}`} data-testid="v25-wb-line-price-cell">
                             {readOnly && line.price_mode === 'por' ? (
@@ -1691,7 +1702,7 @@ function WorkbenchBody({
                               yen(result?.amount)
                             )}
                           </td>
-                          {visible.gross && <td className={`border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums ${v25GrossToneClass(lineCost.gross)}`} data-testid="v25-wb-line-gross">{yen(lineCost.gross)}</td>}
+                          {visible.gross && <td className={`border-r border-slate-200 bg-slate-100 px-1 py-px text-right tabular-nums ${v25GrossToneClass(lineCost?.gross)}`} data-testid="v25-wb-line-gross">{yen(lineCost?.gross)}</td>}
                           {visible.note && <td className={`border-r border-slate-200 px-0.5 py-px ${readOnly ? 'bg-slate-100' : 'bg-amber-50'}`}>
                             <Input data-v25-excel-col="note" value={line.remark} disabled={readOnly} aria-label="備考" title={line.remark} placeholder="備考" className="h-6 min-h-6! w-full rounded-sm border-0 bg-transparent px-1 text-[11px] shadow-none focus-visible:ring-1"
                               onChange={(event) => setLine(line.key, { remark: event.target.value })} />
@@ -1779,7 +1790,7 @@ function WorkbenchBody({
         adjustmentValue={state.adjustment}
         onAdjustmentChange={(value) => setState((current) => ({ ...current, adjustment: value }))}
         readOnly={readOnly}
-        savedProfit={savedCost === undefined ? undefined : savedCost && savedCostMissing !== null
+        savedProfit={savedCost === undefined || !lineCostsAvailable ? undefined : savedCost && savedCostMissing !== null
           ? { ...savedCost, missingCostCount: savedCostMissing, unsaved: !readOnly && dirty }
           : null}
         missingLineCostCount={readOnly ? 0 : missingLineCosts}

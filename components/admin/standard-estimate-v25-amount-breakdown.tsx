@@ -166,13 +166,14 @@ export function StandardEstimateV25AmountBreakdown({
 
 /**
  * 保存済み（DB）の原価合計・粗利・粗利率（本部だけ）。粗利 = 調整後税別額 − 内部原価の合計（原価側の経費を含む）、
- * 粗利率 = 粗利 ÷ 調整後税別額（旧標準見積と同じ定義。表示だけ 0.1% 未満を切り捨て）。別途見積の行は売価・原価とも含めない。
+ * 粗利率 = 粗利 ÷ 調整後税別額（旧標準見積と同じ定義・同じ表示の丸め）。別途見積の行は売価・原価とも含めない。
  * 原価が未設定の行が 1 件でもあれば「未確定」（原価を 0 円として粗利を出さない：2026-11-06 の先方回答）
  */
 function V25SavedProfit({ profit }: { profit: NonNullable<Props['savedProfit']> | null }) {
   const known = profit !== null && profit.missingCostCount === 0;
   const gross = known ? profit.subtotal - profit.costTotal : null;
-  const ratio = known && gross !== null && profit.subtotal > 0 ? `${(Math.trunc((gross * 1000) / profit.subtotal) / 10).toFixed(1)}%` : '—';
+  // 粗利率の表示は旧標準見積の画面と同じ（小数 1 桁に四捨五入。standard-estimate-editor）
+  const ratio = known && gross !== null && profit.subtotal > 0 ? `${Math.round((gross / profit.subtotal) * 1000) / 10}%` : '—';
   const grossTone = gross === null || gross === 0 ? 'text-slate-700' : gross > 0 ? 'text-emerald-800' : 'text-red-700';
   return (
     <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5" data-testid="v25-amount-breakdown-profit">

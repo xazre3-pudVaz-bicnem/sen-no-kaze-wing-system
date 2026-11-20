@@ -217,8 +217,12 @@ select pg_temp.lc_patch_function(
   $old$           l.remark, true, l.sort_order
 $old$,
   $new$           l.remark, true, l.sort_order,
-           case when l.price_mode = 'por' or l.section_code = 'sitework' then null else l.cost_unit_price end,
-           case when l.price_mode = 'por' or l.section_code = 'sitework' or l.cost_unit_price is null then null
+           -- 旧標準見積に登録された原価（⑤-5）。v2.5 の明細の決まり（0〜100,000,000 円・原価金額が整数に入る）に合わない値は原価未設定にする
+           case when l.price_mode = 'por' or l.section_code = 'sitework' or l.cost_unit_price is null
+                     or l.cost_unit_price > 100000000 or trunc(l.quantity * l.cost_unit_price) > 2147483647 then null
+                else l.cost_unit_price end,
+           case when l.price_mode = 'por' or l.section_code = 'sitework' or l.cost_unit_price is null
+                     or l.cost_unit_price > 100000000 or trunc(l.quantity * l.cost_unit_price) > 2147483647 then null
                 else trunc(l.quantity * l.cost_unit_price)::integer end
 $new$
 );
@@ -332,6 +336,13 @@ $new$
 );
 select pg_temp.lc_patch_function(
   'public.standard_estimate_v25_quote_draft_lines(uuid, boolean)'::regprocedure,
+  $old$    -- 商品に紐づかない明細（manual / por）。manual の原価は版に無い（写さない。下書きを作るときは上で止める）
+$old$,
+  $new$    -- 商品に紐づかない明細（manual / por）。manual は版で固定した原価単価を写す（2026-11-20。原価単価が未入力の明細を含む版は、下書きを作るときに上で止める）
+$new$
+);
+select pg_temp.lc_patch_function(
+  'public.standard_estimate_v25_quote_draft_lines(uuid, boolean)'::regprocedure,
   $old$             'cost_unit_price', null,
 $old$,
   $new$             -- 手入力明細は版で固定した原価単価（2026-11-20 の先方の依頼。最新の値で置き換えない）
@@ -345,8 +356,11 @@ drop function pg_temp.lc_patch_function(regprocedure, text, text);
 
 -- 内部用（API からは実行させない）。呼び出し側が v2.5 の書き込みの印（standard_estimate_v25_set_writer）を立てる。
 -- 下書きの v2.5 の版の、原価が未設定の manual の手入力明細のうち、同じ標準見積の v2.5 以前の版に
--- line_key・品名・数量・単位・売価が同じ行があり、その原価単価が 1 つに決まる行に、その原価を写す。
--- 区分・版の原価の列（原価明細小計・原価側の経費・原価合計）だけを足し直し、売価の列は変えない。写した行数を返す
+-- line_key・区分・品名・数量・単位・売価が同じ行があり、その原価単価が 1 つに決まる行に、その原価を写す。
+-- 別途工事の行は写さない（v2.5 以前の版から写すときと同じく、別途工事は原価を引き継がない）。
+-- v2.5 の明細の決まり（0〜100,000,000 円・原価金額が整数に入る）に合わない値も写さない（原価未設定のまま）。
+-- 区分・版の原価の列（原価明細小計・原価側の経費・原価合計）だけを足し直し、売価の列は変えない。
+-- 原価側の経費は再計算と同じ式（計算ルールで経費を掛ける区分なら trunc(原価明細小計 × 版の経費率)、ほかは 0）。写した行数を返す
 create function public.standard_estimate_v25_fill_line_costs_from_legacy(p_revision_id uuid)
 returns integer
 language plpgsql
@@ -354,13 +368,17 @@ set search_path = ''
 as $fill$
 declare
   v_master_id uuid;
+  v_expense_rate numeric;
+  v_targets text[];
   v_count integer := 0;
   v_diff bigint := 0;
 begin
-  select r.standard_estimate_master_id into v_master_id
+  select r.standard_estimate_master_id, r.expense_rate, rule.expense_target_sections
+    into v_master_id, v_expense_rate, v_targets
     from public.standard_estimate_revisions r
+    join public.pricing_calculation_rule_versions rule on rule.id = r.calc_rule_version_id
    where r.id = p_revision_id and r.pricing_model = 'v2.5' and r.status = 'draft'
-   for update;
+   for update of r;
   if not found then
     return 0;
   end if;
@@ -373,14 +391,18 @@ begin
       join public.standard_estimate_revision_lines ll
         on ll.revision_id = lr.id
        and ll.line_key = l.line_key
+       and ll.section_code = l.section_code
        and ll.name = l.name
        and ll.quantity = l.quantity
        and ll.unit is not distinct from l.unit
        and ll.unit_price = l.unit_price
        and ll.price_mode in ('auto', 'manual')
        and ll.cost_unit_price is not null
+       and ll.cost_unit_price <= 100000000
+       and trunc(l.quantity * ll.cost_unit_price) <= 2147483647
      where l.revision_id = p_revision_id
        and l.price_mode = 'manual'
+       and l.section_code <> 'sitework'
        and l.cost_unit_price is null
      group by l.id
     having count(distinct ll.cost_unit_price) = 1
@@ -396,15 +418,16 @@ begin
   per_section as (
     select s.section_code,
            s.cost_line_subtotal::bigint + sum(f.cost_amount)::bigint as new_lines,
-           s.expense_method, s.expense_rate, s.cost_expense_amount::bigint as old_expense, s.cost_total::bigint as old_total
+           s.cost_total::bigint as old_total
       from filled f
       join public.standard_estimate_revision_sections s
         on s.revision_id = p_revision_id and s.section_code = f.section_code
-     group by s.section_code, s.cost_line_subtotal, s.expense_method, s.expense_rate, s.cost_expense_amount, s.cost_total
+     group by s.section_code, s.cost_line_subtotal, s.cost_total
   ),
   calc as (
     select p.section_code, p.new_lines, p.old_total,
-           case when p.expense_method = 'rate' then trunc(p.new_lines * p.expense_rate)::bigint else p.old_expense end as new_expense
+           case when p.section_code = any(coalesce(v_targets, '{}'::text[]))
+                then trunc(p.new_lines * v_expense_rate)::bigint else 0::bigint end as new_expense
       from per_section p
   ),
   upd as (
@@ -430,7 +453,7 @@ end;
 $fill$;
 
 comment on function public.standard_estimate_v25_fill_line_costs_from_legacy(uuid) is
-  '下書きの v2.5 の版の、原価が未設定の手入力明細に、旧標準見積に登録された原価を写す（line_key・品名・数量・単位・売価が同じで原価が 1 つに決まる行だけ）。区分・版の原価の列だけを足し直す。内部用（2026-11-20 の先方の依頼・⑤-5）';
+  '下書きの v2.5 の版の、原価が未設定の手入力明細に、旧標準見積に登録された原価を写す（line_key・区分・品名・数量・単位・売価が同じで原価が 1 つに決まる行だけ。別途工事は写さない）。区分・版の原価の列だけを再計算と同じ式で足し直す。内部用（2026-11-20 の先方の依頼・⑤-5）';
 
 alter function public.standard_estimate_v25_fill_line_costs_from_legacy(uuid) owner to postgres;
 revoke all on function public.standard_estimate_v25_fill_line_costs_from_legacy(uuid) from public, anon, authenticated, service_role;
@@ -447,6 +470,7 @@ declare
   v_closed_after text;
   v_lines_before text;
   v_lines_after text;
+  v_filled_ids uuid[] := '{}'::uuid[];
 begin
   -- 売価側（下書き・公開済みとも）の指紋：版の金額と計算結果、区分の売価、選択枠と明細の売価
   select pg_catalog.md5(coalesce(pg_catalog.string_agg(x.v, '|' order by x.v), ''))
@@ -493,6 +517,9 @@ begin
   loop
     v_filled := public.standard_estimate_v25_fill_line_costs_from_legacy(v_rev.id);
     v_total := v_total + v_filled;
+    if v_filled > 0 then
+      v_filled_ids := pg_catalog.array_append(v_filled_ids, v_rev.id);
+    end if;
   end loop;
   perform public.standard_estimate_v25_set_writer(false);
 
@@ -546,10 +573,31 @@ begin
                 and (r.status <> 'draft' or l.price_mode <> 'manual' or l.cost_amount <> trunc(l.quantity * l.cost_unit_price)::integer)) then
     raise exception 'POSTCONDITION: costs were written to unexpected lines';
   end if;
-  -- 区分の原価の列の決まり（原価合計 = 原価明細小計 + 原価側の経費）と、版の原価合計 = 区分の原価合計の和（写した下書き）
+  -- 写した下書きの区分（本体以外）の原価の列は、再計算と同じ式の値（原価明細小計 = 選択枠の trunc(数量 × 原価単価) の和 +
+  -- 手入力明細の原価金額の和、原価側の経費 = 計算ルールで経費を掛ける区分なら trunc(小計 × 版の経費率)、ほかは 0、
+  -- 原価合計 = 小計 + 経費）。版の原価合計 = 区分の原価合計の和。違えば止める（保存済みの値がずれていた下書きに差分を足さない）
+  if exists (
+    select 1
+      from public.standard_estimate_revision_sections s
+      join public.standard_estimate_revisions r on r.id = s.revision_id
+      join public.pricing_calculation_rule_versions rule on rule.id = r.calc_rule_version_id
+     where s.revision_id = any(v_filled_ids)
+       and s.section_code <> 'base'
+       and (s.cost_line_subtotal is distinct from (
+              (select coalesce(sum(trunc(b.quantity * b.cost_unit_price)), 0)
+                 from public.standard_estimate_revision_baseline_items b
+                where b.revision_id = s.revision_id and b.section_code = s.section_code and b.cost_unit_price is not null)
+              + (select coalesce(sum(l.cost_amount), 0)
+                   from public.standard_estimate_revision_v25_lines l
+                  where l.revision_id = s.revision_id and l.section_code = s.section_code
+                    and l.price_mode = 'manual' and l.cost_amount is not null))
+            or s.cost_expense_amount is distinct from
+                 (case when s.section_code = any(rule.expense_target_sections) then trunc(s.cost_line_subtotal * r.expense_rate) else 0 end)
+            or s.cost_total is distinct from s.cost_line_subtotal + s.cost_expense_amount)) then
+    raise exception 'POSTCONDITION: the section costs of a filled draft must equal the recalculation';
+  end if;
   if exists (select 1 from public.standard_estimate_revisions r
-              where r.pricing_model = 'v2.5' and r.status = 'draft'
-                and exists (select 1 from public.standard_estimate_revision_v25_lines l where l.revision_id = r.id and l.cost_unit_price is not null)
+              where r.id = any(v_filled_ids)
                 and r.cost_total is distinct from (select sum(s.cost_total) from public.standard_estimate_revision_sections s where s.revision_id = r.id)) then
     raise exception 'POSTCONDITION: the cost total of a filled draft must equal the sum of its sections';
   end if;
@@ -594,8 +642,11 @@ begin
     raise exception 'POSTCONDITION: the fill function must not be executable by API roles';
   end if;
   if has_column_privilege('anon', 'public.standard_estimate_revision_v25_lines', 'cost_unit_price', 'SELECT')
+     or has_column_privilege('anon', 'public.standard_estimate_revision_v25_lines', 'cost_amount', 'SELECT')
      or has_column_privilege('authenticated', 'public.standard_estimate_revision_v25_lines', 'cost_unit_price', 'UPDATE')
      or has_column_privilege('authenticated', 'public.standard_estimate_revision_v25_lines', 'cost_unit_price', 'INSERT')
+     or has_column_privilege('authenticated', 'public.standard_estimate_revision_v25_lines', 'cost_amount', 'UPDATE')
+     or has_column_privilege('authenticated', 'public.standard_estimate_revision_v25_lines', 'cost_amount', 'INSERT')
      or not (select c.relrowsecurity from pg_catalog.pg_class c where c.oid = 'public.standard_estimate_revision_v25_lines'::regclass) then
     raise exception 'POSTCONDITION: the privileges of the manual line cost columns are not as expected';
   end if;

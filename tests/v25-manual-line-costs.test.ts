@@ -79,18 +79,20 @@ describe('入力の確かめと保存の形', () => {
     expect(validateV25EditorState(state([line('a', { price_mode: 'por', unit_price: '', cost_unit_price: 'x' })]))).toBeNull();
   });
 
-  it('保存の形：原価単価は数（空・省略は null、0 は 0）。別途見積は null。項目は常に送る（省略すると DB は今の原価を残す）', () => {
+  it('保存の形：原価単価は数（空は null、0 は 0）。別途見積は null。原価を知らない行（項目なし）は項目を送らず、DB は今の原価を残す', () => {
     const payload = buildV25SavePayload(state([
       line('a', { cost_unit_price: '1200' }),
       line('b', { cost_unit_price: '' }),
       line('c'),
       line('d', { cost_unit_price: '0' }),
       line('e', { price_mode: 'por', unit_price: '', cost_unit_price: '500' }),
+      line('f', { price_mode: 'por', unit_price: '' }),
     ]));
-    expect(payload.lines.map((row) => row.cost_unit_price)).toEqual([1200, null, null, 0, null]);
-    expect(payload.lines.every((row) => Object.hasOwn(row, 'cost_unit_price'))).toBe(true);
+    expect(payload.lines.map((row) => ('cost_unit_price' in row ? row.cost_unit_price : 'absent'))).toEqual([1200, null, 'absent', 0, null, null]);
     // 売価は原価と別（原価を入れても変わらない）
-    expect(payload.lines.map((row) => row.unit_price)).toEqual([1000, 1000, 1000, 1000, null]);
+    expect(payload.lines.map((row) => row.unit_price)).toEqual([1000, 1000, 1000, 1000, null, null]);
+    // zod も項目なしをそのまま通す（null にしない）
+    expect('cost_unit_price' in v25SavePayloadSchema.parse(payload).lines[2]).toBe(false);
   });
 
   it('zod の確かめで原価単価を捨てない。数でない・範囲外・小数は止める', () => {
@@ -192,6 +194,22 @@ describe('画面の手入力明細の行：原価単価・原価金額・粗利'
     expect(html).not.toContain('data-testid="v25-amount-breakdown-line-cost-missing"');
   });
 
+  it('原価の列が無い DB（migration の前）では、原価の欄・件数・粗利を出さない（入れた原価が捨てられる・原価 0 円で粗利を出すのを防ぐ）', () => {
+    const html = render(false, state([line('l1', { name: '取付費' }), line('l2', { name: '材料' })]), {
+      lineCostsAvailable: false,
+      savedCost: { subtotal: 100000, costTotal: 70000, hasPor: false },
+      preview: { rules_current: true, publishable: true, calc_error: null, incomplete: [], slots: [] },
+    });
+    expect(html).not.toContain('data-testid="v25-wb-line-cost-input"');
+    expect(rowOf(html, '取付費')).toMatch(/data-testid="v25-wb-line-cost-cell"><span[^>]*>—/);
+    expect(rowOf(html, '取付費')).toMatch(/data-testid="v25-wb-line-cost-amount">—/);
+    expect(rowOf(html, '取付費')).toMatch(/data-testid="v25-wb-line-gross">—/);
+    expect(html).not.toContain('原価未設定');
+    expect(html).not.toContain('data-testid="v25-amount-breakdown-line-cost-missing"');
+    expect(html).toContain('data-testid="v25-amount-breakdown-profit-pending"');
+    expect(html).not.toContain('data-testid="v25-amount-breakdown-profit-values"');
+  });
+
   it('原価を入れても売価・合計の試算は変わらない（売価は売価単価から）', () => {
     const without = render(false, state([line('l1', { name: '取付費', unit_price: '9000' })]));
     const withCost = render(false, state([line('l1', { name: '取付費', unit_price: '9000', cost_unit_price: '6000' })]));
@@ -229,6 +247,8 @@ describe('金額内訳の原価合計・粗利・粗利率（保存済み・社�
     expect(html).toMatch(/原価合計 ¥?199,999/);
     expect(html).toMatch(/粗利 <span class="text-emerald-800">¥?100,001<\/span>/);
     expect(html).toContain('粗利率 33.3%');
+    // 丸めは旧標準見積の画面と同じ四捨五入（2/3 → 66.7%）
+    expect(render({ savedProfit: { subtotal: 3, costTotal: 1, hasPor: false, missingCostCount: 0 } })).toContain('粗利率 66.7%');
     expect(html).toContain('粗利 = 調整後税別額 − 原価合計（原価側の経費を含む）。');
     expect(html).not.toContain('未算定');
   });
@@ -236,7 +256,7 @@ describe('金額内訳の原価合計・粗利・粗利率（保存済み・社�
   it('赤字は赤・別途見積を除く旨・保存していない変更は含まない旨を示す', () => {
     const html = render({ savedProfit: { subtotal: 1000, costTotal: 1500, hasPor: true, missingCostCount: 0, unsaved: true } });
     expect(html).toMatch(/粗利 <span class="text-red-700">-?¥?-?500<\/span>/);
-    expect(html).toContain('粗利率 -50.0%');
+    expect(html).toContain('粗利率 -50%');
     expect(html).toContain('別途見積の行は売価・原価とも含めていません。');
     expect(html).toContain('保存していない変更は含みません（保存すると更新されます）。');
   });
@@ -304,14 +324,18 @@ describe('読み込み：原価単価を読み、列が無い DB でも読める
   it('原価単価を文字にする（未設定は空、0 円は "0"）', async () => {
     const calls: Call[] = [];
     const data = await loadStandardEstimateV25(fakeClient(true, calls), revision, header);
+    expect(data.lineCostsAvailable).toBe(true);
     expect(data.initial.lines.map((row) => [row.name, row.cost_unit_price])).toEqual([['取付費', '6000'], ['材料', ''], ['養生', '0']]);
     expect(calls.filter((call) => call.table === 'standard_estimate_revision_v25_lines')).toHaveLength(1);
   });
 
-  it('原価の列が無い DB（migration の前）では列を外して読み直し、明細を消さない（原価は未設定として扱う）', async () => {
+  it('原価の列が無い DB（migration の前）では列を外して読み直し、明細を消さない（原価は持たず、画面は原価の欄を出さない）', async () => {
     const calls: Call[] = [];
     const data = await loadStandardEstimateV25(fakeClient(false, calls), revision, header);
-    expect(data.initial.lines.map((row) => [row.name, row.cost_unit_price])).toEqual([['取付費', ''], ['材料', ''], ['養生', '']]);
+    expect(data.lineCostsAvailable).toBe(false);
+    expect(data.initial.lines.map((row) => [row.name, 'cost_unit_price' in row])).toEqual([['取付費', false], ['材料', false], ['養生', false]]);
+    // そのまま保存しても原価の項目を送らない（DB の今の原価を残す）
+    expect(buildV25SavePayload(data.initial).lines.some((row) => 'cost_unit_price' in row)).toBe(false);
     const lineCalls = calls.filter((call) => call.table === 'standard_estimate_revision_v25_lines');
     expect(lineCalls).toHaveLength(2);
     expect(lineCalls[1].columns).not.toContain('cost_unit_price');

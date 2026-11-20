@@ -97,7 +97,10 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
                     taxRule={workspace.v25.taxRule}
                     preview={workspace.v25.preview}
                     savedTotal={workspace.revision.hasPor ? null : workspace.revision.total}
-                    savedCost={{ subtotal: workspace.revision.subtotal, costTotal: workspace.revision.costTotal, hasPor: workspace.revision.hasPor }}
+                    lineCostsAvailable={workspace.v25.lineCostsAvailable}
+                    savedCost={workspace.v25.lineCostsAvailable
+                      ? { subtotal: workspace.revision.subtotal, costTotal: workspace.revision.costTotal, hasPor: workspace.revision.hasPor }
+                      : undefined}
                   />
                 </>
               ) : (

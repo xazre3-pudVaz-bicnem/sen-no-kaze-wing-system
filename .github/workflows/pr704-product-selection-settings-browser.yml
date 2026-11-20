@@ -1,0 +1,67 @@
+name: PR 704 Product Selection Settings Isolated Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/admin/categories/page.tsx'
+      - 'app/admin/matrix/page.tsx'
+      - 'components/admin/product-selection-settings-tabs.tsx'
+      - 'components/admin/selection-matrix-panel.tsx'
+      - 'components/admin/customer-category-visibility-panel.tsx'
+      - 'lib/domain/matrix-settings-draft-cache.ts'
+      - 'e2e/pr704-product-selection-settings.spec.ts'
+      - '.github/workflows/pr704-product-selection-settings-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr704-product-selection-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      WING_LOCAL_DIR: '.wing-local/e2e'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Prove isolated local environment
+        run: |
+          test "$WING_LOCAL_MODE" = '1'
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+      - name: Run admin and dealer acceptance on desktop and Pixel 7
+        run: |
+          mkdir -p e2e/artifacts
+          npx playwright test e2e/pr704-product-selection-settings.spec.ts --project=desktop
+      - name: Upload evidence and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr704-product-selection-browser-evidence
+          path: |
+            e2e/artifacts/pr704-*.png
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

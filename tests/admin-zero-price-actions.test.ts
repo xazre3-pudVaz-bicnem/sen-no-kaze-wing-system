@@ -130,6 +130,7 @@ describe('0円商品のServer Actionガード', () => {
 
   it('publishOptionActionはメイン画像なしのDraftをPublishedにしない', async () => {
     const store = {
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'toilet', status: 'published' }]),
       getOption: vi.fn(async () => option({ status: 'draft', image_url: null })),
       upsertOption: vi.fn(),
     };
@@ -178,6 +179,7 @@ describe('0円商品のServer Actionガード', () => {
 
   it('publishOptionActionは明示確認済みの通常価格0円をPublishedにできる', async () => {
     const store = {
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'toilet', status: 'published' }]),
       getOption: vi.fn(async () => option({ status: 'draft', price: 0 })),
       upsertOption: vi.fn(async (value: unknown) => value),
     };
@@ -197,6 +199,7 @@ describe('0円商品のServer Actionガード', () => {
 
   it('publishOptionActionは別途見積なら0円確認なしでPublishedにできる', async () => {
     const store = {
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'toilet', status: 'published' }]),
       getOption: vi.fn(async () => option({ status: 'draft', price: 0, price_on_request: true })),
       upsertOption: vi.fn(async (value: unknown) => value),
     };
@@ -291,6 +294,7 @@ describe('0円商品のServer Actionガード', () => {
 
   it('見積からの商品はPublished化した後にcreated_option付きで元の見積へ戻る', async () => {
     const store = {
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'toilet', status: 'published' }]),
       getOption: vi.fn(async () => option({ status: 'draft', price: 100_000 })),
       upsertOption: vi.fn(async (value: unknown) => value),
     };

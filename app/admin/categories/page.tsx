@@ -58,7 +58,6 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
       }
     >
       <ProductSelectionSettingsTabs
-        key={initialTab}
         initialTab={initialTab}
         matrix={
           matrix ? (
@@ -76,6 +75,7 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
                 categories={categories}
                 categoryItems={matrix.categoryItems}
                 canEdit={canEditMatrix}
+                actorId={actor.id}
               />
             </div>
           ) : (

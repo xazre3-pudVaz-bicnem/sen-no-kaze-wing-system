@@ -200,8 +200,18 @@ export function v25WorkGroupsForDisplay(
   for (const line of lines) {
     ensureGroup(v25WorkItemForManual(displayGroupLabelOf(line), context)).lines.push(line);
   }
-  return [...groups.values()]
-    .sort((a, b) => a.order - b.order || a.first - b.first)
+  const grouped = [...groups.values()];
+  const firstOrder = (group: V25DisplayWorkGroup): number | null => {
+    const values = [...group.slots, ...group.lines]
+      .map((row) => row.row_order)
+      .filter((order): order is number => order != null && Number.isInteger(order) && order > 0);
+    return values.length ? Math.min(...values) : null;
+  };
+  // 保存済み混在行順が全項目で分かる場合はそれを優先する。
+  // 名称変更した工事項目が「その他」の末尾へ移動してしまうことを防ぐ。
+  const ordered = grouped.every((group) => firstOrder(group) !== null);
+  return grouped
+    .sort((a, b) => (ordered ? firstOrder(a)! - firstOrder(b)! : a.order - b.order) || a.first - b.first)
     .map(({ key, label, slots: itemSlots, lines: itemLines }) => ({ key, label, slots: itemSlots, lines: itemLines }));
 }
 

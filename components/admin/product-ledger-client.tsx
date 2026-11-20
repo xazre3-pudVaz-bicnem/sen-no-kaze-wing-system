@@ -188,9 +188,20 @@ function ProductStatus({ option, configurationUsageCount }: { option: ProductOpt
     <div className="flex min-w-0 flex-col items-start gap-1" data-product-handling-status={state}>
       <Badge tone={state === 'registered' ? 'success' : 'neutral'}>{productLedgerStateLabel(option)}</Badge>
       {configurationUsageCount !== null && (
-        <span className="whitespace-nowrap text-[0.68rem] font-medium text-muted">
-          {configurationUsageCount > 0 ? `保存プラン ${configurationUsageCount}件` : '未使用'}
-        </span>
+        configurationUsageCount > 0 ? (
+          <Link
+            href={`/admin/configurations?option_id=${option.id}`}
+            aria-label={`${option.name}の保存プラン ${configurationUsageCount}件を表示`}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            className="pointer-events-auto relative z-30 whitespace-nowrap text-[0.68rem] font-medium text-brown underline underline-offset-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/60"
+            data-testid="ledger-configuration-usage-link"
+          >
+            保存プラン {configurationUsageCount}件
+          </Link>
+        ) : (
+          <span className="whitespace-nowrap text-[0.68rem] font-medium text-muted">保存プラン0件</span>
+        )
       )}
     </div>
   );
@@ -524,7 +535,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
 
               <div className="card p-4"><h3 className="font-semibold">自社の仕入・発注情報</h3><dl className="mt-2">{hqStandardCosts !== null && <Row label="商品標準原価の記録（税別）" value={Object.prototype.hasOwnProperty.call(hqStandardCosts, selected.id) ? formatYen(hqStandardCosts[selected.id]) : '未記録'}/>}<Row label="仕入先" value={<PendingDbValue />}/><Row label="発注コード" value={<PendingDbValue />}/><Row label="発注単位" value={<PendingDbValue />}/></dl>{hqStandardCosts !== null && <p className="mt-2 border-t border-line pt-3 text-xs leading-relaxed text-muted">商品標準原価の記録は、本部が登録済みの商品を保存・登録したときの税別原価の版です（v2.5 の計算に使います）。実仕入価格・案件実原価・発行済み見積の原価ではありません。</p>}</div>
 
-              <details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary><div className="border-t border-line px-4 py-3">{selectedConfigurationUsageCount === null ? <p className="text-sm text-muted">保存プランでの利用件数は、本部の商品編集権限があるユーザーだけ確認できます。</p> : <dl><Row label="保存プラン" value={selectedConfigurationUsageCount > 0 ? `保存プラン ${selectedConfigurationUsageCount}件` : '未使用'}/></dl>}<p className="mt-2 text-xs leading-relaxed text-muted">ここで「保存プラン」として数えるのは、configuration_items から商品IDを直接参照している保存済み構成だけです。標準見積・発行済み見積・Snapshotの履歴判定は含みません。</p>{canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && <div className="mt-3 rounded-lg border border-line bg-white p-3"><p className="text-sm font-semibold text-ink">完全削除可能</p><p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存プランから参照されていません。一覧右端の「⋮」から直接削除できます。</p></div>}{selected.status === 'published' && <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み・販売停止・廃番の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。</p>}</div></details>
+              <details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary><div className="border-t border-line px-4 py-3">{selectedConfigurationUsageCount === null ? <p className="text-sm text-muted">保存プランでの利用件数は、本部の商品編集権限があるユーザーだけ確認できます。</p> : <dl><Row label="保存プラン" value={selectedConfigurationUsageCount > 0 ? <Link href={`/admin/configurations?option_id=${selected.id}`} className="text-brown underline underline-offset-2 hover:text-ink">保存プラン {selectedConfigurationUsageCount}件を表示</Link> : '保存プラン0件'}/></dl>}<p className="mt-2 text-xs leading-relaxed text-muted">ここで「保存プラン」として数えるのは、configuration_items から商品IDを直接参照している保存済み構成だけです。標準見積・発行済み見積・Snapshotの履歴判定は含みません。</p>{canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && <div className="mt-3 rounded-lg border border-line bg-white p-3"><p className="text-sm font-semibold text-ink">完全削除可能</p><p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存プランから参照されていません。一覧右端の「⋮」から直接削除できます。</p></div>}{selected.status === 'published' && <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み・販売停止・廃番の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。</p>}</div></details>
               <details className="card" data-product-origin-slot="pending-db"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">登録・権限情報 <ChevronDown className="size-4" /></summary><div className="border-t border-line"><p className="px-4 pt-3 text-xs leading-relaxed text-muted">商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。</p><dl className="px-4"><Row label="商品状態" value={productLedgerStateLabel(selected)}/><Row label="商品区分" value={<PendingDbValue />}/><Row label="登録元組織" value={<PendingDbValue />}/><Row label="最終更新" value={date(selected.updated_at)}/><Row label="商品情報の編集権限" value={canEdit ? '現在の権限で編集可能' : '閲覧のみ（サーバー側認可に従います）'}/></dl></div></details>
             </section>
           )}

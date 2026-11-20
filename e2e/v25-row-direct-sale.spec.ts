@@ -61,7 +61,7 @@ test('PC：重複した商品メニューを整理し、位置の入口・売価
 
   const manualMenu=row(page,'line','roofLine').getByTestId('v25-wb-line-menu');
   await manualMenu.locator('summary').click();
-  await expect(menu(page).getByRole('button',{name:'工事項目を変更'})).toBeVisible();
+  await expect(menu(page).getByRole('button',{name:'工事項目を変更'})).toHaveCount(0);
   await expect(menu(page).getByRole('button',{name:'金額を入力する'})).toHaveCount(0);
   await expect(menu(page).getByTestId('v25-wb-line-delete-separator')).toBeVisible();
   await expect(menu(page).getByTestId('v25-wb-line-delete')).toBeVisible();

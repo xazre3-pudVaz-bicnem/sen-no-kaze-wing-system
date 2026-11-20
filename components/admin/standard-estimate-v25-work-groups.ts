@@ -147,9 +147,28 @@ export function v25MoveManualLineWithinWorkGroup(
   const adjacent = sameGroup[groupIndex + direction];
   if (!adjacent) return lines as V25LineRow[];
   const updated = [...lines];
+  // 保存した並び順（row_order。2026-11-16 の先方の依頼）のある行は、並び順も入れ替える（上下の移動が見積書の並びにも効くように）
+  if (current.row_order != null || adjacent.line.row_order != null) {
+    updated[currentIndex] = { ...adjacent.line, row_order: current.row_order };
+    updated[adjacent.index] = { ...current, row_order: adjacent.line.row_order };
+    return updated;
+  }
   updated[currentIndex] = adjacent.line;
   updated[adjacent.index] = current;
   return updated;
+}
+
+/**
+ * 工事項目のプルダウンの選択肢（その大区分・モデル・仕様の分類の項目のラベル。2026-11-16 の先方の依頼）。
+ * 別途工事・モデルや仕様が確定できないオプションは空（未設定と保存済みの値だけを選べる）
+ */
+export function v25WorkItemLabelsForSection(context: V25WorkItemContext): string[] {
+  return itemsForSection(context).map((item) => item.label);
+}
+
+/** 商品台帳から選んだ商品の工事項目の自動の値（カテゴリーから。分類できなければ ''。2026-11-16 の先方の依頼） */
+export function v25AutoWorkItemLabel(categoryCode: string | null | undefined, context: V25WorkItemContext): string {
+  return v25WorkItemForCategory(categoryCode, context)?.label ?? '';
 }
 
 /** 商品と自由入力を表示上だけ束ねる。section_code / group_label / 保存順序は変更しない。 */
@@ -159,6 +178,8 @@ export function v25WorkGroupsForDisplay(
   categoryCodeOf: (optionId: string) => string | null | undefined,
   displayGroupLabelOf: (line: V25LineRow) => string = (line) => line.group_label,
   context: V25WorkItemContext = {},
+  /** 商品の行の保存した工事項目（work_item）。あれば手入力と同じく名前で分類の項目に照合し、無ければカテゴリーで分ける */
+  slotWorkItemOf: (slot: V25SlotRow) => string = (slot) => slot.work_item ?? '',
 ): V25DisplayWorkGroup[] {
   const groups = new Map<string, V25DisplayWorkGroup & { order: number; first: number }>();
   const ensureGroup = (identity: DisplayGroupIdentity) => {
@@ -170,7 +191,9 @@ export function v25WorkGroupsForDisplay(
     return group;
   };
   for (const slot of slots) {
-    const item = v25WorkItemForCategory(categoryCodeOf(slot.option_id), context) ??
+    const saved = slotWorkItemOf(slot).trim();
+    const item = (saved ? v25WorkItemForManual(saved, context) : null) ??
+      v25WorkItemForCategory(categoryCodeOf(slot.option_id), context) ??
       { key: 'products:unclassified', label: '工事項目未分類の商品', order: 102 };
     ensureGroup(item).slots.push(slot);
   }

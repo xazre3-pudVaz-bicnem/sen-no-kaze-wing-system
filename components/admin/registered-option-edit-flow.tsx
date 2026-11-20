@@ -2,7 +2,9 @@
 
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
+import { registeredOptionLedgerUrl } from '@/lib/domain/registered-option-save-result';
 import { windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
@@ -334,7 +336,7 @@ export function RegisteredOptionEditFlow({
     setPending(false);
     setState(result);
     if (result.ok) {
-      router.push(`/admin/ledger?updated_option=${encodeURIComponent(option.id)}`);
+      router.push(registeredOptionLedgerUrl(option.id, result));
     }
   };
 
@@ -381,6 +383,7 @@ export function RegisteredOptionEditFlow({
           </section>
 
           {state.error && <Alert tone="danger">{state.error}</Alert>}
+          {!state.ok && state.costRecordingFailed && <Alert tone="warn">保存済みの商品情報と原価Versionを確認し、必要な項目だけを選んでください。 <Link href="/admin/options/cost-import" className="underline">原価 Version の取り込み画面を開く</Link></Alert>}
           {state.fieldErrors?._form?.[0] && <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>}
           {state.ok && <Alert tone="success">変更を反映しました。最新の登録内容を読み直しています。</Alert>}
 

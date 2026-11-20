@@ -58,6 +58,7 @@ export interface AdminFormState {
   error?: string;
   fieldErrors?: FieldErrors;
   message?: string;
+  costRecordingFailed?: boolean;
   savedImageUrl?: string;
 }
 
@@ -395,8 +396,12 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   let createdId: string | null = null;
   let copySkipped: string[] = [];
   let costNotice: string | null = null;
+  let optionSaved = false;
+  let savedOptionPublished = false;
   try {
     const o = await store.upsertOption(optionInput);
+    optionSaved = true;
+    savedOptionPublished = o.status === 'published';
     // 複製するメディアの写し先（新しい下書き）は、保存の直後に覚える（#593）
     if (!parsed.data.id) createdId = o.id;
     await store.setOptionRelations(
@@ -412,9 +417,22 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     updateTag(CATALOG_TAG);
     // 登録済みの商品は、本部が保存した金額を商品標準原価の Version に記録する（下書きは登録のときに記録する）
     if (o.status === 'published' && costAccess.available && costAccess.canManage) {
-      costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save', costAccess));
+      try {
+        costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save', costAccess));
+      } catch (error) {
+        // 商品はすでに保存済み。記録処理の例外を保存自体の失敗と誤認させない。
+        console.error('[wing] failed to record option cost version', error);
+        costNotice = costRecordingNotice({ status: 'error', message: '原価の Version を記録できませんでした' });
+      }
     }
   } catch (e) {
+    if (optionSaved && parsed.data.id) {
+      console.error('[wing] failed after saving option', e);
+      const checkCost = savedOptionPublished && costAccess.available && costAccess.canManage;
+      return { ok: false, costRecordingFailed: checkCost, error: checkCost
+        ? '商品情報は保存されましたが、関連設定または原価Versionの処理を完了できませんでした。再操作前に登録内容と原価Versionを確認してください。'
+        : '商品情報は保存されましたが、関連設定などの後続処理を完了できませんでした。再操作前に登録内容を確認してください。' };
+    }
     // メディアの複製に失敗した場合はコピー先の新規下書きだけ取り消す。
     // コピー元商品・コピー元ファイルには一切触れない。
     // ただし複製の取り消し（DB）に失敗したときは、確認のため新しい下書きと複製したファイルを残す（消すとファイルが行方不明になる）
@@ -443,7 +461,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     }
     redirect('/admin/options/' + createdId + '?step=info&created=1');
   }
-  return { ok: true, message: costNotice ? `保存しました。${costNotice}` : '保存しました', savedImageUrl: image_url };
+  return { ok: true, message: costNotice ? `保存しました。${costNotice}` : '保存しました', costRecordingFailed: Boolean(costNotice), savedImageUrl: image_url };
 }
 
 export async function publishOptionAction(formData: FormData): Promise<void> {
@@ -519,19 +537,31 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     try {
       await store.upsertOption({ ...editable, id: optionId, status: 'published' });
     } catch (e) {
-      redirect(previewUrl({ error: errState(e).error ?? '公開できませんでした。' }));
+      console.error('[wing] option publication outcome unknown', e);
+      redirect(previewUrl({ error: '商品の公開結果を確認できません。再操作前に公開状態と原価Versionを確認してください。' }));
     }
-    revalidatePath('/', 'layout');
-    updateTag(CATALOG_TAG);
     // 本部の登録なら、確認した金額（確認済みの 0 円を含む）を原価の Version に記録する。失敗しても登録は済んでいる
-    const costResult = await recordPublishedOptionCost(optionId, 'publish', costAccess);
-    const choiceResult =
-      costResult.status === 'error' ? costResult : await recordPublishedChoiceCosts(optionId, 'publishChoice', undefined, costAccess);
-    costWarning = costRecordingNotice(costResult) ?? costRecordingNotice(choiceResult);
+    try {
+      revalidatePath('/', 'layout');
+      updateTag(CATALOG_TAG);
+      const costResult = await recordPublishedOptionCost(optionId, 'publish', costAccess);
+      const choiceResult =
+        costResult.status === 'error' ? costResult : await recordPublishedChoiceCosts(optionId, 'publishChoice', undefined, costAccess);
+      costWarning = costRecordingNotice(costResult) ?? costRecordingNotice(choiceResult);
+    } catch (error) {
+      console.error('[wing] failed to record published option cost version', error);
+      costWarning = costRecordingNotice({ status: 'error', message: '原価の Version を記録できませんでした' });
+    }
+    if (costWarning) costWarning = `商品は公開済みです。${costWarning}`;
   }
 
   if (returnTo) {
     const returnUrl = new URL(returnTo, 'https://wing.local');
+    // 警告を表示できない戻り先では、先に商品画面で公開済み・記録失敗を知らせる。
+    const showsCostWarning = returnUrl.pathname === '/admin/ledger' ||
+      returnUrl.pathname === '/admin/estimate-templates/legacy' ||
+      /^\/admin\/estimate-templates\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(returnUrl.pathname);
+    if (costWarning && !showsCostWarning) redirect(previewUrl({ published: '1', cost_warning: costWarning }));
     returnUrl.searchParams.set('created_option', id);
     if (costWarning) returnUrl.searchParams.set('cost_warning', costWarning);
     redirect(returnUrl.pathname + returnUrl.search + returnUrl.hash);
@@ -632,6 +662,9 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
   if (!optionId || !groupId) return { ok: false, error: '商品または選択項目が指定されていません。' };
 
   let uploadedUrl: string | null = null;
+  let choiceWriteStarted = false;
+  let choiceSaved = false;
+  let checkChoiceCost = false;
   try {
     const store = await getStore();
     const option = await store.getOption(optionId);
@@ -647,6 +680,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     // 本部商品の外（旧フリー商品）は従来どおり
     const costAccess = await getCostAccessForProduct(() => store.listCategories(), option.category_id);
     if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+    checkChoiceCost = option.status === 'published' && costAccess.available && costAccess.canManage;
     const keepExistingPrice = !canEditCostField(costAccess);
     // 本部以外が足す選択肢：追加の選択肢は原価差額が未登録（別途見積）、標準・固定は 0 円
     const requestedKind = formData.get('kind');
@@ -719,6 +753,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     }
 
     const choiceId = parsed.data.id ?? randomUUID();
+    choiceWriteStarted = true;
     await store.upsertVariantChoice({
       id: choiceId,
       group_id: group.id,
@@ -732,6 +767,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
       sort_order: parsed.data.sort_order,
       status: parsed.data.status,
     });
+    choiceSaved = true;
     revalidatePath(`/admin/options/${optionId}`);
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
@@ -741,15 +777,24 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
         ? costRecordingNotice(await recordPublishedChoiceCosts(optionId, 'choice', [choiceId], costAccess))
         : null;
     const savedMessage = parsed.data.id ? '選択肢を更新しました。' : '選択肢を追加しました。';
-    return { ok: true, message: costNotice ? `${savedMessage}${costNotice}` : savedMessage };
+    return { ok: true, message: costNotice ? `${savedMessage}${costNotice}` : savedMessage, costRecordingFailed: Boolean(costNotice) };
   } catch (e) {
-    if (uploadedUrl) {
+    if (choiceSaved) {
+      console.error('[wing] failed after saving variant choice', e);
+      if (!checkChoiceCost) return { ok: false, error: '選択肢は保存しましたが、後続処理を完了できませんでした。再操作前に登録内容を確認してください。' };
+      return { ok: true, costRecordingFailed: true, message: '選択肢は保存しましたが、後続処理を完了できませんでした。原価Versionの記録を確認し、必要な項目だけを「原価 Version の取り込み」画面から記録してください。' };
+    }
+    if (uploadedUrl && !choiceWriteStarted) {
       try {
         const store = await getStore();
         await store.deleteUploadedImage(uploadedUrl);
       } catch {
         // 元のエラーを優先する
       }
+    }
+    if (choiceWriteStarted) {
+      console.error('[wing] variant choice save outcome unknown', e);
+      return { ok: false, costRecordingFailed: checkChoiceCost, error: '選択肢の保存結果を確認できません。再操作する前に選択肢と画像の状態を確認してください。' };
     }
     return errState(e);
   }

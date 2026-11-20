@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { Alert } from '@/components/ui';
-import { AdminPage } from '@/components/admin/ui';
+import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import {
   EstimateTemplateWorkbench,
   type EstimateTemplateWorkbenchLine,
@@ -77,6 +77,7 @@ export default async function EstimateTemplatesPage({
   if (!selectedTemplate) {
     return (
       <AdminPage title="旧テンプレート（参照）" lead={LEGACY_LEAD} actions={<Link href="/admin/estimate-templates" className="btn-secondary btn-sm">標準見積（v2.5）へ戻る</Link>}>
+        <FlashMessages sp={sp} />
         <QuoteManagementTabs active="standard" />
         <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
         <EstimateTemplateExcelDemo key={selectedSample?.id ?? 'new-estimate-demo'} sampleId={selectedSample?.id} products={demoProducts} />
@@ -92,6 +93,7 @@ export default async function EstimateTemplatesPage({
   if (!bundle) {
     return (
       <AdminPage title="旧テンプレート（参照）" lead={LEGACY_LEAD} actions={<Link href="/admin/estimate-templates" className="btn-secondary btn-sm">標準見積（v2.5）へ戻る</Link>}>
+        <FlashMessages sp={sp} />
         <QuoteManagementTabs active="standard" />
         <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
         <Alert tone="warn">選択した標準見積の明細を読み込めませんでした。一覧から別の標準見積を選択してください。</Alert>
@@ -161,6 +163,7 @@ export default async function EstimateTemplatesPage({
       lead={LEGACY_LEAD}
       actions={<Link href="/admin/estimate-templates" className="btn-secondary btn-sm">標準見積（v2.5）へ戻る</Link>}
     >
+      <FlashMessages sp={sp} />
       <QuoteManagementTabs active="standard" />
       <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
       <EstimateTemplateDetailTabs

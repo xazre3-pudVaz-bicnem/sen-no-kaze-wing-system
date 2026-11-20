@@ -188,9 +188,20 @@ function ProductStatus({ option, configurationUsageCount }: { option: ProductOpt
     <div className="flex min-w-0 flex-col items-start gap-1" data-product-handling-status={state}>
       <Badge tone={state === 'registered' ? 'success' : 'neutral'}>{productLedgerStateLabel(option)}</Badge>
       {configurationUsageCount !== null && (
-        <span className="whitespace-nowrap text-[0.68rem] font-medium text-muted">
-          {configurationUsageCount > 0 ? `保存プラン ${configurationUsageCount}件` : '未使用'}
-        </span>
+        configurationUsageCount > 0 ? (
+          <Link
+            href={`/admin/configurations?option_id=${option.id}`}
+            aria-label={`${option.name}の保存プラン ${configurationUsageCount}件を表示`}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            className="pointer-events-auto relative z-30 whitespace-nowrap text-[0.68rem] font-medium text-brown underline underline-offset-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/60"
+            data-testid="ledger-configuration-usage-link"
+          >
+            保存プラン {configurationUsageCount}件
+          </Link>
+        ) : (
+          <span className="whitespace-nowrap text-[0.68rem] font-medium text-muted">保存プラン0件</span>
+        )
       )}
     </div>
   );
@@ -454,7 +465,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
                       {showCost && <td className="px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>}
                       <td className="px-2.5 py-1.5"><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></td>
                       <td className="px-2.5 py-1.5 text-xs whitespace-nowrap text-muted">{date(o.updated_at)}</td>
-                      <td className="px-1.5 py-1.5 text-center"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></td>
+                      <td className="px-1.5 py-1.5 text-center"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} lifecycleEnabled={lifecycleEnabled} archivedAt={o.archived_at} discontinuedAt={o.discontinued_at} expectedUpdatedAt={o.updated_at} /></td>
                     </tr>;
                   })}
                 </tbody>
@@ -466,7 +477,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
                 const itemCategory = categoryMap.get(o.category_id);
                 return <article key={o.id} className={'relative overflow-visible rounded-xl border bg-white ' + (recentlyChangedId === o.id ? 'border-brown ring-2 ring-brown/30' : 'border-line')} data-testid={'ledger-mobile-option-' + o.code} data-recently-changed={recentlyChangedId === o.id ? 'true' : undefined}>
                   <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
-                  <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
+                  <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} lifecycleEnabled={lifecycleEnabled} archivedAt={o.archived_at} discontinuedAt={o.discontinued_at} expectedUpdatedAt={o.updated_at} /></div>
                   <div className="pointer-events-none relative z-20 flex gap-2.5 p-2.5">
                     <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}</span>
                     <div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3><p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-ink">{showCost ? productPrice(o) : ''}</span><span className="text-muted">更新 {date(o.updated_at)}</span></div></div>
@@ -484,7 +495,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
                 const targetModel = o.base_model_id ? modelMap.get(o.base_model_id)?.name ?? '特定モデル' : '全モデル';
                 return <article key={o.id} className={'group relative overflow-visible rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line') + (recentlyChangedId === o.id ? ' ring-2 ring-brown/50' : '')} data-testid={'ledger-option-' + o.code} data-recently-changed={recentlyChangedId === o.id ? 'true' : undefined}>
                   <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
-                  <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
+                  <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} lifecycleEnabled={lifecycleEnabled} archivedAt={o.archived_at} discontinuedAt={o.discontinued_at} expectedUpdatedAt={o.updated_at} /></div>
                   <div className="pointer-events-none relative z-20 flex min-h-[6.25rem] gap-2.5 p-2.5"><span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}</span><div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3><p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{showCost ? productPrice(o) : ''}</p><p className="text-[0.68rem] text-muted">{targetModel}</p></div></div></div>
                 </article>;
               })}
@@ -524,7 +535,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
 
               <div className="card p-4"><h3 className="font-semibold">自社の仕入・発注情報</h3><dl className="mt-2">{hqStandardCosts !== null && <Row label="商品標準原価の記録（税別）" value={Object.prototype.hasOwnProperty.call(hqStandardCosts, selected.id) ? formatYen(hqStandardCosts[selected.id]) : '未記録'}/>}<Row label="仕入先" value={<PendingDbValue />}/><Row label="発注コード" value={<PendingDbValue />}/><Row label="発注単位" value={<PendingDbValue />}/></dl>{hqStandardCosts !== null && <p className="mt-2 border-t border-line pt-3 text-xs leading-relaxed text-muted">商品標準原価の記録は、本部が登録済みの商品を保存・登録したときの税別原価の版です（v2.5 の計算に使います）。実仕入価格・案件実原価・発行済み見積の原価ではありません。</p>}</div>
 
-              <details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary><div className="border-t border-line px-4 py-3">{selectedConfigurationUsageCount === null ? <p className="text-sm text-muted">保存プランでの利用件数は、本部の商品編集権限があるユーザーだけ確認できます。</p> : <dl><Row label="保存プラン" value={selectedConfigurationUsageCount > 0 ? `保存プラン ${selectedConfigurationUsageCount}件` : '未使用'}/></dl>}<p className="mt-2 text-xs leading-relaxed text-muted">ここで「保存プラン」として数えるのは、configuration_items から商品IDを直接参照している保存済み構成だけです。標準見積・発行済み見積・Snapshotの履歴判定は含みません。</p>{canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && <div className="mt-3 rounded-lg border border-line bg-white p-3"><p className="text-sm font-semibold text-ink">完全削除可能</p><p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存プランから参照されていません。一覧右端の「⋮」から直接削除できます。</p></div>}{selected.status === 'published' && <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み・販売停止・廃番の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。</p>}</div></details>
+              <details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary><div className="border-t border-line px-4 py-3">{selectedConfigurationUsageCount === null ? <p className="text-sm text-muted">保存プランでの利用件数は、本部の商品編集権限があるユーザーだけ確認できます。</p> : <dl><Row label="保存プラン" value={selectedConfigurationUsageCount > 0 ? <Link href={`/admin/configurations?option_id=${selected.id}`} className="text-brown underline underline-offset-2 hover:text-ink">保存プラン {selectedConfigurationUsageCount}件を表示</Link> : '保存プラン0件'}/></dl>}<p className="mt-2 text-xs leading-relaxed text-muted">ここで「保存プラン」として数えるのは、configuration_items から商品IDを直接参照している保存済み構成だけです。標準見積・発行済み見積・Snapshotの履歴判定は含みません。</p>{canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && <div className="mt-3 rounded-lg border border-line bg-white p-3"><p className="text-sm font-semibold text-ink">完全削除可能</p><p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存プランから参照されていません。一覧右端の「⋮」から直接削除できます。</p></div>}{selected.status === 'published' && <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み・販売停止・廃番の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。</p>}</div></details>
               <details className="card" data-product-origin-slot="pending-db"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">登録・権限情報 <ChevronDown className="size-4" /></summary><div className="border-t border-line"><p className="px-4 pt-3 text-xs leading-relaxed text-muted">商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。</p><dl className="px-4"><Row label="商品状態" value={productLedgerStateLabel(selected)}/><Row label="商品区分" value={<PendingDbValue />}/><Row label="登録元組織" value={<PendingDbValue />}/><Row label="最終更新" value={date(selected.updated_at)}/><Row label="商品情報の編集権限" value={canEdit ? '現在の権限で編集可能' : '閲覧のみ（サーバー側認可に従います）'}/></dl></div></details>
             </section>
           )}

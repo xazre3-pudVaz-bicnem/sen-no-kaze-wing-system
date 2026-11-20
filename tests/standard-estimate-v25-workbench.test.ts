@@ -503,7 +503,8 @@ describe('Excel 風の画面（描画）', () => {
     const globals = read('app/globals.css');
     const grid = source.slice(source.indexOf('<tbody onMouseDownCapture='), source.indexOf('</tbody>'));
     const excelInputs = Array.from(grid.matchAll(/<Input data-v25-excel-col="[^"]+"[\s\S]*?className="([^"]+)"/g));
-    expect(excelInputs).toHaveLength(7);
+    // 手入力明細の原価単価の入力欄（2026-11-20 の先方の依頼）を足して 8 つ
+    expect(excelInputs).toHaveLength(8);
     for (const match of excelInputs) {
       const classes = match[1].split(/\s+/);
       expect(classes).toContain('h-6');

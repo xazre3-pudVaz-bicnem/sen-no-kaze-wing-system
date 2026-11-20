@@ -17,6 +17,8 @@ async function openWorkbench(page: Page) {
   await expect(page.getByTestId('pr691-local-fixture')).toBeVisible();
   await expect(page.locator(row('slot','sash'))).toBeVisible();
   await expect(page.getByTestId('v25-work-item-heading').first()).toBeVisible();
+  // 画面の準備（React のハイドレーション）が済むまで待つ。済む前のスクロールは処理されず、固定の見出しが出ない（時間の競争）
+  await expect(page.locator('[data-testid="standard-estimate-v25-workbench"][data-v25-ready="true"]')).toBeVisible({ timeout: 30_000 });
 }
 
 async function assertVisibleStructure(page: Page) {

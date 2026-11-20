@@ -1,0 +1,62 @@
+name: V25 Manual Line Cost Isolated Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/standard-estimate-v25-workbench.tsx'
+      - 'components/admin/standard-estimate-v25-amount-breakdown.tsx'
+      - 'lib/domain/standard-estimate-v25-view.ts'
+      - 'e2e/fixtures/v25-line-cost-page.tsx.fixture'
+      - 'e2e/v25-line-cost.spec.ts'
+      - 'e2e/v25-line-cost-mobile.spec.ts'
+      - '.github/workflows/v25-line-cost-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v25-line-cost-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Assert disposable local-only test environment
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+      - name: Add isolated fixture without writing to production DB
+        run: |
+          mkdir -p app/v25-e2e-line-cost
+          cp e2e/fixtures/v25-line-cost-page.tsx.fixture app/v25-e2e-line-cost/page.tsx
+      - name: Test PC and mobile manual line cost input
+        run: npx playwright test e2e/v25-line-cost.spec.ts e2e/v25-line-cost-mobile.spec.ts --project=desktop --project=mobile
+      - name: Attach failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v25-line-cost-browser
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

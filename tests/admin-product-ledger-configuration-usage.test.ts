@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 const ledgerPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/ledger/page.tsx'), 'utf8');
 const ledgerClient = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
 const usage = fs.readFileSync(path.resolve(process.cwd(), 'lib/data/product-ledger-usage.ts'), 'utf8');
+const configurationsPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/configurations/page.tsx'), 'utf8');
+const configurationDetail = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/configurations/[id]/page.tsx'), 'utf8');
+const regionFilter = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/region-filter.tsx'), 'utf8');
 const supabaseStore = fs.readFileSync(path.resolve(process.cwd(), 'lib/data/supabase-store.ts'), 'utf8');
 const localStore = fs.readFileSync(path.resolve(process.cwd(), 'lib/data/local-store.ts'), 'utf8');
 
@@ -23,13 +26,52 @@ describe('商品台帳の保存済み構成利用状況', () => {
     expect(ledgerPage).toContain('configurationUsageCounts={configurationUsageCounts}');
   });
 
-  it('一覧と詳細は利用者向けに保存プラン件数として表示する', () => {
-    expect(ledgerClient).toContain("configurationUsageCount > 0 ? `保存プラン ${configurationUsageCount}件` : '未使用'");
-    expect(ledgerClient).toContain('whitespace-nowrap text-[0.68rem]');
+  it('一覧・詳細の保存プラン件数をリンク化し、0件を「未使用」と誤表示しない', () => {
+    expect(ledgerClient).toContain('data-testid="ledger-configuration-usage-link"');
+    expect(ledgerClient).toContain('href={`/admin/configurations?option_id=${option.id}`}');
+    expect(ledgerClient).toContain('href={`/admin/configurations?option_id=${selected.id}`}');
+    expect(ledgerClient).toContain('pointer-events-auto relative z-30');
+    expect(ledgerClient).toContain('onClick={(event) => event.stopPropagation()}');
+    expect(ledgerClient).toContain('onKeyDown={(event) => event.stopPropagation()}');
+    expect(ledgerClient).toContain('保存プラン0件');
     expect(ledgerClient).toContain('configurationUsageCounts[selected.id] ?? 0');
     expect(ledgerClient).toContain('label="保存プラン"');
     expect(ledgerClient).toContain('ここで「保存プラン」として数えるのは、configuration_items');
     expect(ledgerClient).toContain('標準見積・発行済み見積・Snapshotの履歴判定は含みません。');
+  });
+
+  it('指定商品で保存プランを直接参照するIDだけ取得し、重複する明細をSetで1件にまとめる', () => {
+    expect(usage).toContain('export async function getProductConfigurationIdsForOption');
+    expect(usage).toContain("db.configurationItems");
+    expect(usage).toContain('row.option_id === optionId');
+    expect(usage).toContain("db\n    .from('configuration_items')");
+    expect(usage).toContain(".select('configuration_id')");
+    expect(usage).toContain(".eq('option_id', optionId)");
+    expect(usage).toContain('return new Set((data ?? []).map((row) => row.configuration_id))');
+  });
+
+  it('保存プランの既存一覧で対象商品の参照先だけ絞り込み、地域条件と共存させる', () => {
+    expect(configurationsPage).toContain("const actor = await requireStaff('/admin/configurations')");
+    expect(configurationsPage).toContain("actor.role !== 'admin'");
+    expect(configurationsPage).toContain('data-testid="configuration-detail-access-note"');
+    expect(configurationsPage).toContain('各プランの詳細確認は本部管理者のみ可能です。');
+    expect(configurationsPage).toContain("actor.role === 'admin'");
+    expect(configurationsPage).toContain('data-testid="configuration-detail-admin-only"');
+    expect(configurationsPage).toContain('本部管理者のみ');
+    expect(configurationsPage).toContain('getProductConfigurationIdsForOption(optionId)');
+    expect(configurationsPage).toContain('parseConfigurationOptionFilter(sp.option_id)');
+    expect(configurationsPage).toContain('const optionConfigurations = !hasOptionFilter');
+    expect(configurationsPage).toContain('件数と一覧はこのアカウントで閲覧できる保存プランに限ります');
+    expect(configurationsPage).toContain('configurations.filter((configuration) => matchingIds.has(configuration.id))');
+    expect(configurationsPage).toContain('const shown = optionConfigurations.filter');
+    expect(configurationsPage).toContain('data-testid="configuration-option-filter"');
+    expect(configurationsPage).toContain('total={optionConfigurations.length} matched={shown.length}');
+    expect(configurationsPage).toContain('href="/admin/configurations"');
+    expect(configurationsPage).toContain('actor.role === \'admin\'');
+    expect(configurationsPage).toContain('href={`/admin/configurations/${c.id}`}');
+    expect(configurationsPage).toContain('await requireStaff');
+    expect(regionFilter).toContain('new URLSearchParams(sp.toString())');
+    expect(configurationDetail).toContain('await requireAdmin()');
   });
 
   it('完全削除可能の案内は未使用の下書きだけに表示する', () => {

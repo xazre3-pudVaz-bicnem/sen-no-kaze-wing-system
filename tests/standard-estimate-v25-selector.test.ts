@@ -49,14 +49,18 @@ describe('v2.5 標準見積仕様一覧（全件を保持する表示専用整�
     }));
     expect((html.match(/data-testid="v25-selector-entry"/g) ?? [])).toHaveLength(10);
     expect((html.match(/data-testid="v25-selector-product"/g) ?? [])).toHaveLength(3);
-    expect((html.match(/>4550×3640<\/p>/g) ?? [])).toHaveLength(3); // サイズの見える表示はWingの各用途で1回だけ
+    expect((html.match(/>4550×3640<\/span>/g) ?? [])).toHaveLength(1); // Wing内の同寸法はグループ見出しに1回だけ
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain('選択中');
-    expect(html).toContain('公開中 第2版');
+    expect(html).toContain('選択中'); // 現在の仕様を明確にする
+    expect(html).toContain('公開 第2版');
     expect(html).toContain('下書き 第3版');
     expect(html).toContain('未公開');
     expect(html).toContain('href="/admin/estimate-templates?master=w1"');
-    expect(html).toContain('grid-cols-2');
+    expect(html).toContain('data-testid="v25-selector-list"');
+    expect(html).toContain('max-h-[22rem]');
+    expect(html).toContain('公開価格（税込）');
+    expect(html).toContain('公開価格未設定');
+    expect(html).not.toContain('data-testid="v25-selector-size"');
   });
 
   it('空欄も既存の案内を保つ', () => {

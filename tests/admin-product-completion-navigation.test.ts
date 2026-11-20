@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { registeredOptionLedgerUrl } from '@/lib/domain/registered-option-save-result';
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 const optionPage = read('app/admin/options/[id]/page.tsx');
@@ -24,7 +25,14 @@ describe('商品公開・編集完了後の商品台帳への移動', () => {
     const applyChanges = editFlow.slice(editFlow.indexOf('  const applyChanges = async () => {'), editFlow.indexOf('\n  return (', editFlow.indexOf('  const applyChanges = async () => {')));
     expect(applyChanges).toContain('saveOptionAction(initialState, review.formData)');
     expect(applyChanges).toContain('setState(result)');
-    expect(applyChanges).toMatch(/if \(result\.ok\) \{\s+router\.push\(`\/admin\/ledger\?updated_option=/);
+    expect(applyChanges).toMatch(/if \(result\.ok\) \{\s+router\.push\(registeredOptionLedgerUrl\(option\.id, result\)\)/);
+    const normal = new URL(registeredOptionLedgerUrl('id & 1', {}), 'https://example.invalid');
+    expect(normal.pathname).toBe('/admin/ledger');
+    expect(normal.searchParams.get('updated_option')).toBe('id & 1');
+    expect(normal.searchParams.has('cost_recording_failed')).toBe(false);
+    const warning = new URL(registeredOptionLedgerUrl('id & 1', { costRecordingFailed: true }), 'https://example.invalid');
+    expect(warning.searchParams.get('updated_option')).toBe('id & 1');
+    expect(warning.searchParams.get('cost_recording_failed')).toBe('1');
     expect(applyChanges).not.toContain('router.refresh()');
     expect(editFlow).toContain('反映に成功すると商品台帳一覧へ戻ります');
     expect(editFlow).toContain('価格単位・本部基準原価の個別保存とは別の操作');

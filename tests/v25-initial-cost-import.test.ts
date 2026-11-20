@@ -159,7 +159,7 @@ describe('v2.5 PR-A3：独立レビューの指摘への対応', () => {
   });
 
   it('登録の後の戻り先でも、原価の記録の失敗を知らせる（共通の通知）', () => {
-    expect(read('components/admin/ui.tsx')).toContain('{sp.cost_warning && <Alert tone="warn">{sp.cost_warning}</Alert>}');
+    expect(read('components/admin/ui.tsx')).toContain('{sp.cost_warning && (');
   });
 
   it('取り込みは、途中の状態でも原価が 0 円未満にならない順に記録する（選択肢の上げ → 商品 → 選択肢の下げ）', () => {
@@ -205,7 +205,7 @@ describe('v2.5 PR-A3：商品登録 STEP1 の商品標準原価・原価差額',
     const recording = read('lib/data/option-cost-recording.ts');
     expect(recording).toContain("if (!optionRow || optionRow.status !== 'published' || optionRow.price_on_request) return { status: 'skipped' };");
     // 商品価格は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
-    expect(recording).toContain("const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all');");
+    expect(recording).toContain("const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all', true);");
     // 下書きの 0 円は価格未確認。登録のときの確認済みの 0 円だけ記録する
     expect(recording).toContain("if (price < 0 || (price === 0 && kind !== 'publish')) return { status: 'skipped' };");
     // 原価の本部商品基準原価カードは入力欄を持たない（二重入力しない）

@@ -126,7 +126,7 @@ describe('画面の描画（工事項目は表示のみ、移動で変更）', (
       line('l', { section_code: 'option', group_label: '照明工事' }),
     ]));
     expect(html).toContain('data-testid="v25-work-item-heading"');
-    expect(html).toContain('>2. 屋根工事</td>');
+    expect(html).toContain('>2. 屋根工事</span>');
     expect(html).not.toContain('data-testid="v25-wb-slot-work-item"');
     expect(html).not.toContain('data-testid="v25-wb-slot-work-item-label"');
     expect(html).not.toContain('data-testid="v25-wb-slot-work-item-select"');
@@ -137,7 +137,7 @@ describe('画面の描画（工事項目は表示のみ、移動で変更）', (
 
   it('保存済み工事項目は小見出しに残し、商品行では繰り返さない', () => {
     const html = render(false, state([slot('a', 'roof1', { work_item: '3. 外壁工事' })], []));
-    expect(html).toContain('>3. 外壁工事</td>');
+    expect(html).toContain('>3. 外壁工事</span>');
     expect(html).not.toContain('data-testid="v25-wb-slot-work-item');
     expect(html).not.toContain('data-testid="v25-wb-work-item-auto-unsaved"');
   });
@@ -145,7 +145,7 @@ describe('画面の描画（工事項目は表示のみ、移動で変更）', (
   it('公開済みreadOnlyでも重複ラベルを出さず、見出し・商品・数量表示は維持', () => {
     const html = render(true, state([slot('a', 'roof1'), slot('b', 'sash1', { work_item: '1. サッシ・木製建具工事' })], []));
     expect(html).toContain('data-testid="v25-work-item-heading"');
-    expect(html).toContain('>1. サッシ・木製建具工事</td>');
+    expect(html).toContain('>1. サッシ・木製建具工事</span>');
     expect(html).not.toContain('data-testid="v25-wb-slot-work-item');
     expect(html).toContain('data-testid="v25-wb-slot-unit"');
     expect(html).not.toContain('data-testid="v25-wb-work-item-auto-unsaved"');
@@ -161,7 +161,9 @@ describe('画面（Excel 風明細）', () => {
     expect(workbench).not.toContain('data-testid="v25-wb-slot-work-item-label"');
     expect(workbench).not.toContain('data-testid="v25-wb-slot-work-item"');
     expect(workbench).toContain('data-testid="v25-work-item-heading"');
-    expect(workbench).toContain('data-testid="v25-wb-change-work-group"');
+    expect(workbench).toContain('data-testid="v25-wb-edit-work-group"');
+    expect(workbench).toContain('data-testid={`v25-wb-add-work-group-${code}`}');
+    expect(workbench).not.toContain('data-testid="v25-wb-change-work-group"');
     expect(workbench).toContain('const workItemOf = (slot: V25SlotRow) => slot.work_item?.trim() || autoWorkItemOf(slot);');
     expect(workbench).toContain("if (readOnly) return '';");
     expect(workbench).toContain('v25PlanMixedRowMove(');

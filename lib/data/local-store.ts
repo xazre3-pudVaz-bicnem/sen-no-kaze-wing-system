@@ -1952,7 +1952,7 @@ export class LocalStore implements DataStore {
       const doc = db.quoteDocuments.filter((d) => d.quote_id === quoteId).sort((a, b) => b.generated_at.localeCompare(a.generated_at))[0];
       if (!doc) return null;
       const p = path.join(filesDir(), doc.storage_path);
-      if (!fs.existsSync(p)) return null;
+      if (!fs.existsSync(p)) throw new StoreError('INTERNAL', '保存済みPDFを取得できません。自動再生成は行いません');
       return { bytes: new Uint8Array(fs.readFileSync(p)), document: doc };
     });
   }
@@ -1961,7 +1961,10 @@ export class LocalStore implements DataStore {
       const rel = path.posix.join('quotes', `${quoteId}.pdf`);
       const abs = path.join(filesDir(), rel);
       fs.mkdirSync(path.dirname(abs), { recursive: true });
-      fs.writeFileSync(abs, bytes);
+      if (db.quoteDocuments.some((d) => d.quote_id === quoteId) || fs.existsSync(abs)) {
+        throw new StoreError('LOCKED', '見積PDFは既に保存済みです');
+      }
+      fs.writeFileSync(abs, bytes, { flag: 'wx' });
       const doc: QuoteDocument = {
         id: randomUUID(),
         quote_id: quoteId,
@@ -1970,7 +1973,6 @@ export class LocalStore implements DataStore {
         byte_size: bytes.byteLength,
         generated_at: nowIso(),
       };
-      db.quoteDocuments = db.quoteDocuments.filter((d) => d.quote_id !== quoteId);
       db.quoteDocuments.push(doc);
       return doc;
     });

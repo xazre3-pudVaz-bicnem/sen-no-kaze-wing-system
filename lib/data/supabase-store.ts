@@ -1223,13 +1223,21 @@ export class SupabaseStore implements DataStore {
     if (!doc) return null;
     const admin = createAdminClient();
     const { data: blob, error: dlError } = await admin.storage.from('quote-documents').download((doc as QuoteDocument).storage_path);
-    if (dlError || !blob) return null;
+    if (dlError || !blob) {
+      throw new StoreError('INTERNAL', '保存済みPDFを取得できません。自動再生成は行いません');
+    }
     return { bytes: new Uint8Array(await blob.arrayBuffer()), document: doc as QuoteDocument };
   }
   async saveQuoteDocument(quoteId: string, bytes: Uint8Array, fileName: string) {
     const admin = createAdminClient();
+    // Fail closed when metadata already exists (even if a caller was denied SELECT by RLS).
+    const { data: prior, error: priorError } = await admin
+      .from('quote_documents').select('id').eq('quote_id', quoteId).limit(1).maybeSingle();
+    if (priorError) mapPgError(priorError);
+    if (prior) throw new StoreError('LOCKED', '見積PDFは既に保存済みです');
     const storagePath = `quotes/${quoteId}.pdf`;
-    const up = await admin.storage.from('quote-documents').upload(storagePath, bytes, { contentType: 'application/pdf', upsert: true });
+    // An existing/orphan object must never be replaced.
+    const up = await admin.storage.from('quote-documents').upload(storagePath, bytes, { contentType: 'application/pdf', upsert: false });
     if (up.error) throw new StoreError('INTERNAL', up.error.message);
     const { data, error } = await admin
       .from('quote_documents')

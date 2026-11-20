@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 type SettingsTab = 'matrix' | 'categories';
 
@@ -14,9 +14,6 @@ export function ProductSelectionSettingsTabs({
   categories: ReactNode;
 }) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
-
-  // 編集画面へ直接アクセスしたときも正しいタブを開く。
-  useEffect(() => setTab(initialTab), [initialTab]);
 
   const tabs: { id: SettingsTab; label: string; caption: string }[] = [
     { id: 'matrix', label: '仕様別の選択可否', caption: '機種・仕様・サイズごと' },

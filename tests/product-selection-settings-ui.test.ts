@@ -41,7 +41,7 @@ describe('商品選択設定の2タブUI', () => {
     expect(page).toContain("requireStaff('/admin/categories')");
     expect(page).toContain("hasRoleAtLeast(actor.role, 'master_dealer')");
     expect(page).toContain("const canEditMatrix = actor.role === 'admin'");
-    expect(matrix).toContain('categoryItems={');
+    expect(page).toContain('categoryItems={matrix.categoryItems}');
     expect(matrix).toContain('expected_lock_version: row.lock_version');
     expect(matrix).toContain('{canEdit && (');
     expect(categories).toContain('disabled={pending || !canEdit}');

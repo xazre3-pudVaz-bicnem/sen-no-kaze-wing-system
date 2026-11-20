@@ -40,8 +40,9 @@ test('本部PC：未保存変更をタブ・カテゴリー詳細編集・リロ
   await page.screenshot({ path: 'e2e/artifacts/pr704-desktop-detail-roundtrip.png', fullPage: false });
 
   await page.reload();
-  await expect(page.getByTestId('selection-matrix-panel')).toBeVisible();
+  await expect(page.getByRole('tab', { name: /お客様への共通表示/ })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: /仕様別の選択可否/ }).click();
+  await expect(page.getByTestId('selection-matrix-panel')).toBeVisible();
   await expect(kitchen).toBeChecked();
   await expect(page.getByText('このブラウザタブの未保存変更を復元しました。')).toBeVisible();
 

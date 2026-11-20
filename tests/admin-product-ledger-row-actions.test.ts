@@ -70,6 +70,15 @@ describe('商品台帳の一覧操作', () => {
     expect(menu).toContain('仕様・供給・価格を確認しました');
     expect(menu).toContain('onClick={(event) => event.stopPropagation()}');
     expect(menu).toContain('closeLifecycleDialog()');
+    expect(menu).toContain('function handleModalKeyDown(event: ReactKeyboardEvent<HTMLDivElement>');
+    expect(menu).toContain('event.stopPropagation();');
+    expect(menu).toContain("event.key === 'Escape'");
+    expect(menu).toContain("event.key !== 'Tab'");
+    expect(menu).toContain('last.focus();');
+    expect(menu).toContain('first.focus();');
+    expect(menu).toContain('onKeyDown={(event) => handleModalKeyDown(event, closeLifecycleDialog)}');
+    expect(menu).toContain('onKeyDown={(event) => handleModalKeyDown(event, closeDeleteDialog)}');
+    expect((menu.match(/onClick=\{\(event\) => event.stopPropagation\(\)\}/g) ?? []).length).toBeGreaterThanOrEqual(3);
 
     const lifecycleAction = fs.readFileSync(path.resolve(process.cwd(), 'lib/actions/product-lifecycle.ts'), 'utf8');
     expect(lifecycleAction).toContain("await requireCatalogEditor(ledgerPath)");

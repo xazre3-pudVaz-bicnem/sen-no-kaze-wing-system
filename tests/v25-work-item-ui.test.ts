@@ -7,6 +7,10 @@ import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricin
 import { buildV25SavePayload, type V25EditorState, type V25LineRow, type V25SlotRow } from '@/lib/domain/standard-estimate-v25-view';
 import type { V25WorkbenchCandidate } from '@/lib/domain/standard-estimate-v25-workbench';
 import {
+  v25InsertMixedRow, v25MixedRowsForWorkGroup, v25PersistedMixedRowOrder,
+  v25ReconcileMixedRowOrder, v25MixedRowIdentity,
+} from '@/lib/domain/standard-estimate-v25-row-order';
+import {
   v25AutoWorkItemLabel,
   v25RenameWorkGroup,
   v25WorkGroupNameError,
@@ -143,6 +147,54 @@ describe('工事項目の見出し単位の追加と名称編集', () => {
     ]);
     expect(after.slots[1].row_order).toBe(2);
     expect(after.lines[0].row_order).toBe(3);
+  });
+
+  it('独自見出し→屋根の保存済み順に新しい工事項目を追加しても、既存の相対順が動かない', () => {
+    const before = state(
+      [slot('roof', 'roof1', { row_order: 2, work_item: '2. 屋根工事', quantity: '23.5' })],
+      [line('custom', { row_order: 1, group_label: '5. 造作工事', quantity: '2', unit_price: '4500', cost_unit_price: '2500' })],
+    );
+    const added = state(before.slots, [
+      ...before.lines,
+      line('repair', {
+        row_order: null, line_key: null, group_label: '6. 補修工事',
+        name: '補修費', price_mode: 'por', unit_price: '', cost_unit_price: undefined,
+      }),
+    ]);
+    const getGroups = (input: V25EditorState) =>
+      v25WorkGroupsForDisplay(input.slots, input.lines, categoryOf, (item) => item.group_label, scope);
+    expect(getGroups(before).map((group) => group.label)).toEqual(['5. 造作工事', '2. 屋根工事']);
+    const groups = getGroups(added);
+    expect(groups.map((group) => group.label)).toEqual([
+      '5. 造作工事', '2. 屋根工事', '6. 補修工事',
+    ]);
+    const sectionOf = () => 'interior_exterior' as const;
+    const persisted = v25PersistedMixedRowOrder(before, sectionOf);
+    const withNewRow = v25InsertMixedRow(persisted,
+      { kind: 'line', key: 'repair', section: 'interior_exterior' });
+    const mixed = v25ReconcileMixedRowOrder(withNewRow, added, sectionOf);
+    const rendered = groups.flatMap((group) => v25MixedRowsForWorkGroup(mixed, group));
+    expect(rendered.map(v25MixedRowIdentity)).toEqual([
+      'line:custom', 'slot:roof', 'line:repair',
+    ]);
+    const saved = v25SaveOrderKeepingRenames(added, rendered, true);
+    const payload = buildV25SavePayload(saved);
+    expect(payload.slots[0]).toMatchObject({ row_order: 2, quantity: '23.5' });
+    expect(payload.lines[0]).toMatchObject({
+      row_order: 1, quantity: '2', cost_unit_price: 2500, group_label: '5. 造作工事',
+    });
+    expect(payload.lines[1]).toMatchObject({
+      row_order: 3, line_key: null, price_mode: 'por', unit_price: null, group_label: '6. 補修工事',
+    });
+    // 全行未採番の旧下書きは従来の標準項目順を保つ。
+    const legacy = state(
+      [slot('roof', 'roof1', { work_item: '2. 屋根工事' })],
+      [line('custom', { group_label: '5. 造作工事' }),
+       line('repair', { group_label: '6. 補修工事' })],
+    );
+    expect(getGroups(legacy).map((group) => group.label)).toEqual([
+      '2. 屋根工事', '5. 造作工事', '6. 補修工事',
+    ]);
   });
 
   it('名称変更のみでは保存前・保存payloadの全行row_orderを保持し、明示的な移動だけ採番する', () => {

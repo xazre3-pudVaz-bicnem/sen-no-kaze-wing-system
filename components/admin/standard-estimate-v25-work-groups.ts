@@ -207,11 +207,18 @@ export function v25WorkGroupsForDisplay(
       .filter((order): order is number => order != null && Number.isInteger(order) && order > 0);
     return values.length ? Math.min(...values) : null;
   };
-  // 保存済み混在行順が全項目で分かる場合はそれを優先する。
-  // 名称変更した工事項目が「その他」の末尾へ移動してしまうことを防ぐ。
-  const ordered = grouped.every((group) => firstOrder(group) !== null);
+  // 保存済みの見出しは、その行の row_order を常に優先する。
+  // 新規の「＋ 工事項目」は未採番なので末尾へ置き、既存見出しを標準順へ戻さない。
+  // すべて未採番の旧下書きは、従来どおり標準項目順→手入力順で表示する。
   return grouped
-    .sort((a, b) => (ordered ? firstOrder(a)! - firstOrder(b)! : a.order - b.order) || a.first - b.first)
+    .sort((a, b) => {
+      const aSaved = firstOrder(a);
+      const bSaved = firstOrder(b);
+      if (aSaved !== null && bSaved !== null) return aSaved - bSaved || a.first - b.first;
+      if (aSaved !== null) return -1;
+      if (bSaved !== null) return 1;
+      return a.order - b.order || a.first - b.first;
+    })
     .map(({ key, label, slots: itemSlots, lines: itemLines }) => ({ key, label, slots: itemSlots, lines: itemLines }));
 }
 

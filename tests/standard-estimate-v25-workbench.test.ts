@@ -256,14 +256,16 @@ describe('Excel 風の画面（描画）', () => {
     expect(legacy).toContain('h-6 min-h-6');
   });
 
-  it('品名欄はグループ入力に圧迫されず、変更操作は自由入力メニューにのみ現れる', () => {
+  it('品名欄を維持し、工事項目の編集は見出し側にのみ現れる', () => {
     const html = render(false);
     const readOnlyHtml = render(true);
     const manual = html.slice(html.indexOf('data-testid="v25-wb-line"'), html.indexOf('data-testid="v25-wb-line-menu"'));
     expect(html).not.toContain('data-v25-excel-col="group"');
     expect(manual).toContain('data-v25-excel-col="name"');
-    expect(html).toContain('data-testid="v25-wb-change-work-group"');
-    expect(readOnlyHtml).not.toContain('data-testid="v25-wb-change-work-group"');
+    expect(html).toContain('data-testid="v25-wb-edit-work-group"');
+    expect(html).toContain('data-testid="v25-wb-add-work-group-interior_exterior"');
+    expect(html).not.toContain('data-testid="v25-wb-change-work-group"');
+    expect(readOnlyHtml).not.toContain('data-testid="v25-wb-edit-work-group"');
     expect(readOnlyHtml).not.toContain('data-testid="v25-wb-work-group-dialog"');
   });
 
@@ -465,7 +467,7 @@ describe('Excel 風の画面（描画）', () => {
     expect(source).toContain('title={candidate?.categoryName ??');
     expect(source).toContain('flex min-w-0 flex-wrap items-center gap-1');
     expect(source).toContain('title={line.remark}');
-    expect(source).toContain('data-testid="v25-wb-change-work-group"');
+    expect(source).toContain('data-testid="v25-wb-edit-work-group"');
     expect(source).toContain('data-v25-excel-col="name"');
     expect(source).toContain('data-v25-excel-col="note"');
   });

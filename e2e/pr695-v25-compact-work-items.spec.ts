@@ -49,27 +49,27 @@ test('PC｜現在仕様の工事項目見出し・重複表示防止・Portal操
     fullPage:false,
   });
 
-  // The manual-line work-item change entry remains usable, but it only edits
-  // local draft state. No save action or production database is invoked.
+  // 見出しの編集で配下の商品・手入力行をまとめて変更する。保存は行わない。
   const manual = page.locator(row('line','sashLine'));
-  await manual.getByTestId('v25-wb-line-menu').locator('summary').click();
-  // Portal menu actions are children of document.body, not the original row.
-  const menuPanel=page.getByTestId('v25-wb-menu-panel');
-  await expect(menuPanel).toBeVisible();
-  await menuPanel.getByTestId('v25-wb-change-work-group').click();
+  await expect(manual.getByTestId('v25-wb-line-menu')).toHaveCount(1);
+  await page.locator('tr[data-work-item="work:sash_wood"]').getByTestId('v25-wb-edit-work-group').click();
   const dialog = page.getByTestId('v25-wb-work-group-dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByTestId('v25-wb-work-group-input').fill('3. 外壁工事');
+  await expect(dialog.getByTestId('v25-wb-work-group-input')).toBeFocused();
+  await dialog.getByTestId('v25-wb-work-group-input').fill('1. 建具（現場加工）');
   await dialog.getByTestId('v25-wb-work-group-confirm').click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  const renamed = page.locator('tr[data-work-item="manual:1. 建具（現場加工）"]');
+  await expect(renamed).toContainText('1. 建具（現場加工）');
   await expect.poll(() => manual.evaluate((el) => {
     let candidate = el.previousElementSibling;
     while (candidate && !candidate.matches('[data-testid="v25-work-item-heading"]')) {
       candidate = candidate.previousElementSibling;
     }
     return candidate?.textContent?.trim() ?? '';
-  })).toContain('3. 外壁工事');
+  })).toContain('1. 建具（現場加工）');
+  await expect(page.locator(row('slot','sash'))).toBeVisible();
   await page.getByRole('button', {name:'変更を破棄'}).click();
   await expect(page.getByTestId('v25-wb-unsaved-position')).toHaveCount(0);
   await expect(page.locator(row('line','sashLine'))).toBeVisible();
@@ -100,6 +100,37 @@ test('PC｜現在仕様の工事項目見出し・重複表示防止・Portal操
   await expect(page.getByTestId('v25-wb-slot-work-item')).toHaveCount(0);
 });
 
+test('PC｜工事項目の追加・重複防止・変更破棄', async ({ page }) => {
+  await page.setViewportSize({ width: 1060, height: 760 });
+  await openWorkbench(page);
+  const addButton = page.getByTestId('v25-wb-add-work-group-interior_exterior');
+  await addButton.click();
+  const dialog = page.getByTestId('v25-wb-work-group-dialog');
+  await expect(dialog).toBeVisible();
+  const name = dialog.getByTestId('v25-wb-work-group-input');
+  await expect(name).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(addButton).toBeFocused();
+  await addButton.click();
+  await expect(name).toBeFocused();
+  await name.fill('工事項目未設定(手入力)');
+  await expect(dialog.getByTestId('v25-wb-work-group-error')).toContainText('予約');
+  await name.fill('2. 屋根工事');
+  await expect(dialog.getByTestId('v25-wb-work-group-error')).toContainText('すでに');
+  await expect(dialog.getByTestId('v25-wb-work-group-confirm')).toBeDisabled();
+  await name.fill('5. 造作工事');
+  await dialog.getByTestId('v25-wb-work-group-confirm').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('tr[data-work-item="manual:5. 造作工事"]')).toBeVisible();
+  const added = page.locator('tr[data-v25-dnd-row^="line:line-new-"]');
+  await expect(added).toHaveCount(1);
+  await expect(page.getByTestId('v25-wb-unsaved-position')).toBeVisible();
+  await page.getByRole('button', { name: '変更を破棄' }).click();
+  await expect(added).toHaveCount(0);
+  await expect(page.locator('tr[data-work-item="manual:5. 造作工事"]')).toHaveCount(0);
+});
+
 test('スマートフォン｜現在仕様の重複表示防止と固定見出しの横同期', async ({ browser }) => {
   test.setTimeout(120_000);
   const context=await browser.newContext({...devices['Pixel 7']});
@@ -124,6 +155,15 @@ test('スマートフォン｜現在仕様の重複表示防止と固定見出�
     await grid.evaluate((el)=>{el.scrollLeft=165;el.dispatchEvent(new Event('scroll'));});
     await expect.poll(()=>float.evaluate((el)=>el.scrollLeft)).toBeGreaterThan(100);
     await expect(page.getByTestId('v25-wb-slot-work-item-label')).toHaveCount(0);
+    // Pixel 7実タップでも初期入力フォーカス・Escape後の見出しボタン復帰を確かめる。
+    const edit = page.locator('tr[data-work-item="work:sash_wood"]').getByTestId('v25-wb-edit-work-group');
+    await edit.tap();
+    const dialog = page.getByTestId('v25-wb-work-group-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('v25-wb-work-group-input')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(edit).toBeFocused();
   } finally {
     await context.close();
   }

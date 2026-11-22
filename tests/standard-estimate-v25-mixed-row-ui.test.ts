@@ -120,7 +120,7 @@ describe('PR #666 × #686/#687 混在順序の保存・読込・工事項目整�
     expect(source).toContain('data-testid="v25-wb-row-up"');
     expect(source).toContain('data-testid="v25-wb-row-down"');
     expect(source).toContain('testId="v25-wb-row-insert"');
-    expect(source).toContain('v25WithRowOrder(toSave, renderedMixedOrder)');
+    expect(source).toContain('v25SaveOrderKeepingRenames(toSave, renderedMixedOrder, viewOrder.length > 0)');
     expect(source).toContain('payload: buildV25SavePayload(orderedToSave)');
     expect(source).toContain('work_item: workItemOf(slot)');
     expect(source).toContain('v25WorkGroupsForDisplay(');

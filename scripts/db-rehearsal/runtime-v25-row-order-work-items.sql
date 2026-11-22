@@ -200,11 +200,16 @@ begin
     )));
   perform pg_temp.rwo_expect_eq('RWO-17 PR701 工事項目追加→Draft保存成功', 'true', (v_out ~ '^[0-9]+$')::text);
   perform pg_temp.rwo_expect_eq('RWO-18 PR701 再読込で新しい工事項目・品名・行ID・行順・原価単価を保持',
-    '手入力追加|5. 造作工事|5|4000|2400|2',
-    (select concat_ws('|', l.name, l.group_label, l.display_order::text, l.unit_price::text,
-                      l.cost_unit_price::text, l.quantity::text)
-       from public.standard_estimate_revision_v25_lines l
-      where l.revision_id = v_rev and l.line_key = '68800000-0000-4000-8000-000000000703'::uuid));
+    'true',
+    coalesce((select (l.name = '手入力追加'
+                      and l.group_label = '5. 造作工事'
+                      and l.display_order = 5
+                      and l.unit_price = 4000
+                      and l.cost_unit_price = 2400
+                      and l.quantity = 2)::text
+                from public.standard_estimate_revision_v25_lines l
+               where l.revision_id = v_rev
+                 and l.line_key = '68800000-0000-4000-8000-000000000703'::uuid), 'false'));
 
   -- 名称だけ変更。追加時点の原価Version・合計・数量・金額・sort_order・行IDを基準とする。
   v_money_a := (select concat_ws('/', r.subtotal_raw, r.subtotal, r.tax, r.total,

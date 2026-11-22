@@ -98,6 +98,7 @@ declare
   v_pin_b text;
   v_mixed text;
   v_reversed text;
+  v_generated_line_key uuid;
 begin
   set local session_replication_role = replica;
   insert into auth.users (id, email, raw_user_meta_data)
@@ -254,6 +255,47 @@ begin
   perform pg_temp.rwo_expect_eq('RWO-21 PR701 名称変更のみでは金額・数量・原価Version・原価単価・行ID・sort_orderは不変',
     'true/true/draft', (v_money_a = v_money_b)::text || '/' || (v_pin_a = v_pin_b)::text ||
     '/' || (select status from public.standard_estimate_revisions where id = v_rev));
+
+
+  -- ---------- PR #701 実際の「＋ 工事項目」初期値：line_key=null・price_mode=por ----------
+  -- UIでは名前入力後も新規行の line_key は null。保存RPCがUUIDを発番し、再読込後も保持できるかを検査。
+  v_out := pg_temp.rwo_save(u_editor, v_rev, pg_temp.rwo_payload(
+    jsonb_build_array(pg_temp.rwo_slot(r1, k_r1, 3, '2. 屋根・板金工事'), pg_temp.rwo_slot(m1, k_m1, 1, null)),
+    jsonb_build_array(
+      pg_temp.rwo_line(k_l1, '手入力1', '1. 設備機器', 1000, 4),
+      pg_temp.rwo_line(k_l2, '手入力2', '2. 屋根・板金工事', 3000, 2),
+      pg_temp.rwo_line(null, '新規補修明細', '6. 補修工事', 0, 5) ||
+        jsonb_build_object('price_mode', 'por', 'unit_price', null, 'cost_unit_price', null)
+    )));
+  perform pg_temp.rwo_expect_eq('RWO-22 PR701 未保存line_key=null・別途見積からDraft保存', 'true',
+    (v_out ~ '^[0-9]+$')::text);
+  select l.line_key into v_generated_line_key
+    from public.standard_estimate_revision_v25_lines l
+   where l.revision_id = v_rev and l.name = '新規補修明細';
+  perform pg_temp.rwo_expect_eq('RWO-23 PR701 保存後に行IDを発番し別途見積と数量・混在順を復元', 'true',
+    coalesce((select (l.line_key is not null and l.group_label = '6. 補修工事'
+                     and l.display_order = 5 and l.quantity = 2
+                     and l.price_mode = 'por' and l.unit_price is null
+                     and l.cost_unit_price is null and l.amount is null)::text
+                from public.standard_estimate_revision_v25_lines l
+               where l.revision_id = v_rev and l.line_key = v_generated_line_key), 'false'));
+  v_out := pg_temp.rwo_save(u_editor, v_rev, pg_temp.rwo_payload(
+    jsonb_build_array(pg_temp.rwo_slot(r1, k_r1, 3, '2. 屋根・板金工事'), pg_temp.rwo_slot(m1, k_m1, 1, null)),
+    jsonb_build_array(
+      pg_temp.rwo_line(k_l1, '手入力1', '1. 設備機器', 1000, 4),
+      pg_temp.rwo_line(k_l2, '手入力2', '2. 屋根・板金工事', 3000, 2),
+      pg_temp.rwo_line(v_generated_line_key, '新規補修明細', '6. 補修仕上工事', 0, 5) ||
+        jsonb_build_object('price_mode', 'por', 'unit_price', null, 'cost_unit_price', null)
+    )));
+  perform pg_temp.rwo_expect_eq('RWO-24 PR701 再読込した新規行の見出し変更→再保存', 'true',
+    (v_out ~ '^[0-9]+$')::text);
+  perform pg_temp.rwo_expect_eq('RWO-25 PR701 再保存でも新規の行ID・見出し・数量・順序・別途見積を保持', 'true',
+    coalesce((select (l.group_label = '6. 補修仕上工事'
+                     and l.display_order = 5 and l.quantity = 2
+                     and l.price_mode = 'por' and l.unit_price is null
+                     and l.cost_unit_price is null and l.amount is null)::text
+                from public.standard_estimate_revision_v25_lines l
+               where l.revision_id = v_rev and l.line_key = v_generated_line_key), 'false'));
 
   -- ---------- 決まり ----------
   perform pg_temp.rwo_expect_eq('RWO-8 並び順を一部の行だけに付けると止まる', 'true',

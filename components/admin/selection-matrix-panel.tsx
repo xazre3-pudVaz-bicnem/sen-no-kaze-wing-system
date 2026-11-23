@@ -247,7 +247,7 @@ export function SelectionMatrixPanel({
             停止中も表示
           </label>
         </div>
-        <p className="mt-3 text-xs text-muted">「防火」は商品カテゴリーではなく仕様の条件です。設備15項目の選択可否は仕様別、下部の「お客様への共通表示」は全仕様共通です。変更した行だけ個別に保存します。</p>
+        <p className="mt-3 text-xs text-muted">「防火」は商品カテゴリーではなく仕様の条件です。設備{activeItems.length}項目の選択可否は仕様別、下部の「お客様への共通表示」は全仕様共通です。変更した行だけ個別に保存します。</p>
         <div className="mt-3 max-h-[70vh] overflow-auto overscroll-contain rounded-lg border border-line" data-testid="matrix-grid-scroll" tabIndex={0} aria-label="仕様別の選択可否表（横スクロール可能）">
           <table className="w-full min-w-[122rem] border-collapse text-left text-xs" data-testid="matrix-excel-grid">
             <thead className="sticky top-0 z-30 bg-[#f7f8f8]">

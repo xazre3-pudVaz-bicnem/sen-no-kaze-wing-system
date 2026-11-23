@@ -387,7 +387,10 @@ describe('corrective migration and simulator contract', () => {
       const fromMatrix = SEED_MATRIX.rows[modelSlug]?.[specCode];
       // 確定 6 行に無い仕様（room / storage / BOX residence・office）は行が無く、選べない
       if (!fromMatrix) continue;
-      expect([...items].sort(), `${modelSlug}/${specCode}`).toEqual([...fromMatrix].sort());
+      // The corrective migration is historical (15 columns); current local seed adds 2 items in #707.
+      expect([...items].sort(), `${modelSlug}/${specCode}`).toEqual(
+        [...fromMatrix].filter((code) => code !== 'aircon' && code !== 'lighting').sort()
+      );
     }
     expect(Object.keys(SEED_MATRIX.rows.box).sort()).toEqual(['base', 'hotel', 'hotel-single', 'water-kit']);
     // PR B（20261013130000）で、同じ署名のまま DB のマトリクスを読む実装へ置き換え、確定対応を登録する
@@ -400,7 +403,8 @@ describe('corrective migration and simulator contract', () => {
     const sqlMapping = Object.fromEntries(
       [...migration.matchAll(/^\s+when '([a-z-]+)' then '([a-z-]+)'$/gm)].map((m) => [m[1], m[2]])
     );
-    expect(sqlMapping).toEqual({ ...SEED_MATRIX.itemByCategoryCode });
+    // Historical migration mapping is unchanged; #707 remaps only the two categories later.
+    expect(sqlMapping).toEqual(Object.fromEntries(MATRIX_CATEGORY_ITEM_SEED));
     expect(migration).toContain("when 'boiler' then 'boiler'");
     expect(migration).not.toContain("when 'boiler' then 'other'");
     expect(migration).toContain('POSTCONDITION: boiler selectability must equal UB/SWR on every model/spec row');

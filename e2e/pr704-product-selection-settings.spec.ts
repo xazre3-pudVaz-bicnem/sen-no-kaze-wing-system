@@ -31,7 +31,7 @@ test('本部PC：全仕様のExcel表・絞り込み・ドラフトをカテゴ�
   const grid = page.getByTestId('matrix-excel-grid');
   await expect(grid).toBeVisible();
   await expect(page.getByRole('tablist', { name: '商品選択設定' })).toHaveCount(0);
-  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(15);
+  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(17);
   const row = firstRow(page);
   const kitchen = category(row, 'キッチン');
   const initial = await kitchen.isChecked();
@@ -104,7 +104,7 @@ test('PCとPixel 7：権限・旧URL・固定ヘッダー・横スクロール�
   test.setTimeout(180_000);
   await signInOrRegister(page, MASTER_EMAIL, path, '総代理店 テスト');
   await page.goto(path);
-  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(15);
+  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(17);
   await expect(category(firstRow(page), 'キッチン')).toBeDisabled();
   await openCommonDisplay(page);
   await expect(page.getByRole('link', { name: '詳細編集' }).first()).toBeVisible();
@@ -136,7 +136,7 @@ test('PCとPixel 7：権限・旧URL・固定ヘッダー・横スクロール�
     await mobilePage.goto(path);
     const scroll = mobilePage.getByTestId('matrix-grid-scroll');
     await expect(scroll).toBeVisible();
-    await expect(firstRow(mobilePage).getByTestId('matrix-excel-cell')).toHaveCount(15);
+    await expect(firstRow(mobilePage).getByTestId('matrix-excel-cell')).toHaveCount(17);
     const bounds = await scroll.boundingBox();
     expect(bounds).toBeTruthy();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);

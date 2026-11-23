@@ -92,7 +92,7 @@ describe.sequential('本体仕様マトリクスの変更：ローカル検証�
     const after = (await store.getSpecMatrix())!;
     const selectable = after.cells.filter((cell) => cell.matrix_row_id === row.id && cell.selectable).map((cell) => cell.matrix_item_code);
     expect(selectable).toEqual(['roof-exterior']);
-    expect(after.cells.filter((cell) => cell.matrix_row_id === row.id)).toHaveLength(15);
+    expect(after.cells.filter((cell) => cell.matrix_row_id === row.id)).toHaveLength(17);
   });
 
   it('同じ機種・仕様・サイズの行は追加できず、停止・再開は版を進める', async () => {

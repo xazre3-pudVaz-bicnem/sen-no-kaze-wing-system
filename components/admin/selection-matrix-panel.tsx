@@ -65,6 +65,11 @@ export function SelectionMatrixPanel({
     fire_selectable: false,
   });
 
+  const [modelFilter, setModelFilter] = useState('all');
+  const [specFilter, setSpecFilter] = useState('all');
+  const [sizeFilter, setSizeFilter] = useState('all');
+  const [showRetired, setShowRetired] = useState(false);
+
   const activeItems = useMemo(() => items.filter((item) => item.status === 'active'), [items]);
   // クライアント側で復元できてから書き込むため、ハイドレーション中に原本を消さない。
   useEffect(() => {
@@ -101,26 +106,25 @@ export function SelectionMatrixPanel({
     return () => window.removeEventListener('beforeunload', warn);
   }, [drafts, rows]);
 
-  const chooseRow = (id: string) => {
-    if (selected && selected.id !== id && isDirty(selected)) {
-      if (!window.confirm('未保存の変更があります。破棄して別の仕様を表示しますか？')) return;
-      setDrafts((current) => {
-        const next = { ...current };
-        delete next[selected.id];
-        return next;
-      });
-    }
-    setSelectedId(id);
-    setNotice(null);
-  };
-
-  const modelRows = selected ? rows.filter((row) => row.base_model_id === selected.base_model_id) : [];
-  const specRows = selected ? modelRows.filter((row) => row.spec_code === selected.spec_code) : [];
+  // Excel型一覧では仕様の切替で他行の未保存変更を捨てず、行単位で保持する。
   const modelIds = [...new Set(rows.map((row) => row.base_model_id))];
-  const specCodes = [...new Set(modelRows.map((row) => row.spec_code))];
-  const draft = selected ? draftOf(selected) : null;
-  const retired = selected?.status === 'retired';
-  const staleDraft = Boolean(selected && draft && draft.lockVersion !== selected.lock_version);
+  const specCodes = [...new Set(rows.filter((row) => modelFilter === 'all' || row.base_model_id === modelFilter)
+    .map((row) => row.spec_code))];
+  const sizeCodes = [...new Set(rows.filter((row) =>
+    (modelFilter === 'all' || row.base_model_id === modelFilter) &&
+    (specFilter === 'all' || row.spec_code === specFilter))
+    .map((row) => row.size_code))];
+  const visibleRows = rows.filter((row) =>
+    (showRetired || row.status === 'active') &&
+    (modelFilter === 'all' || row.base_model_id === modelFilter) &&
+    (specFilter === 'all' || row.spec_code === specFilter) &&
+    (sizeFilter === 'all' || row.size_code === sizeFilter)
+  );
+  const staleDrafts = rows.filter((row) => {
+    const draft = drafts[row.id];
+    return draft && draft.lockVersion !== row.lock_version;
+  });
+  const dirtyCount = rows.filter(isDirty).length;
 
   const save = (row: MatrixEditorRow) => {
     const changes = draftOf(row);
@@ -200,124 +204,157 @@ export function SelectionMatrixPanel({
 
   return (
     <div className="space-y-4" data-testid="selection-matrix-panel">
-      <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
-        <h2 className="text-lg font-semibold">機種・仕様・サイズごとの選択可否</h2>
-        <p className="mt-1 text-sm text-muted">
-          ここでは仕様別に選べる設備・工事項目を設定します。項目の下には対応カテゴリーの共通表示状態を併記しています。
-        </p>
-        {!canEdit && <p className="mt-2 text-sm font-medium text-ink-soft">閲覧のみ：変更できるのは本部管理者です。</p>}
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <section className="rounded-xl border border-line bg-white p-3 sm:p-5" aria-label="仕様別の選択可否一覧">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">機種・仕様・サイズごとの選択可否</h2>
+            <p className="mt-1 text-xs text-muted">元のExcelと同じ一覧表です。横方向にスクロールして、各仕様の選択可否を確認できます。</p>
+          </div>
+          <div className="text-xs text-ink-soft" data-testid="matrix-unsaved-count">
+            表示 {visibleRows.length} / {rows.length} 行
+            {dirtyCount > 0 && <span className="ml-2 font-semibold text-amber-800">未保存 {dirtyCount} 行</span>}
+          </div>
+        </div>
+        {!canEdit && <p className="mt-2 text-sm font-medium text-ink-soft">閲覧のみ：仕様別設定を変更できるのは本部管理者です。</p>}
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="matrix-grid-filters">
           <Field label="機種" htmlFor="selection-matrix-model">
-            <Select
-              id="selection-matrix-model"
-              value={selected?.base_model_id ?? ''}
-              disabled={pending || !hydrated || modelIds.length === 0}
-              onChange={(event) => chooseRow(rows.find((row) => row.base_model_id === event.target.value)?.id ?? '')}
-            >
+            <Select id="selection-matrix-model" value={modelFilter} onChange={(event) => {
+              setModelFilter(event.target.value);
+              setSpecFilter('all');
+              setSizeFilter('all');
+            }}>
+              <option value="all">すべて</option>
               {modelIds.map((id) => <option key={id} value={id}>{models.find((model) => model.id === id)?.name ?? id}</option>)}
             </Select>
           </Field>
           <Field label="仕様" htmlFor="selection-matrix-spec">
-            <Select
-              id="selection-matrix-spec"
-              value={selected?.spec_code ?? ''}
-              disabled={pending || !hydrated || !selected}
-              onChange={(event) => chooseRow(modelRows.find((row) => row.spec_code === event.target.value)?.id ?? '')}
-            >
+            <Select id="selection-matrix-spec" value={specFilter} onChange={(event) => {
+              setSpecFilter(event.target.value);
+              setSizeFilter('all');
+            }}>
+              <option value="all">すべて</option>
               {specCodes.map((code) => <option key={code} value={code}>{labelSpec(code)}</option>)}
             </Select>
           </Field>
           <Field label="サイズ" htmlFor="selection-matrix-size">
-            <Select
-              id="selection-matrix-size"
-              value={selected?.size_code ?? ''}
-              disabled={pending || !hydrated || !selected}
-              onChange={(event) => chooseRow(specRows.find((row) => row.size_code === event.target.value)?.id ?? '')}
-            >
-              {specRows.map((row) => (
-                <option key={row.id} value={row.size_code}>
-                  {labelSize(row.size_code)}{row.status === 'retired' ? '（停止中）' : ''}
-                </option>
-              ))}
+            <Select id="selection-matrix-size" value={sizeFilter} onChange={(event) => setSizeFilter(event.target.value)}>
+              <option value="all">すべて</option>
+              {sizeCodes.map((code) => <option key={code} value={code}>{labelSize(code)}</option>)}
             </Select>
           </Field>
+          <label className="flex items-center gap-2 self-end rounded-md border border-line px-3 py-2 text-sm">
+            <input type="checkbox" checked={showRetired} onChange={(event) => setShowRetired(event.target.checked)} />
+            停止中も表示
+          </label>
         </div>
-      </div>
+        <p className="mt-3 text-xs text-muted">「防火」は商品カテゴリーではなく仕様の条件です。設備15項目の選択可否は仕様別、下部の「お客様への共通表示」は全仕様共通です。変更した行だけ個別に保存します。</p>
+        <div className="mt-3 max-h-[70vh] overflow-auto overscroll-contain rounded-lg border border-line" data-testid="matrix-grid-scroll" tabIndex={0} aria-label="仕様別の選択可否表（横スクロール可能）">
+          <table className="w-full min-w-[122rem] border-collapse text-left text-xs" data-testid="matrix-excel-grid">
+            <thead className="sticky top-0 z-30 bg-[#f7f8f8]">
+              <tr>
+                <th scope="col" className="sticky left-0 z-40 w-[120px] min-w-[120px] border-b border-r border-line bg-[#f7f8f8] px-2 py-3">機種</th>
+                <th scope="col" className="z-40 w-[130px] min-w-[130px] border-b border-r border-line bg-[#f7f8f8] px-2 py-3 md:sticky md:left-[120px]">仕様</th>
+                <th scope="col" className="z-40 w-[125px] min-w-[125px] border-b border-r border-line bg-[#f7f8f8] px-2 py-3 md:sticky md:left-[250px]">サイズ</th>
+                <th scope="col" className="min-w-[78px] border-b border-line px-2 py-3 text-center">防火</th>
+                {activeItems.map((item) => {
+                  const mapped = related(item.code);
+                  return (
+                    <th scope="col" key={item.code} className="min-w-[96px] max-w-[116px] border-b border-line px-2 py-2 text-center">
+                      <span className="block font-semibold">{item.label}</span>
+                      <details className="mt-1 text-left font-normal">
+                        <summary className="cursor-pointer text-center text-[10px] text-ink-soft">対応 {mapped.length} 件</summary>
+                        <div className="mt-1 rounded border border-line bg-white p-1.5 text-[10px] font-normal text-ink-soft">
+                          {mapped.length ? mapped.map((category) => (
+                            <p key={category.id}>{category.name}（共通表示：{category.customer_visible ? '表示' : '非表示'}）</p>
+                          )) : <p>対応カテゴリーなし</p>}
+                        </div>
+                      </details>
+                    </th>
+                  );
+                })}
+                <th scope="col" className="min-w-[175px] border-b border-l border-line bg-[#f7f8f8] px-2 py-3 text-center lg:sticky lg:right-0 lg:z-40">操作（行単位）</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((row) => {
+                const draft = draftOf(row);
+                const dirty = isDirty(row);
+                const retired = row.status === 'retired';
+                const staleDraft = draft.lockVersion !== row.lock_version;
+                const locked = !canEdit || retired || pending || staleDraft;
+                const rowBg = retired ? 'bg-slate-50 text-muted' : 'bg-white';
+                return (
+                  <tr key={row.id} data-testid="matrix-excel-row" data-row-id={row.id}
+                    className={('border-b border-line last:border-b-0 ' + rowBg)}>
+                    <th scope="row" className={('sticky left-0 z-20 w-[120px] min-w-[120px] border-r border-line px-2 py-2 text-xs font-semibold ' + rowBg)}>
+                      {row.model_name}
+                      {dirty && <span className="mt-1 block text-[10px] text-amber-800">未保存</span>}
+                      {retired && <span className="mt-1 block text-[10px]">停止中</span>}
+                    </th>
+                    <td className={('w-[130px] min-w-[130px] border-r border-line px-2 py-2 md:sticky md:left-[120px] md:z-20 ' + rowBg)}>{labelSpec(row.spec_code)}</td>
+                    <td className={('w-[125px] min-w-[125px] border-r border-line px-2 py-2 md:sticky md:left-[250px] md:z-20 ' + rowBg)}>{labelSize(row.size_code)}</td>
+                    <td className="px-2 py-2 text-center">
+                      <input type="checkbox" checked={draft.fire} disabled={locked}
+                        aria-label={row.model_name + ' ' + labelSpec(row.spec_code) + ' ' + labelSize(row.size_code) + ' の防火を選択可能にする'}
+                        onChange={(event) => {
+                          setSelectedId(row.id);
+                          setDrafts((current) => ({ ...current, [row.id]: { ...draft, fire: event.target.checked } }));
+                        }} />
+                    </td>
+                    {activeItems.map((item) => (
+                      <td key={item.code} className="px-2 py-2 text-center" data-testid="matrix-excel-cell">
+                        <input type="checkbox" checked={draft.items.includes(item.code)} disabled={locked}
+                          aria-label={row.model_name + ' ' + labelSpec(row.spec_code) + ' ' + labelSize(row.size_code) + ' ' + item.label + ' を選択可能にする'}
+                          onChange={(event) => {
+                            setSelectedId(row.id);
+                            setDrafts((current) => ({
+                              ...current,
+                              [row.id]: {
+                                ...draft,
+                                items: event.target.checked
+                                  ? [...draft.items, item.code]
+                                  : draft.items.filter((code) => code !== item.code),
+                              },
+                            }));
+                          }} />
+                      </td>
+                    ))}
+                    <td className={('border-l border-line px-2 py-2 lg:sticky lg:right-0 lg:z-20 ' + rowBg)}>
+                      {canEdit && (
+                        <div className="flex min-w-[160px] flex-wrap gap-1">
+                          <Button type="button" size="sm" disabled={!dirty || pending || retired || staleDraft} onClick={() => save(row)}>
+                            保存
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" disabled={!dirty || pending} onClick={() => {
+                            setDrafts((current) => {
+                              const next = { ...current };
+                              delete next[row.id];
+                              return next;
+                            });
+                          }}>破棄</Button>
+                          <Button type="button" size="sm" variant="ghost" disabled={pending || dirty}
+                            onClick={() => changeStatus(row, retired ? 'active' : 'retired')}>
+                            {retired ? '再開' : '停止'}
+                          </Button>
+                        </div>
+                      )}
+                      {staleDraft && <p className="mt-1 text-[10px] text-red-700">版が更新されています。破棄して再編集してください。</p>}
+                    </td>
+                  </tr>
+                );
+              })}
+              {visibleRows.length === 0 && (
+                <tr><td colSpan={activeItems.length + 5} className="px-4 py-6 text-center text-sm text-muted">該当する仕様行はありません。</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-xs text-muted">横スクロールできます。ヘッダーと左側の機種名を固定しています。行の保存・破棄・停止／再開はそれぞれ独立した操作です。</p>
+      </section>
       {restoration.failed && <Alert tone="warn">このブラウザでは一時保管を利用できません。移動前に設定を保存してください。</Alert>}
       {Object.keys(restoration.cache.drafts).length > 0 && Object.keys(drafts).length > 0 && <Alert tone="info">このブラウザタブの未保存変更を復元しました。保存または破棄するまで保持します。</Alert>}
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
-      {staleDraft && <Alert tone="warn">別の画面でこの仕様が更新されています。復元した変更は自動保存されません。内容を確認し、変更を破棄してから再編集してください。</Alert>}
-      {selected && draft ? (
-        <section className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5" aria-label="仕様別の設定">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="font-semibold">{selected.model_name} / {labelSpec(selected.spec_code)} / {labelSize(selected.size_code)}</h3>
-              <p className="mt-1 text-xs text-muted">{retired ? '停止中の行です。' : '選択可否を変更してから、この仕様の設定だけ保存します。'}</p>
-            </div>
-            {retired && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-ink-soft">停止中</span>}
-          </div>
-          <label className="flex items-center gap-3 rounded-lg border border-line bg-sand/30 px-3 py-3 text-sm">
-            <input
-              type="checkbox"
-              checked={draft.fire}
-              disabled={!canEdit || retired || pending || !hydrated || staleDraft}
-              onChange={(event) => setDrafts((current) => ({
-                ...current, [selected.id]: { ...draft, fire: event.target.checked },
-              }))}
-              aria-label="この仕様で防火を選べる"
-            />
-            <span className="font-medium">防火仕様を選択可能にする</span>
-          </label>
-          <div className="divide-y divide-line rounded-lg border border-line">
-            {activeItems.map((item) => {
-              const mapped = related(item.code);
-              const checked = draft.items.includes(item.code);
-              return (
-                <label key={item.code} className="flex items-start gap-3 px-3 py-3 sm:px-4" data-testid="matrix-item-row">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={!canEdit || retired || pending || !hydrated || staleDraft}
-                    onChange={() => setDrafts((current) => ({
-                      ...current,
-                      [selected.id]: {
-                        ...draft,
-                        items: checked ? draft.items.filter((code) => code !== item.code) : [...draft.items, item.code],
-                      },
-                    }))}
-                    aria-label={item.label + ' を選択可能にする'}
-                    className="mt-1"
-                  />
-                  <span className="min-w-0 flex-1 space-y-1">
-                    <span className="block text-sm font-medium">{item.label}</span>
-                    <span className="block text-xs text-muted">
-                      {mapped.length ? mapped.map((category) =>
-                        category.name + '（共通表示：' + (category.customer_visible ? '表示' : '非表示') + '）'
-                      ).join(' / ') : '対応カテゴリーの登録なし'}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs text-ink-soft">{checked ? '選択可' : '不可'}</span>
-                </label>
-              );
-            })}
-          </div>
-          {canEdit && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex gap-2">
-                <Button type="button" disabled={!isDirty(selected) || pending || retired || !hydrated || staleDraft} onClick={() => save(selected)}>この仕様を保存</Button>
-                <Button type="button" variant="ghost" disabled={!isDirty(selected) || pending || !hydrated} onClick={() => setDrafts((current) => {
-                  const next = { ...current };
-                  delete next[selected.id];
-                  return next;
-                })}>変更を破棄</Button>
-              </div>
-              <Button type="button" size="sm" variant="ghost" disabled={pending || !hydrated || isDirty(selected)} onClick={() => changeStatus(selected, retired ? 'active' : 'retired')}>
-                {retired ? '行を再開' : '行を停止'}
-              </Button>
-            </div>
-          )}
-        </section>
-      ) : <Alert tone="warn">表示できる仕様行がありません。</Alert>}
+      {staleDrafts.length > 0 && <Alert tone="warn">別の画面で仕様が更新されています。復元した変更は自動保存されません。該当行の変更を破棄してから再編集してください。</Alert>}
       {canEdit && (
         <details className="rounded-xl border border-line bg-white p-4 sm:p-5">
           <summary className="cursor-pointer text-sm font-semibold">＋ 仕様行を追加</summary>
@@ -351,7 +388,7 @@ export function SelectionMatrixPanel({
         </details>
       )}
       <p className="text-xs text-muted">
-        「共通表示」は別タブで管理します。この画面の選択可否とは別の設定です。保存するとシミュレーターや見積依頼の選択判定に影響します。
+        「お客様への共通表示」は、このページ下部でカテゴリーごとに個別保存します。仕様別の選択可否とは別設定です。変更はシミュレーターや見積依頼の選択判定に影響します。
       </p>
     </div>
   );

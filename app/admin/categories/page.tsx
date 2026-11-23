@@ -6,7 +6,6 @@ import { hasRoleAtLeast, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/typ
 import { AdminPage } from '@/components/admin/ui';
 import { CategoryForm } from '@/components/admin/forms';
 import { CustomerCategoryVisibilityPanel } from '@/components/admin/customer-category-visibility-panel';
-import { ProductSelectionSettingsTabs } from '@/components/admin/product-selection-settings-tabs';
 import { SelectionMatrixPanel } from '@/components/admin/selection-matrix-panel';
 import type { MatrixEditorRow } from '@/components/admin/matrix-editor';
 import { Alert } from '@/components/ui';
@@ -33,9 +32,6 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
     ? categories.find((category) => category.id === params.edit) ?? null
     : null;
   const creating = canEditCategories && params.create === '1' && !editingCategory;
-  const initialTab = (params.edit || params.create)
-    ? 'categories'
-    : params.tab === 'matrix' ? 'matrix' : 'categories';
 
   const rows: MatrixEditorRow[] = matrix?.rows.map((row) => ({
     ...row,
@@ -48,7 +44,7 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
   return (
     <AdminPage
       title="商品選択設定"
-      lead="機種・仕様別の選択可否と、お客様への共通表示を2つのタブで管理します。設定と保存先は従来どおり別々です。防火仕様は商品カテゴリーではなく、標準見積・本体仕様の条件として管理します。"
+      lead="機種・仕様・サイズごとの選択可否をExcel型の一覧で管理します。下部でお客様への共通表示を設定できます。設定と保存先は別々です。防火仕様は商品カテゴリーではなく、標準見積・本体仕様の条件として管理します。"
       actions={
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/base-masters" className="btn-secondary btn-sm">本体マスター</Link>
@@ -57,32 +53,35 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
         </div>
       }
     >
-      <ProductSelectionSettingsTabs
-        initialTab={initialTab}
-        matrix={
-          matrix ? (
-            <div className="space-y-3">
-              <Alert tone="info">
-                仕様別の変更はシミュレーターの選択肢、Configuration の保存・見積依頼の検査に反映されます。
-                発行済みの見積・承諾済みの内容は変更しません。
-              </Alert>
-              <SelectionMatrixPanel
-                rows={rows}
-                items={matrix.items}
-                specs={matrix.specs}
-                sizes={matrix.sizes}
-                models={models.map((model) => ({ id: model.id, name: model.name }))}
-                categories={categories}
-                categoryItems={matrix.categoryItems}
-                canEdit={canEditMatrix}
-                actorId={actor.id}
-              />
-            </div>
-          ) : (
-            <Alert tone="warn">本体仕様マトリクスがありません（DBの更新が未適用の可能性があります）。</Alert>
-          )
-        }
-        categories={
+
+      <section id="matrix-settings" className="space-y-3 scroll-mt-4" aria-label="仕様別の選択可否">
+        <Alert tone="info">
+          仕様別の変更はシミュレーターの商品選択、Configuration の保存・見積依頼の検査に反映されます。
+          発行済み見積・承諾済みの内容は変更しません。下部の「お客様への共通表示」とは別々に保存します。
+        </Alert>
+        {matrix ? (
+          <SelectionMatrixPanel
+            rows={rows}
+            items={matrix.items}
+            specs={matrix.specs}
+            sizes={matrix.sizes}
+            models={models.map((model) => ({ id: model.id, name: model.name }))}
+            categories={categories}
+            categoryItems={matrix.categoryItems}
+            canEdit={canEditMatrix}
+            actorId={actor.id}
+          />
+        ) : (
+          <Alert tone="warn">本体仕様マトリクスがありません（DBの更新が未適用の可能性があります）。</Alert>
+        )}
+      </section>
+      <section id="customer-visibility" className="mt-5 scroll-mt-4" aria-label="お客様への共通表示">
+        <details className="rounded-xl border border-line bg-white" open={Boolean(editingCategory || creating)}>
+          <summary className="cursor-pointer px-4 py-4 text-base font-semibold sm:px-5">
+            お客様への共通表示・カテゴリー詳細設定（全機種・全仕様共通）
+            <span className="ml-2 text-xs font-normal text-muted">開いて編集</span>
+          </summary>
+          <div className="space-y-4 border-t border-line p-3 sm:p-4">
           <div className="space-y-5">
             <CustomerCategoryVisibilityPanel
               categories={categories}
@@ -117,8 +116,9 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
               </section>
             )}
           </div>
-        }
-      />
+          </div>
+        </details>
+      </section>
     </AdminPage>
   );
 }

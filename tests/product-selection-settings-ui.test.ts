@@ -1,63 +1,74 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ProductSelectionSettingsTabs } from '@/components/admin/product-selection-settings-tabs';
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
-describe('商品選択設定の2タブUI', () => {
-  it('PCとスマホ共通のタブを表示し、カテゴリータブを初期選択する', () => {
-    const html = renderToStaticMarkup(createElement(ProductSelectionSettingsTabs, {
-      initialTab: 'categories',
-      matrix: createElement('p', null, 'matrix content'),
-      categories: createElement('p', null, 'category content'),
-    }));
-    expect(html).toContain('role="tablist"');
-    expect(html).toContain('仕様別の選択可否');
-    expect(html).toContain('お客様への共通表示');
-    expect(html).toContain('id="settings-tab-categories" role="tab" aria-selected="true"');
-    expect(html).toContain('id="settings-panel-matrix" role="tabpanel" aria-labelledby="settings-tab-matrix" hidden=""');
-  });
-
-  it('旧マトリクスURLから入る場合は仕様タブを初期選択する', () => {
-    const html = renderToStaticMarkup(createElement(ProductSelectionSettingsTabs, {
-      initialTab: 'matrix',
-      matrix: createElement('p', null, 'matrix content'),
-      categories: createElement('p', null, 'category content'),
-    }));
-    expect(html).toContain('id="settings-tab-matrix" role="tab" aria-selected="true"');
-    expect(html).toContain('id="settings-panel-categories" role="tabpanel" aria-labelledby="settings-tab-categories" hidden=""');
+describe('商品選択設定のExcel型1画面・工程A', () => {
+  it('2タブを廃止し、仕様別表と共通表示を同じページに配置する', () => {
+    const page = read('app/admin/categories/page.tsx');
+    expect(page).toContain('id="matrix-settings"');
+    expect(page).toContain('id="customer-visibility"');
+    expect(page).toContain('<SelectionMatrixPanel');
+    expect(page).toContain('<CustomerCategoryVisibilityPanel');
+    expect(page).not.toContain('<ProductSelectionSettingsTabs');
+    expect(page).not.toContain('key={initialTab}');
+    expect(page).toContain("requireStaff('/admin/categories')");
+    expect(page).toContain("hasRoleAtLeast(actor.role, 'master_dealer')");
+    expect(page).toContain("const canEditMatrix = actor.role === 'admin'");
     const legacy = read('app/admin/matrix/page.tsx');
     expect(legacy).toContain("await requireAdmin('/admin/matrix')");
     expect(legacy).toContain("redirect('/admin/categories?tab=matrix')");
   });
 
-  it('保存ActionとDB構造を変更せず、権限に応じて編集操作を隠す', () => {
-    const page = read('app/admin/categories/page.tsx');
+  it('一覧はすべての有効行を表示し、Excel型の16チェック列（防火＋現行15項目）と検索を備える', () => {
     const matrix = read('components/admin/selection-matrix-panel.tsx');
-    const categories = read('components/admin/customer-category-visibility-panel.tsx');
-    expect(page).toContain("requireStaff('/admin/categories')");
-    expect(page).toContain("hasRoleAtLeast(actor.role, 'master_dealer')");
-    expect(page).toContain("const canEditMatrix = actor.role === 'admin'");
-    expect(page).toContain('categoryItems={matrix.categoryItems}');
-    expect(matrix).toContain('expected_lock_version: row.lock_version');
-    expect(matrix).toContain('{canEdit && (');
-    expect(categories).toContain('disabled={pending || !canEdit}');
-    expect(categories).toContain('{canEdit && <button');
-    expect(categories).toContain('{canEdit && <Link');
+    expect(matrix).toContain('data-testid="matrix-excel-grid"');
+    expect(matrix).toContain('data-testid="matrix-excel-row"');
+    expect(matrix).toContain('data-testid="matrix-excel-cell"');
+    expect(matrix).toContain('max-h-[70vh] overflow-auto');
+    expect(matrix).toContain('sticky top-0');
+    expect(matrix).toContain('sticky left-0');
+    expect(matrix).toContain('activeItems.map((item) =>');
+    expect(matrix).toContain('draft.fire');
+    expect(matrix).toContain('modelFilter');
+    expect(matrix).toContain('specFilter');
+    expect(matrix).toContain('sizeFilter');
+    expect(matrix).toContain('showRetired');
+    expect(matrix).toContain('showRetired || row.status');
+    expect(matrix).toContain('対応 {mapped.length} 件');
+    expect(matrix).not.toContain('matrix-item-row');
+    expect(matrix).not.toContain('const chooseRow =');
   });
 
-  it('クライアント内の詳細編集・戻る操作で未保存ドラフトを黙って破棄しない', () => {
-    const page = read('app/admin/categories/page.tsx');
-    const tabs = read('components/admin/product-selection-settings-tabs.tsx');
+  it('編集権限・行別保存と破棄・停止再開・版番号競合・ドラフト復元を維持する', () => {
     const matrix = read('components/admin/selection-matrix-panel.tsx');
-    expect(page).not.toContain('key={initialTab}');
-    expect(tabs).toContain('const tab = selection.urlTab === initialTab ? selection.tab : initialTab;');
+    const categories = read('components/admin/customer-category-visibility-panel.tsx');
+    expect(matrix).toContain('expected_lock_version: changes.lockVersion');
+    expect(matrix).toContain('setMatrixRowStatusAction');
+    expect(matrix).toContain('createMatrixRowAction');
+    expect(matrix).toContain('disabled={locked}');
+    expect(matrix).toContain('const staleDraft = draft.lockVersion !== row.lock_version');
+    expect(matrix).toContain('rows.filter(isDirty).length');
     expect(matrix).toContain('restoreMatrixSettingsDrafts(window.sessionStorage.getItem(draftKey), initialRows)');
     expect(matrix).toContain('window.sessionStorage.setItem(draftKey, serializeMatrixSettingsDrafts({ drafts, selectedId }))');
-    expect(matrix).toContain('expected_lock_version: changes.lockVersion');
-    expect(matrix).toContain('staleDraft');
+    expect(matrix).toContain('window.addEventListener');
+    expect(matrix).toContain("delete next[row.id]");
+    expect(categories).toContain('disabled={pending || !canEdit}');
+    expect(categories).toContain('customerCategoryVisibilityFormData');
+    expect(categories).toContain('{canEdit && <button');
+    expect(categories).toContain('{canEdit && <Link');
+    expect(matrix).not.toContain('照明器具を独立'); // 工程BのDB設定を工程Aへ混ぜない
+  });
+
+  it('仕様別の選択可否とお客様への共通表示を一括保存にしない', () => {
+    const matrix = read('components/admin/selection-matrix-panel.tsx');
+    const category = read('components/admin/customer-category-visibility-panel.tsx');
+    expect(matrix).toContain('updateMatrixRowAction({');
+    expect(matrix).toContain('row_id: row.id');
+    expect(matrix).toContain('onClick={() => save(row)}');
+    expect(category).toContain('saveCategoryAction({ ok: false }, data)');
+    expect(category).toContain('onClick={() => saveVisibility(category, draftVisible(category))}');
+    expect(read('app/admin/categories/page.tsx')).toContain('別々に保存します。');
   });
 });

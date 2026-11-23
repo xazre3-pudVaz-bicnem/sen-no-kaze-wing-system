@@ -12,37 +12,52 @@ lock table public.matrix_items, public.matrix_rows, public.matrix_cells,
   public.option_category_matrix_items in share row exclusive mode;
 
 do $preflight$
+declare
+  v_empty boolean;
 begin
+  -- Existing foundation intentionally skips row and category mapping seed for
+  -- completely empty databases. Accept that state ONLY when both models and
+  -- products are empty; partial/prod data must pass the audited 6x15 baseline.
+  v_empty := not exists (select 1 from public.base_models)
+             and not exists (select 1 from public.options);
   if (select count(*) from public.matrix_items) <> 15
     or (select count(*) from public.matrix_items where status = 'active') <> 15
     or exists (select 1 from public.matrix_items where code in ('aircon', 'lighting')) then
     raise exception 'STOP 707: expected exactly 15 active legacy matrix items';
   end if;
 
-  if (select count(*) from public.matrix_rows) <> 6
-    or (select count(*) from public.matrix_rows where status = 'active') <> 6
-    or (select count(*) from public.matrix_cells) <> 90
-    or (select count(*) from public.matrix_cells where matrix_item_code = 'other') <> 6
-    or (select count(*) from public.matrix_cells where matrix_item_code = 'other' and selectable) <> 4
-    or exists (
-      select 1 from public.matrix_rows r
-       where (select count(*) from public.matrix_cells c where c.matrix_row_id = r.id) <> 15
-    ) then
-    raise exception 'STOP 707: legacy matrix rows/cells differ from audited baseline (6 x 15; other=true 4)';
-  end if;
+  if v_empty then
+    if exists (select 1 from public.matrix_rows)
+      or exists (select 1 from public.matrix_cells)
+      or exists (select 1 from public.option_category_matrix_items) then
+      raise exception 'STOP 707: empty database has partial matrix rows/cells/mapping';
+    end if;
+  else
+    if (select count(*) from public.matrix_rows) <> 6
+      or (select count(*) from public.matrix_rows where status = 'active') <> 6
+      or (select count(*) from public.matrix_cells) <> 90
+      or (select count(*) from public.matrix_cells where matrix_item_code = 'other') <> 6
+      or (select count(*) from public.matrix_cells where matrix_item_code = 'other' and selectable) <> 4
+      or exists (
+        select 1 from public.matrix_rows r
+         where (select count(*) from public.matrix_cells c where c.matrix_row_id = r.id) <> 15
+      ) then
+      raise exception 'STOP 707: legacy matrix rows/cells differ from audited baseline (6 x 15; other=true 4)';
+    end if;
 
-  if (select count(*) from public.option_category_matrix_items) <> 24
-    or (select count(*)
-          from public.option_category_matrix_items x
-          join public.option_categories c on c.id = x.category_id
-         where c.code in ('aircon', 'lighting', 'smartlock', 'exterior-parts')
-           and x.matrix_item_code = 'other') <> 4 then
-    raise exception 'STOP 707: expected the four categories mapped to other';
-  end if;
+    if (select count(*) from public.option_category_matrix_items) <> 24
+      or (select count(*)
+            from public.option_category_matrix_items x
+            join public.option_categories c on c.id = x.category_id
+           where c.code in ('aircon', 'lighting', 'smartlock', 'exterior-parts')
+             and x.matrix_item_code = 'other') <> 4 then
+      raise exception 'STOP 707: expected the four categories mapped to other';
+    end if;
 
-  if not exists(select 1 from public.option_categories where code='aircon' and status='published')
-    or not exists(select 1 from public.option_categories where code='lighting' and status='published') then
-    raise exception 'STOP 707: aircon and lighting must exist as published categories';
+    if not exists(select 1 from public.option_categories where code='aircon' and status='published')
+      or not exists(select 1 from public.option_categories where code='lighting' and status='published') then
+      raise exception 'STOP 707: aircon and lighting must exist as published categories';
+    end if;
   end if;
 end;
 $preflight$;
@@ -98,8 +113,9 @@ update public.matrix_rows
 do $postflight$
 begin
   if (select count(*) from public.matrix_items where status = 'active') <> 17
-    or (select count(*) from public.matrix_rows) <> 6
-    or (select count(*) from public.matrix_cells) <> 102
+    or (select count(*) from public.matrix_rows) not in (0, 6)
+    or (select count(*) from public.matrix_cells) <>
+       (select count(*) from public.matrix_rows) * 17
     or exists (
       select 1 from public.matrix_rows r
        where (select count(*) from public.matrix_cells c where c.matrix_row_id = r.id) <> 17
@@ -107,7 +123,8 @@ begin
     raise exception 'STOP 707: item/row/cell count mismatch after split';
   end if;
 
-  if (select count(*) from public.option_category_matrix_items) <> 24
+  if (select count(*) from public.option_category_matrix_items) <>
+       (case when (select count(*) from public.matrix_rows) = 0 then 0 else 24 end)
     or exists (
       select 1 from public.option_categories c
       join public.option_category_matrix_items x on x.category_id=c.id

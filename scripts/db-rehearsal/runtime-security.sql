@@ -442,7 +442,7 @@ begin
   -- 9. 本体仕様マトリクス：誰でも読めるが、API ロールからは書き換えられない（変更は管理画面の RPC だけ）
   ---------------------------------------------------------------------------
   if to_regclass('public.matrix_rows') is not null then
-    perform pg_temp.expect_eq('9-1 未ログインでも Matrix Item（15 項目）を読める', '15',
+    perform pg_temp.expect_eq('9-1 未ログインでも Matrix Item（17 項目）を読める', '17',
       pg_temp.run_as('anon', null, $q$ select count(*)::text from public.matrix_items where status = 'active' $q$));
     perform pg_temp.expect_eq('9-2 未ログインでも Matrix Row を読める（機種がある DB では確定 seed の 6 行）',
       (case when exists (select 1 from public.base_models where slug in ('wing-01', 'box', 'flat')) then '6' else '0' end),

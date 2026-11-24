@@ -21,7 +21,7 @@ describe('商品選択設定のExcel型1画面・工程A', () => {
     expect(legacy).toContain("redirect('/admin/categories?tab=matrix')");
   });
 
-  it('一覧はすべての有効行を表示し、Excel型の16チェック列（防火＋現行15項目）と検索を備える', () => {
+  it('一覧はすべての有効行を表示し、Excel型の動的チェック列（防火＋有効な項目）と検索を備える', () => {
     const matrix = read('components/admin/selection-matrix-panel.tsx');
     expect(matrix).toContain('data-testid="matrix-excel-grid"');
     expect(matrix).toContain('data-testid="matrix-excel-row"');

@@ -183,13 +183,13 @@ describe.sequential('本体仕様マトリクス: ローカル検証モード', 
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('空のローカル DB は確定 seed のマトリクス（6 行 × 15 項目）を持ち、機種 ID が解決されている', async () => {
+  it('空のローカル DB は現在のマトリクス（6 行 × 17 項目）を持ち、機種 ID が解決されている', async () => {
     const store = new LocalStore();
     const matrix = (await store.getSpecMatrix())!;
     const models = await store.listModels({ includeDraft: true });
-    expect(matrix.items).toHaveLength(15);
+    expect(matrix.items).toHaveLength(17);
     expect(matrix.rows).toHaveLength(6);
-    expect(matrix.cells).toHaveLength(90);
+    expect(matrix.cells).toHaveLength(102);
     // Category → Item はローカルにあるカテゴリーの分だけ（PR B の確定対応）
     const categories = (await store.getCatalogBundle(models[0].id, { includeDraft: true }))!.categories;
     const localMapped = MATRIX_CATEGORY_ITEM_SEED.filter(([code]) => categories.some((category) => category.code === code));

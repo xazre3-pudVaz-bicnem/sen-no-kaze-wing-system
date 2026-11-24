@@ -31,7 +31,7 @@ test('本部PC：全仕様のExcel表・絞り込み・ドラフトをカテゴ�
   const grid = page.getByTestId('matrix-excel-grid');
   await expect(grid).toBeVisible();
   await expect(page.getByRole('tablist', { name: '商品選択設定' })).toHaveCount(0);
-  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(15);
+  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(17);
   const row = firstRow(page);
   const kitchen = category(row, 'キッチン');
   const initial = await kitchen.isChecked();
@@ -100,11 +100,51 @@ test('本部PC：行別保存・再読込・別タブ更新による競合防止
   await expect.poll(() => currentDraft(page)).toBeNull();
 });
 
+// Issue #707：空調（エアコン）・照明器具は「その他」と別の列。1 つだけ変えて保存しても、ほかの 2 つは変わらない
+test('本部PC：空調・照明器具をその他と別々に保存・再読込（#707）', async ({ page }) => {
+  test.setTimeout(180_000);
+  await signInOrRegister(page, ADMIN_EMAIL, path, '本部管理者 テスト');
+  await page.goto(path);
+  await expect(page.getByText(/設備17項目の選択可否は仕様別/)).toBeVisible();
+  const states = async () => {
+    const row = firstRow(page);
+    return {
+      aircon: await category(row, '空調（エアコン）').isChecked(),
+      lighting: await category(row, '照明器具').isChecked(),
+      other: await category(row, 'その他').isChecked(),
+    };
+  };
+  const initial = await states();
+
+  // 空調だけを切り替えて保存 → 開き直す
+  await category(firstRow(page), '空調（エアコン）').setChecked(!initial.aircon);
+  await firstRow(page).getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText(/保存しました。シミュレーター/)).toBeVisible();
+  await page.reload();
+  expect(await states()).toEqual({ aircon: !initial.aircon, lighting: initial.lighting, other: initial.other });
+
+  // 照明器具だけを切り替えて保存 → 開き直す（空調は前の保存のまま、その他は最初のまま）
+  await category(firstRow(page), '照明器具').setChecked(!initial.lighting);
+  await firstRow(page).getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText(/保存しました。シミュレーター/)).toBeVisible();
+  await page.reload();
+  expect(await states()).toEqual({ aircon: !initial.aircon, lighting: !initial.lighting, other: initial.other });
+  await expect.poll(() => currentDraft(page)).toBeNull();
+
+  // 後片付け：空調・照明器具を最初の状態へ戻して保存する（後に流れるシミュレーターの試験に影響を残さない）
+  await category(firstRow(page), '空調（エアコン）').setChecked(initial.aircon);
+  await category(firstRow(page), '照明器具').setChecked(initial.lighting);
+  await firstRow(page).getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText(/保存しました。シミュレーター/)).toBeVisible();
+  await page.reload();
+  expect(await states()).toEqual(initial);
+});
+
 test('PCとPixel 7：権限・旧URL・固定ヘッダー・横スクロール・共通表示', async ({ page, browser }) => {
   test.setTimeout(180_000);
   await signInOrRegister(page, MASTER_EMAIL, path, '総代理店 テスト');
   await page.goto(path);
-  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(15);
+  await expect(firstRow(page).getByTestId('matrix-excel-cell')).toHaveCount(17);
   await expect(category(firstRow(page), 'キッチン')).toBeDisabled();
   await openCommonDisplay(page);
   await expect(page.getByRole('link', { name: '詳細編集' }).first()).toBeVisible();
@@ -136,7 +176,7 @@ test('PCとPixel 7：権限・旧URL・固定ヘッダー・横スクロール�
     await mobilePage.goto(path);
     const scroll = mobilePage.getByTestId('matrix-grid-scroll');
     await expect(scroll).toBeVisible();
-    await expect(firstRow(mobilePage).getByTestId('matrix-excel-cell')).toHaveCount(15);
+    await expect(firstRow(mobilePage).getByTestId('matrix-excel-cell')).toHaveCount(17);
     const bounds = await scroll.boundingBox();
     expect(bounds).toBeTruthy();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);

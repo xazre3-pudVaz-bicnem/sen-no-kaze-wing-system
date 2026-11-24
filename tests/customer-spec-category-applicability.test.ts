@@ -79,19 +79,19 @@ const option = (
 const controlledCategoryCodes = Object.keys(SEED_MATRIX.itemByCategoryCode);
 
 const matrixRows: Array<[string, string, readonly string[]]> = [
-  ['wing-01', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
-  ['wing-01', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
+  ['wing-01', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other','aircon','lighting']],
+  ['wing-01', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other','aircon','lighting']],
   // 確定 6 行（PR A）に無い仕様は、行が無いため対象カテゴリーを選べない（fail closed）
   ['wing-01', 'room', []],
-  ['wing-01', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']],
-  ['box', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
+  ['wing-01', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other','aircon','lighting']],
+  ['box', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other','aircon','lighting']],
   // 確定 6 行（PR A）に無い仕様は、行が無いため対象カテゴリーを選べない（fail closed）
   ['box', 'residence', []],
   // 確定 6 行（PR A）に無い仕様は、行が無いため対象カテゴリーを選べない（fail closed）
   ['box', 'room', []],
   // 確定 6 行（PR A）に無い仕様は、行が無いため対象カテゴリーを選べない（fail closed）
   ['box', 'office', []],
-  ['box', 'hotel-single', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
+  ['box', 'hotel-single', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other','aircon','lighting']],
   ['box', 'water-kit', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler']],
   // 確定 6 行（PR A）に無い仕様は、行が無いため対象カテゴリーを選べない（fail closed）
   ['box', 'storage', []],
@@ -99,7 +99,7 @@ const matrixRows: Array<[string, string, readonly string[]]> = [
 ];
 
 describe('confirmed classification-sheet business-item matrix', () => {
-  it.each(matrixRows)('%s / %s matches all 15 business columns', (modelSlug, specCode, selectedItems) => {
+  it.each(matrixRows)('%s / %s matches all 17 current business columns', (modelSlug, specCode, selectedItems) => {
     for (const categoryCode of controlledCategoryCodes) {
       const businessItem = SEED_MATRIX.itemByCategoryCode[categoryCode];
       expect(customerCategorySelectable(SEED_MATRIX, modelSlug, specCode, categoryCode), categoryCode).toBe(
@@ -122,16 +122,18 @@ describe('confirmed classification-sheet business-item matrix', () => {
     expect(SEED_MATRIX.itemByCategoryCode.furniture).toBe('furnishings');
     expect(SEED_MATRIX.itemByCategoryCode.appliances).toBe('furnishings');
     expect(SEED_MATRIX.itemByCategoryCode['office-supplies']).toBe('furnishings');
-    for (const code of ['aircon','lighting','smartlock','exterior-parts']) {
+    expect(SEED_MATRIX.itemByCategoryCode.aircon).toBe('aircon');
+    expect(SEED_MATRIX.itemByCategoryCode.lighting).toBe('lighting');
+    for (const code of ['smartlock', 'exterior-parts']) {
       expect(SEED_MATRIX.itemByCategoryCode[code]).toBe('other');
     }
   });
 
-  it('has exactly the 15 confirmed business items with boiler as its own item', () => {
+  it('has exactly 17 current business items with boiler, aircon and lighting independent', () => {
     expect([...new Set(Object.values(SEED_MATRIX.itemByCategoryCode))].sort()).toEqual(
       [
         'roof-exterior', 'interior', 'entrance-door', 'sash', 'bath', 'kitchen', 'washbasin', 'toilet',
-        'boiler', 'entrance-storage', 'interior-door', 'closet', 'bed', 'furnishings', 'other',
+        'boiler', 'entrance-storage', 'interior-door', 'closet', 'bed', 'furnishings', 'other', 'aircon', 'lighting',
       ].sort()
     );
     expect(SEED_MATRIX.itemByCategoryCode.boiler).toBe('boiler');
@@ -385,7 +387,10 @@ describe('corrective migration and simulator contract', () => {
       const fromMatrix = SEED_MATRIX.rows[modelSlug]?.[specCode];
       // 確定 6 行に無い仕様（room / storage / BOX residence・office）は行が無く、選べない
       if (!fromMatrix) continue;
-      expect([...items].sort(), `${modelSlug}/${specCode}`).toEqual([...fromMatrix].sort());
+      // The corrective migration is historical (15 columns); current local seed adds 2 items in #707.
+      expect([...items].sort(), `${modelSlug}/${specCode}`).toEqual(
+        [...fromMatrix].filter((code) => code !== 'aircon' && code !== 'lighting').sort()
+      );
     }
     expect(Object.keys(SEED_MATRIX.rows.box).sort()).toEqual(['base', 'hotel', 'hotel-single', 'water-kit']);
     // PR B（20261013130000）で、同じ署名のまま DB のマトリクスを読む実装へ置き換え、確定対応を登録する
@@ -398,7 +403,8 @@ describe('corrective migration and simulator contract', () => {
     const sqlMapping = Object.fromEntries(
       [...migration.matchAll(/^\s+when '([a-z-]+)' then '([a-z-]+)'$/gm)].map((m) => [m[1], m[2]])
     );
-    expect(sqlMapping).toEqual({ ...SEED_MATRIX.itemByCategoryCode });
+    // Historical migration mapping is unchanged; #707 remaps only the two categories later.
+    expect(sqlMapping).toEqual(Object.fromEntries(MATRIX_CATEGORY_ITEM_SEED));
     expect(migration).toContain("when 'boiler' then 'boiler'");
     expect(migration).not.toContain("when 'boiler' then 'other'");
     expect(migration).toContain('POSTCONDITION: boiler selectability must equal UB/SWR on every model/spec row');

@@ -130,6 +130,14 @@ test('本部PC：空調・照明器具をその他と別々に保存・再読込
   await page.reload();
   expect(await states()).toEqual({ aircon: !initial.aircon, lighting: !initial.lighting, other: initial.other });
   await expect.poll(() => currentDraft(page)).toBeNull();
+
+  // 後片付け：空調・照明器具を最初の状態へ戻して保存する（後に流れるシミュレーターの試験に影響を残さない）
+  await category(firstRow(page), '空調（エアコン）').setChecked(initial.aircon);
+  await category(firstRow(page), '照明器具').setChecked(initial.lighting);
+  await firstRow(page).getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText(/保存しました。シミュレーター/)).toBeVisible();
+  await page.reload();
+  expect(await states()).toEqual(initial);
 });
 
 test('PCとPixel 7：権限・旧URL・固定ヘッダー・横スクロール・共通表示', async ({ page, browser }) => {

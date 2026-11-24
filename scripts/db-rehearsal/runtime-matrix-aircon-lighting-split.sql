@@ -90,11 +90,23 @@ begin
       (select string_agg(c.code || '=' || x.matrix_item_code, ',' order by c.code)
          from public.option_category_matrix_items x join public.option_categories c on c.id = x.category_id
         where c.code in ('aircon', 'lighting', 'smartlock', 'exterior-parts')));
-    perform pg_temp.al_expect_eq('AL-2b 各行の空調・照明の値は「その他」と同じ（移行の直後の行）', '0',
-      (select count(*)::text from public.matrix_cells c
-         join public.matrix_cells o on o.matrix_row_id = c.matrix_row_id and o.matrix_item_code = 'other'
-         join public.matrix_rows r on r.id = c.matrix_row_id and r.lock_version = 2
-        where c.matrix_item_code in ('aircon', 'lighting') and c.selectable is distinct from o.selectable));
+    -- どの行にも有効な項目すべての値がある（空調・照明の値の無い行が無い）。値は移行の後に管理画面で変えられるので、
+    -- 「その他」と同じことは、移行の直後（版 2）の行がある DB でだけ確かめる
+    perform pg_temp.al_expect_eq('AL-2b どの行にも空調・照明の値がある（各行の値の数 = 有効な項目の数）', '0',
+      (select count(*)::text from public.matrix_rows r
+        where (select count(*) from public.matrix_cells c join public.matrix_items i on i.code = c.matrix_item_code and i.status = 'active'
+                where c.matrix_row_id = r.id) <> (select count(*) from public.matrix_items where status = 'active')
+           or not exists (select 1 from public.matrix_cells c where c.matrix_row_id = r.id and c.matrix_item_code = 'aircon')
+           or not exists (select 1 from public.matrix_cells c where c.matrix_row_id = r.id and c.matrix_item_code = 'lighting')));
+    if exists (select 1 from public.matrix_rows where lock_version = 2) then
+      perform pg_temp.al_expect_eq('AL-2c 移行の直後（版 2）の行は、空調・照明の値が「その他」と同じ',
+        (select count(*)::text from public.matrix_rows where lock_version = 2) || ' 行・違い 0',
+        (select count(*)::text from public.matrix_rows where lock_version = 2) || ' 行・違い ' ||
+        (select count(*)::text from public.matrix_cells c
+           join public.matrix_cells o on o.matrix_row_id = c.matrix_row_id and o.matrix_item_code = 'other'
+           join public.matrix_rows r on r.id = c.matrix_row_id and r.lock_version = 2
+          where c.matrix_item_code in ('aircon', 'lighting') and c.selectable is distinct from o.selectable));
+    end if;
   else
     perform pg_temp.al_expect_eq('AL-2 対応表（本番相当のデータが無い DB のため省略）', 'skipped', 'skipped');
   end if;

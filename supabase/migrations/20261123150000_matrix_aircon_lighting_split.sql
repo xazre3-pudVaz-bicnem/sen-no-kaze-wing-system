@@ -7,16 +7,20 @@ begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
--- Serialize this cutover against the matrix admin RPC and category mapping writers.
+-- Serialize this cutover against the matrix admin RPCs and category mapping writers.
 -- EXCLUSIVE (not SHARE ROW EXCLUSIVE): it also conflicts with the row lock that
--- update_matrix_row / set_matrix_row_status take first (SELECT ... FOR UPDATE), so a
--- save that starts during the cutover waits for it and then sees the bumped lock_version,
--- and a save already holding a row lock finishes before the cutover starts (no deadlock
--- between the two). Plain reads (simulator catalog, configuration category guards) are
--- ACCESS SHARE and are not blocked. lock_timeout aborts the whole cutover if a writer
--- keeps a conflicting lock.
-lock table public.matrix_items, public.matrix_rows, public.matrix_cells,
-  public.option_category_matrix_items in exclusive mode;
+-- update_matrix_row / set_matrix_row_status take first (SELECT ... FOR UPDATE) and with
+-- create_matrix_row's insert, so a save that starts during the cutover waits for it and
+-- then sees the bumped lock_version. Plain reads (simulator catalog, configuration
+-- category guards, v2.5 checks) are ACCESS SHARE and are not blocked.
+-- Lock order: matrix_rows first (every admin writer touches it before the other three
+-- tables, holding at most ACCESS SHARE on them), matrix_items last (it is only reached by
+-- writers through foreign-key checks from matrix_cells / option_category_matrix_items).
+-- A writer that already holds a lock on an earlier table can therefore always finish
+-- before the cutover takes the later ones, so the two never wait on each other in a cycle.
+-- lock_timeout aborts the whole cutover if a writer keeps a conflicting lock.
+lock table public.matrix_rows, public.matrix_cells, public.option_category_matrix_items,
+  public.matrix_items in exclusive mode;
 
 do $preflight$
 declare
@@ -153,6 +157,23 @@ begin
          or (c.code in ('smartlock','exterior-parts') and x.matrix_item_code<>'other')
     ) then
     raise exception 'STOP 707: category mapping mismatch after split';
+  end if;
+
+  -- With data, exactly one category maps to each new item (the published aircon / lighting
+  -- categories). option_categories is not locked, so a concurrent code change must not let
+  -- the remap silently miss a category.
+  if (select count(*) from public.matrix_rows) > 0 and (
+       (select count(*) from public.option_category_matrix_items x
+          join public.option_categories c on c.id = x.category_id
+         where x.matrix_item_code = 'aircon' and c.code = 'aircon') <> 1
+    or (select count(*) from public.option_category_matrix_items x
+          join public.option_categories c on c.id = x.category_id
+         where x.matrix_item_code = 'lighting' and c.code = 'lighting') <> 1
+    or exists (select 1 from public.option_category_matrix_items x
+                where x.matrix_item_code in ('aircon', 'lighting')
+                  and not exists (select 1 from public.option_categories c
+                                   where c.id = x.category_id and c.code = x.matrix_item_code))) then
+    raise exception 'STOP 707: aircon / lighting categories were not remapped exactly once';
   end if;
 
   if exists (

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LocalStore } from '@/lib/data/local-store';
 import { buildCustomerCategoryMatrix, customerCategorySelectable } from '@/lib/domain/customer-category-applicability';
-import { MATRIX_CURRENT_CATEGORY_ITEM_SEED, MATRIX_CURRENT_ITEM_SEED, buildSeedMatrix } from '@/lib/seed/matrix';
+import { MATRIX_CURRENT_CATEGORY_ITEM_SEED, MATRIX_CURRENT_ITEM_SEED, MATRIX_ITEM_EXTENSION_707, buildSeedMatrix } from '@/lib/seed/matrix';
 
 const migration = fs.readFileSync(
   path.join(process.cwd(), 'supabase/migrations/20261123150000_matrix_aircon_lighting_split.sql'),
@@ -13,7 +13,7 @@ const migration = fs.readFileSync(
 
 describe('Issue #707: atomic split contract', () => {
   it('new items inherit other; only aircon and lighting move; row versions invalidate stale clients', () => {
-    expect(migration).toContain("lock table public.matrix_items, public.matrix_rows, public.matrix_cells");
+    expect(migration).toContain("lock table public.matrix_rows, public.matrix_cells, public.option_category_matrix_items");
     expect(migration).toContain("c.matrix_item_code = 'other'");
     expect(migration).toContain("cross join (values ('aircon'), ('lighting'))");
     expect(migration).toContain("and c.code in ('aircon','lighting')");
@@ -27,12 +27,24 @@ describe('Issue #707: atomic split contract', () => {
     expect(MATRIX_CURRENT_CATEGORY_ITEM_SEED).toHaveLength(24);
   });
 
-  it('locks in EXCLUSIVE mode so an in-flight row save cannot deadlock with the cutover', () => {
-    // update_matrix_row / set_matrix_row_status first take SELECT ... FOR UPDATE (ROW SHARE).
-    // SHARE ROW EXCLUSIVE does not conflict with it; EXCLUSIVE does, while plain reads still pass.
-    expect(migration).toMatch(/lock table public\.matrix_items, public\.matrix_rows, public\.matrix_cells,\s+public\.option_category_matrix_items in exclusive mode;/);
+  it('locks in EXCLUSIVE mode, matrix_rows first and the FK target matrix_items last', () => {
+    // update_matrix_row / set_matrix_row_status first take SELECT ... FOR UPDATE (ROW SHARE) and
+    // create_matrix_row inserts a row (ROW EXCLUSIVE); SHARE ROW EXCLUSIVE does not conflict with the
+    // former, EXCLUSIVE conflicts with both while plain reads (ACCESS SHARE) still pass.
+    // Writers reach matrix_items only via FK checks after touching matrix_rows / cells / mapping,
+    // so locking it last keeps the cutover from waiting on a writer that waits on the cutover.
+    expect(migration).toMatch(/lock table public\.matrix_rows, public\.matrix_cells, public\.option_category_matrix_items,\s+public\.matrix_items in exclusive mode;/);
     expect(migration).not.toMatch(/in share row exclusive mode/);
+    expect(migration.match(/^lock table/gm)).toHaveLength(1);
     expect(migration).toContain("set local lock_timeout = '5s'");
+  });
+
+  it('the local seed adds exactly the items the migration inserts', () => {
+    for (const item of MATRIX_ITEM_EXTENSION_707) {
+      expect(migration).toContain(`('${item.code}', '${item.label}', ${item.sort_order}, '${item.status}')`);
+    }
+    expect(MATRIX_ITEM_EXTENSION_707.map((item) => item.code)).toEqual(['aircon', 'lighting']);
+    expect(migration).toContain("STOP 707: aircon / lighting categories were not remapped exactly once");
   });
 
   it('postflight compares full before-images of items, rows, cells, mappings and every category answer', () => {

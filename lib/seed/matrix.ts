@@ -47,7 +47,7 @@ export const MATRIX_ITEM_EXTENSION_707: MatrixItem[] = [
 export const MATRIX_CURRENT_ITEM_SEED: MatrixItem[] = [...MATRIX_ITEM_SEED, ...MATRIX_ITEM_EXTENSION_707]
   .sort((a, b) => a.sort_order - b.sort_order);
 
- /** 機種 slug・仕様・サイズ・防火の可否と、選択できる項目（列挙していない項目は選択不可） */
+/** 機種 slug・仕様・サイズ・防火の可否と、選択できる項目（列挙していない項目は選択不可） */
 export const MATRIX_ROW_SEED: Array<{
   model_slug: string;
   spec_code: string;

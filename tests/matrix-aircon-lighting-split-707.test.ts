@@ -27,6 +27,28 @@ describe('Issue #707: atomic split contract', () => {
     expect(MATRIX_CURRENT_CATEGORY_ITEM_SEED).toHaveLength(24);
   });
 
+  it('locks in EXCLUSIVE mode so an in-flight row save cannot deadlock with the cutover', () => {
+    // update_matrix_row / set_matrix_row_status first take SELECT ... FOR UPDATE (ROW SHARE).
+    // SHARE ROW EXCLUSIVE does not conflict with it; EXCLUSIVE does, while plain reads still pass.
+    expect(migration).toMatch(/lock table public\.matrix_items, public\.matrix_rows, public\.matrix_cells,\s+public\.option_category_matrix_items in exclusive mode;/);
+    expect(migration).not.toMatch(/in share row exclusive mode/);
+    expect(migration).toContain("set local lock_timeout = '5s'");
+  });
+
+  it('postflight compares full before-images of items, rows, cells, mappings and every category answer', () => {
+    for (const name of ['matrix_707_items_before', 'matrix_707_rows_before', 'matrix_707_cells_before', 'matrix_707_mapping_before']) {
+      expect(migration).toContain(`create temporary table ${name} on commit drop`);
+      expect(migration).toContain(`pg_temp.${name}`);
+    }
+    expect(migration).toContain('r.lock_version is distinct from b.lock_version + 1');
+    expect(migration).toContain("STOP 707: existing matrix cells changed");
+    expect(migration).toContain("STOP 707: category mappings changed beyond aircon/lighting");
+    // The selectability before-image covers every category, not only the four "other" categories.
+    const before = migration.slice(migration.indexOf('create temporary table matrix_707_before'), migration.indexOf('create temporary table matrix_707_other_before'));
+    expect(before).toContain('cross join public.option_categories c;');
+    expect(before).not.toContain("where c.code in");
+  });
+
   it('all six local rows preserve the four category answers at cutover; BOX alias remains unchanged', () => {
     const models = [
       { id:'model-wing', slug:'wing-01' },

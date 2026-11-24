@@ -40,6 +40,7 @@ import { runtimeV25RowOrderWorkItems } from './runtime-v25-row-order-work-items.
 import { runtimeV25ManualLineCosts } from './runtime-v25-manual-line-costs.mjs';
 import { runtimeCasePlanPositionSlots } from './runtime-case-plan-position-slots.mjs';
 import { runtimeAnonChildRows } from './runtime-anon-child-rows.mjs';
+import { runtimeMatrixAirconLightingSplit } from './runtime-matrix-aircon-lighting-split.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -107,6 +108,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeCasePlanPositionSlots(client));
     // 子の行の読み取りの条件：匿名・お客様は親が公開中の行だけ（依頼 A）、代理店以上は親が読める行だけ（H2-C ①）
     runtime = mergeRuntime(runtime, await runtimeAnonChildRows(client));
+    // 商品選択設定：空調・照明器具を「その他」から独立（Issue #707、2026-11-23 の先方の依頼）
+    runtime = mergeRuntime(runtime, await runtimeMatrixAirconLightingSplit(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

@@ -8,8 +8,15 @@ set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
 -- Serialize this cutover against the matrix admin RPC and category mapping writers.
+-- EXCLUSIVE (not SHARE ROW EXCLUSIVE): it also conflicts with the row lock that
+-- update_matrix_row / set_matrix_row_status take first (SELECT ... FOR UPDATE), so a
+-- save that starts during the cutover waits for it and then sees the bumped lock_version,
+-- and a save already holding a row lock finishes before the cutover starts (no deadlock
+-- between the two). Plain reads (simulator catalog, configuration category guards) are
+-- ACCESS SHARE and are not blocked. lock_timeout aborts the whole cutover if a writer
+-- keeps a conflicting lock.
 lock table public.matrix_items, public.matrix_rows, public.matrix_cells,
-  public.option_category_matrix_items in share row exclusive mode;
+  public.option_category_matrix_items in exclusive mode;
 
 do $preflight$
 declare
@@ -62,7 +69,8 @@ begin
 end;
 $preflight$;
 
--- Capture the pre-cutover business result, including BOX hotel-single and "base" aliases.
+-- Capture the pre-cutover business result for every category (not only the four
+-- "other" categories), including BOX hotel-single and "base" aliases.
 create temporary table matrix_707_before on commit drop as
   with target_specs as (
     select distinct m.slug as model_slug, r.spec_code
@@ -77,14 +85,26 @@ create temporary table matrix_707_before on commit drop as
   select t.model_slug, t.spec_code, c.code as category_code,
          public.customer_category_selectable(t.model_slug, t.spec_code, c.code) as was_selectable
     from target_specs t
-    cross join public.option_categories c
-   where c.code in ('aircon','lighting','smartlock','exterior-parts');
+    cross join public.option_categories c;
 
 -- Keep the existing other cell values as a separate before-image.
 create temporary table matrix_707_other_before on commit drop as
   select matrix_row_id, selectable
     from public.matrix_cells
    where matrix_item_code = 'other';
+
+-- Full before-images: existing items, rows, cells and category mappings must not change,
+-- except for the two new items and their cells, the two remapped categories and the
+-- row lock_version bump.
+create temporary table matrix_707_items_before on commit drop as
+  select code, label, sort_order, status from public.matrix_items;
+create temporary table matrix_707_rows_before on commit drop as
+  select id, base_model_id, spec_code, size_code, fire_selectable, status, lock_version
+    from public.matrix_rows;
+create temporary table matrix_707_cells_before on commit drop as
+  select matrix_row_id, matrix_item_code, selectable from public.matrix_cells;
+create temporary table matrix_707_mapping_before on commit drop as
+  select category_id, matrix_item_code from public.option_category_matrix_items;
 
 insert into public.matrix_items (code, label, sort_order, status)
 values ('aircon', '空調（エアコン）', 145, 'active'),
@@ -142,6 +162,49 @@ begin
     where c.selectable is distinct from b.selectable
   ) then
     raise exception 'STOP 707: new items or old other differ from the approved initialization';
+  end if;
+
+  -- The 15 existing items keep code/label/order/status; only aircon and lighting are new.
+  if exists (
+      select 1 from pg_temp.matrix_707_items_before b
+        left join public.matrix_items i on i.code = b.code
+       where i.code is null or i.label is distinct from b.label
+          or i.sort_order is distinct from b.sort_order or i.status is distinct from b.status)
+    or (select count(*) from public.matrix_items) <> (select count(*) from pg_temp.matrix_707_items_before) + 2 then
+    raise exception 'STOP 707: existing matrix items changed';
+  end if;
+
+  -- Rows keep model/spec/size/fire/status; every lock_version moved by exactly one.
+  if exists (
+      select 1 from pg_temp.matrix_707_rows_before b
+        left join public.matrix_rows r on r.id = b.id
+       where r.id is null
+          or r.base_model_id is distinct from b.base_model_id or r.spec_code is distinct from b.spec_code
+          or r.size_code is distinct from b.size_code or r.fire_selectable is distinct from b.fire_selectable
+          or r.status is distinct from b.status or r.lock_version is distinct from b.lock_version + 1)
+    or (select count(*) from public.matrix_rows) <> (select count(*) from pg_temp.matrix_707_rows_before) then
+    raise exception 'STOP 707: matrix rows changed beyond the lock_version bump';
+  end if;
+
+  -- Every pre-existing cell keeps its value.
+  if exists (
+    select 1 from pg_temp.matrix_707_cells_before b
+      left join public.matrix_cells c on c.matrix_row_id = b.matrix_row_id and c.matrix_item_code = b.matrix_item_code
+     where c.matrix_row_id is null or c.selectable is distinct from b.selectable
+  ) then
+    raise exception 'STOP 707: existing matrix cells changed';
+  end if;
+
+  -- Only the aircon and lighting categories move; every other mapping is unchanged.
+  if exists (
+    select 1 from pg_temp.matrix_707_mapping_before b
+      join public.option_categories c on c.id = b.category_id
+      left join public.option_category_matrix_items x on x.category_id = b.category_id
+     where x.category_id is null
+        or x.matrix_item_code is distinct from
+           case when c.code in ('aircon', 'lighting') then c.code else b.matrix_item_code end
+  ) then
+    raise exception 'STOP 707: category mappings changed beyond aircon/lighting';
   end if;
 
   if exists (

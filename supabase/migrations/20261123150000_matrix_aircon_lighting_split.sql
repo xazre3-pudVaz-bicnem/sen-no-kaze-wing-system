@@ -8,11 +8,12 @@ set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
 -- Serialize this cutover against the matrix admin RPCs and category mapping writers.
--- EXCLUSIVE (not SHARE ROW EXCLUSIVE): it also conflicts with the row lock that
--- update_matrix_row / set_matrix_row_status take first (SELECT ... FOR UPDATE) and with
--- create_matrix_row's insert, so a save that starts during the cutover waits for it and
--- then sees the bumped lock_version. Plain reads (simulator catalog, configuration
--- category guards, v2.5 checks) are ACCESS SHARE and are not blocked.
+-- EXCLUSIVE (not SHARE ROW EXCLUSIVE): unlike SHARE ROW EXCLUSIVE, it also conflicts with
+-- the ROW SHARE lock that update_matrix_row / set_matrix_row_status take first
+-- (SELECT ... FOR UPDATE); both modes conflict with create_matrix_row's insert. So a save
+-- that starts during the cutover waits for it and then sees the bumped lock_version.
+-- Plain reads (simulator catalog, configuration category guards, v2.5 checks) are
+-- ACCESS SHARE and are not blocked.
 -- Lock order: matrix_rows first (every admin writer touches it before the other three
 -- tables, holding at most ACCESS SHARE on them), matrix_items last (it is only reached by
 -- writers through foreign-key checks from matrix_cells / option_category_matrix_items).

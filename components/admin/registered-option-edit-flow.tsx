@@ -523,27 +523,21 @@ export function RegisteredOptionEditFlow({
         return;
       }
     }
-    let saved: AdminFormState = { ok: true };
-    if (productChanged) {
-      const result = await saveOptionAction(initialState, review.formData);
-      if (!result.ok) {
-        setPending(false);
-        if (!mediaChanged) {
-          setState(result);
-          return;
-        }
-        // 追加画像・メーカー資料は反映済み。編集案を片付け、もう一度押しても商品情報だけを送る
-        resetMediaEdits();
-        setReview((current) => (current ? { ...current, mediaDiffs: [] } : current));
-        setState({ ...result, error: `追加画像・メーカー資料は反映しました。商品情報は反映できませんでした。${result.error ?? '入力内容を確認してください。'}` });
-        return;
-      }
-      saved = result;
-    }
+    // 追加画像・メーカー資料だけの変更は、商品情報を送らない（画像・資料の反映で完了）
+    const result: AdminFormState = productChanged ? await saveOptionAction(initialState, review.formData) : { ok: true };
     setPending(false);
-    setState(saved);
+    if (!result.ok && mediaChanged) {
+      // 追加画像・メーカー資料は反映済み。編集案を片付け、もう一度押しても商品情報だけを送る
+      resetMediaEdits();
+      setReview((current) => (current ? { ...current, mediaDiffs: [] } : current));
+      setState({ ...result, error: `追加画像・メーカー資料は反映しました。商品情報は反映できませんでした。${result.error ?? '入力内容を確認してください。'}` });
+      return;
+    }
+    setState(result);
     // 反映できたら商品台帳へ戻り、変えた商品を強調する（#632。追加画像・メーカー資料だけの変更も同じ）
-    router.push(registeredOptionLedgerUrl(option.id, saved));
+    if (result.ok) {
+      router.push(registeredOptionLedgerUrl(option.id, result));
+    }
   };
 
   return (

@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { isLocalMode } from '@/lib/data/store';
 import { getSiteUrl } from '@/lib/site';
 
@@ -17,10 +18,13 @@ import { getSiteUrl } from '@/lib/site';
  * - API の速さの上限はチーム全体で共有なので、1 通ずつ間をあけて送る
  * - 上限（429）に当たったら、その回はそこで止める。速さの上限なら送信待ちのまま次の回へ回し、
  *   送信数の上限（1 日・1 か月）なら失敗として残す（上限が戻った瞬間にまとめて送らない）
- * - 同じ通知を二重に送らない。Idempotency-Key に通知の ID を使うので、同時に 2 か所から送っても、
- *   届いたか分からないまま送り直しても、Resend が 1 通にまとめる（キーは 24 時間有効）
- * - 1 時間に送る通知の数に上限を置く（MAIL_MAX_PER_HOUR。既定 30）。お問い合わせは誰でも送れるので、
- *   いたずらの連続送信などで、共用の送信数を使い切らないため。超えた分はメールを送らず、画面のお知らせにだけ残す
+ * - 同じ通知を二重に送らない。Idempotency-Key に通知の ID と中身の要約を使うので、同時に 2 か所から送っても、
+ *   届いたか分からないまま送り直しても、Resend が 1 通にまとめる（キーは 24 時間有効）。
+ *   24 時間を過ぎて送り直すと二重になりうるので、作成から 23 時間を過ぎた通知は送らない（古い通知を送らない決まりも兼ねる）
+ * - 誰でも送れるお問い合わせの通知は、1 時間に送る数に上限を置く（MAIL_MAX_PER_HOUR。既定 30）。
+ *   いたずらの連続送信で共用の送信数を使い切らないため。超えた分はメールを送らず、画面のお知らせにだけ残す。
+ *   数はこの 1 時間に作られて送信済みになったお問い合わせの数で数える目安（同時の送信では少し超えることがある）
+ * - 状態は送信待ちの行だけを変える（同時に動いた別の処理が決めた状態を上書きしない）
  */
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
@@ -30,25 +34,19 @@ export const SEND_INTERVAL_MS = 250;
 const MAX_RETRY_WAIT_MS = 2_000;
 /** 1 通の送信を待つ最長の時間（ミリ秒）。アクションの応答を長く止めない */
 const REQUEST_TIMEOUT_MS = 10_000;
+/** これより前に作られた通知は送らない（Resend の Idempotency-Key は 24 時間で消えるため、その少し手前） */
+export const STALE_AFTER_MS = 23 * 60 * 60 * 1000;
+/** 1 時間の上限をかける通知の種類（誰でも送れるお問い合わせ） */
+export const PUBLIC_NOTIFICATION_KIND = 'contact_received';
+/** 1 時間に送るお問い合わせの通知の数の既定の上限 */
+export const DEFAULT_MAX_PER_HOUR = 30;
 
 export const MAIL_QUOTA_EXCEEDED = 'Resend の送信数の上限（1 日または 1 か月）に達したため、送れませんでした';
-/** 1 時間に送る通知の数の既定の上限 */
-export const DEFAULT_MAX_PER_HOUR = 30;
+export const MAIL_STALE = '作成から 23 時間を過ぎた通知のため、メールは送りませんでした（古い通知を送らない・二重に送らないため）';
 const EMAIL_PATTERN = /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[^\s@<>,;"]+$/;
 
 export function mailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
-}
-
-/** 1 時間に送る通知の数の上限（MAIL_MAX_PER_HOUR。正の整数でなければ既定の 30） */
-export function mailMaxPerHour(): number {
-  const value = Number(process.env.MAIL_MAX_PER_HOUR);
-  return Number.isInteger(value) && value > 0 ? value : DEFAULT_MAX_PER_HOUR;
-}
-
-/** 上限を超えたため送らなかった通知に残す理由 */
-export function hourlyLimitMessage(max: number): string {
-  return `1 時間に送る通知メールの上限（${max} 件）を超えたため、メールは送りませんでした（お知らせの画面で確認してください）`;
 }
 
 /** 返信先（MAIL_REPLY_TO）。形の正しいアドレスだけを使い、1 つも無ければ付けない */
@@ -59,15 +57,28 @@ export function mailReplyTo(): string[] {
     .filter((v) => EMAIL_PATTERN.test(v));
 }
 
+/** 1 時間に送るお問い合わせの通知の数の上限（MAIL_MAX_PER_HOUR。正の整数でなければ既定の 30） */
+export function mailMaxPerHour(): number {
+  const value = Number(process.env.MAIL_MAX_PER_HOUR);
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_MAX_PER_HOUR;
+}
+
+/** 上限を超えたため送らなかった通知に残す理由 */
+export function hourlyLimitMessage(max: number): string {
+  return `1 時間に送るお問い合わせのメールの上限（${max} 件）を超えたため、メールは送りませんでした（お知らせの画面で確認してください）`;
+}
+
 interface Pending {
   id: string;
   recipient_id: string | null;
+  kind: string;
   title: string;
   body: string | null;
   link: string | null;
+  created_at: string;
 }
 
-interface MailPayload {
+export interface MailPayload {
   from: string | undefined;
   to: string[];
   subject: string;
@@ -90,9 +101,21 @@ export interface FlushOptions {
   intervalMs?: number;
   /** 待つ処理（試験で差し替える） */
   wait?: (ms: number) => Promise<void>;
+  /** 今の時刻（試験で差し替える） */
+  now?: () => number;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 二重送信を防ぐキー。通知の ID に中身（宛先・差出人・返信先・本文）の要約を足す。
+ * 中身が同じなら同じキー（同時の送信・送り直しは 1 通になる）。宛先などが変わった後の送り直しは別のキーになり、
+ * 「同じキーで中身が違う」で送れなくなることがない
+ */
+export function idempotencyKey(id: string, payload: MailPayload): string {
+  const digest = createHash('sha256').update(JSON.stringify(payload)).digest('hex').slice(0, 16);
+  return `wing-notification-${id}-${digest}`;
+}
 
 /** Resend のエラーの種類（応答の JSON の name）。読めなければ null */
 function resendErrorName(body: string): string | null {
@@ -110,7 +133,7 @@ function retryAfterMs(value: string | null): number {
   return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds * 1000) : 1_000;
 }
 
-async function sendOne(id: string, payload: MailPayload, wait: (ms: number) => Promise<void>): Promise<SendOutcome> {
+async function sendOne(key: string, payload: MailPayload, wait: (ms: number) => Promise<void>): Promise<SendOutcome> {
   for (let attempt = 0; ; attempt++) {
     let res: Response;
     try {
@@ -119,7 +142,7 @@ async function sendOne(id: string, payload: MailPayload, wait: (ms: number) => P
         headers: {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
           'Content-Type': 'application/json',
-          'Idempotency-Key': `wing-notification-${id}`,
+          'Idempotency-Key': key,
         },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -143,10 +166,19 @@ async function sendOne(id: string, payload: MailPayload, wait: (ms: number) => P
       return { kind: 'retry_later', reason: 'rate_limit' };
     }
     if (res.status === 409 && name === 'concurrent_idempotent_requests') return { kind: 'in_progress' };
-    // 同じキーで、宛先などが違う送信がすでにある＝この通知は送信済み（送った後に送信済みにできなかったときの送り直し）
-    if (res.status === 409 && name === 'invalid_idempotent_request') return { kind: 'sent' };
     if (res.status >= 500) return { kind: 'retry_later', reason: `status_${res.status}` };
-    return { kind: 'failed', reason: `${res.status} ${text.slice(0, 200)}`, stop: false };
+    // キーの誤り・送れないドメインなどは、どの通知でも同じ結果になるので、その回はそこで止める（共用の上限を無駄に使わない）
+    const stop = res.status === 401 || res.status === 403;
+    return { kind: 'failed', reason: `${res.status} ${text.slice(0, 200)}`, stop };
+  }
+}
+
+async function loadAdminClient() {
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    return createAdminClient();
+  } catch {
+    return null;
   }
 }
 
@@ -161,21 +193,21 @@ export async function flushNotifications(
   const result = { sent: 0, skipped: 0, failed: 0, deferred: 0 };
   if (isLocalMode()) return result;
 
-  let admin;
-  try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    admin = createAdminClient();
-  } catch {
-    return result; // service role キー未設定（デモモード等）
-  }
+  const admin = await loadAdminClient();
+  if (!admin) return result; // service role キー未設定（デモモード等）
 
   const { data, error } = await admin
     .from('notifications')
-    .select('id, recipient_id, title, body, link')
+    .select('id, recipient_id, kind, title, body, link, created_at')
     .eq('email_status', 'pending')
     .order('created_at')
     .limit(limit);
   if (error || !data?.length) return result;
+  const rows = data as Pending[];
+
+  /** 送信待ちの行だけ、状態を変える（同時に動いた別の処理が決めた状態を上書きしない） */
+  const settle = (id: string, values: { email_status: 'sent' | 'skipped' | 'failed'; email_error: string | null }) =>
+    admin.from('notifications').update(values).eq('id', id).eq('email_status', 'pending');
 
   // 宛先を解決する。recipient_id が null の通知は本部（管理者全員）宛
   const [{ data: admins }, { data: people }] = await Promise.all([
@@ -183,52 +215,64 @@ export async function flushNotifications(
     admin
       .from('profiles')
       .select('id, email')
-      .in('id', (data as Pending[]).map((n) => n.recipient_id).filter((v): v is string => Boolean(v))),
+      .in('id', rows.map((n) => n.recipient_id).filter((v): v is string => Boolean(v))),
   ]);
   const adminEmails = ((admins ?? []) as { email: string }[]).map((p) => p.email).filter(Boolean);
   const emailById = new Map(((people ?? []) as { id: string; email: string }[]).map((p) => [p.id, p.email]));
   const base = getSiteUrl();
   const wait = options.wait ?? sleep;
+  const now = (options.now ?? Date.now)();
   const intervalMs = options.intervalMs ?? SEND_INTERVAL_MS;
   const replyTo = mailReplyTo();
   if (process.env.MAIL_REPLY_TO?.trim() && replyTo.length === 0) {
     console.warn('[mail] MAIL_REPLY_TO の形が正しくないため、返信先を付けずに送ります（アドレスだけをカンマ区切りで書く）');
   }
-  // この 1 時間に送った通知の数から、あと何件送れるかを決める（数えられなければ、送信待ちのまま次の回へ）
+
+  // お問い合わせの通知の、この 1 時間の残り（数えられなければ、お問い合わせの通知だけ送信待ちのまま次の回へ）
   const maxPerHour = mailMaxPerHour();
-  let budget = maxPerHour;
-  if (mailConfigured()) {
-    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  let publicBudget = maxPerHour;
+  let publicDeferred = false;
+  if (mailConfigured() && rows.some((n) => n.kind === PUBLIC_NOTIFICATION_KIND)) {
     const { count, error: countError } = await admin
       .from('notifications')
       .select('id', { count: 'exact', head: true })
+      .eq('kind', PUBLIC_NOTIFICATION_KIND)
       .eq('email_status', 'sent')
-      .gte('created_at', since);
+      .gte('created_at', new Date(now - 60 * 60 * 1000).toISOString());
     if (countError) {
-      console.warn('[mail] この 1 時間の送信数を数えられなかったため、送信を次の回へ回しました');
-      result.deferred += data.length;
-      return result;
+      console.warn('[mail] この 1 時間のお問い合わせのメールの数を数えられなかったため、次の回へ回しました');
+      publicDeferred = true;
+    } else {
+      publicBudget = Math.max(0, maxPerHour - (count ?? 0));
     }
-    budget = Math.max(0, maxPerHour - (count ?? 0));
   }
   let sentBefore = false;
 
-  for (const n of data as Pending[]) {
+  for (const n of rows) {
     const to = n.recipient_id ? [emailById.get(n.recipient_id)].filter((v): v is string => Boolean(v)) : adminEmails;
     if (!mailConfigured() || to.length === 0) {
-      await admin
-        .from('notifications')
-        .update({ email_status: 'skipped', email_error: mailConfigured() ? '宛先が解決できませんでした' : 'メール送信が未設定です' })
-        .eq('id', n.id);
+      await settle(n.id, { email_status: 'skipped', email_error: mailConfigured() ? '宛先が解決できませんでした' : 'メール送信が未設定です' });
       result.skipped++;
       continue;
     }
-    if (budget <= 0) {
-      await admin.from('notifications').update({ email_status: 'skipped', email_error: hourlyLimitMessage(maxPerHour) }).eq('id', n.id);
+    const createdAt = Date.parse(n.created_at);
+    if (Number.isFinite(createdAt) && now - createdAt > STALE_AFTER_MS) {
+      await settle(n.id, { email_status: 'skipped', email_error: MAIL_STALE });
       result.skipped++;
       continue;
     }
-    budget--;
+    if (n.kind === PUBLIC_NOTIFICATION_KIND) {
+      if (publicDeferred) {
+        result.deferred++;
+        continue;
+      }
+      if (publicBudget <= 0) {
+        await settle(n.id, { email_status: 'skipped', email_error: hourlyLimitMessage(maxPerHour) });
+        result.skipped++;
+        continue;
+      }
+      publicBudget--;
+    }
     // 用件 → 操作リンク の順に置く。メールから 1 回で作業画面へ入れるようにする
     const lines = [n.body ?? '', n.link ? `▼ こちらから開けます
 ${base}${n.link}` : ''].filter(Boolean);
@@ -241,9 +285,9 @@ ${base}${n.link}` : ''].filter(Boolean);
     };
     if (sentBefore && intervalMs > 0) await wait(intervalMs);
     sentBefore = true;
-    const outcome = await sendOne(n.id, payload, wait);
+    const outcome = await sendOne(idempotencyKey(n.id, payload), payload, wait);
     if (outcome.kind === 'sent') {
-      await admin.from('notifications').update({ email_status: 'sent', email_error: null }).eq('id', n.id);
+      await settle(n.id, { email_status: 'sent', email_error: null });
       result.sent++;
     } else if (outcome.kind === 'in_progress') {
       result.deferred++;
@@ -253,10 +297,7 @@ ${base}${n.link}` : ''].filter(Boolean);
       result.deferred++;
       break;
     } else {
-      await admin
-        .from('notifications')
-        .update({ email_status: 'failed', email_error: outcome.reason.slice(0, 300) })
-        .eq('id', n.id);
+      await settle(n.id, { email_status: 'failed', email_error: outcome.reason.slice(0, 300) });
       result.failed++;
       if (outcome.stop) break;
     }

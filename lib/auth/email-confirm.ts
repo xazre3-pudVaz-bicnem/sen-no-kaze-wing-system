@@ -23,6 +23,23 @@ export const CONFIRMATION_RESENT =
 export const CONFIRMATION_RESEND_RATE_LIMITED =
   '続けて送り直すことはできません。1 分以上おいてから、もう一度お試しください。';
 
+/** 送る仕組みの障害で送り直せなかったときの文 */
+export const CONFIRMATION_RESEND_FAILED =
+  '確認メールを送れませんでした。時間をおいて、もう一度お試しください。続くときは、お問い合わせのフォームからお知らせください。';
+
+/**
+ * 会員登録の確認メールのリンクの戻り先。会員登録の確認だと分かる印（flow=signup）を付ける。
+ * 印の無いリンク（パスワード再設定など）は、別のブラウザで開いても「確認が済んだ」とは案内しない
+ */
+export function signupRedirectTo(origin: string, next: string): string {
+  return `${origin}/auth/callback?next=${encodeURIComponent(next)}&flow=signup`;
+}
+
+/** 戻り先が、会員登録の確認のリンクか */
+export function isSignupCallback(params: URLSearchParams): boolean {
+  return params.get('flow') === 'signup';
+}
+
 /** コードの交換に失敗した理由が「このブラウザに Cookie が無い」（別のブラウザ・端末でリンクを開いた）か */
 export function isCodeVerifierMissing(error: { code?: string | null; name?: string | null }): boolean {
   return error.code === 'pkce_code_verifier_not_found' || error.name === 'AuthPKCECodeVerifierMissingError';

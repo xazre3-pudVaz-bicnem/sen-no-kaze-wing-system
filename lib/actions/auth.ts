@@ -7,7 +7,14 @@ import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 import { resetRequestSchema, signInSchema, signUpSchema, updatePasswordSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
 import { safeNextPath } from '@/lib/utils';
 import { PASSWORD_RESET_STALE_PAGE, passwordResetCanonicalUrl, passwordUpdateErrorMessage, requestHost } from '@/lib/auth/password-reset';
-import { CONFIRMATION_RESEND_RATE_LIMITED, EMAIL_NOT_CONFIRMED, isEmailNotConfirmed, isEmailRateLimited } from '@/lib/auth/email-confirm';
+import {
+  CONFIRMATION_RESEND_FAILED,
+  CONFIRMATION_RESEND_RATE_LIMITED,
+  EMAIL_NOT_CONFIRMED,
+  isEmailNotConfirmed,
+  isEmailRateLimited,
+  signupRedirectTo,
+} from '@/lib/auth/email-confirm';
 import { getSiteUrl } from '@/lib/site';
 
 export interface AuthFormState {
@@ -60,7 +67,7 @@ export async function signUpAction(_prev: AuthFormState, formData: FormData): Pr
     email: input.email,
     password: input.password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      emailRedirectTo: signupRedirectTo(origin, next),
       data: {
         full_name: input.full_name,
         company_name: input.company_name ?? '',
@@ -128,12 +135,14 @@ export async function resendConfirmationAction(_prev: AuthFormState, formData: F
   const { error } = await supabase.auth.resend({
     type: 'signup',
     email: parsed.data.email,
-    options: { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` },
+    options: { emailRedirectTo: signupRedirectTo(origin, next) },
   });
   if (error) {
     // 理由のコードだけをサーバーの記録に残す（メールアドレスは残さない）
     console.error('[signup-confirm] resend failed', { code: error.code ?? null, status: error.status ?? null });
     if (isEmailRateLimited(error)) return { ok: false, error: CONFIRMATION_RESEND_RATE_LIMITED };
+    // 送る仕組みの障害（SMTP の設定の誤りなど）は、送れたように見せない
+    if ((error.status ?? 0) >= 500) return { ok: false, error: CONFIRMATION_RESEND_FAILED };
   }
   return { ok: true, sent: true };
 }

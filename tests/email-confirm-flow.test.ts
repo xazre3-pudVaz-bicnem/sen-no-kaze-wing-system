@@ -26,16 +26,19 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient, hasS
 vi.mock('@/lib/auth/session', () => ({ getSessionUser: mocks.getSessionUser }));
 
 import {
+  CONFIRMATION_RESEND_FAILED,
   CONFIRMATION_RESEND_RATE_LIMITED,
   EMAIL_CONFIRMED_SIGN_IN,
   EMAIL_NOT_CONFIRMED,
   emailConfirmedLoginPath,
   isCodeVerifierMissing,
+  signupRedirectTo,
 } from '@/lib/auth/email-confirm';
 import { AUTH_LINK_ERROR } from '@/lib/auth/password-reset';
-import { resendConfirmationAction, signInAction } from '@/lib/actions/auth';
+import { resendConfirmationAction, signInAction, signUpAction } from '@/lib/actions/auth';
 import { GET as authCallback } from '@/app/auth/callback/route';
 import LoginPage from '@/app/(site)/login/page';
+import RegisterPage from '@/app/(site)/register/page';
 import { safeNextPath } from '@/lib/utils';
 
 const SITE = 'https://www.sen-no-kaze.com';
@@ -99,15 +102,15 @@ describe('確認メールの送り直し', () => {
     expect(resend).toHaveBeenCalledWith({
       type: 'signup',
       email: 'user@example.com',
-      options: { emailRedirectTo: `${SITE}/auth/callback?next=${encodeURIComponent('/mypage')}` },
+      options: { emailRedirectTo: `${SITE}/auth/callback?next=${encodeURIComponent('/mypage')}&flow=signup` },
     });
     await resendConfirmationAction({ ok: false }, form({ email: 'user@example.com', next: '/mypage/configurations/1/request-quote' }));
     expect(resend).toHaveBeenLastCalledWith(
-      expect.objectContaining({ options: { emailRedirectTo: `${SITE}/auth/callback?next=${encodeURIComponent('/mypage/configurations/1/request-quote')}` } })
+      expect.objectContaining({ options: { emailRedirectTo: `${SITE}/auth/callback?next=${encodeURIComponent('/mypage/configurations/1/request-quote')}&flow=signup` } })
     );
     // 別のサイトへの行き先は使わない
     await resendConfirmationAction({ ok: false }, form({ email: 'user@example.com', next: 'https://evil.example/' }));
-    expect(resend).toHaveBeenLastCalledWith(expect.objectContaining({ options: { emailRedirectTo: `${SITE}/auth/callback?next=%2Fmypage` } }));
+    expect(resend).toHaveBeenLastCalledWith(expect.objectContaining({ options: { emailRedirectTo: `${SITE}/auth/callback?next=%2Fmypage&flow=signup` } }));
   });
 
   it('続けて送ったときだけ待つよう案内し、ほかの失敗は同じ応答にする（アカウントの列挙を防ぐ）。記録には理由のコードだけ', async () => {
@@ -118,9 +121,16 @@ describe('確認メールの送り直し', () => {
       ok: false,
       error: CONFIRMATION_RESEND_RATE_LIMITED,
     });
+    // 送る仕組みの障害（5xx）は、送れたように見せない
     resend.mockResolvedValueOnce({ data: {}, error: { code: 'unexpected_failure', status: 500, message: 'x' } });
-    await expect(resendConfirmationAction({ ok: false }, form({ email: 'user@example.com' }))).resolves.toEqual({ ok: true, sent: true });
+    await expect(resendConfirmationAction({ ok: false }, form({ email: 'user@example.com' }))).resolves.toEqual({
+      ok: false,
+      error: CONFIRMATION_RESEND_FAILED,
+    });
     expect(log).toHaveBeenCalledWith('[signup-confirm] resend failed', { code: 'unexpected_failure', status: 500 });
+    // ほかの失敗（4xx）は同じ応答
+    resend.mockResolvedValueOnce({ data: {}, error: { code: 'validation_failed', status: 400, message: 'x' } });
+    await expect(resendConfirmationAction({ ok: false }, form({ email: 'user@example.com' }))).resolves.toEqual({ ok: true, sent: true });
     expect(JSON.stringify(log.mock.calls)).not.toContain('user@example.com');
   });
 
@@ -136,6 +146,28 @@ describe('確認メールの送り直し', () => {
   });
 });
 
+describe('会員登録', () => {
+  it('確認メールの戻り先は www の /auth/callback（会員登録の印つき）。確認が要るときは送った案内を返す', async () => {
+    expect(signupRedirectTo(SITE, '/mypage')).toBe(`${SITE}/auth/callback?next=%2Fmypage&flow=signup`);
+    const signUp = vi.fn(async () => ({ data: { session: null, user: { id: 'u1' } }, error: null }));
+    mocks.createClient.mockResolvedValue({ auth: { signUp } });
+    const result = await signUpAction(
+      { ok: false },
+      form({ email: 'user@example.com', password: 'Wing-Test1', full_name: '山田 太郎', company_name: '', agree: 'on', next: '/mypage' })
+    );
+    expect(result).toEqual({ ok: true, needsEmailConfirm: true, values: { email: 'user@example.com' } });
+    expect(signUp).toHaveBeenCalledWith(
+      expect.objectContaining({ options: expect.objectContaining({ emailRedirectTo: `${SITE}/auth/callback?next=%2Fmypage&flow=signup` }) })
+    );
+  });
+
+  it('会員登録の画面は、URL の値が重なっても（配列）落ちない', async () => {
+    await expect(RegisterPage({ searchParams: Promise.resolve({ next: ['/mypage', '/admin'] }) })).resolves.toBeTruthy();
+    mocks.getSessionUser.mockResolvedValue({ id: 'u1', email: 'user@example.com', role: 'customer', full_name: '', company_name: null });
+    await expect(RegisterPage({ searchParams: Promise.resolve({ next: ['/mypage/quotes', '/admin'] }) })).rejects.toThrow('REDIRECT:/mypage/quotes');
+  });
+});
+
 describe('確認メールのリンクを、登録した時と別のブラウザで開いたとき', () => {
   type ExchangeError = { name?: string; code: string; status: number };
   const exchangeFailing = (error: ExchangeError) => {
@@ -147,10 +179,13 @@ describe('確認メールのリンクを、登録した時と別のブラウザ�
   it('Cookie が無い（確認は済んでいる）なら、ログインの画面で「確認が済んだ」と案内する。元の行き先を残す', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     exchangeFailing(missing);
-    const res = await authCallback(new NextRequest(`${SITE}/auth/callback?code=abc&next=%2Fmypage`));
+    const res = await authCallback(new NextRequest(`${SITE}/auth/callback?code=abc&next=%2Fmypage&flow=signup`));
     expect(res.headers.get('location')).toBe(`${SITE}/login?confirmed=1`);
+    // 印の無いリンクは「確認が済んだ」とは案内しない（理由の画面へ）
+    const unmarked = await authCallback(new NextRequest(`${SITE}/auth/callback?code=abc&next=%2Fmypage`));
+    expect(unmarked.headers.get('location')).toBe(`${SITE}/login?error=link`);
     const withNext = await authCallback(
-      new NextRequest(`${SITE}/auth/callback?code=abc&next=${encodeURIComponent('/mypage/configurations/1/request-quote')}`)
+      new NextRequest(`${SITE}/auth/callback?code=abc&next=${encodeURIComponent('/mypage/configurations/1/request-quote')}&flow=signup`)
     );
     expect(withNext.headers.get('location')).toBe(`${SITE}/login?confirmed=1&next=%2Fmypage%2Fconfigurations%2F1%2Frequest-quote`);
     expect(emailConfirmedLoginPath('/mypage')).toBe('/login?confirmed=1');
@@ -162,10 +197,10 @@ describe('確認メールのリンクを、登録した時と別のブラウザ�
   it('パスワード再設定のリンク・ほかの失敗は、今までどおり理由を出す画面へ戻す', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     exchangeFailing(missing);
-    const reset = await authCallback(new NextRequest(`${SITE}/auth/callback?code=abc&next=${encodeURIComponent('/reset-password/update')}`));
+    const reset = await authCallback(new NextRequest(`${SITE}/auth/callback?code=abc&next=${encodeURIComponent('/reset-password/update')}&flow=signup`));
     expect(reset.headers.get('location')).toBe(`${SITE}/reset-password?error=link`);
     exchangeFailing({ code: 'bad_code_verifier', status: 400 });
-    const other = await authCallback(new NextRequest(`${SITE}/auth/callback?code=abc&next=%2Fmypage`));
+    const other = await authCallback(new NextRequest(`${SITE}/auth/callback?code=abc&next=%2Fmypage&flow=signup`));
     expect(other.headers.get('location')).toBe(`${SITE}/login?error=link`);
   });
 

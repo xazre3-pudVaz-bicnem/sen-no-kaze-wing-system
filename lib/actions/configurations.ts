@@ -11,7 +11,7 @@ import type { Configuration, QuoteContact } from '@/lib/domain/types';
 import { SAME_SITE_ADDRESS_CONFIRMATION_FIELD, SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE, sameContactAndSiteAddress } from '@/lib/domain/quote-contact-site-address';
 import { quoteRequestSchema, saveConfigurationSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
 
-export type SaveErrorCode = 'UNAUTHENTICATED' | 'VALIDATION' | 'LOCKED' | 'FORBIDDEN' | 'NOT_FOUND' | 'INTERNAL';
+export type SaveErrorCode = 'UNAUTHENTICATED' | 'VALIDATION' | 'LOCKED' | 'CONFLICT' | 'FORBIDDEN' | 'NOT_FOUND' | 'INTERNAL';
 
 export type SaveResult = { ok: true; configuration: Configuration } | { ok: false; error: string; code: SaveErrorCode };
 

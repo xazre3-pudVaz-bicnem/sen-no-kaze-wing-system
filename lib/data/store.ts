@@ -59,7 +59,8 @@ export interface SessionUser {
 
 export class StoreError extends Error {
   constructor(
-    public code: 'NOT_FOUND' | 'FORBIDDEN' | 'VALIDATION' | 'LOCKED' | 'UNAUTHENTICATED' | 'INTERNAL',
+    /** CONFLICT：保存の前提が今のデータと合わなくなった（最新を読み込んでやり直す。商品台帳の一括登録の競合など） */
+    public code: 'NOT_FOUND' | 'FORBIDDEN' | 'VALIDATION' | 'LOCKED' | 'CONFLICT' | 'UNAUTHENTICATED' | 'INTERNAL',
     message: string
   ) {
     super(message);

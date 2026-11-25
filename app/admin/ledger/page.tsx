@@ -59,6 +59,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     getOptionHqStandardCostMap(catalogOptions.map((option) => option.id)),
   ]);
   const selected = typeof sp.product === 'string' && catalogOptions.some((option) => option.id === sp.product) ? sp.product : undefined;
+  const recentlyChangedId = [sp.updated_option, sp.created_option].find((id) => id && catalogOptions.some((option) => option.id === id));
 
   return <AdminPage
     title="商品台帳"
@@ -127,6 +128,8 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     `}</style>
     <ProductLedgerOverlayDismiss />
     <FlashMessages sp={sp} />
+    {recentlyChangedId && sp.created_option === recentlyChangedId && <Alert tone="success">商品を公開しました。</Alert>}
+    {recentlyChangedId && sp.updated_option === recentlyChangedId && <Alert tone="success">商品を更新しました。</Alert>}
     {sp.lifecycle && PRODUCT_LIFECYCLE_DONE[sp.lifecycle] && <Alert tone="success">{PRODUCT_LIFECYCLE_DONE[sp.lifecycle]}</Alert>}
     {editor && !lifecycleEnabled && (
       <Alert tone="info">販売停止・シミュレーター表示の設定は、DB の更新（migration）が済むまで使えません。</Alert>
@@ -149,6 +152,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       showCost={showCost}
       windowTypes={windowTypes}
       initiallySelectedId={selected}
+      recentlyChangedId={recentlyChangedId}
     />
   </AdminPage>;
 }

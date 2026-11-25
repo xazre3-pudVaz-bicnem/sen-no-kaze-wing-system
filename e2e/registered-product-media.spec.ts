@@ -20,9 +20,10 @@ async function openProduct(page: Page) {
 
 async function applyReviewed(page: Page) {
   await page.getByRole('button', { name: 'この変更を反映' }).click();
-  // 反映すると、最新の登録内容を読み直して編集画面へ戻る
+  // 反映すると商品台帳へ戻り、変えた商品を強調する（#632）。編集の画面を開き直して、反映した内容を確かめる
+  await page.waitForURL((url) => url.pathname === '/admin/ledger' && url.searchParams.get('updated_option') === COAT_RACK_ID);
+  await openProduct(page);
   await expect(review(page)).toHaveCount(0);
-  await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
 }
 
 test('登録済み商品の追加画像・メーカー資料を確認してからまとめて反映でき、開いた後に変わっていたら反映しない', async ({ browser }) => {

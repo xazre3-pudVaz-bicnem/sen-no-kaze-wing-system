@@ -160,7 +160,7 @@ begin
         'price_mode', 'auto', 'manual_unit_price', null, 'slot_code', null, 'slot_label', null, 'selectable_option_ids', '[]'::jsonb)),
       'lines', jsonb_build_array(
         jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1 工事', 'name', '取付費',
-          'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 10000, 'remark', null, 'review_required', false),
+          'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 10000, 'cost_unit_price', 6000, 'remark', null, 'review_required', false),
         jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1 工事', 'name', '据付工事',
           'quantity', '1', 'unit', '式', 'price_mode', 'por', 'unit_price', null, 'remark', null, 'review_required', false)))::text));
   v_out := pg_temp.fq_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, %s)).status', v_rev,

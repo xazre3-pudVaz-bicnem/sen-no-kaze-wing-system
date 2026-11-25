@@ -40,6 +40,8 @@ export async function getStandardEstimateV25Header(supabase: SupabaseClient, rev
 
 export type StandardEstimateV25Data = {
   initial: V25EditorState;
+  /** 手入力明細の原価単価の列を読めたか（20261110150000 の後の DB）。false なら画面は原価の欄を出さない */
+  lineCostsAvailable: boolean;
   savedSlotAmounts: Record<string, { amount: number | null; sale_unit_price: number | null }>;
   savedLineAmounts: Record<string, number | null>;
   preview: V25Preview | null;
@@ -54,26 +56,32 @@ export async function loadStandardEstimateV25(
   header: StandardEstimateV25Header
 ): Promise<StandardEstimateV25Data> {
   // 位置・用途の選択枠（v2.5 PR-S1。20261102100000）の列と、枠ごとの選べる商品も読む。migration が無い DB では読まずに続ける
-  const slotColumns = (withPositions: boolean) =>
-    `id, baseline_key, option_id, quantity, price_mode, manual_unit_price, sale_unit_price, amount, sort_order,${withPositions ? ' slot_code, slot_label,' : ''} standard_estimate_revision_baseline_variants(variant_group_id, variant_choice_id, sort_order)`;
-  const readSlots = (withPositions: boolean) =>
+  // 混在の並び順・工事項目（2026-11-16 の先方の依頼。20261110140000）の列も読む。migration が無い DB では読まずに続ける
+  const slotColumns = (withPositions: boolean, withRowOrder: boolean) =>
+    `id, baseline_key, option_id, quantity, price_mode, manual_unit_price, sale_unit_price, amount, sort_order,${withPositions ? ' slot_code, slot_label,' : ''}${withRowOrder ? ' display_order, work_item,' : ''} standard_estimate_revision_baseline_variants(variant_group_id, variant_choice_id, sort_order)`;
+  const readSlots = (withPositions: boolean, withRowOrder: boolean) =>
     supabase
       .from('standard_estimate_revision_baseline_items')
-      .select(slotColumns(withPositions))
+      .select(slotColumns(withPositions, withRowOrder))
       .eq('revision_id', revision.id)
       .order('sort_order');
-  const [firstSlotsResult, slotOptionsResult, linesResult, previewResult, calcResult, taxResult] = await Promise.all([
-    readSlots(true),
+  // 手入力明細の原価単価（2026-11-20 の先方の依頼。20261110150000）の列も読む。migration が無い DB では読まずに続ける
+  const lineColumns = (withRowOrder: boolean, withCost: boolean) =>
+    `line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order${withRowOrder ? ', display_order' : ''}${withCost ? ', cost_unit_price' : ''}`;
+  const readLines = (withRowOrder: boolean, withCost: boolean) =>
+    supabase
+      .from('standard_estimate_revision_v25_lines')
+      .select(lineColumns(withRowOrder, withCost))
+      .eq('revision_id', revision.id)
+      .order('sort_order');
+  const [firstSlotsResult, slotOptionsResult, firstLinesResult, previewResult, calcResult, taxResult] = await Promise.all([
+    readSlots(true, true),
     supabase
       .from('standard_estimate_revision_slot_options')
       .select('slot_code, option_id, sort_order')
       .eq('revision_id', revision.id)
       .order('sort_order'),
-    supabase
-      .from('standard_estimate_revision_v25_lines')
-      .select('line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order')
-      .eq('revision_id', revision.id)
-      .order('sort_order'),
+    readLines(true, true),
     supabase.rpc('preview_standard_estimate_v25_revision', { p_revision_id: revision.id }),
     header.calc_rule_version_id
       ? supabase.from('pricing_calculation_rule_versions').select('code').eq('id', header.calc_rule_version_id).maybeSingle()
@@ -82,12 +90,27 @@ export async function loadStandardEstimateV25(
       ? supabase.from('tax_rule_versions').select('code, tax_rate').eq('id', header.tax_rule_version_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
-  const slotsResult = firstSlotsResult.error && isMissingColumn(firstSlotsResult.error) ? await readSlots(false) : firstSlotsResult;
+  // 並び順・工事項目の列が無ければそれを除いて、位置の列も無ければさらに除いて読み直す。
+  // 列が無いことの判定は、コードと「column … does not exist」の両方で行う（表が無い扱いにして明細を空で読むと、次の保存で消えるため）
+  const missingColumn = (error: { code?: string; message?: string } | null | undefined) =>
+    isMissingColumn(error) || /column .* does not exist/i.test(error?.message ?? '');
+  let slotsResult = firstSlotsResult;
+  if (slotsResult.error && missingColumn(slotsResult.error)) slotsResult = await readSlots(true, false);
+  if (slotsResult.error && missingColumn(slotsResult.error)) slotsResult = await readSlots(false, false);
+  let linesResult = firstLinesResult;
+  // 原価の列を読めたか（20261110150000 の後か）。読めなければ画面は原価の欄を出さず、保存でも原価の項目を送らない
+  // （migration の前の DB で原価を入れても捨てられ、粗利を原価 0 円として出すのを防ぐ。独立レビューの指摘）
+  let lineCostsAvailable = true;
+  if (linesResult.error && missingColumn(linesResult.error)) {
+    lineCostsAvailable = false;
+    linesResult = await readLines(true, false);
+  }
+  if (linesResult.error && missingColumn(linesResult.error)) linesResult = await readLines(false, false);
   if (slotsResult.error) throw new Error(`標準見積の商品を取得できませんでした: ${slotsResult.error.code ?? 'unknown'}`);
   if (slotOptionsResult.error && !isMissingRelation(slotOptionsResult.error)) {
     throw new Error(`標準見積の選べる商品を取得できませんでした: ${slotOptionsResult.error.code ?? 'unknown'}`);
   }
-  if (linesResult.error && !isMissingRelation(linesResult.error)) {
+  if (linesResult.error && (missingColumn(linesResult.error) || !isMissingRelation(linesResult.error))) {
     throw new Error(`標準見積の明細を取得できませんでした: ${linesResult.error.code ?? 'unknown'}`);
   }
   const previewUnavailable = previewResult.error && isMissingFunction(previewResult.error);
@@ -105,6 +128,8 @@ export async function loadStandardEstimateV25(
     amount: number | null;
     slot_code?: string | null;
     slot_label?: string | null;
+    display_order?: number | null;
+    work_item?: string | null;
     standard_estimate_revision_baseline_variants: { variant_group_id: string; variant_choice_id: string; sort_order: number }[] | null;
   };
   type LineRow = {
@@ -119,6 +144,8 @@ export async function loadStandardEstimateV25(
     amount: number | null;
     remark: string | null;
     review_required: boolean;
+    display_order?: number | null;
+    cost_unit_price?: number | null;
   };
   const slots = (slotsResult.data ?? []) as unknown as SlotRow[];
   const lines = (linesResult.error ? [] : (linesResult.data ?? [])) as unknown as LineRow[];
@@ -147,6 +174,9 @@ export async function loadStandardEstimateV25(
       slot_code: slot.slot_code ?? '',
       slot_label: slot.slot_label ?? '',
       selectable_option_ids: selectableOf(slot.slot_code),
+      // 並び順と工事項目（2026-11-16 の先方の依頼。保存前の下書きは null と ''）
+      row_order: slot.display_order ?? null,
+      work_item: slot.work_item ?? '',
     })),
     lines: lines.map((line) => ({
       key: `line-${line.line_key}`,
@@ -160,11 +190,17 @@ export async function loadStandardEstimateV25(
       unit_price: line.unit_price === null ? '' : String(line.unit_price),
       remark: line.remark ?? '',
       review_required: line.review_required,
+      row_order: line.display_order ?? null,
+      // 原価単価（空は原価未設定。0 円は "0"）。原価の列が無い DB では持たない（保存で項目を送らず、DB の今の値を残す）
+      ...(lineCostsAvailable
+        ? { cost_unit_price: line.cost_unit_price === null || line.cost_unit_price === undefined ? '' : String(line.cost_unit_price) }
+        : {}),
     })),
   };
 
   return {
     initial,
+    lineCostsAvailable,
     savedSlotAmounts: Object.fromEntries(slots.map((slot) => [slot.baseline_key, { amount: slot.amount, sale_unit_price: slot.sale_unit_price }])),
     savedLineAmounts: Object.fromEntries(lines.map((line) => [line.line_key, line.amount])),
     preview: previewUnavailable ? null : ((previewResult.data ?? null) as V25Preview | null),

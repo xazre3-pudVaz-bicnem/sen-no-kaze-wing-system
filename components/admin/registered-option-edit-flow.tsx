@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import {
   applyOptionMediaChangesAction,
@@ -26,6 +27,7 @@ import {
   type OptionMediaChanges,
   type StagedMedia,
 } from '@/lib/domain/option-media-changes';
+import { registeredOptionLedgerUrl } from '@/lib/domain/registered-option-save-result';
 import { windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
@@ -521,6 +523,7 @@ export function RegisteredOptionEditFlow({
         return;
       }
     }
+    let saved: AdminFormState = { ok: true };
     if (productChanged) {
       const result = await saveOptionAction(initialState, review.formData);
       if (!result.ok) {
@@ -535,10 +538,12 @@ export function RegisteredOptionEditFlow({
         setState({ ...result, error: `追加画像・メーカー資料は反映しました。商品情報は反映できませんでした。${result.error ?? '入力内容を確認してください。'}` });
         return;
       }
+      saved = result;
     }
     setPending(false);
-    setState({ ok: true });
-    router.refresh();
+    setState(saved);
+    // 反映できたら商品台帳へ戻り、変えた商品を強調する（#632。追加画像・メーカー資料だけの変更も同じ）
+    router.push(registeredOptionLedgerUrl(option.id, saved));
   };
 
   return (
@@ -584,6 +589,7 @@ export function RegisteredOptionEditFlow({
           </section>
 
           {state.error && <Alert tone="danger">{state.error}</Alert>}
+          {!state.ok && state.costRecordingFailed && <Alert tone="warn">保存済みの商品情報と原価Versionを確認し、必要な項目だけを選んでください。 <Link href="/admin/options/cost-import" className="underline">原価 Version の取り込み画面を開く</Link></Alert>}
           {state.fieldErrors?._form?.[0] && <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>}
           {state.ok && <Alert tone="success">変更を反映しました。最新の登録内容を読み直しています。</Alert>}
 
@@ -668,7 +674,7 @@ export function RegisteredOptionEditFlow({
           <section className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="変更反映">
             <div>
               <h3 className="font-semibold">変更を反映</h3>
-              <p className="mt-1 text-xs text-muted">このボタンを押した時点で、確認した変更を登録済み商品へ反映します。</p>
+              <p className="mt-1 text-xs text-muted">このボタンで編集を完了します。反映に成功すると商品台帳一覧へ戻ります。価格単位・本部基準原価の個別保存とは別の操作です。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="secondary" onClick={() => { setScreen('edit'); setState(initialState); }}>編集に戻る</Button>

@@ -172,9 +172,9 @@ begin
       v_slot || jsonb_build_object('option_id', o5, 'price_mode', 'manual', 'manual_unit_price', 8000)),
     'lines', jsonb_build_array(
       jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1c 工事', 'name', '取付費',
-        'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 10000, 'remark', null, 'review_required', false),
+        'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 10000, 'cost_unit_price', 6000, 'remark', null, 'review_required', false),
       jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1c 工事', 'name', '養生',
-        'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 0, 'remark', null, 'review_required', false),
+        'quantity', '1', 'unit', '式', 'price_mode', 'manual', 'unit_price', 0, 'cost_unit_price', 0, 'remark', null, 'review_required', false),
       jsonb_build_object('line_key', null, 'section_code', 'sitework', 'group_label', 'D1c 別途工事', 'name', '据付工事',
         'quantity', '1', 'unit', '式', 'price_mode', 'por', 'unit_price', null, 'remark', null, 'review_required', false)));
   v_out := pg_temp.sqd_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, %s, %L::jsonb)).lock_version::text', v_rev,
@@ -189,10 +189,10 @@ begin
   -- ---------- 案件と下書きを作る ----------
   perform pg_temp.sqd_expect_error('D1c-1 代理店・総代理店は、標準見積から案件を作れない（今と同じく本部だけ）', '42501', 'FORBIDDEN',
     pg_temp.sqd_run_as('authenticated', u_master, format($q$ select public.create_standard_quote_case('D1c 案件', '{"full_name":"検査 花子"}'::jsonb, null, %L)::text $q$, v_rev)));
-  -- 売価だけを決めた行（manual の選択枠「施工1」・明細「取付費」「養生」）は版に原価が無い。原価＝売価として写さず、この版からは作らない
-  --（2026-11-04 の先方回答 A-2 ⑤：「原価＝売価」の案は未承認。原価の扱いを反映するまで止める）
-  perform pg_temp.sqd_expect_error('D1c-1b 売価だけを決めて原価の無い行（manual）を含む版からは、案件・下書きを作らない（明細の名前を示す）', 'P0001',
-    'LOCKED: 標準見積の版に、売価だけを決めて原価が無い明細（「D1c 施工1」・「取付費」・「養生」）',
+  -- 売価を入力した商品の行（manual の選択枠「施工1」）は版に原価が無い。原価＝売価として写さず、この版からは作らない
+  --（2026-11-04 の先方回答 A-2 ⑤：「原価＝売価」の案は未承認）。手入力明細「取付費」「養生」は原価単価を入力済み（2026-11-20 の依頼）なので挙げない
+  perform pg_temp.sqd_expect_error('D1c-1b 原価が未設定の行（売価を入力した商品の行）を含む版からは、案件・下書きを作らない（明細の名前を示す）', 'P0001',
+    'LOCKED: 標準見積の版に、原価が未設定の明細（「D1c 施工1」）',
     pg_temp.sqd_run_as('authenticated', u_admin,
       format($q$ select public.create_standard_quote_case('D1c 案件（売価だけ）', '{"full_name":"検査 花子"}'::jsonb, null, %L)::text $q$, v_rev)));
   perform pg_temp.sqd_expect_eq('D1c-1c 作れなかったときは、案件も下書きも残さない', '0/0',

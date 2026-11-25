@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { revalidatePath } from 'next/cache';
 
 const stubs = vi.hoisted(() => ({
   getOption: vi.fn(),
   getOptionVariants: vi.fn(),
   upsertVariantGroup: vi.fn(),
   upsertVariantChoice: vi.fn(),
+  uploadImage: vi.fn(),
+  deleteUploadedImage: vi.fn(),
+  costMode: 'success',
 }));
 
 vi.mock('@/lib/auth/session', () => ({
@@ -13,12 +17,12 @@ vi.mock('@/lib/auth/session', () => ({
 // 原価の Version の記録（v2.5 PR-A3）は、このテストでは「仕組みが無い」扱い（従来どおりの保存）
 vi.mock('@/lib/data/option-cost-recording', () => ({
   getCostRecordingAccess: vi.fn(async () => ({ available: false, canManage: false })),
-  getCostAccessForProduct: vi.fn(async () => ({ available: false, canManage: false })),
+  getCostAccessForProduct: vi.fn(async () => ({ available: true, canManage: true })),
   NO_COST_RECORDING: { available: false, canManage: false },
   canEditCostField: (access: { available: boolean; canManage: boolean; error?: boolean }) => !access.error && (!access.available || access.canManage),
   recordPublishedOptionCost: vi.fn(async () => ({ status: 'unavailable' })),
-  recordPublishedChoiceCosts: vi.fn(async () => ({ status: 'unavailable' })),
-  costRecordingNotice: () => null,
+  recordPublishedChoiceCosts: vi.fn(async () => { if (stubs.costMode === 'throw') throw new Error('record'); return stubs.costMode === 'error' ? { status: 'error' } : { status: 'recorded' }; }),
+  costRecordingNotice: (result: { status: string }) => result.status === 'error' ? '商品は保存しましたが、原価Versionを記録できませんでした' : null,
   COST_ACCESS_ERROR_MESSAGE: '原価の権限を確認できませんでした。',
 }));
 vi.mock('@/lib/data/store', () => ({
@@ -57,6 +61,9 @@ describe('選択項目の初回作成：保存アクションの金額対応', (
   beforeEach(() => {
     vi.clearAllMocks();
     stubs.getOption.mockResolvedValue({ id: optionId });
+    stubs.costMode = 'success';
+    stubs.uploadImage.mockResolvedValue('https://example.com/upload.png');
+    stubs.deleteUploadedImage.mockResolvedValue(undefined);
     stubs.getOptionVariants.mockResolvedValue({ groups: [], choices: [] });
     stubs.upsertVariantGroup.mockImplementation(async (item) => item);
     stubs.upsertVariantChoice.mockImplementation(async (item) => item);
@@ -121,5 +128,37 @@ describe('選択項目の初回作成：保存アクションの金額対応', (
     const result = await save(form);
     expect(result.ok).toBe(true);
     expect(stubs.upsertVariantChoice.mock.calls.map(([saved]) => saved.extra_price)).toEqual([0, 0]);
+  });
+});
+
+
+describe('選択肢作成後の復旧', () => {
+  beforeEach(() => {
+    vi.clearAllMocks(); stubs.costMode = 'success';
+    stubs.getOption.mockResolvedValue({ id: optionId, status: 'published' });
+    stubs.getOptionVariants.mockResolvedValue({ groups: [], choices: [] });
+    stubs.upsertVariantGroup.mockImplementation(async (item) => item);
+    stubs.upsertVariantChoice.mockImplementation(async (item) => item);
+    stubs.uploadImage.mockResolvedValue('https://example.com/upload.png');
+    stubs.deleteUploadedImage.mockResolvedValue(undefined);
+  });
+  it.each(['error', 'throw'])('全件保存後の記録%sを警告し画像を保持する', async (mode) => {
+    stubs.costMode = mode;
+    const form = prepare(['白'], ['0'], 0);
+    form.delete('choice_image_url_0');
+    form.set('choice_image_file_0', new File(['image'], 'test.png', { type: 'image/png' }));
+    const result = await save(form);
+    expect(result.ok).toBe(true); expect(result.costRecordingFailed).toBe(true);
+    expect(stubs.upsertVariantChoice).toHaveBeenCalledOnce(); expect(stubs.deleteUploadedImage).not.toHaveBeenCalled();
+  });
+  it('2件目の書込み結果不明時は既存保存と画像を保持して復旧を促す', async () => {
+    stubs.upsertVariantChoice.mockImplementationOnce(async (item) => item).mockRejectedValueOnce(new Error('network'));
+    vi.mocked(revalidatePath).mockImplementationOnce(() => { throw new Error('cache'); });
+    const form = prepare(['白', '黒'], ['0', '0'], 0);
+    form.delete('choice_image_url_1');
+    form.set('choice_image_file_1', new File(['image'], 'test.png', { type: 'image/png' }));
+    const result = await save(form);
+    expect(result.ok).toBe(false); expect(result.error).toContain('保存結果は不明');
+    expect(result.costRecordingFailed).toBe(true); expect(stubs.deleteUploadedImage).not.toHaveBeenCalled();
   });
 });

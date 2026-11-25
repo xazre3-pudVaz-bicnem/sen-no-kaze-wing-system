@@ -19,6 +19,9 @@ import {
 import { Button } from '@/components/ui';
 import { ProductDetail } from './product-detail';
 import { ProductList } from './product-list';
+import { productChoicePoints } from '@/lib/domain/simulator-product-choice-guide';
+import { simulatorCardPricePresentation } from '@/lib/domain/simulator-card-price-presentation';
+import type { SimulatorCardDelta } from '@/lib/domain/simulator-card-price-delta';
 import { cn } from '@/lib/utils';
 
 /**
@@ -48,7 +51,7 @@ function deltaPriceLabel(value: number, priceOnRequest = false): string {
 }
 
 function totalPriceLabel(state: EquipmentCategoryPriceState): string {
-  if (state.kind === 'standard') return '標準';
+  if (state.kind === 'standard') return '基本プランの商品';
   if (state.kind === 'price-on-request') return '別途見積';
   if (state.kind === 'no-change') return '追加費用なし';
   return state.delta > 0 ? `+${formatYen(state.delta)}` : formatYen(state.delta);
@@ -66,6 +69,8 @@ interface Props {
   baselineVariantIds: string[];
   onClose: () => void;
   onApply: (nextSelectedInCategory: string[], variantIds: string[]) => void;
+  /** 候補を実際に選んだ仮プランの税込見積総額を正式計算で評価（画面表示専用）。 */
+  getCandidateDelta?: (nextSelectedInCategory: string[], variantIds: string[]) => SimulatorCardDelta;
   /**
    * 位置・用途の選択枠（v2.5 PR-S2）の選び直し。その位置で 1 つだけ選び、外せない（位置ごとに必ず 1 つ）。
    * options はその位置で選べる商品、selectedIds・baselineSelectedIds はその位置の今の商品と標準の商品
@@ -91,6 +96,7 @@ export function OptionPickerDialog({
   baselineVariantIds,
   onClose,
   onApply,
+  getCandidateDelta,
   slot = null,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -116,6 +122,16 @@ export function OptionPickerDialog({
         : selectedInCategory,
     [displayOptions, isWashbasinCategory, options, selectedInCategory]
   );
+  // 洗面セットは2商品を1カードに表示するため、基本プランの判定も表示IDに変換する。
+  const displayBaselineSelectedIds = useMemo(
+    () => displayOptions
+      .filter((option) => isWashbasinCategory
+        ? isWashbasinDisplayOptionSelected(option, baselineSelectedIds, options)
+        : baselineSelectedIds.includes(option.id))
+      .map((option) => option.id),
+    [baselineSelectedIds, displayOptions, isWashbasinCategory, options]
+  );
+  const choicePoints = productChoicePoints(category.code);
   const isSingleSelection = Boolean(slot) || isSimulatorSingleProductCategory(category);
   const baseCategoryName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
@@ -192,8 +208,18 @@ export function OptionPickerDialog({
       variantChoices,
     });
 
+  const candidatePresentation = (option: ProductOption, optionVariants: string[]) =>
+    getCandidateDelta
+      ? simulatorCardPricePresentation(getCandidateDelta(
+          nextSelectedForOption(option), nextVariantsForOption(option, optionVariants)
+        ))
+      : null;
+
   const priceLabel = (option: ProductOption) =>
+    candidatePresentation(option, optionVariantIds(option))?.label ??
     totalPriceLabel(priceBreakdown(option, optionVariantIds(option)).state);
+  const priceTone = (option: ProductOption) =>
+    candidatePresentation(option, optionVariantIds(option))?.tone ?? 'neutral';
 
   const detailBreakdown = detailOption
     ? priceBreakdown(detailOption, draftVariantIds)
@@ -207,6 +233,7 @@ export function OptionPickerDialog({
   const totalPriceDetailLabel = detailBreakdown
     ? totalPriceLabel(detailBreakdown.state)
     : '0円';
+  const detailCandidate = detailOption ? candidatePresentation(detailOption, draftVariantIds) : null;
 
   const openDetail = (option: ProductOption) => {
     const groups = variantGroups
@@ -346,14 +373,31 @@ export function OptionPickerDialog({
             choices={variantChoices}
             selectedVariantIds={draftVariantIds}
             isCurrentlySelected={isCurrentlySelected}
+            isBasicPlanProduct={displayBaselineSelectedIds.includes(detailOption.id)}
             onVariantChange={chooseVariant}
           />
         ) : (
+          <div>
+            {choicePoints.length > 0 && (
+              <section className="mb-3 rounded-lg border border-line bg-ivory/55 px-3 py-2.5 sm:px-4" data-testid="product-choice-guide" aria-label={`${baseCategoryName}の選ぶポイント`}>
+                <h3 className="text-xs font-semibold text-ink">選ぶポイント</h3>
+                <ul className="mt-1.5 flex flex-wrap gap-1.5" data-testid="product-choice-guide-points">
+                  {choicePoints.map((point) => (
+                    <li key={point} className="rounded-md border border-line/70 bg-white px-2 py-1 text-[0.7rem] leading-relaxed text-ink-soft">
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-[0.65rem] leading-relaxed text-muted">比較するときの目安です。各商品の仕様は商品詳細やメーカー資料をご確認ください。</p>
+              </section>
+            )}
           <ProductList
             category={category}
             options={displayOptions}
             selectedIds={displaySelectedIds}
+            baselineSelectedIds={displayBaselineSelectedIds}
             getPriceLabel={priceLabel}
+            getPriceTone={getCandidateDelta ? priceTone : undefined}
             getDisabledReason={(option) => {
               if (displaySelectedIds.includes(option.id)) return null;
               if (isWashbasinCategory) {
@@ -367,6 +411,7 @@ export function OptionPickerDialog({
             }}
             onOpenProduct={openDetail}
           />
+          </div>
         )}
       </div>
 
@@ -391,6 +436,12 @@ export function OptionPickerDialog({
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+              {getCandidateDelta ? (
+                <div className="min-w-[12rem] rounded-lg border border-line bg-ivory/55 px-4 py-2 text-center" data-testid="product-detail-total-delta">
+                  <p className="text-[0.68rem] font-semibold text-brown">基本プランとの差額（税込）</p>
+                  <p className={cn('mt-1 text-sm font-bold', detailCandidate?.tone === 'increase' ? 'text-red-700' : detailCandidate?.tone === 'decrease' ? 'text-blue-700' : 'text-ink')} data-price-tone={detailCandidate?.tone ?? 'neutral'}>{detailCandidate?.label ?? '金額確認中'}</p>
+                </div>
+              ) : (
               <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-white text-center text-[0.68rem]">
                 <div className="min-w-[6.5rem] px-2.5 py-1.5">
                   <dt className="text-muted">商品追加額</dt>
@@ -405,6 +456,7 @@ export function OptionPickerDialog({
                   <dd className="mt-0.5 text-sm font-bold text-brown">{totalPriceDetailLabel}</dd>
                 </div>
               </dl>
+              )}
 
               <Button type="button" onClick={applyDetail} disabled={requiredVariantMissing} data-testid="product-detail-apply">
                 この内容に変更する

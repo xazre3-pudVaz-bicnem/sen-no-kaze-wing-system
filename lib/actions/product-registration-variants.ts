@@ -21,6 +21,7 @@ export interface ProductVariantCreateState {
   error?: string;
   fieldErrors?: FieldErrors;
   message?: string;
+  costRecordingFailed?: boolean;
 }
 
 const initialError = (error: unknown): ProductVariantCreateState => {
@@ -217,10 +218,12 @@ export async function createVariantGroupWithFirstChoiceAction(
 
     let savedChoiceCount = 0;
     const savedChoiceIds: string[] = [];
+    let saveOutcomeUnknown = false;
     try {
       for (const [index, choice] of choices.entries()) {
         const file = selectedChoiceImage(formData, choiceInputs[index].choiceIndex);
         let uploadedUrl: string | null = null;
+        let writeStarted = false;
         try {
           if (file) {
             uploadedUrl = await store.uploadImage({
@@ -230,6 +233,7 @@ export async function createVariantGroupWithFirstChoiceAction(
             }, 'variant-choices');
           }
           const choiceId = randomUUID();
+          writeStarted = true;
           await store.upsertVariantChoice({
             id: choiceId,
             group_id: choice.group_id,
@@ -246,36 +250,53 @@ export async function createVariantGroupWithFirstChoiceAction(
           savedChoiceCount += 1;
           savedChoiceIds.push(choiceId);
         } catch (error) {
-          // DB保存に失敗した場合、参照されないアップロード画像だけ回収する。
-          if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+          // 書込み開始後のエラーは保存済みかもしれないため、参照中の画像を消さない。
+          if (writeStarted) saveOutcomeUnknown = true;
+          else if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
           throw error;
         }
       }
     } catch (error) {
       console.error('[wing] product variant choice create error', error);
-      revalidatePath(`/admin/options/${option.id}`);
+      try {
+        revalidatePath(`/admin/options/${option.id}`);
+      } catch (revalidateError) {
+        console.error('[wing] failed to refresh partial variant save', revalidateError);
+      }
       return {
         ok: false,
-        error:
+        costRecordingFailed: option.status === 'published' && costAccess.available && costAccess.canManage && (savedChoiceCount > 0 || saveOutcomeUnknown),
+        error: saveOutcomeUnknown
+          ? `選択肢${savedChoiceCount}件の保存は確認できましたが、次の選択肢の保存結果は不明です。再操作する前に選択肢と画像の状態を確認してください。`
+          :
           savedChoiceCount === 0
             ? '選択項目はありますが、選択肢を保存できませんでした。表示された選択項目から選択肢を追加してください。'
             : `選択項目と選択肢${savedChoiceCount}件は保存されましたが、残りの選択肢を保存できませんでした。表示された選択項目から不足分を追加してください。`,
       };
     }
 
-    revalidatePath(`/admin/options/${option.id}`);
-    revalidatePath('/', 'layout');
-    updateTag(CATALOG_TAG);
     // 登録済みの商品なら、本部が入れた原価差額（0 円を含む）を Version に記録する
-    const costNotice =
-      option.status === 'published' && costAccess.available && costAccess.canManage
-        ? costRecordingNotice(await recordPublishedChoiceCosts(option.id, 'choice', savedChoiceIds, costAccess))
-        : null;
+    let costNotice: string | null = null;
+    try {
+      revalidatePath(`/admin/options/${option.id}`);
+      revalidatePath('/', 'layout');
+      updateTag(CATALOG_TAG);
+      if (option.status === 'published' && costAccess.available && costAccess.canManage) {
+        costNotice = costRecordingNotice(await recordPublishedChoiceCosts(option.id, 'choice', savedChoiceIds, costAccess));
+      }
+    } catch (error) {
+      console.error('[wing] failed to record variant cost versions', error);
+      if (!(option.status === 'published' && costAccess.available && costAccess.canManage)) {
+        return { ok: false, error: '選択肢は保存しましたが、後続処理を完了できませんでした。再操作前に登録内容を確認してください。' };
+      }
+      costNotice = costRecordingNotice({ status: 'error', message: '原価の Version を記録できませんでした' });
+    }
     const savedMessage = reusableGroup
       ? `既存の選択項目へ選択肢${choices.length}件を追加しました。`
       : `選択項目と選択肢${choices.length}件を追加しました。`;
     return {
       ok: true,
+      costRecordingFailed: Boolean(costNotice),
       message: costNotice ? `${savedMessage}${costNotice}` : savedMessage,
     };
   } catch (error) {

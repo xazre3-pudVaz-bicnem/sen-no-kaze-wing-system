@@ -184,13 +184,15 @@ export async function requestQuoteAsCustomer(page: Page, email: string, configNa
  * 商品の編集画面を開いた状態で呼ぶ
  */
 export async function applyRegisteredOptionPrice(page: Page, price: number) {
+  const optionId = new URL(page.url()).pathname.split('/').at(-1);
   await page.locator('#registered-price').fill(String(price));
   await page.getByRole('button', { name: '変更内容を確認' }).click();
   await expect(page.getByTestId('registered-option-change-review')).toContainText('商品標準原価（税別）');
   await page.getByRole('button', { name: 'この変更を反映' }).click();
-  // 反映が済むと、最新の登録内容を読み直して編集画面へ戻る
-  await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
-  await expect(page.locator('#registered-price')).toHaveValue(String(price));
+  // 正式反映に成功したら商品台帳へ。編集画面には残らない。
+  await page.waitForURL((url) => url.pathname === '/admin/ledger' && url.searchParams.get('updated_option') === optionId);
+  await expect(page.getByText('商品を更新しました。')).toBeVisible();
+  await expect(page.locator('[data-recently-changed="true"]:visible').first()).toBeVisible();
 }
 
 /** 本部として案件を開き、担当代理店を割り当てる（「次にやること」の「担当代理店を選ぶ」から） */

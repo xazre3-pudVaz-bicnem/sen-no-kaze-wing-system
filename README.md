@@ -49,8 +49,8 @@ e2e/, tests/         Playwright / Vitest
 
 3. 環境変数 — `.env.example` をコピーして `.env.local` を作成し、`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `NEXT_PUBLIC_SITE_URL` を設定
 
-   通知メールを送る場合は `RESEND_API_KEY` と `MAIL_FROM`（例 `Wing <noreply@example.com>`）も設定します。
-   未設定でも通知は管理画面「お知らせ」に必ず残るため、運用は止まりません。
+   通知メールを送る場合は `RESEND_API_KEY` と `MAIL_FROM`（例 `Wing <noreply@example.com>`）も設定します。返信先は `MAIL_REPLY_TO`（任意）。
+   未設定でも通知は管理画面「お知らせ」に必ず残るため、運用は止まりません。本番の設定は [docs/mail-setup.md](docs/mail-setup.md)。
 
 4. 初期データ投入（モデル・オプション・画像ルール）
 

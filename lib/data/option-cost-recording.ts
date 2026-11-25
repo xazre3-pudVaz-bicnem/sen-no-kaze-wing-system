@@ -102,7 +102,7 @@ export async function recordPublishedOptionCost(
   if (error) return { status: 'error', message: errorMessage(error) };
   if (!optionRow || optionRow.status !== 'published' || optionRow.price_on_request) return { status: 'skipped' };
   // 商品価格（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
-  const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all');
+  const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all', true);
   const price = Number(option.price ?? 0);
   // 下書きの 0 円は価格未確認。登録（公開）のときだけ、確認済みの 0 円として記録する
   if (price < 0 || (price === 0 && kind !== 'publish')) return { status: 'skipped' };
@@ -115,14 +115,19 @@ export async function recordPublishedOptionCost(
   if (copy.error) return { status: 'error', message: errorMessage(copy.error) };
   if (current.data && Number(current.data.standard_cost) === price) return { status: 'unchanged' };
 
-  const result = await db.rpc('set_option_hq_standard_cost', {
-    p_option_id: optionId,
-    p_standard_cost: price,
-    p_expected_lock_version: copy.data?.lock_version ?? 0,
-    p_change_reason: RECORD_REASON[kind],
-  });
+  let result;
+  try {
+    result = await db.rpc('set_option_hq_standard_cost', {
+      p_option_id: optionId,
+      p_standard_cost: price,
+      p_expected_lock_version: copy.data?.lock_version ?? 0,
+      p_change_reason: RECORD_REASON[kind],
+    });
+  } finally {
+    // 通信結果が不明でもDB側で記録された可能性がある。
+    refreshSalePrices();
+  }
   if (result.error) return { status: 'error', message: errorMessage(result.error) };
-  refreshSalePrices();
   return { status: 'recorded' };
 }
 
@@ -153,7 +158,7 @@ export async function recordPublishedChoiceCosts(
   // 追加金額（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
   const targets = await withLegacyChoicePrices(
     ((choices.data ?? []) as { id: string; price_on_request: boolean }[]).filter((row) => !row.price_on_request),
-    'all'
+    'all', true
   );
   if (!targets.length) return { status: 'skipped' };
 
@@ -170,19 +175,22 @@ export async function recordPublishedChoiceCosts(
     const amount = Number(choice.extra_price ?? 0);
     const current = currentByChoice.get(choice.id as string);
     if (current && Number(current.cost_adjustment) === amount) continue;
-    const result = await db.rpc('set_option_variant_cost_adjustment', {
-      p_variant_choice_id: choice.id,
-      p_cost_adjustment: amount,
-      p_expected_current_version_id: current?.id ?? null,
-      p_change_reason: RECORD_REASON[kind],
-    });
+    let result;
+    try {
+      result = await db.rpc('set_option_variant_cost_adjustment', {
+        p_variant_choice_id: choice.id,
+        p_cost_adjustment: amount,
+        p_expected_current_version_id: current?.id ?? null,
+        p_change_reason: RECORD_REASON[kind],
+      });
+    } finally {
+      refreshSalePrices();
+    }
     if (result.error) {
-      if (recorded) refreshSalePrices();
       return { status: 'error', message: errorMessage(result.error) };
     }
     recorded = true;
   }
-  if (recorded) refreshSalePrices();
   return { status: recorded ? 'recorded' : 'unchanged' };
 }
 

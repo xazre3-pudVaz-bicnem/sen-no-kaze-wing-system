@@ -512,6 +512,8 @@ export default async function EditOptionPage({
                     <input type="hidden" name="included_categories_expected_ids" value={JSON.stringify(inclusionRead.ids)} />
                   )}
                   {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
+                  {/* 見積テンプレート等からの戻り先がない通常登録は、公開成功時に商品台帳へ戻す。 */}
+                  {!returnTo && <input type="hidden" name="return_to" value="/admin/ledger" />}
                   {needsZeroPriceConfirmation && (
                     <div className="max-w-xl rounded-xl border border-[#d9a441] bg-[#fff8e8] p-3 text-sm">
                       <p className="font-semibold text-ink">{priceLabel}が0円です</p>

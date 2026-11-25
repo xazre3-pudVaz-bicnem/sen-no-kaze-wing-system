@@ -4,7 +4,7 @@ import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { Alert, Badge } from '@/components/ui';
-import { AdminPage, BackLink } from '@/components/admin/ui';
+import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
 import {
   EstimateTemplateWorkbench,
   type EstimateTemplateWorkbenchLine,
@@ -120,6 +120,7 @@ export default async function EstimateTemplateDetailPage({
       }
     >
       <BackLink href="/admin/estimate-templates/legacy" label="旧テンプレート（参照）へ戻る" />
+      <FlashMessages sp={sp} />
 
       <Alert tone="info">
         既存の分類表見積データを使って、新しい編集画面を確認しています。

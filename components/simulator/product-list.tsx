@@ -3,6 +3,7 @@
 import { Check, ImageOff } from 'lucide-react';
 import type { OptionCategory, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
+import { orderPickerProducts } from '@/lib/domain/simulator-product-choice-guide';
 import { cn } from '@/lib/utils';
 
 export interface ProductListAttribute {
@@ -14,7 +15,9 @@ interface Props {
   category: OptionCategory;
   options: ProductOption[];
   selectedIds: string[];
+  baselineSelectedIds: string[];
   getPriceLabel: (option: ProductOption) => string;
+  getPriceTone?: (option: ProductOption) => 'increase' | 'decrease' | 'neutral';
   getAttributes?: (category: OptionCategory, option: ProductOption) => ProductListAttribute[];
   onOpenProduct: (option: ProductOption) => void;
   getDisabledReason?: (option: ProductOption) => string | null;
@@ -33,7 +36,9 @@ export function ProductList({
   category,
   options,
   selectedIds,
+  baselineSelectedIds,
   getPriceLabel,
+  getPriceTone,
   getAttributes = defaultProductListAttributes,
   onOpenProduct,
   getDisabledReason,
@@ -41,6 +46,8 @@ export function ProductList({
   actionLabel = '詳しく見る',
 }: Props) {
   const selected = new Set(selectedIds);
+  const baseline = new Set(baselineSelectedIds);
+  const orderedOptions = orderPickerProducts(options, selectedIds, baselineSelectedIds);
 
   if (options.length === 0) {
     return (
@@ -52,16 +59,18 @@ export function ProductList({
 
   return (
     <ul className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" data-testid="product-list">
-      {options.map((option) => {
+      {orderedOptions.map((option) => {
         const checked = selected.has(option.id);
+        const isBaseline = baseline.has(option.id);
+        const displayPrice = getPriceLabel(option);
+        const priceTone = getPriceTone?.(option) ?? 'neutral';
+        // 同じ案内がバッジと価格欄に二重表示される場合だけ省略。
+        // 数値・別途見積・追加費用のラベルは変更も非表示もしない。
+        const redundantBasicPlanText = isBaseline && (displayPrice === '基本プランの商品' || displayPrice === '基本プランに含む');
         const disabledReason = checked ? null : getDisabledReason?.(option) ?? null;
         const attributes = getAttributes(category, option).filter(
           (item) => item.label.trim().length > 0 && item.value.trim().length > 0
         );
-        const containImage = ['ub', 'toilet', 'washbasin', 'kitchen', 'boiler', 'aircon', 'lighting'].includes(
-          category.code
-        );
-
         return (
           <li key={option.id}>
             <article
@@ -93,7 +102,7 @@ export function ProductList({
                       alt={option.name}
                       fill
                       sizes="(min-width: 1024px) 13rem, (min-width: 768px) 30vw, (min-width: 480px) 45vw, 92vw"
-                      className={containImage ? 'object-contain' : 'object-cover'}
+                      className="object-contain p-2"
                     />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-1 text-[0.65rem] text-muted">
@@ -102,34 +111,41 @@ export function ProductList({
                     </div>
                   )}
 
-                  {checked && (
-                    <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-brown px-1.5 py-0.5 text-[0.65rem] font-semibold text-white">
-                      <Check className="size-3" aria-hidden="true" />
-                      選択中
-                    </span>
-                  )}
+                  <div className="absolute top-1.5 left-1.5 flex max-w-[calc(100%-0.75rem)] flex-col items-start gap-1">
+                    {checked && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brown px-2 py-0.5 text-[0.65rem] font-semibold text-white" data-testid={`product-card-current-${option.code}`}>
+                        <Check className="size-3 shrink-0" aria-hidden="true" />
+                        現在選択中
+                      </span>
+                    )}
+                    {isBaseline && (
+                      <span className="inline-flex items-center rounded-full border border-brown/25 bg-white/95 px-2 py-0.5 text-[0.65rem] font-semibold text-brown" data-testid={`product-card-baseline-${option.code}`}>
+                        基本プランの商品
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-1 flex-col p-2.5 sm:p-3">
                   {option.manufacturer && (
-                    <span className="mb-0.5 text-[0.65rem] text-muted">{option.manufacturer}</span>
+                    <span className="mb-0.5 min-w-0 text-[0.65rem] text-muted [overflow-wrap:anywhere]">{option.manufacturer}</span>
                   )}
 
-                  <h3 className="text-xs leading-snug font-semibold text-ink sm:text-[0.82rem]">{option.name}</h3>
+                  <h3 className="min-w-0 text-xs leading-snug font-semibold text-ink [overflow-wrap:anywhere] sm:text-[0.82rem]">{option.name}</h3>
 
                   {attributes.length > 0 && (
                     <dl className="mt-2 grid gap-1 text-[0.65rem] sm:text-[0.7rem]">
                       {attributes.map((item) => (
                         <div key={`${item.label}-${item.value}`} className="grid grid-cols-[4rem_1fr] gap-1.5">
                           <dt className="text-muted">{item.label}</dt>
-                          <dd className="min-w-0 break-words text-ink-soft">{item.value}</dd>
+                          <dd className="min-w-0 text-ink-soft [overflow-wrap:anywhere]">{item.value}</dd>
                         </div>
                       ))}
                     </dl>
                   )}
 
                   <div className="mt-auto pt-2.5">
-                    <p className="text-xs font-semibold text-ink sm:text-[0.82rem]">{getPriceLabel(option)}</p>
+                    {!redundantBasicPlanText && <p className={cn("min-w-0 text-xs font-semibold [overflow-wrap:anywhere] sm:text-[0.82rem]", priceTone === "increase" ? "text-red-700" : priceTone === "decrease" ? "text-blue-700" : "text-ink")} data-price-tone={priceTone} data-testid={`product-card-price-${option.code}`}>{displayPrice}</p>}
                     {disabledReason && <p className="mt-1 text-[0.65rem] leading-snug text-warn">{disabledReason}</p>}
                     <button
                       type="button"
@@ -162,18 +178,21 @@ export function defaultProductListAttributes(
   category: OptionCategory,
   option: ProductOption
 ): ProductListAttribute[] {
-  if (!option.size_note) return [];
+  const attributes: ProductListAttribute[] = [];
+  if (option.model_no?.trim()) attributes.push({ label: '型番', value: option.model_no.trim() });
 
   const labelByCategory: Record<string, string> = {
     ub: 'サイズ',
     washbasin: '間口',
     kitchen: '間口',
     boiler: 'サイズ・設置',
-    aircon: '適用畳数',
+    aircon: 'サイズ・仕様',
     sash: 'サイズ・呼称',
     furniture: '寸法',
   };
 
-  const label = labelByCategory[category.code];
-  return label ? [{ label, value: option.size_note }] : [];
+  if (option.size_note?.trim()) {
+    attributes.push({ label: labelByCategory[category.code] ?? 'サイズ・仕様', value: option.size_note.trim() });
+  }
+  return attributes;
 }

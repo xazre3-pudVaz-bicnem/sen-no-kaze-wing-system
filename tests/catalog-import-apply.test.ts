@@ -232,8 +232,13 @@ describe('商品マスターの原子的な一括登録', () => {
   it('途中失敗時は商品・グループ・選択肢を一件も反映しない', async () => {
     const store = useStore(new AtomicCatalogStore());
     store.fail = true;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(applyImportPlan(oneProductPlan(), new Map())).rejects.toThrow('商品・選択項目・選択肢は反映されませんでした');
+    // 想定外のエラーの文は画面に出さず、サーバーの記録にだけ残す（v6.1 H2-B）
+    await expect(applyImportPlan(oneProductPlan(), new Map())).rejects.not.toThrow('意図的な選択肢エラー');
+    expect(log).toHaveBeenCalledWith('[catalog-import] apply_catalog_import failed', { message: '意図的な選択肢エラー' });
+    log.mockRestore();
     expect(store.options).toHaveLength(0);
     expect(store.groups).toHaveLength(0);
     expect(store.choices).toHaveLength(0);

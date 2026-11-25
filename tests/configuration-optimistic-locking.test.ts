@@ -194,7 +194,7 @@ describe('Configuration 保存の同時編集対策: アプリ', () => {
     // 既存プランの版はサーバーから取得し、保存成功時は最新の版を記録する。
     // 新規入口・ログイン後再開では、以前のプランIDと版をブラウザから復元しない。
     expect(simulator).toContain('lockVersion: result.configuration.lock_version ?? null');
-    expect(simulator).toContain('canRestoreSimulatorSelection(draft, user?.id ?? null, resume)');
+    expect(simulator).toContain('canRestoreSimulatorSelection(legacyDraft, user?.id ?? null, true, standardPreview)');
     expect(simulator).not.toContain('setLockVersion(draft.lockVersion ?? null)');
     expect(simulator).not.toContain('setConfigId(draft.configId)');
   });

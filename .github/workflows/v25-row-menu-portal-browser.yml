@@ -1,0 +1,59 @@
+name: V25 Row Menu Portal Isolated Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/standard-estimate-v25-workbench.tsx'
+      - 'e2e/v25-row-menu-portal.spec.ts'
+      - 'e2e/v25-row-menu-portal-mobile.spec.ts'
+      - '.github/workflows/v25-row-menu-portal-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v25-row-menu-portal-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Reject production connections
+        run: |
+          test "$WING_LOCAL_MODE" = 1
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+      - name: Set up disposable fixture
+        run: |
+          mkdir -p app/pr691-e2e-row-move
+          cp e2e/fixtures/pr691-v25-row-move-page.tsx.fixture app/pr691-e2e-row-move/page.tsx
+      - name: Isolated PC and smartphone menu regression
+        run: npx playwright test e2e/v25-row-menu-portal.spec.ts e2e/v25-row-menu-portal-mobile.spec.ts --project=desktop --project=mobile
+      - name: Upload failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v25-row-menu-portal-browser
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

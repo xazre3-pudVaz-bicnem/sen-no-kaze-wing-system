@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   createVariantGroupWithFirstChoiceAction,
   type ProductVariantCreateState,
@@ -245,12 +246,14 @@ function VariantCreatePortal({
   optionId,
   categoryLabel,
   canEditCost,
+  onCostWarning,
 }: {
   target: HTMLElement;
   optionId: string;
   categoryLabel: string;
   /** 原価差額の欄を出す（原価の Version の仕組みがある間は本部だけ。v2.5 PR-A3） */
   canEditCost: boolean;
+  onCostWarning: (optionId: string, message: string) => void;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -359,6 +362,7 @@ function VariantCreatePortal({
     const result = await createVariantGroupWithFirstChoiceAction(initialState, new FormData(form));
     setPending(false);
     setState(result);
+    if (result.costRecordingFailed) onCostWarning(optionId, result.ok ? result.message ?? '' : '保存済みの選択肢の原価Versionを確認してください。');
 
     if (!result.ok) {
       router.refresh();
@@ -599,6 +603,7 @@ export function ProductRegistrationFinalRefinements() {
   const [optionId, setOptionId] = useState('');
   const [categoryLabel, setCategoryLabel] = useState('');
   const [canEditCost, setCanEditCost] = useState(true);
+  const [costWarning, setCostWarning] = useState<{ optionId: string; message: string } | null>(null);
 
   useEffect(() => {
     let raf = 0;
@@ -648,13 +653,16 @@ export function ProductRegistrationFinalRefinements() {
     };
   }, []);
 
-  if (!portalTarget || !optionId) return null;
   return (
-    <VariantCreatePortal
+    <>
+    {costWarning && <Alert tone="warn">商品ID {costWarning.optionId}：{costWarning.message} 対象と金額を確認し、必要な項目だけを選んでください。 <Link href="/admin/options/cost-import" className="underline">原価 Version の取り込み画面を開く</Link> <button type="button" onClick={() => setCostWarning(null)} className="underline">閉じる</button></Alert>}
+    {portalTarget && optionId && <VariantCreatePortal
       target={portalTarget}
       optionId={optionId}
       categoryLabel={categoryLabel}
       canEditCost={canEditCost}
-    />
+      onCostWarning={(id, message) => setCostWarning({ optionId: id, message })}
+    />}
+    </>
   );
 }

@@ -3,7 +3,7 @@
  *
  * 本番・共有 DB の正本は migration `20261013110000_matrix_identity_foundation.sql` の初期登録と、
  * その後の管理画面での変更。ここはローカル検証モードの空 DB を作るときだけ使う。
- * 内容は migration の確定 seed と一致させる（tests/matrix-identity-foundation.test.ts で照合）。
+ * PR A 時点の15項目・6行の歴史的seedは残し、#707 の現行追加項目だけ下の拡張seedで適用する。
  */
 import type { BaseModel, MatrixCell, MatrixItem, MatrixRow, MatrixSize, MatrixSpec, OptionCategory, SpecMatrix } from '@/lib/domain/types';
 
@@ -36,6 +36,16 @@ export const MATRIX_ITEM_SEED: MatrixItem[] = [
   { code: 'furnishings', label: '備品', sort_order: 140, status: 'active' },
   { code: 'other', label: 'その他', sort_order: 150, status: 'active' },
 ];
+
+// The original 15 items are the immutable historical PR A seed (20261013110000).
+// The current local simulator includes the later two independently selectable items.
+// Do not change the old migration or MATRIX_ITEM_SEED to rewrite the PR A baseline.
+export const MATRIX_ITEM_EXTENSION_707: MatrixItem[] = [
+  { code: 'aircon', label: '空調（エアコン）', sort_order: 145, status: 'active' },
+  { code: 'lighting', label: '照明器具', sort_order: 146, status: 'active' },
+];
+export const MATRIX_CURRENT_ITEM_SEED: MatrixItem[] = [...MATRIX_ITEM_SEED, ...MATRIX_ITEM_EXTENSION_707]
+  .sort((a, b) => a.sort_order - b.sort_order);
 
 /** 機種 slug・仕様・サイズ・防火の可否と、選択できる項目（列挙していない項目は選択不可） */
 export const MATRIX_ROW_SEED: Array<{
@@ -104,6 +114,14 @@ export const MATRIX_CATEGORY_ITEM_SEED: ReadonlyArray<readonly [categoryCode: st
   ['aircon', 'other'], ['lighting', 'other'], ['smartlock', 'other'], ['exterior-parts', 'other'],
 ];
 
+// The historical category mapping remains unchanged above; the current mapping
+// matches #707's migration, which re-maps only aircon and lighting.
+export const MATRIX_CURRENT_CATEGORY_ITEM_SEED: ReadonlyArray<readonly [string, string]> =
+  MATRIX_CATEGORY_ITEM_SEED.map(([categoryCode, itemCode]) => [
+    categoryCode,
+    categoryCode === 'aircon' || categoryCode === 'lighting' ? categoryCode : itemCode,
+  ] as const);
+
 /** ローカル検証モードの空 DB 用に、機種 ID・カテゴリー ID を解決したマトリクスを作る（無い機種・カテゴリーは作らない） */
 export function buildSeedMatrix(
   models: Pick<BaseModel, 'id' | 'slug'>[],
@@ -125,17 +143,23 @@ export function buildSeedMatrix(
       status: 'active',
       lock_version: 1,
     });
-    for (const item of MATRIX_ITEM_SEED) {
-      cells.push({ matrix_row_id: id, matrix_item_code: item.code, selectable: seed.selectable_items.includes(item.code) });
+    for (const item of MATRIX_CURRENT_ITEM_SEED) {
+      // 707 initial state: inherit the legacy "other" flag for both new items.
+      const isNew = item.code === 'aircon' || item.code === 'lighting';
+      cells.push({
+        matrix_row_id: id,
+        matrix_item_code: item.code,
+        selectable: seed.selectable_items.includes(isNew ? 'other' : item.code),
+      });
     }
   }
   return {
     specs: MATRIX_SPEC_SEED.map((row) => ({ ...row })),
     sizes: MATRIX_SIZE_SEED.map((row) => ({ ...row })),
-    items: MATRIX_ITEM_SEED.map((row) => ({ ...row })),
+    items: MATRIX_CURRENT_ITEM_SEED.map((row) => ({ ...row })),
     rows,
     cells,
-    categoryItems: MATRIX_CATEGORY_ITEM_SEED.flatMap(([categoryCode, itemCode]) => {
+    categoryItems: MATRIX_CURRENT_CATEGORY_ITEM_SEED.flatMap(([categoryCode, itemCode]) => {
       const category = categories.find((candidate) => candidate.code === categoryCode);
       return category ? [{ category_id: category.id, matrix_item_code: itemCode }] : [];
     }),

@@ -139,12 +139,21 @@ export interface StandardEstimateWorkspace {
     total: number;
     hasPor: boolean;
     pricingModel: PricingModel;
+    /** 調整後の税別額と内部原価の合計（DB の保存値。本部だけ。粗利の表示に使う：2026-11-20 の先方の依頼） */
+    subtotal: number;
+    costTotal: number;
   };
   /** v2.5 の Revision のときだけ（v2.5 以前・未適用の DB では null） */
   v25: {
+    /** 表示用分類に必要な商品モデル。価格・保存の判定には使用しない。 */
+    modelSlug: string | null;
     initial: V25EditorState;
+    /** 手入力明細の原価単価の列を読めたか（20261110150000 の後の DB）。false なら原価の欄・粗利を出さない */
+    lineCostsAvailable: boolean;
     preview: V25Preview | null;
     baseLines: V25WorkbenchBaseLine[];
+    /** 既存見積が参照する本体マスターの固定Revision（取得できた場合のみ表示用）。 */
+    baseMasterReference: { masterId: string; revisionVersion: number } | null;
     candidates: V25WorkbenchCandidate[];
     costs: V25WorkbenchCosts;
     rule: PricingCalculationRule;
@@ -161,7 +170,7 @@ export async function loadStandardEstimateWorkspace(
   if (!revisionId) return null;
   const { data: revision, error } = await supabase
     .from('standard_estimate_revisions')
-    .select('id, version, status, base_master_revision_id, sales_fee_rate, expense_rate, markup_rate, standard_adjustment_amount, standard_adjustment_reason, total, has_por, lock_version')
+    .select('id, version, status, base_master_revision_id, sales_fee_rate, expense_rate, markup_rate, standard_adjustment_amount, standard_adjustment_reason, subtotal, total, cost_total, has_por, lock_version')
     .eq('id', revisionId)
     .maybeSingle();
   if (error) throw new Error(`標準見積を取得できませんでした: ${error.code ?? 'unknown'}`);
@@ -176,6 +185,8 @@ export async function loadStandardEstimateWorkspace(
     total: revision.total,
     hasPor: revision.has_por,
     pricingModel,
+    subtotal: revision.subtotal,
+    costTotal: revision.cost_total,
   };
   if (!header || pricingModel !== 'v2.5' || !header.calc_rule_version_id || !header.tax_rule_version_id) {
     return { revision: summary, v25: null };
@@ -202,6 +213,19 @@ export async function loadStandardEstimateWorkspace(
     // 窓タイプの名前（v2.5 PR-S2。候補の表示と、位置の枠の選べる商品の絞り込みだけに使う。読めなければ名前なしで続ける）
     supabase.from('window_types').select('code, label'),
   ]);
+  // 既存の固定参照Revisionからのみ読み取る。現在の公開版を参照先と誤認しない。
+  // 参照情報が取得できなくても編集・保存の可否や計算には影響させない。
+  const baseReferenceResult = revision.base_master_revision_id
+    ? await supabase.from('base_master_revisions')
+      .select('base_master_id, version')
+      .eq('id', revision.base_master_revision_id)
+      .maybeSingle()
+    : null;
+  const baseMasterReference = baseReferenceResult?.data && !baseReferenceResult.error &&
+    typeof baseReferenceResult.data.base_master_id === 'string' &&
+    typeof baseReferenceResult.data.version === 'number'
+    ? { masterId: baseReferenceResult.data.base_master_id, revisionVersion: baseReferenceResult.data.version }
+    : null;
   for (const result of [baseResult, savedResult, ruleResult, taxResult]) {
     if (result.error) throw new Error(`標準見積の編集に必要な内容を取得できませんでした: ${result.error.code ?? 'unknown'}`);
   }
@@ -250,6 +274,8 @@ export async function loadStandardEstimateWorkspace(
         displayGroup: isLegacyWashbasinOption(option) ? 'washbasin-standard-set' : null,
         manufacturer: option.manufacturer ?? '',
         modelNo: option.model_no ?? '',
+        priceUnit: option.price_unit ?? null,
+        imageUrl: option.image_url ?? null,
         usesWindowType: category?.uses_window_type === true,
         windowTypeCode: option.window_type_code ?? null,
         windowTypeLabel: option.window_type_code ? (windowTypeLabel.get(option.window_type_code) ?? option.window_type_code) : null,
@@ -299,6 +325,8 @@ export async function loadStandardEstimateWorkspace(
       singleSelect: false,
       manufacturer: '',
       modelNo: '',
+      // 旧スナップショットに保存された単位はないため、推測して補完しない。
+      priceUnit: null,
       section: row.section_code,
       retired: true,
       unavailable: true,
@@ -357,8 +385,11 @@ export async function loadStandardEstimateWorkspace(
   return {
     revision: summary,
     v25: {
+      modelSlug: model?.slug ?? null,
       initial: v25.initial,
+      lineCostsAvailable: v25.lineCostsAvailable,
       preview: v25.preview,
+      baseMasterReference,
       baseLines: ((baseResult.data ?? []) as { id: string; section: string; name: string; quantity: number | string; unit: string | null; unit_price: number }[]).map(
         (line) => ({ id: line.id, section: line.section, name: line.name, quantity: String(Number(line.quantity)), unit: line.unit, standard_cost: Number(line.unit_price) })
       ),

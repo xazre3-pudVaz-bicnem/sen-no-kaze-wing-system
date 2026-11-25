@@ -5,40 +5,69 @@ import { useActionState, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import {
   requestPasswordResetAction,
+  resendConfirmationAction,
   signInAction,
   signUpAction,
   updatePasswordAction,
   type AuthFormState,
 } from '@/lib/actions/auth';
+import { CONFIRMATION_RESENT } from '@/lib/auth/email-confirm';
 import { Alert, Button, Checkbox, Field, Input, Spinner } from '@/components/ui';
 
 const initial: AuthFormState = { ok: false };
 
+/** 会員登録の確認メールを送り直すボタン（別のフォーム。ログインのフォームの中には置かない） */
+function ResendConfirmationForm({ email, next }: { email: string; next: string }) {
+  const [state, action, pending] = useActionState(resendConfirmationAction, initial);
+  return (
+    <form action={action} className="space-y-3" data-testid="resend-confirmation">
+      <input type="hidden" name="email" value={email} />
+      <input type="hidden" name="next" value={next} />
+      {state.ok && state.sent && <Alert tone="success">{CONFIRMATION_RESENT}</Alert>}
+      {state.error && <Alert tone="danger">{state.error}</Alert>}
+      <Button type="submit" variant="secondary" className="w-full" disabled={pending}>
+        {pending && <Spinner />}
+        確認メールを送り直す
+      </Button>
+    </form>
+  );
+}
+
 export function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState(signInAction, initial);
   const v = state.values ?? {};
+  // 確認がまだのアカウント：理由と送り直しのボタンを、ログインのフォームの外（上）に出す（フォームを入れ子にしない）
+  const unconfirmed = Boolean(state.needsEmailConfirm && v.email);
   return (
-    <form action={action} className="space-y-5" noValidate>
-      <input type="hidden" name="next" value={next} />
-      {state.error && <Alert tone="danger">{state.error}</Alert>}
-      <Field label="メールアドレス" htmlFor="email" required errors={state.fieldErrors?.email}>
-        <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" defaultValue={v.email} required />
-      </Field>
-      <Field label="パスワード" htmlFor="password" required errors={state.fieldErrors?.password}>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required />
-      </Field>
-      <Button type="submit" size="lg" className="w-full" disabled={pending}>
-        {pending && <Spinner />}
-        {pending ? 'ログイン中…' : 'ログイン'}
-      </Button>
-      <div className="flex flex-col gap-2 text-center text-sm">
-        <Link href="/reset-password" className="text-ink-soft underline-offset-4 hover:underline">パスワードをお忘れの方</Link>
-        <p className="text-muted">
-          アカウントをお持ちでない方は{' '}
-          <Link href={`/register?next=${encodeURIComponent(next)}`} className="font-semibold text-ink underline-offset-4 hover:underline">新規会員登録</Link>
-        </p>
-      </div>
-    </form>
+    <div className="space-y-5">
+      {unconfirmed && (
+        <div className="space-y-3" data-testid="login-email-unconfirmed">
+          <Alert tone="warn">{state.error}</Alert>
+          <ResendConfirmationForm email={v.email} next={next} />
+        </div>
+      )}
+      <form action={action} className="space-y-5" noValidate>
+        <input type="hidden" name="next" value={next} />
+        {!unconfirmed && state.error && <Alert tone="danger">{state.error}</Alert>}
+        <Field label="メールアドレス" htmlFor="email" required errors={state.fieldErrors?.email}>
+          <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" defaultValue={v.email} required />
+        </Field>
+        <Field label="パスワード" htmlFor="password" required errors={state.fieldErrors?.password}>
+          <Input id="password" name="password" type="password" autoComplete="current-password" required />
+        </Field>
+        <Button type="submit" size="lg" className="w-full" disabled={pending}>
+          {pending && <Spinner />}
+          {pending ? 'ログイン中…' : 'ログイン'}
+        </Button>
+        <div className="flex flex-col gap-2 text-center text-sm">
+          <Link href="/reset-password" className="text-ink-soft underline-offset-4 hover:underline">パスワードをお忘れの方</Link>
+          <p className="text-muted">
+            アカウントをお持ちでない方は{' '}
+            <Link href={`/register?next=${encodeURIComponent(next)}`} className="font-semibold text-ink underline-offset-4 hover:underline">新規会員登録</Link>
+          </p>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -48,9 +77,20 @@ export function RegisterForm({ next }: { next: string }) {
   const v = state.values ?? {};
   if (state.ok && state.needsEmailConfirm) {
     return (
-      <Alert tone="success" title="確認メールを送信しました">
-        {v.email} 宛に確認メールを送りました。メール内のリンクを開くと登録が完了し、ログインできます。
-      </Alert>
+      <div className="space-y-4" data-testid="register-confirm-sent">
+        <Alert tone="success" title="確認メールを送信しました">
+          {v.email} 宛に確認メールを送りました。メールのリンクを開くと、登録が完了します。
+        </Alert>
+        <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-ink-soft">
+          <li>メールが届かないときは、迷惑メールのフォルダもご確認ください。</li>
+          <li>リンクは、スマートフォンなど別の端末で開いても確認できます。その場合は、確認の後にログインしてください。</li>
+        </ul>
+        {v.email && <ResendConfirmationForm email={v.email} next={next} />}
+        <p className="text-center text-sm text-muted">
+          確認が済んだ方は{' '}
+          <Link href={`/login?next=${encodeURIComponent(next)}`} className="font-semibold text-ink underline-offset-4 hover:underline">ログイン</Link>
+        </p>
+      </div>
     );
   }
   return (

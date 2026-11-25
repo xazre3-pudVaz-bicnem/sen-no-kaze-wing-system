@@ -163,11 +163,11 @@ begin
         jsonb_build_object('baseline_key', null, 'option_id', p2, 'variant_choice_ids', '[]'::jsonb, 'quantity', '2', 'price_mode', 'auto', 'manual_unit_price', null)),
       'lines', jsonb_build_array(
         jsonb_build_object('line_key', null, 'section_code', 'sitework', 'group_label', null, 'name', '設置工事', 'quantity', '1', 'unit', '式',
-                           'price_mode', 'manual', 'unit_price', 50000, 'remark', null, 'review_required', false)))::text));
-  -- シミュレーターと連携する選択枠の決まり（2026-10-29 先方回答）：外壁以外の選択枠は数量 1。数量 2 の選択枠がある版は公開できない
+                           'price_mode', 'manual', 'unit_price', 50000, 'cost_unit_price', 30000, 'remark', null, 'review_required', false)))::text));
+  -- シミュレーターと連携する選択枠の決まり（2026-10-29 先方回答・#647）：多く選べるカテゴリーの枠は数量 1。数量 2 の選択枠がある版は公開できない
   v_out := pg_temp.svp_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 3)).status', v_rev));
   perform pg_temp.svp_expect_eq('外壁以外の選択枠が数量 1 でない版は公開できない（下書きのまま）', 'true/draft',
-    (v_out like 'ERROR P0001: LOCKED: シミュレーターの選択枠の決まりに合わないため公開できません（外壁以外の選択枠は数量 1 にしてください%「C1 商品2」%')::text
+    (v_out like 'ERROR P0001: LOCKED: シミュレーターの選択枠の決まりに合わないため公開できません（外壁以外の選択枠の数量を 1 以外にできるのは%「C1 商品2」%')::text
     || '/' || (select status from public.standard_estimate_revisions where id = v_rev));
   perform pg_temp.svp_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 3, %L::jsonb)).lock_version::text', v_rev,
     jsonb_build_object(
@@ -178,7 +178,7 @@ begin
         jsonb_build_object('baseline_key', null, 'option_id', p2, 'variant_choice_ids', '[]'::jsonb, 'quantity', '1', 'price_mode', 'auto', 'manual_unit_price', null)),
       'lines', jsonb_build_array(
         jsonb_build_object('line_key', null, 'section_code', 'sitework', 'group_label', null, 'name', '設置工事', 'quantity', '1', 'unit', '式',
-                           'price_mode', 'manual', 'unit_price', 50000, 'remark', null, 'review_required', false)))::text));
+                           'price_mode', 'manual', 'unit_price', 50000, 'cost_unit_price', 30000, 'remark', null, 'review_required', false)))::text));
   v_out := pg_temp.svp_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 4)).status', v_rev));
   -- 本体 29,211 × 12 ＝ 350,532 ＋ 経費 52,579、オプション 160,500 ＋ 32,100 ＝ 192,600 ＋ 経費 28,890、別途工事 50,000 → 税抜 674,601・税 67,460
   perform pg_temp.svp_expect_eq('前提：選択枠を数量 1 に直した v2.5 の標準見積（事務所用）を公開できた（税込 742,061 円）', 'published/742061',
@@ -323,7 +323,7 @@ begin
   set local session_replication_role = origin;
   v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
   perform pg_temp.svp_expect_eq('外壁以外の選択枠の数量が 1 でない標準見積があると、スイッチを入れられない', 'true',
-    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%外壁以外の選択枠は数量 1 にしてください%「C1 商品2」%')::text);
+    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%外壁以外の選択枠の数量を 1 以外にできるのは%「C1 商品2」%')::text);
   set local session_replication_role = replica;
   update public.standard_estimate_revision_baseline_items set quantity = 1 where revision_id = v_rev and option_id = p2;
   -- 1 つだけ選べるカテゴリーに選択枠が 2 つある版（試験のため、カテゴリーを 1 つだけ選べるに書き換えて確かめ、元に戻す）

@@ -28,6 +28,10 @@ export interface V25WorkbenchCandidate extends V25ProductCandidate {
   displayGroup?: string | null;
   manufacturer: string;
   modelNo: string;
+  /** 商品台帳の販売単位（台・セット・㎡など）。表示専用で価格計算には影響しない。 */
+  priceUnit?: string | null;
+  /** 商品台帳に登録したメイン画像。商品選択画面でのみ使用。 */
+  imageUrl?: string | null;
   /** 窓タイプを使うカテゴリー（サッシ）の商品か（v2.5 PR-S2。位置の枠の選べる商品を窓タイプで絞り込む） */
   usesWindowType?: boolean;
   /** 窓タイプ（未設定は null） */
@@ -81,8 +85,8 @@ export type V25WorkbenchSlotCost =
   | { status: 'missing'; reason: 'missing_standard_cost' | 'missing_variant_cost'; pinned: boolean };
 
 /**
- * シミュレーターと連携する選択枠の数量（2026-10-29 先方回答）：外壁は front / right / back / left の 4 面を個別に変えられるので 4（面）、
- * それ以外は 1（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にする）
+ * 選択枠を新しく入れるときの数量（2026-10-29 先方回答）：外壁は front / right / back / left の 4 面を個別に変えられるので 4（面）、
+ * それ以外は 1。屋根の 23.5㎡ のような計上数量は、入れた後に変えられる（#647。決まりは v25SlotRuleIssues）
  */
 export function standardSlotQuantity(categoryCode: string): number {
   return categoryCode === 'exterior-wall' ? 4 : 1;
@@ -96,35 +100,142 @@ export function canUsePositionSlot(categoryCode: string): boolean {
   return !NO_POSITION_SLOT_CATEGORY_CODES.has(categoryCode);
 }
 
+/** 選択枠の決まりで使う商品の情報（DB の standard_estimate_v25_slot_rule_issues と同じ判定に要るもの） */
+type V25SlotRuleCandidate = Pick<
+  V25WorkbenchCandidate,
+  'name' | 'categoryId' | 'categoryName' | 'categoryCode' | 'singleSelect' | 'displayGroup' | 'unavailable' | 'priceUnit'
+> & {
+  retired?: boolean;
+};
+
+/** DB の nullif(btrim(price_unit), '') と同じ（前後の半角空白だけを外す） */
+function normalizedUnit(value: string | null | undefined): string | null {
+  const unit = typeof value === 'string' ? value.replace(/^ +| +$/g, '') : '';
+  return unit || null;
+}
+
+/** 既存行の変更用patch。安全判定（v25ProductReplacementIssue）が成功した後だけ利用する。 */
+export function v25ProductChangePatch(
+  slot: V25SlotRow,
+  candidate: V25WorkbenchCandidate,
+  choices: Record<string, string>,
+  candidateOf: (id: string) => V25WorkbenchCandidate | undefined,
+): Partial<V25SlotRow> {
+  if (candidate.id === slot.option_id) return { variant_choices: { ...choices } };
+  return {
+    option_id: candidate.id,
+    variant_choices: { ...choices },
+    // 既存行の価格モードは商品入替では変更しない（別途工事の手入力売価も保持）。
+    selectable_option_ids: slot.selectable_option_ids.filter(
+      (id) => id !== candidate.id && candidateOf(id)?.categoryId === candidate.categoryId
+    ),
+  };
+}
+
 /**
- * 選択枠がシミュレーターと連携する決まりに合わない内容（公開できない理由。DB の standard_estimate_v25_slot_rule_issues と同じ決まり）。
- * 外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーのカテゴリー単位の選択枠は 1 つ（シミュレーターで標準構成を再現できるようにするため）。
- * 位置・用途の選択枠（v2.5 PR-S1）：外壁・防火仕様には作らない、カテゴリー単位の枠と同じカテゴリーに混ぜない、
- * 1 つだけ選べるカテゴリーでも位置ごとに 1 つ選ぶので何枠でもよい、選べる商品は同じカテゴリーの販売中の商品
+ * 既存商品から別の商品へ入れ替えるときだけの安全検査。
+ * 同一商品は仕様だけ変えるため数量・単位・位置・価格指定を保持する。
+ * 販売単位を画面で推測・換算せず、#659 の公開判定を変更候補の確定前にも適用する。
+ */
+export function v25ProductReplacementIssue(
+  slot: V25SlotRow,
+  previous: V25WorkbenchCandidate,
+  replacement: V25WorkbenchCandidate,
+  slots: readonly V25SlotRow[],
+  candidateOf: (id: string) => V25WorkbenchCandidate | undefined,
+  candidatesInCategory: (categoryId: string) => V25WorkbenchCandidate[],
+): string | null {
+  if (previous.id !== slot.option_id || previous.categoryId !== replacement.categoryId ||
+    previous.section !== replacement.section || replacement.retired || replacement.unavailable) {
+    return '同じカテゴリーの選択可能な商品へ変更してください';
+  }
+  if (previous.id === replacement.id) return null;
+
+  const beforeUnit = normalizedUnit(previous.priceUnit);
+  const afterUnit = normalizedUnit(replacement.priceUnit);
+  if (!beforeUnit || !afterUnit || beforeUnit.length > 12 || afterUnit.length > 12) {
+    return '変更前後の商品の販売単位を確認できません。商品台帳の販売単位を確認してから変更してください（数量は自動変更しません）';
+  }
+  if (beforeUnit !== afterUnit) {
+    return `変更前後の販売単位が異なります（${beforeUnit} → ${afterUnit}）。数量の換算は行いません。商品台帳と数量を確認してください`;
+  }
+
+  const quantity = slot.quantity.trim();
+  if (!/^\d+(?:\.\d{1,4})?$/.test(quantity) || !Number.isFinite(Number(quantity)) ||
+    Number(quantity) <= 0 || Number(quantity) > 99999) {
+    return '既存数量が有効ではありません。数量を確認してから商品を変更してください';
+  }
+
+  const candidateAfter = (id: string) => id === replacement.id ? replacement : candidateOf(id);
+  const beforeIssues = new Set(v25SlotRuleIssues([...slots], candidateOf, candidatesInCategory));
+  const afterSlots = slots.map((row) =>
+    row.key === slot.key ? { ...row, option_id: replacement.id } : row);
+  const newIssues = v25SlotRuleIssues(afterSlots, candidateAfter, candidatesInCategory)
+    .filter((issue) => !beforeIssues.has(issue));
+  if (newIssues.length > 0) {
+    return `変更すると数量・選択枠のルールに適合しません：${newIssues[0]}`;
+  }
+  return null;
+}
+
+/**
+ * 選択枠がシミュレーターと連携する決まりに合わない内容（公開できない理由。DB の standard_estimate_v25_slot_rule_issues と同じ決まり・同じ文言）。
+ * 外壁は数量 4（面）。外壁以外の数量（計上数量）を 1 以外にできるのは、1 つだけ選べるカテゴリーにその枠だけがある
+ * カテゴリー単位の枠（屋根 23.5㎡ など。#647）だけで、その枠は商品台帳の販売単位が必要、そのカテゴリーの選べる商品は同じ販売単位。
+ * 位置・用途の枠は数量 1。
+ * 1 つだけ選べるカテゴリーのカテゴリー単位の選択枠は 1 つ。位置・用途の選択枠（v2.5 PR-S1）：外壁・防火仕様には作らない、
+ * カテゴリー単位の枠と同じカテゴリーに混ぜない、1 つだけ選べるカテゴリーでも位置ごとに 1 つ選ぶので何枠でもよい、選べる商品は同じカテゴリーの販売中の商品。
+ * candidatesInCategory はカテゴリー単位の枠の販売単位の確認に使う（その仕様で選べる商品。渡さなければその確認はしない）
  */
 export function v25SlotRuleIssues(
   slots: (Pick<V25SlotRow, 'option_id' | 'quantity'> & Partial<Pick<V25SlotRow, 'slot_code' | 'selectable_option_ids'>>)[],
-  candidateOf: (
-    optionId: string
-  ) =>
-    | (Pick<V25WorkbenchCandidate, 'name' | 'categoryId' | 'categoryName' | 'categoryCode' | 'singleSelect' | 'displayGroup' | 'unavailable'> & {
-        retired?: boolean;
-      })
-    | undefined
+  candidateOf: (optionId: string) => V25SlotRuleCandidate | undefined,
+  candidatesInCategory?: (categoryId: string) => V25SlotRuleCandidate[]
 ): string[] {
   const wall: string[] = [];
-  const other: string[] = [];
+  const notMeasured: string[] = [];
+  const unitMissing: string[] = [];
+  const unitMismatch: string[] = [];
   const noPosition: string[] = [];
   const badSelectable: string[] = [];
   const singles = new Map<string, { name: string; keys: Set<string> }>();
   const kinds = new Map<string, { name: string; category: boolean; position: boolean }>();
+  // カテゴリー単位の選択枠の数（カテゴリーごと。DB の standard_estimate_v25_slot_measured と同じ数え方。外壁は別）
+  const categoryLevelCount = new Map<string, number>();
+  for (const slot of slots) {
+    const candidate = candidateOf(slot.option_id);
+    if (!candidate || slot.slot_code?.trim()) continue;
+    categoryLevelCount.set(candidate.categoryId, (categoryLevelCount.get(candidate.categoryId) ?? 0) + 1);
+  }
   slots.forEach((slot, index) => {
     const candidate = candidateOf(slot.option_id);
     // この仕様で選べなくなった商品の行は、削除してから保存する（別の案内を出す）
     if (!candidate || candidate.unavailable) return;
     const position = Boolean(slot.slot_code?.trim());
-    const want = standardSlotQuantity(candidate.categoryCode);
-    if (Number(slot.quantity.trim()) !== want) (want === 4 ? wall : other).push(`「${candidate.name}」`);
+    const quantity = Number(slot.quantity.trim());
+    // 計上数量を 1 以外にできる枠（#647）：1 つだけ選べるカテゴリーに、そのカテゴリー単位の選択枠だけがある（位置・用途の枠は数量 1）
+    const quantityAllowed =
+      !position &&
+      candidate.categoryCode !== 'exterior-wall' &&
+      candidate.singleSelect &&
+      categoryLevelCount.get(candidate.categoryId) === 1;
+    if (candidate.categoryCode === 'exterior-wall') {
+      if (quantity !== standardSlotQuantity(candidate.categoryCode)) wall.push(`「${candidate.name}」`);
+    } else if (quantity !== 1) {
+      const unit = normalizedUnit(candidate.priceUnit);
+      if (!quantityAllowed) {
+        notMeasured.push(`「${candidate.name}」`);
+      } else if (!unit || unit.length > 12) {
+        unitMissing.push(`「${candidate.name}」`);
+      } else {
+        // そのカテゴリーの、この仕様で選べる商品は同じ販売単位（違う商品は価格未確定になるため）
+        for (const alternative of candidatesInCategory?.(candidate.categoryId) ?? []) {
+          if (alternative.unavailable || alternative.retired) continue;
+          const altUnit = normalizedUnit(alternative.priceUnit);
+          if (altUnit !== unit) unitMismatch.push(`「${alternative.name}」（${altUnit ?? '販売単位なし'}）`);
+        }
+      }
+    }
     if (position && NO_POSITION_SLOT_CATEGORY_CODES.has(candidate.categoryCode)) noPosition.push(`「${candidate.name}」`);
     const kind = kinds.get(candidate.categoryId) ?? { name: candidate.categoryName, category: false, position: false };
     kinds.set(candidate.categoryId, { ...kind, category: kind.category || !position, position: kind.position || position });
@@ -148,9 +259,19 @@ export function v25SlotRuleIssues(
   const mixed = [...kinds.values()].filter((row) => row.category && row.position).map((row) => `「${row.name}」`);
   const unique = (values: string[]) => [...new Set(values)];
   return [
-    ...(wall.length > 0 ? [`外壁の選択枠は数量 4（面）にしてください：${wall.join('・')}`] : []),
-    ...(other.length > 0
-      ? [`外壁以外の選択枠は数量 1 にしてください（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にします）：${other.join('・')}`]
+    ...(wall.length > 0 ? [`外壁の選択枠は数量 4（面）にしてください：${unique(wall).join('・')}`] : []),
+    ...(notMeasured.length > 0
+      ? [
+          `外壁以外の選択枠の数量を 1 以外にできるのは、1 つだけ選べるカテゴリーにその選択枠だけがあるときです（位置・用途の選択枠とほかは数量 1 にし、個別に選ばない数量は明細にします）：${unique(notMeasured).join('・')}`,
+        ]
+      : []),
+    ...(unitMissing.length > 0
+      ? [
+          `数量が 1 以外の選択枠には、商品台帳の販売単位（12 文字まで）が必要です（商品台帳で販売単位を設定してから、下書きを保存し直してください）：${unique(unitMissing).join('・')}`,
+        ]
+      : []),
+    ...(unitMismatch.length > 0
+      ? [`数量が 1 以外の選択枠のカテゴリーの商品は、標準の商品と同じ販売単位にしてください：${unique(unitMismatch).join('・')}`]
       : []),
     ...(noPosition.length > 0 ? [`外壁・防火仕様には位置・用途の選択枠を作れません：${unique(noPosition).join('・')}`] : []),
     ...(mixed.length > 0 ? [`カテゴリー単位の選択枠と位置・用途の選択枠を、同じカテゴリーに混ぜられません：${mixed.join('・')}`] : []),

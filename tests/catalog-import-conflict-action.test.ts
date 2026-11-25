@@ -40,7 +40,7 @@ vi.mock('@/lib/data/store', async (importOriginal) => ({
 
 import { StoreError } from '@/lib/data/store';
 import { importCatalogAction } from '@/lib/actions/admin';
-import { IMPORT_CONFLICT_MESSAGE, IMPORT_FAILED } from '@/lib/import/errors';
+import { IMPORT_CONFLICT_MESSAGE, IMPORT_FAILED, IMPORT_UNEXPECTED } from '@/lib/import/errors';
 
 const category: OptionCategory = {
   id: '22222222-2222-4222-8222-222222222222',
@@ -81,25 +81,37 @@ beforeEach(() => {
 
 describe('一括登録の失敗が、画面の文言まで届く', () => {
   it('競合は「最新の状態を読み込んで、もう一度」の決まった文言で届く（DB の文は届かない）', async () => {
+    // ストアが決まった文言の CONFLICT にしたもの（包まれずに返った競合）
     const apply = storeFailingWith(new StoreError('CONFLICT', IMPORT_CONFLICT_MESSAGE));
     const state = await importCatalogAction({ ok: false }, applyForm());
     expect(apply).toHaveBeenCalledTimes(1);
     expect(state).toEqual({ ok: false, error: IMPORT_CONFLICT_MESSAGE });
+    // 行の処理の中で起きて包まれた競合（ストアは INTERNAL で、DB の文のまま渡す）
+    storeFailingWith(new StoreError('INTERNAL', 'IMPORT_VARIANT_CHOICE UPSERT prod-1-color-white: IMPORT_CONFLICT: expected id mismatch (select 1)'));
+    const wrapped = await importCatalogAction({ ok: false }, applyForm());
+    expect(wrapped).toEqual({ ok: false, error: IMPORT_CONFLICT_MESSAGE });
   });
 
-  it('想定外の DB のエラーは、SQL の文を出さずに、止まった商品のコードと案内だけが届く', async () => {
+  it('Excel の値が DB の決まりに合わないときは、SQL の文を出さずに、直す行が届く', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     storeFailingWith(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT prod-1: null value in column "category_id" violates not-null constraint'));
     const state = await importCatalogAction({ ok: false }, applyForm());
     expect(state.ok).toBe(false);
     expect(state.error).toContain(IMPORT_FAILED);
-    expect(state.error).toContain('商品コード「prod-1」');
+    expect(state.error).toContain('Excel の商品コード「prod-1」の行');
     expect(state.error).not.toMatch(/null value|category_id|constraint|IMPORT_OPTION/);
+  });
+
+  it('想定外の DB のエラーは、SQL の文を出さずに、止まった行と「時間をおいて」の案内が届く', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    storeFailingWith(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT prod-1: could not serialize access due to concurrent update'));
+    const state = await importCatalogAction({ ok: false }, applyForm());
+    expect(state.error).toBe(`${IMPORT_FAILED}。商品コード「prod-1」の登録で止まりました。${IMPORT_UNEXPECTED}`);
   });
 
   it('入力の誤り（DB の関数が書いた文）は、その文言が届く', async () => {
     storeFailingWith(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT prod-1: VALIDATION: 価格は 0 以上で入力してください'));
     const state = await importCatalogAction({ ok: false }, applyForm());
-    expect(state).toEqual({ ok: false, error: `${IMPORT_FAILED}。価格は 0 以上で入力してください` });
+    expect(state).toEqual({ ok: false, error: `${IMPORT_FAILED}。価格は 0 以上で入力してください（商品コード「prod-1」）` });
   });
 });

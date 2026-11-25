@@ -70,41 +70,98 @@ describe('一括登録の失敗を、画面に出してよい形にする', () =
     const fromStore = importFailure(new StoreError('CONFLICT', IMPORT_CONFLICT_MESSAGE));
     expect(fromStore.code).toBe('CONFLICT');
     expect(fromStore.message).toBe(IMPORT_CONFLICT_MESSAGE);
-    // 今の DB の包み方（IMPORT_OPTION 操作 コード: 理由）の中に競合の印があっても、競合として伝える
-    const wrapped = importFailure(new StoreError('INTERNAL', 'IMPORT_OPTION UPDATE prod-1: IMPORT_CONFLICT: stale payload'));
-    expect(wrapped.code).toBe('CONFLICT');
-    expect(wrapped.message).toBe(IMPORT_CONFLICT_MESSAGE);
+    // 行の処理の中で起きて包まれて返っても（商品・選択項目・選択肢）、競合として伝える
+    for (const raw of [
+      'IMPORT_OPTION UPDATE prod-1: IMPORT_CONFLICT: stale payload',
+      'IMPORT_VARIANT_GROUP UPSERT g-1: IMPORT_CONFLICT: stale payload',
+      'IMPORT_VARIANT_CHOICE UPSERT c-1: IMPORT_CONFLICT: stale payload',
+    ]) {
+      const wrapped = importFailure(new StoreError('INTERNAL', raw));
+      expect(wrapped.code).toBe('CONFLICT');
+      expect(wrapped.message).toBe(IMPORT_CONFLICT_MESSAGE);
+    }
   });
 
-  it('アプリや DB の関数が決めた文言（権限・入力の誤り・使用中）は、何も反映していないことと一緒に出す', () => {
+  it('DB が返した包まれた競合は、ストアから画面に出す形まで競合のまま届く', async () => {
+    rpcFails({ code: 'P0001', message: 'IMPORT_VARIANT_CHOICE UPSERT c-1: IMPORT_CONFLICT: expected id mismatch' });
+    const fromStore = await caught(new SupabaseStore().applyCatalogImport(batch));
+    const shown = importFailure(fromStore);
+    expect(shown.code).toBe('CONFLICT');
+    expect(shown.message).toBe(IMPORT_CONFLICT_MESSAGE);
+  });
+
+  it('アプリや DB の関数が決めた文言（権限・入力の誤り・使用中・形式）は、どの行かと一緒に出す', () => {
     const validation = importFailure(new StoreError('VALIDATION', '同じ値が既に登録されています'));
     expect(validation.code).toBe('VALIDATION');
     expect(validation.message).toBe(`${IMPORT_FAILED}。同じ値が既に登録されています`);
-    expect(importFailure(new StoreError('FORBIDDEN', '権限がありません')).code).toBe('FORBIDDEN');
+    expect(importFailure(new StoreError('FORBIDDEN', '権限がありません')).message).toBe(`${IMPORT_FAILED}。権限がありません`);
     expect(importFailure(new StoreError('LOCKED', '現在ほかの処理で使用中です。')).code).toBe('LOCKED');
-    // 包まれた中の、DB の関数が書いた文
+
     const ownValidation = importFailure(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT prod-1: VALIDATION: 価格は 0 以上で入力してください'));
     expect(ownValidation.code).toBe('VALIDATION');
-    expect(ownValidation.message).toBe(`${IMPORT_FAILED}。価格は 0 以上で入力してください`);
-    const ownForbidden = importFailure(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT prod-1: FORBIDDEN: rank 3 required'));
+    expect(ownValidation.message).toBe(`${IMPORT_FAILED}。価格は 0 以上で入力してください（商品コード「prod-1」）`);
+    // 権限の説明の文は出す（文が無ければ「権限がありません」）
+    const ownForbidden = importFailure(
+      new StoreError('INTERNAL', 'IMPORT_VARIANT_CHOICE UPSERT c-x: FORBIDDEN: 本部商品の選択肢の原価差額は本部だけが登録できます')
+    );
     expect(ownForbidden.code).toBe('FORBIDDEN');
-    expect(ownForbidden.message).not.toContain('rank');
+    expect(ownForbidden.message).toBe(`${IMPORT_FAILED}。本部商品の選択肢の原価差額は本部だけが登録できます（選択肢のコード「c-x」）`);
+    expect(importFailure(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT prod-1: FORBIDDEN')).message).toBe(
+      `${IMPORT_FAILED}。権限がありません。（商品コード「prod-1」）`
+    );
+    // 印だけの LOCKED は、使用中の案内
+    const locked = importFailure(new StoreError('INTERNAL', 'IMPORT_VARIANT_GROUP UPSERT g-1: LOCKED'));
+    expect(locked.code).toBe('LOCKED');
+    expect(locked.message).toContain('使用中');
+    expect(locked.message).toContain('選択項目のコード「g-1」');
+    // 全体の形式の誤り（包まれていない DB の関数の文）
+    const format = importFailure(new StoreError('INTERNAL', 'IMPORT_VALIDATION: 一括登録データの形式が正しくありません'));
+    expect(format.code).toBe('VALIDATION');
+    expect(format.message).toBe(`${IMPORT_FAILED}。一括登録データの形式が正しくありません`);
   });
 
-  it('想定外の DB のエラーは、SQL の文を出さず、止まった商品のコードと案内だけを出す（文はサーバーの記録へ）', () => {
+  it('商品コードに「: 」が入っていても、長くても、理由の印で切り分ける（長いコードは 64 文字で切る）', () => {
+    const colon = importFailure(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT 商品: A: VALIDATION: 価格が正しくありません'));
+    expect(colon.code).toBe('VALIDATION');
+    expect(colon.message).toBe(`${IMPORT_FAILED}。価格が正しくありません（商品コード「商品: A」）`);
+    const longCode = 'p'.repeat(80);
+    const long = importFailure(new StoreError('INTERNAL', `IMPORT_OPTION UPSERT ${longCode}: IMPORT_CONFLICT: stale`));
+    expect(long.code).toBe('CONFLICT');
+    const longValidation = importFailure(new StoreError('INTERNAL', `IMPORT_OPTION UPSERT ${longCode}: VALIDATION: x`));
+    expect(longValidation.message).toContain(`商品コード「${'p'.repeat(64)}…」`);
+  });
+
+  it('Excel の値が DB の決まりに合わないときは、SQL の文を出さずに、直す行を伝える（何度やっても同じなので「時間をおいて」にしない）', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     const raw = 'IMPORT_OPTION UPSERT prod-1: duplicate key value violates unique constraint "options_code_key"';
     const error = importFailure(new StoreError('INTERNAL', raw));
-    expect(error.code).toBe('INTERNAL');
-    expect(error.message).toBe(`${IMPORT_FAILED}。商品コード「prod-1」の登録で止まりました。${IMPORT_UNEXPECTED}`);
+    expect(error.code).toBe('VALIDATION');
+    expect(error.message).toBe(
+      `${IMPORT_FAILED}。Excel の商品コード「prod-1」の行に、登録できない値があります（空欄・重複・形式・長さなど）。直してから、もう一度お試しください。`
+    );
     expect(error.message).not.toMatch(/duplicate|constraint|options_code_key|IMPORT_OPTION/);
     expect(log).toHaveBeenCalledWith('[catalog-import] apply_catalog_import failed', { message: raw });
-
-    // 包み方の分からないエラー・Error でないもの
-    const plain = importFailure(new Error('relation "public.option_variant_groups" does not exist'));
-    expect(plain.message).toBe(`${IMPORT_FAILED}。${IMPORT_UNEXPECTED}`);
-    expect(importFailure('boom').message).toBe(`${IMPORT_FAILED}。${IMPORT_UNEXPECTED}`);
+    // 選択肢の行・型の変換の誤り
+    const cast = importFailure(new StoreError('INTERNAL', 'IMPORT_VARIANT_CHOICE UPSERT c-9: invalid input syntax for type numeric: "abc"'));
+    expect(cast.code).toBe('VALIDATION');
+    expect(cast.message).toContain('Excel の選択肢のコード「c-9」の行');
+    expect(cast.message).not.toContain('numeric');
     // コードの無い行（(codeなし)）は、コードを出さない
-    expect(importFailure(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT (codeなし): null value')).message).toBe(`${IMPORT_FAILED}。${IMPORT_UNEXPECTED}`);
+    const noCode = importFailure(new StoreError('INTERNAL', 'IMPORT_OPTION UPSERT (codeなし): null value in column "code" violates not-null constraint'));
+    expect(noCode.message).toContain('Excel の内容に、登録できない値があります');
+    expect(noCode.message).not.toContain('(codeなし)');
+  });
+
+  it('想定外の DB のエラーは、SQL の文を出さず、止まった行と案内だけを出す（文はサーバーの記録へ）', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const raw = 'IMPORT_OPTION UPSERT prod-1: could not serialize access due to concurrent update';
+    const error = importFailure(new StoreError('INTERNAL', raw));
+    expect(error.code).toBe('INTERNAL');
+    expect(error.message).toBe(`${IMPORT_FAILED}。商品コード「prod-1」の登録で止まりました。${IMPORT_UNEXPECTED}`);
+    expect(error.message).not.toMatch(/serialize|concurrent/);
+    expect(log).toHaveBeenCalledWith('[catalog-import] apply_catalog_import failed', { message: raw });
+    // 包み方の分からないエラー・Error でないもの
+    expect(importFailure(new Error('relation "public.option_variant_groups" does not exist')).message).toBe(`${IMPORT_FAILED}。${IMPORT_UNEXPECTED}`);
+    expect(importFailure('boom').message).toBe(`${IMPORT_FAILED}。${IMPORT_UNEXPECTED}`);
   });
 });

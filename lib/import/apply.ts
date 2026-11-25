@@ -12,6 +12,7 @@ import {
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import { isHqCostProduct, newChoicePriceWithoutCost } from '@/lib/domain/option-cost-access';
 import { slugify, type ImportPlan } from './catalog-import';
+import { importFailure } from './errors';
 
 /**
  * 取り込み計画を実際のカタログへ反映する。
@@ -313,11 +314,8 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   try {
     await store.applyCatalogImport(batch);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : '不明なエラー';
-    throw new StoreError(
-      'INTERNAL',
-      `商品台帳の一括登録に失敗しました（商品・選択項目・選択肢は反映されませんでした）: ${detail}`
-    );
+    // 競合は決まった文言で、想定外の DB のエラーは文を出さずに伝える（lib/import/errors.ts。v6.1 H2-B）
+    throw importFailure(error);
   }
 
   if (options.catalogImportUserId && previousCatalogImportImageUrls.length) {

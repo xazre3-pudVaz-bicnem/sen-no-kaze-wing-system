@@ -47,6 +47,7 @@ import {
   catalogImportUploadPath,
   catalogImportUrlsForUser,
 } from '@/lib/import/catalog-import-images';
+import { IMPORT_CONFLICT_MESSAGE, isImportConflict } from '@/lib/import/errors';
 import {
   StoreError,
   type ContactInput,
@@ -165,6 +166,8 @@ export function dealerQuoteRequestFromRpcResult(
 
 function mapPgError(e: { code?: string; message?: string } | null): never {
   const msg = e?.message ?? '不明なエラー';
+  // 商品台帳の一括登録の競合（v6.1 H2-B）。DB の文はそのまま出さず、決まった文言にする（lib/import/errors.ts）
+  if (isImportConflict(e)) throw new StoreError('CONFLICT', IMPORT_CONFLICT_MESSAGE);
   if (msg.startsWith('CONFLICT:') || msg.startsWith('DEPENDENCY:') || msg.startsWith('REQUIRED:') || msg.startsWith('SINGLE:')) {
     throw new StoreError('VALIDATION', msg.replace(/^[A-Z_]+:\s*/, ''));
   }

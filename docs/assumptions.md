@@ -789,7 +789,7 @@ v2.5 の標準見積から作った Web の見積の第 2 版以降を、サー�
 | 機能 | 実装 | 補足 |
 |---|---|---|
 | 通知 | `notifications` テーブル。作成は**アプリではなく DB トリガー**（`quotes` / `contact_messages`）。経路が増えても取りこぼさない | 宛先 `recipient_id` が null のものは本部（管理者全員）宛 |
-| 通知メール | Resend の HTTP API。`RESEND_API_KEY` と `MAIL_FROM` が揃っているときだけ送信 | 未設定なら `email_status` は skipped。**画面通知は必ず残るので運用は止まらない** |
+| 通知メール | Resend の HTTP API。`RESEND_API_KEY` と `MAIL_FROM` が揃っているときだけ送信。`MAIL_REPLY_TO` があれば返信先に付ける | 未設定なら `email_status` は skipped。**画面通知は必ず残るので運用は止まらない**。Resend のチームは千の風様の既存の送信と共用のため、間をあけて送り、上限（429）で止める（[mail-setup.md](./mail-setup.md)） |
 | 顧客の回答 | `respond_to_quote` RPC。本人・`issued` の版のみ。承諾すると仕様は `closed` へ | 改訂済み（`superseded`）の版には回答できない |
 | 変更履歴 | `audit_logs` ＋ トリガー（商品・本体の価格／公開状態、ユーザーの権限） | 閲覧は管理者のみ。発行済み見積の金額はそもそも変わらない |
 
@@ -798,8 +798,8 @@ v2.5 の標準見積から作った Web の見積の第 2 版以降を、サー�
 
 ## 認証・メール
 
-- 会員登録時のメール確認は Supabase の設定に従います。MVP では **Confirm email を OFF** 推奨
-- 通知メールは Resend。`RESEND_API_KEY` / `MAIL_FROM` 未設定なら画面通知のみ
+- 会員登録時のメール確認は Supabase の設定に従います。MVP では Confirm email を OFF。2026-11-25：**本部先行の運用開始の時に ON**（千の風様のご判断。[mail-setup.md](./mail-setup.md)）
+- 通知メールは Resend。`RESEND_API_KEY` / `MAIL_FROM` 未設定なら画面通知のみ。返信先は `MAIL_REPLY_TO`
 
 ## 画像
 

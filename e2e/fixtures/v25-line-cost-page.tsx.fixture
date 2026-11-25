@@ -1,0 +1,52 @@
+import { StandardEstimateV25Workbench } from '@/components/admin/standard-estimate-v25-workbench';
+import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
+import type { V25EditorState } from '@/lib/domain/standard-estimate-v25-view';
+import type { V25WorkbenchCandidate, V25WorkbenchCosts } from '@/lib/domain/standard-estimate-v25-workbench';
+
+/**
+ * CI でのみ app/v25-e2e-line-cost/page.tsx にコピーする（公開のルートには無い）。
+ * 正式な DB・版を一切参照・変更せず、実物の Excel 風明細で手入力明細の原価単価の入力を操作する（2026-11-20 の先方の依頼）。
+ */
+const section = 'interior_exterior' as const;
+const candidates: V25WorkbenchCandidate[] = [
+  { id: 'e2e-sash', name: '検査用サッシ', categoryId: 'cat-sash', categoryName: 'サッシ', categoryCode: 'sash', priceUnit: '台', section,
+    singleSelect: false, manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {} },
+];
+const line = (key: string, name: string, extra: Partial<V25EditorState['lines'][number]> = {}) => ({
+  key, line_key: key, section_code: section, group_label: '1. サッシ・木製建具工事', name, quantity: '1', unit: '式',
+  price_mode: 'manual' as const, unit_price: '1000', remark: '', review_required: false, cost_unit_price: '', ...extra,
+});
+const initial: V25EditorState = {
+  sales_fee_rate: '1', markup_rate: '1.5', expense_rate: '0.15', adjustment: '0', adjustment_reason: '',
+  slots: [
+    { key: 'sash', baseline_key: 'sash', option_id: 'e2e-sash', work_item: '1. サッシ・木製建具工事', variant_choices: {}, quantity: '1',
+      price_mode: 'manual', manual_unit_price: '25000', slot_code: '', slot_label: '', selectable_option_ids: [] },
+  ],
+  lines: [
+    line('costLine', '取付費', { quantity: '2', unit_price: '9000', cost_unit_price: '6000' }),
+    line('noCostLine', '材料'),
+    line('porLine', '外構工事', { price_mode: 'por', unit_price: '' }),
+    // 本番に近い長い明細（横・縦のスクロールの中で操作する）
+    ...Array.from({ length: 40 }, (_, i) => line('extra-' + i, '追加明細' + i, { cost_unit_price: String(500 + i) })),
+  ],
+};
+const rule: PricingCalculationRule = {
+  id: 'e2e-rule', formula_code: 'v2.5', rounding_mode: 'trunc',
+  expense_target_sections: ['base', 'interior_exterior', 'option'],
+  auto_price_sections: ['base', 'interior_exterior', 'option'],
+};
+const taxRule: PricingTaxRule = { id: 'e2e-tax', tax_mode: 'full_single_rate', tax_rate: '0.100000', rounding_mode: 'trunc' };
+const costs: V25WorkbenchCosts = { pinned: {}, currentProduct: {}, currentChoice: {} };
+export default function LineCostFixture() {
+  return (
+    <main className="mx-auto max-w-6xl p-4" data-testid="v25-line-cost-local-fixture">
+      <h1 className="mb-3 text-lg font-bold">隔離テスト用 手入力明細の原価単価</h1>
+      <StandardEstimateV25Workbench
+        resetKey="v25-line-cost-1" revisionId="00000000-0000-4000-8000-000000000720"
+        lockVersion={1} modelSlug="wing-01" specCode="hotel"
+        readOnly={false} baseLines={[]} candidates={candidates} initial={initial}
+        costs={costs} rule={rule} taxRule={taxRule} preview={null} savedTotal={null}
+      />
+    </main>
+  );
+}

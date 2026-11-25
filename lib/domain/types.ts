@@ -872,6 +872,8 @@ export interface PricingLine {
   category_code: string;
   unit_price: number;
   quantity: number;
+  /** 数量の単位（#647：計上数量が 1 でない選択枠は保存した販売単位。未設定は画面で「式」） */
+  unit?: string | null;
   amount: number;
   /** 諸費用（15%）を乗せない項目（別途工事・フリー商品） */
   is_installation: boolean;

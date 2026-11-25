@@ -19,9 +19,9 @@ export const PASSWORD_UPDATE_SIGNED_OUT =
 export const PASSWORD_RESET_STALE_PAGE =
   'この画面からは再設定メールを送れません。お手数ですが、パスワード再設定の画面を開き直してから、もう一度お試しください。';
 
-/** ログイン画面で出す文（パスワード再設定以外のメールのリンク） */
+/** ログイン画面で出す文（パスワード再設定以外のメールのリンク＝会員登録の確認メール） */
 export const AUTH_LINK_ERROR =
-  'メールのリンクを確認できませんでした。リンクの有効期限が切れたか、すでに使われた可能性があります。もう一度お試しください。';
+  'メールのリンクを確認できませんでした。リンクの有効期限が切れたか、すでに使われた可能性があります。会員登録の確認メールのリンクだった場合は、ログインをお試しください。確認が済んでいないときは、確認メールを送り直すボタンが出ます。';
 
 /** URL の値（同じ名前が重なると配列になる）を 1 つにする */
 export function firstParam(value: string | string[] | undefined): string | undefined {
@@ -75,9 +75,14 @@ export function passwordResetRedirect(
  * ほかはログイン画面へ戻し、元の行き先を残す（ログインした後に続きへ戻れるように）。行き先はパスで判定する
  */
 export function authLinkErrorPath(next: string): string {
-  const path = next.split(/[?#]/)[0];
-  if (path === '/reset-password' || path.startsWith('/reset-password/')) return '/reset-password?error=link';
+  if (isPasswordResetNext(next)) return '/reset-password?error=link';
   return next === '/mypage' ? '/login?error=link' : `/login?error=link&next=${encodeURIComponent(next)}`;
+}
+
+/** メールのリンクの行き先が、パスワード再設定の画面か（パスで判定する） */
+export function isPasswordResetNext(next: string): boolean {
+  const path = next.split(/[?#]/)[0];
+  return path === '/reset-password' || path.startsWith('/reset-password/');
 }
 
 /** 弱いパスワードと判定されたときの文（Supabase が返す理由ごと。理由が分からなければ一般的な文） */

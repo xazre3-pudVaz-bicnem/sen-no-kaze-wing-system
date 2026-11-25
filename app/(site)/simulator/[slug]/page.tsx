@@ -24,7 +24,7 @@ import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-
 import { SimulatorApp, type SimulatorInitial } from '@/components/simulator/simulator-app';
 
 type Params = Promise<{ slug: string }>;
-type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string; plan?: string }>;
+type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string; plan?: string; draft?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function SimulatorPage({ params, searchParams }: { params: Params; searchParams: Search }) {
-  const [{ slug }, { c, resume, spec, preview, plan }] = await Promise.all([params, searchParams]);
+  const [{ slug }, { c, resume, spec, preview, plan, draft }] = await Promise.all([params, searchParams]);
 
   // 公開カタログと認証確認は互いに依存しないため並列取得する。
   // カタログは1回だけ取得し、bundle とモデル一覧を同じ結果から組み立てる。
@@ -186,22 +186,30 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
     }
   }
 
+  // URL の対象（保存プラン・一時保存・仕様）と本部プレビューのモードを別々に識別する。
+  // 同じ画面からプレビューへ移ったときも、以前の React state を引き継がず標準状態から開始する。
+  const simulatorRouteKey = c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new';
+  const workRouteKey = draft ? `${simulatorRouteKey}:work:${draft}` : simulatorRouteKey;
+
   return (
     <>
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: `${model.name} 見積シミュレーター`, path: `/simulator/${model.slug}` }])} />
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
-          key={c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new'}
+          key={`${previewRequested ? 'standard-preview:' : ''}${workRouteKey}`}
           bundle={clientBundle}
           estimateTemplates={sale.v25 ? withoutTemplatePrices(estimateTemplates) : estimateTemplates}
           saleViews={saleViews}
           pricingPreview={pricingPreview}
+          standardPreview={previewRequested}
           v25Pricing={sale.v25}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}
           initial={initial}
           loadError={loadError}
           resume={resume === '1'}
+          draftId={draft ?? null}
+          explicitEntry={Boolean(c || plan)}
           user={user ? { id: user.id, name: user.full_name || user.email } : null}
           guestPlanExpiresAt={guestPlanExpiresAt}
         />

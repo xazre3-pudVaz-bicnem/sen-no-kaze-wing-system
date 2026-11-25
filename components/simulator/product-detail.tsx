@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff, ZoomIn } from 
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
+import { isWashbasinStandardSet } from '@/lib/domain/washbasin-selection';
 import { cn } from '@/lib/utils';
 import { isValidManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import { ManufacturerDocumentModal } from './manufacturer-document-modal';
@@ -18,6 +19,7 @@ interface Props {
   choices: OptionVariantChoice[];
   selectedVariantIds: string[];
   isCurrentlySelected: boolean;
+  isBasicPlanProduct?: boolean;
   compactMedia?: boolean;
   onVariantChange: (choiceId: string, groupId: string) => void;
 }
@@ -44,6 +46,7 @@ export function ProductDetail({
   choices,
   selectedVariantIds,
   isCurrentlySelected,
+  isBasicPlanProduct = false,
   compactMedia = false,
   onVariantChange,
 }: Props) {
@@ -263,26 +266,37 @@ export function ProductDetail({
 
         <section className="min-h-0 min-w-0 md:overflow-y-auto md:pr-2">
           <div className="border-b border-line pb-3">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 {option.manufacturer && <p className="text-xs font-semibold text-brown">{option.manufacturer}</p>}
                 <h3 className="mt-0.5 text-lg font-semibold leading-snug text-ink">{option.name}</h3>
               </div>
-              {isCurrentlySelected && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brown px-2 py-1 text-[0.68rem] font-semibold text-white">
-                  <Check className="size-3" aria-hidden="true" />
-                  現在選択中
-                </span>
+              {(isCurrentlySelected || isBasicPlanProduct) && (
+                <div className="flex max-w-full shrink-0 flex-wrap items-center gap-1.5">
+                  {isCurrentlySelected && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brown px-2 py-1 text-[0.68rem] font-semibold text-white" data-testid="product-detail-current">
+                      <Check className="size-3" aria-hidden="true" />
+                      現在選択中
+                    </span>
+                  )}
+                  {isBasicPlanProduct && (
+                    <span className="inline-flex items-center rounded-full border border-brown/25 bg-ivory px-2 py-1 text-[0.68rem] font-semibold text-brown" data-testid="product-detail-baseline">
+                      基本プランの商品
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 
             {option.highlight && (
-              <p
-                className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-ink-soft"
-                data-testid="product-detail-highlight"
-              >
-                {option.highlight}
-              </p>
+              !(isWashbasinStandardSet(option) && option.highlight === '標準') && (
+                <p
+                  className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-ink-soft"
+                  data-testid="product-detail-highlight"
+                >
+                  {option.highlight}
+                </p>
+              )
             )}
 
             {option.description && (

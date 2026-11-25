@@ -11,6 +11,8 @@ export interface V25SourceSlot {
   option_name_snapshot: string;
   category_name_snapshot: string;
   slot_label: string | null;
+  /** 工事項目（2026-11-16 の先方の依頼。20261110140000 の前の DB・未設定は null・省略） */
+  work_item?: string | null;
   price_mode: string | null;
   cost_unit_price: number | null;
   manual_unit_price: number | null;
@@ -43,9 +45,13 @@ export function v25SourceSlotName(slot: Pick<V25SourceSlot, 'option_name_snapsho
   return chars.length > LINE_NAME_MAX ? `${chars.slice(0, LINE_NAME_MAX - 1).join('')}…` : full;
 }
 
-/** 選択枠の見出し：「カテゴリー」、位置・用途の枠は「カテゴリー（位置）」 */
-export function v25SourceSlotGroupLabel(slot: Pick<V25SourceSlot, 'category_name_snapshot' | 'slot_label'>): string {
-  return slot.slot_label ? `${slot.category_name_snapshot}（${slot.slot_label}）` : slot.category_name_snapshot;
+/**
+ * 選択枠の見出し（見積の明細の摘要）：工事項目があれば「工事項目」・位置・用途の枠は「工事項目（位置）」、
+ * 無ければ「カテゴリー」・「カテゴリー（位置）」（DB の standard_estimate_v25_quote_draft_lines・sale_view と同じ）
+ */
+export function v25SourceSlotGroupLabel(slot: Pick<V25SourceSlot, 'category_name_snapshot' | 'slot_label' | 'work_item'>): string {
+  const head = slot.work_item || slot.category_name_snapshot;
+  return slot.slot_label ? `${head}（${slot.slot_label}）` : head;
 }
 
 /**

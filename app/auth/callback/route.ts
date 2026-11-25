@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { authLinkErrorPath, loggableAuthErrorCode } from '@/lib/auth/password-reset';
+import { emailConfirmedLoginPath, isCodeVerifierMissing, isSignupCallback } from '@/lib/auth/email-confirm';
+import { authLinkErrorPath, isPasswordResetNext, loggableAuthErrorCode } from '@/lib/auth/password-reset';
 import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/utils';
 
@@ -17,6 +18,11 @@ export async function GET(request: NextRequest) {
     if (!error) return NextResponse.redirect(new URL(next, url.origin));
     // 申し込んだブラウザの Cookie が無い（別のブラウザ・別のドメインで開いた）・期限切れ など。理由は戻した画面で案内する
     console.error('[auth/callback] exchangeCodeForSession failed', { code: error.code ?? null, status: error.status ?? null });
+    // 会員登録の確認のリンク（flow=signup の印）を別のブラウザで開いた：Supabase が code を返した時点で確認は済んでいるので、
+    // ログインを案内する。パスワード再設定は、申し込んだブラウザでしか続けられない（今までどおり申し込みの画面へ戻す）
+    if (isCodeVerifierMissing(error) && isSignupCallback(url.searchParams) && !isPasswordResetNext(next)) {
+      return NextResponse.redirect(new URL(emailConfirmedLoginPath(next), url.origin));
+    }
   }
   return NextResponse.redirect(new URL(authLinkErrorPath(next), url.origin));
 }

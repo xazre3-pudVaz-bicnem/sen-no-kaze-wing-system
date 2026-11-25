@@ -4,13 +4,18 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { calculatePricingV25, type PricingCalculationRule, type PricingTaxRule } from '@/lib/domain/pricing-v25';
-import type { V25EditorState, V25Preview } from '@/lib/domain/standard-estimate-v25-view';
+import { formatYen } from '@/lib/domain/pricing';
+import { buildV25SavePayload, validateV25EditorState, type V25EditorState, type V25Preview } from '@/lib/domain/standard-estimate-v25-view';
 import {
   calculateV25Workbench,
   percentProblem,
   percentToRate,
   rateToPercent,
   slotCostForWorkbench,
+  standardSlotQuantity,
+  v25ProductChangePatch,
+  v25ProductReplacementIssue,
+  v25SlotRuleIssues,
   type V25WorkbenchBaseLine,
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
@@ -23,7 +28,7 @@ vi.mock('@/lib/actions/standard-estimate-v25', () => ({
   publishStandardEstimateV25RevisionAction: vi.fn(),
 }));
 
-const { StandardEstimateV25Workbench } = await import('@/components/admin/standard-estimate-v25-workbench');
+const { StandardEstimateV25Workbench, v25VariantSummary, v25PositionActionsLocked, deleteV25WorkbenchRow, v25DisplayedCostAndGross, v25LineSalePricePatch } = await import('@/components/admin/standard-estimate-v25-workbench');
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
@@ -48,6 +53,7 @@ const candidates: V25WorkbenchCandidate[] = [
     singleSelect: false,
     manufacturer: 'メーカーA',
     modelNo: 'A-1',
+    priceUnit: '台',
     section: 'option',
     variantGroups: [{ id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] }],
     defaultChoices: { g1: 'c1' },
@@ -187,7 +193,7 @@ const preview: V25Preview = {
   ],
 };
 
-const render = (readOnly: boolean) =>
+const render = (readOnly: boolean, view?: { initial?: V25EditorState; candidates?: V25WorkbenchCandidate[] }) =>
   renderToStaticMarkup(
     createElement(StandardEstimateV25Workbench, {
       resetKey: '00000000-0000-4000-8000-000000000001:3',
@@ -195,8 +201,8 @@ const render = (readOnly: boolean) =>
       lockVersion: 3,
       readOnly,
       baseLines,
-      candidates,
-      initial,
+      candidates: view?.candidates ?? candidates,
+      initial: view?.initial ?? initial,
       costs,
       rule,
       taxRule,
@@ -206,6 +212,636 @@ const render = (readOnly: boolean) =>
   );
 
 describe('Excel 風の画面（描画）', () => {
+
+  it('旧画面の入力黄・参照灰・区分濃緑・小計淡緑、列順と文字サイズを明細だけに適用', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const legacy = read('components/admin/estimate-template-workbench.tsx');
+    for (const cls of ['bg-amber-50', 'bg-slate-100', 'bg-emerald-900']) {
+      expect(legacy).toContain(cls);
+      expect(source).toContain(cls);
+    }
+    expect(legacy).toContain('bg-emerald-50');
+    expect(source).toContain('bg-lime-100');
+    const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
+    expect((header.match(/<th /g) ?? []).length).toBe(10);
+    const order = ['name', 'quantity', 'unit', 'cost_unit', 'cost_amount', 'sale_unit', 'sale_amount', 'gross', 'note', 'actions'];
+    let cursor = -1;
+    for (const id of order) {
+      const next = header.indexOf('data-v25-column="' + id + '"', cursor + 1);
+      expect(next).toBeGreaterThan(cursor);
+      cursor = next;
+    }
+    expect(header).not.toContain('>グループ</th>');
+    expect(header).not.toContain('>状態</th>');
+    expect(header).not.toContain('>#</th>');
+    expect(html).toContain('data-testid="v25-section-subtotal-base"');
+    for (const code of ['interior_exterior', 'option', 'sitework']) {
+      expect(html).toContain(`data-testid="v25-section-subtotal-${code}"`);
+      expect(html).toContain(`data-testid="v25-section-subtotal-value-${code}"`);
+    }
+    expect(html).toContain('data-testid="v25-wb-base-row"');
+    expect(html).toContain('>本体マスター</span>');
+    expect(html).not.toContain('data-v25-excel-col="group"');
+    expect(html).toContain('data-v25-excel-col="name"');
+    expect(html).toContain('設備');
+    expect(html).toContain('bg-slate-100');
+    expect(html).toContain('bg-amber-50');
+    expect(source).toContain('flex items-center justify-center gap-2');
+    expect(source).toContain('flex size-6 cursor-pointer');
+    expect(source).toContain('flex size-6 shrink-0');
+    expect(source).toContain('h-6 min-h-6!');
+    expect(source).toContain('text-[11px]');
+    // フォントサイズや共通UIルールを変更せず、通常の入力欄だけ旧画面相当の高さに調整
+    expect(legacy).toContain('h-6 min-h-6');
+  });
+
+  it('品名欄を維持し、工事項目の編集は見出し側にのみ現れる', () => {
+    const html = render(false);
+    const readOnlyHtml = render(true);
+    const manual = html.slice(html.indexOf('data-testid="v25-wb-line"'), html.indexOf('data-testid="v25-wb-line-menu"'));
+    expect(html).not.toContain('data-v25-excel-col="group"');
+    expect(manual).toContain('data-v25-excel-col="name"');
+    expect(html).toContain('data-testid="v25-wb-edit-work-group"');
+    expect(html).toContain('data-testid="v25-wb-add-work-group-interior_exterior"');
+    expect(html).not.toContain('data-testid="v25-wb-change-work-group"');
+    expect(readOnlyHtml).not.toContain('data-testid="v25-wb-edit-work-group"');
+    expect(readOnlyHtml).not.toContain('data-testid="v25-wb-work-group-dialog"');
+  });
+
+  it('原価金額と粗利は正式なv2.5結果から表示用に求め、未提供金額はダッシュ表示', () => {
+    const calc = calculateV25Workbench(rule, taxRule, initial, baseLines, costs, sectionOf);
+    const line = calc.result?.sections.find((section) => section.code === 'option')?.lines.find((row) => row.key === 'slot:slot-b1');
+    expect(line?.cost_unit_price).toBe(128400);
+    expect(line?.amount).toBe(385200);
+    expect(v25DisplayedCostAndGross(line, '2')).toEqual({ costAmount: 256800, gross: 128400 });
+    expect(v25DisplayedCostAndGross(line, '1.2345').costAmount).toBe(158509); // 128400×1.2345を整数円で切捨て
+    expect(v25DisplayedCostAndGross(line, 'abc')).toEqual({ costAmount: null, gross: null });
+    expect(v25DisplayedCostAndGross(undefined, '2')).toEqual({ costAmount: null, gross: null });
+    const html = render(false);
+    expect(html).toContain(`data-testid="v25-section-subtotal-value-option">${formatYen(385200)}</strong>`);
+    expect(html).toContain('data-testid="v25-wb-slot-cost-amount"');
+    expect(html).toContain('data-testid="v25-wb-slot-gross"');
+    expect(html).toContain('data-testid="v25-wb-slot-sale-amount"');
+    expect(html).toContain(formatYen(256800));
+    expect(html).toContain(formatYen(128400));
+    expect(html).toContain(formatYen(385200));
+    expect(html).toContain('data-testid="v25-wb-subtotal"');
+    expect(html).toContain('data-testid="v25-wb-total"');
+    expect(html).toContain('未確定（別途見積を含む）');
+    // UI追加の前後とも、公式の価格計算結果そのものは同一の値である。
+    expect(calc.result?.sections.find((section) => section.code === 'option')?.subtotal).toBe(385200);
+    expect(calc.result?.total).toBeNull();
+  });
+
+  it('商品台帳の販売単位を商品行に表示し、未設定はダッシュで示す（表示のみ）', () => {
+    const html = render(false);
+    expect(html).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>[\s\S]*?台[\s\S]*?<\/td>/);
+    const modified = render(false, { candidates: candidates.map((item) => item.id === 'p1' ? { ...item, priceUnit: '㎡' } : item) });
+    expect(modified).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>[\s\S]*?㎡[\s\S]*?<\/td>/);
+    const unregistered = render(false, { candidates: candidates.map((item) => ({ ...item, priceUnit: null })) });
+    expect(unregistered).toContain('data-testid="v25-wb-slot-unit"');
+    expect(unregistered).toMatch(/data-testid="v25-wb-slot-unit"[^>]*>\s*—\s*<\/td>/);
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('payload: buildV25SavePayload(orderedToSave)');
+  });
+
+  it('旧Excel型の表示密度・固定列・ページ縦スクロールと入力セル移動を保ち、正式な操作を維持する', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(html).not.toContain('data-testid="v25-excel-toolbar"');
+    expect(html).toContain('data-testid="v25-wb-column-display-position"');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('className="relative z-50 ml-auto shrink-0"');
+    expect(html).toContain('data-testid="v25-excel-grid-scroll"');
+    expect(html).toContain('overflow-x-auto rounded-b-md');
+    expect(html).not.toContain('max-h-[70vh]');
+    expect(html).not.toContain('overscroll-contain');
+    expect(html).toContain('sticky left-0 top-0 z-40');
+    expect(html).not.toContain('sticky left-[6.25rem] top-0 z-40');
+    expect(html).not.toContain('sticky left-7 top-0 z-40');
+    expect(html).not.toContain('sticky left-[8rem] top-0 z-40');
+    expect(html).toContain('sticky top-0 z-30');
+    expect(source).toContain('data-testid="v25-wb-menu-panel"');
+    expect(source).toContain('fixed z-[80]');
+    expect(source).toContain('createPortal(');
+    expect(html).not.toContain('sticky left-[6.25rem]');
+    expect(html).toContain('bg-emerald-900');
+    expect(html).not.toContain('data-v25-excel-col="group"');
+    expect(html).toContain('data-v25-excel-col="name"');
+    expect(html).toContain('data-v25-excel-col="qty"');
+    expect(html).toContain('data-v25-excel-col="note"');
+    expect(html).not.toContain('>状態</th>');
+    expect(html).not.toContain('>#</th>');
+    expect(html).toContain('>品名');
+    expect(html).toContain('>数量');
+    expect(html).toContain('>単位');
+    expect(html.indexOf('>仕様・備考')).toBeGreaterThan(html.indexOf('>売価金額'));
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('v25GridWidth(columnPrefs.prefs)');
+    expect(read('components/admin/standard-estimate-v25-workbench.tsx')).toContain('colSpan={beforeSaleAmount}');
+    expect(html).toContain('data-testid="v25-wb-save"');
+    expect(html).toContain('data-testid="v25-wb-refresh"');
+    expect(html).toContain('data-testid="v25-wb-publish"');
+    expect(html).toContain('data-testid="v25-wb-variant-summary"');
+  });
+
+
+  it('ページ縦スクロール時の固定見出しは実表から採寸し、原価列の有無・横スクロールに追従する', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(html).toContain('data-testid="v25-excel-grid-scroll"');
+    expect(html).toContain('>数量');
+    expect(html).toContain('>単位');
+    expect(html).toContain('>売価単価');
+    expect(html).toContain('>原価単価');
+    expect(html).toContain('>原価金額');
+    expect(html).toContain('>粗利');
+    expect(source).toContain('useV25PageFloatingHeader(headerLayoutKey)');
+    expect(source).toContain('sourceHead.cloneNode(true)');
+    expect(source).toContain('table.cloneNode(false)');
+    expect(source).toContain('const sourceCells = Array.from(sourceHead.rows[0]?.cells ?? [])');
+    expect(source).toContain('columns[index].style.width =');
+    expect(source).toContain('cell.getBoundingClientRect().width');
+    expect(source).toContain('overlay.scrollLeft = grid.scrollLeft');
+    expect(source).toContain("window.addEventListener('scroll', sync, true)");
+    expect(source).toContain('const nativeHeaderPassed = sourceHead.getBoundingClientRect().bottom <= 0;');
+    expect(source).not.toContain('saveAreaRef.current');
+    expect(source).not.toContain('saveAreaReached');
+    expect(source).toContain('const visible = nativeHeaderPassed && gridRect.bottom > headerHeight;');
+    expect(source).toContain('data-testid="v25-wb-save-area"');
+    expect(source).toContain("overlay.style.display = visible ? 'block' : 'none'");
+    expect(source).toContain("overlay.setAttribute('aria-hidden', 'true')");
+    expect(source).toContain('pointer-events-none fixed top-0 z-[45]');
+    expect(source).toContain('bg-[#E6EDF3] text-[12px] font-bold leading-4 text-[#24374B]');
+    expect(source).toContain("overlay.className = 'pointer-events-none fixed top-0 z-[45] overflow-hidden border-b border-[#CBD5E1] bg-[#E6EDF3] shadow-sm';");
+    expect(source).toContain('border-[#CBD5E1] bg-[#E6EDF3]');
+    expect(source).not.toContain('border-slate-600 bg-slate-900');
+    // 大区分と工事項目の緑は列見出し淡色化の対象外。
+    expect(source).toContain('className="bg-emerald-900 text-white" data-testid={`v25-section-${code}`}');
+    expect(source).toContain('className="border-y border-emerald-200 bg-emerald-100 text-slate-800"');
+    expect(source).toContain('h-[34px] sticky');
+    expect(source).toContain("sourceHead.cloneNode(true) as HTMLTableSectionElement");
+    // 原価列の切替後は同じ hook が再実行され、複製される列数は実ヘッダーに一致する。
+    expect(source).toContain('}, [headerLayoutKey]);');
+    expect(source).toContain('{visible.cost_unit && <th');
+    expect(read('components/admin/v25-grid-preferences.tsx')).toContain('原価を表示');
+    expect(read('components/admin/v25-grid-preferences.tsx')).toContain('relative z-50'); // 見出しより前面に列表示メニューを出す
+    // 表の後ろに見積の保存領域が残り、別スクロールではなくページで到達できる。
+    expect(source).toContain('data-testid="v25-wb-save"');
+    expect(source).toContain('data-testid="v25-wb-publish"');
+    expect(source).not.toContain('max-h-[70vh] overflow-auto');
+  });
+
+  it('商品行は自動から手入力へ切替、手入力明細は売価セルで直接入力できる', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(html).not.toContain('>計算</th>');
+    expect(html).toContain('>売価単価');
+    expect(html).toContain('>操作');
+    expect(html).toContain('data-testid="v25-wb-slot-price-cell"');
+    expect(html).toContain('data-testid="v25-wb-line-price-cell"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-price-mode"');
+    expect(html).not.toContain('data-testid="v25-wb-line-price-mode"');
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).toContain('data-testid="v25-wb-line-menu"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-status"');
+    expect(html).not.toContain('data-testid="v25-wb-line-status"');
+    expect(html).toContain('data-testid="v25-wb-slot-cost-alert"');
+    expect(html).toContain('data-testid="v25-wb-line-review-alert"');
+    expect(html).toContain('原価未設定');
+    expect(html).toContain('原価更新あり');
+    expect(html).not.toContain('原価最新');
+    expect(html).toContain('要見直し');
+    expect(source).toContain("status && status !== 'current'");
+    expect(source).toContain('title={V25_COST_STATUS_LABEL[status]}');
+    expect(html).not.toContain('商品台帳から選択');
+    expect(html).toContain('金額を入力する');
+    expect(html).toContain('別途見積にする');
+    expect(html).toContain('自動計算に戻す');
+    expect(html).toContain('見直し済みにする');
+    expect(html).toContain('data-testid="v25-wb-slot-delete"');
+    expect(html).toContain('data-testid="v25-wb-line-delete"');
+    expect(source).toContain('const columnCount = displayedColumns.length;');
+    expect(source).toContain("code !== 'sitework' && slot.price_mode !== 'auto'");
+    expect(source).toContain("setSlot(slot.key, { price_mode: 'auto' })");
+    expect(source).toContain("setSlot(slot.key, { price_mode: 'manual' })");
+    expect(source).toContain("setSlot(slot.key, { price_mode: 'por' })");
+    expect(source).toContain('v25LineSalePricePatch(line, event.target.value)');
+    expect(source).toContain("setLine(line.key, { price_mode: 'por' })");
+    expect(source).toContain('payload: buildV25SavePayload(orderedToSave)');
+  });
+
+  it('幅の過大な列を圧縮し、広い画面では表全体を可変幅で表示する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const html = render(false);
+    const headerSource = source.slice(source.indexOf('<thead className='), source.indexOf('</thead>'));
+    const tableSource = source.slice(source.indexOf('<table ref={tableRef}'), source.indexOf('<thead className='));
+    expect(tableSource).toContain('v25GridWidth(columnPrefs.prefs)');
+    expect(html).toContain('data-testid="v25-workbench-grid"');
+    expect(html).toContain('min-width:1104px');
+    expect(html).toContain('w-full');
+    const widths = [
+      ['w-[20rem]', 1], // 品名
+      ['w-14', 2], // 数量と単位
+      ['w-[5.75rem]', 5], // 金額5列
+      ['w-[8rem]', 1], // 仕様・備考
+      ['w-[4.5rem]', 1], // 操作
+    ] as const;
+    for (const [width, expectedCount] of widths) {
+      expect(headerSource.split(width).length - 1).toBe(expectedCount);
+    }
+    const previousCostOn = 85 * 16;
+    const currentCostOn = 69 * 16;
+    const previousCostOff = 64 * 16;
+    const currentCostOff = 52 * 16;
+    expect(currentCostOn).toBe(1104);
+    expect(currentCostOff).toBe(832);
+    expect(previousCostOn - currentCostOn).toBe(256);
+    expect(previousCostOff - currentCostOff).toBe(192);
+    // 操作ボタンを押し分けられる幅（24px×2＋8px間隔）を確保。
+    expect(4.5 * 16).toBeGreaterThanOrEqual(24 * 2 + 8);
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).toContain('data-testid="v25-wb-slot-delete"');
+    expect(html).toContain('data-testid="v25-wb-line-menu"');
+    expect(html).toContain('data-testid="v25-wb-line-delete"');
+    // 位置名・カテゴリー・品名・備考は省略表示でも元データを保持している。
+    expect(source).toContain('title={line.section}');
+    expect(source).toContain('title={candidate?.categoryName ??');
+    expect(source).toContain('flex min-w-0 flex-wrap items-center gap-1');
+    expect(source).toContain('title={line.remark}');
+    expect(source).toContain('data-testid="v25-wb-edit-work-group"');
+    expect(source).toContain('data-v25-excel-col="name"');
+    expect(source).toContain('data-v25-excel-col="note"');
+  });
+
+  it('通常10列・原価非表示7列の旧画面順にし、入力状態表示を残す', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const header = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
+    expect((header.match(/<th /g) ?? []).length).toBe(10);
+    expect(source).toContain('const columnCount = displayedColumns.length;');
+    expect(source).toContain('w-[20rem]');
+    expect(source).toContain('w-[4.5rem]');
+    expect(source).toContain('className="h-6 min-h-6!');
+    expect(source).toContain('data-v25-excel-col="qty"');
+    expect(source).toContain('data-v25-excel-col="unit"');
+    expect(source).toContain('data-v25-excel-col="sale"');
+    expect(source).toContain('data-v25-excel-col="name"');
+    expect(source).toContain('data-v25-excel-col="note"');
+    expect(source).toContain('if (event.key === \'Enter\' && index >= 0)');
+    expect(source).toContain("} else if (event.key === 'Tab') {");
+    expect(source).toContain("overlay.scrollLeft = grid.scrollLeft");
+    expect(source).toContain('columns[index].style.width =');
+    expect(source).toContain('}, [headerLayoutKey]);');
+    // 原価の警告は原価列の表示フラグに依存しない位置にある。
+    const warningSource = source.slice(source.indexOf('data-testid="v25-wb-slot-cost-alert"') - 130, source.indexOf('data-testid="v25-wb-slot-cost-alert"') + 180);
+    expect(warningSource).not.toContain('showCost &&');
+    expect(html).toContain('原価未設定');
+    expect(html).toContain('原価更新あり');
+  });
+
+  it('明細セル内の入力欄だけ旧画面に合わせた24px最小高さと11px文字を維持する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const globals = read('app/globals.css');
+    const grid = source.slice(source.indexOf('<tbody onMouseDownCapture='), source.indexOf('</tbody>'));
+    const excelInputs = Array.from(grid.matchAll(/<Input data-v25-excel-col="[^"]+"[\s\S]*?className="([^"]+)"/g));
+    // 手入力明細の原価単価の入力欄（2026-11-20 の先方の依頼）を足して 8 つ
+    expect(excelInputs).toHaveLength(8);
+    for (const match of excelInputs) {
+      const classes = match[1].split(/\s+/);
+      expect(classes).toContain('h-6');
+      expect(classes).toContain('min-h-6!'); // Tailwind v4 important で .input の min-h-12 を上書き
+      expect(classes).toContain('text-[11px]'); // 文字サイズは変更しない
+      expect(classes).not.toContain('text-[10px]');
+    }
+    expect(globals).toContain('@utility input {');
+    expect(globals).toContain('min-h-12');
+    const nonGrid = source.slice(source.indexOf('</tbody>'));
+    expect(nonGrid).not.toContain('min-h-6!');
+    // 標準見積の外の共通Inputやモーダル入力には同じ上書きを適用しない。
+    const beforeGrid = source.slice(0, source.indexOf('<tbody onMouseDownCapture='));
+    expect(beforeGrid).not.toContain('className="h-6 min-h-6!');
+    const html = render(false);
+    const renderedInputs = Array.from(html.matchAll(/<input\b[^>]*data-v25-excel-col="[^"]+"[^>]*>/g));
+    // 8種類のJSX入力が複数の明細行に描画されるため、実際のinput要素数は8より多い。
+    expect(renderedInputs.length).toBeGreaterThan(8);
+    for (const input of renderedInputs) {
+      expect(input[0]).toContain('min-h-6!');
+      expect(input[0]).toContain('text-[11px]');
+    }
+  });
+
+  it('確認なしの即削除を撤去し、品名を示す確認ダイアログの確定時だけ対象行を削除する', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const confirmSource = read('components/admin/confirm-action-button.tsx');
+    expect((html.match(/data-testid="v25-wb-slot-delete"/g) ?? []).length).toBe(initial.slots.length);
+    expect((html.match(/data-testid="v25-wb-line-delete"/g) ?? []).length).toBe(initial.lines.length);
+    expect(html).toContain('aria-label="「検査商品1」を削除"');
+    expect(html).toContain('aria-label="「外構工事」を削除"');
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).toContain('data-testid="v25-wb-line-menu"');
+    expect(source).toContain('dialogTitle="この明細を削除しますか？"');
+    expect(source).toContain('message={`「${name}」を明細から削除します。削除は下書き保存まで確定しません。`}');
+    expect(source).toContain('confirmLabel="削除する"');
+    expect(source).toContain('onConfirm={onConfirm}');
+    expect(source).toContain('if (positionActionsLocked) return;');
+    expect(confirmSource).toContain('onClick={closeDialog}');
+    expect(confirmSource).toContain('void onConfirm()');
+    // 取消時は操作関数が呼ばれない。確認時だけ対象の種類・キーを限定して更新する。
+    const before = initial;
+    const removedSlot = deleteV25WorkbenchRow(before, 'slot', 'slot-b1');
+    expect(removedSlot.slots).toHaveLength(before.slots.length - 1);
+    expect(removedSlot.slots.find((row) => row.key === 'slot-b1')).toBeUndefined();
+    expect(removedSlot.lines).toEqual(before.lines);
+    const removedLine = deleteV25WorkbenchRow(before, 'line', 'line-k1');
+    expect(removedLine.lines).toHaveLength(before.lines.length - 1);
+    expect(removedLine.slots).toEqual(before.slots);
+    expect(before.slots).toHaveLength(initial.slots.length);
+    expect(before.lines).toHaveLength(initial.lines.length);
+    const published = render(true);
+    expect(published).not.toContain('data-testid="v25-wb-slot-delete"');
+    expect(published).not.toContain('data-testid="v25-wb-line-delete"');
+  });
+
+  it('手入力の売価は別途見積のまま空欄で開始し、0を含む値入力でmanualへ移行、未入力のmanualは保存検証で停止する', () => {
+    const line = initial.lines[0];
+    const unchanged = { ...line, ...v25LineSalePricePatch(line, '') };
+    expect(unchanged.price_mode).toBe('por');
+    expect(unchanged.unit_price).toBe('');
+    expect(buildV25SavePayload({ ...initial, lines: [unchanged, initial.lines[1]] }).lines[0]).toMatchObject({
+      price_mode: 'por', unit_price: null,
+    });
+    const zero = { ...line, ...v25LineSalePricePatch(line, '0') };
+    expect(zero.price_mode).toBe('manual');
+    expect(zero.unit_price).toBe('0');
+    expect(validateV25EditorState({ ...initial, lines: [zero, initial.lines[1]] }, sectionOf)).toBeNull();
+    expect(buildV25SavePayload({ ...initial, lines: [zero, initial.lines[1]] }).lines[0]).toMatchObject({
+      price_mode: 'manual', unit_price: 0,
+    });
+    const priced = { ...line, quantity: '2', ...v25LineSalePricePatch(line, '12500') };
+    const draft = { ...initial, lines: [priced, initial.lines[1]] };
+    expect(validateV25EditorState(draft, sectionOf)).toBeNull();
+    expect(buildV25SavePayload(draft).lines[0]).toMatchObject({ quantity: '2', price_mode: 'manual', unit_price: 12500 });
+    // 既存計算器を使用。手入力売価×数量に予定外の式や掛率を加えない。
+    const result = calculateV25Workbench(rule, taxRule, draft, baseLines, costs, sectionOf);
+    const manualResult = result.result?.sections.flatMap((section) => section.lines)
+      .find((item) => item.key === result.lineKeyOf[priced.key]);
+    expect(manualResult?.amount).toBe(25000);
+    const clearing = { ...priced, ...v25LineSalePricePatch(priced, '') };
+    expect(clearing.price_mode).toBe('manual');
+    expect(clearing.unit_price).toBe('');
+    expect(validateV25EditorState({ ...initial, lines: [clearing, initial.lines[1]] }, sectionOf))
+      .toContain('売価単価');
+    const invalid = { ...line, ...v25LineSalePricePatch(line, 'abc') };
+    expect(invalid.price_mode).toBe('manual');
+    expect(validateV25EditorState({ ...initial, lines: [invalid, initial.lines[1]] }, sectionOf))
+      .toContain('売価単価');
+    const explicitPor = { ...priced, price_mode: 'por' as const };
+    expect(buildV25SavePayload({ ...initial, lines: [explicitPor, initial.lines[1]] }).lines[0])
+      .toMatchObject({ price_mode: 'por', unit_price: null });
+    // 編集のイベント以前は既存stateを変更しない。
+    expect(initial.lines[0].price_mode).toBe('por');
+    expect(initial.lines[1].price_mode).toBe('manual');
+    expect(initial.lines[1].unit_price).toBe('50000');
+  });
+
+  it('商品名右端に商品台帳アイコンを配置し、既存の選び直し画面を使用する', () => {
+    const html = render(false);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const iconCount = (html.match(/data-testid="v25-wb-slot-product-picker-icon"/g) ?? []).length;
+    const slotCount = (html.match(/data-testid="v25-wb-slot"/g) ?? []).length;
+    expect(slotCount).toBeGreaterThan(0);
+    expect(iconCount).toBe(slotCount);
+    expect(html).toContain('title="商品台帳から選ぶ"');
+    expect(html).toContain('aria-label="検査商品1を商品台帳から選び直す"');
+    expect(source).toContain("import { Package, Trash2 } from 'lucide-react'");
+    expect(source).toContain('<Package className="size-3.5" aria-hidden="true" />');
+    expect(source).toContain("setPicker({ section: code, targetKey: slot.key });");
+    expect(source).toContain('<StandardEstimateV25ProductPicker');
+    expect(source).toContain('onChoose={choose}');
+    expect(html).toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).not.toContain('商品台帳から選択');
+  });
+
+  it('採用済みの現行商品だけ、行の「…」から商品台帳を別タブで編集できる', () => {
+    const html = render(false);
+    const links = html.match(/data-testid="v25-wb-slot-edit-catalog"/g) ?? [];
+    expect(links).toHaveLength(initial.slots.length);
+    expect(html).toContain('この商品を台帳で編集 ↗');
+    expect(html).toContain('href="/admin/options/p1"');
+    expect(html).toContain('href="/admin/options/p2"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).not.toContain('商品台帳から選択');
+    expect(html).toContain('仕様を変更');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain("encodeURIComponent(slot.option_id)");
+    expect(source).toContain('candidate.id === slot.option_id');
+    expect(source).not.toContain('onClick={() => save()}');
+  });
+
+  it('販売停止・対象外・存在しない商品、手入力明細と公開版には台帳編集リンクを出さない', () => {
+    const unavailable = render(false, {
+      candidates: candidates.map((candidate) => candidate.id === 'p2'
+        ? { ...candidate, unavailable: true } : candidate.id === 'p3'
+          ? { ...candidate, retired: true } : candidate),
+    });
+    expect(unavailable.match(/data-testid="v25-wb-slot-edit-catalog"/g) ?? []).toHaveLength(1);
+    expect(unavailable).toContain('href="/admin/options/p1"');
+    expect(unavailable).not.toContain('href="/admin/options/p2"');
+    expect(unavailable).not.toContain('href="/admin/options/p3"');
+    const missing = render(false, { candidates: candidates.filter((candidate) => candidate.id !== 'p2') });
+    expect(missing).not.toContain('href="/admin/options/p2"');
+    // 手入力明細のメニューには Link が無く、選択枠の数だけ編集リンクがある。
+    expect(render(false).match(/data-testid="v25-wb-slot-edit-catalog"/g) ?? []).toHaveLength(initial.slots.length);
+    expect(render(true)).not.toContain('v25-wb-slot-edit-catalog');
+  });
+
+  it('固定メニューはスクロール領域の外へ切り出して表示し、画面移動時は閉じる', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain("window.addEventListener('scroll', onScroll, true)");
+    expect(source).toContain("window.addEventListener('resize', dismiss)");
+    expect(source).toContain("document.addEventListener('keydown', onEscape, true)");
+    expect(source).toContain('data-testid="v25-wb-menu-backdrop"');
+    expect(source).toContain("event.stopImmediatePropagation()");
+    expect(source).toContain("event.key === 'Escape'");
+    expect(source).toContain('maxHeight: Math.max(80');
+    expect(source).toContain('target="_blank" rel="noopener noreferrer" prefetch={false}');
+    expect(source).toContain('clearV25Position(state, positionFor)');
+  });
+
+  it('公開中の版では右端の変更メニューを表示しない', () => {
+    const html = render(true);
+    expect(html).not.toContain('data-testid="v25-wb-slot-menu"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-product-picker-icon"');
+    expect(html).not.toContain('data-testid="v25-wb-line-menu"');
+    expect(html).toContain('data-testid="v25-wb-slot-price-cell"');
+    expect(html).toContain('data-testid="v25-wb-line-price-cell"');
+  });
+
+  it('選択肢が4種類でも表には短い要約だけを出し、ドロップダウンを縦に並べない', () => {
+    const groups = [
+      { id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] },
+      { id: 'g2', name: '色', choices: [{ id: 'white', name: '白' }] },
+      { id: 'g3', name: '仕上げ', choices: [{ id: 'matte', name: 'マット' }] },
+      { id: 'g4', name: '方向', choices: [{ id: 'left', name: '左' }] },
+    ];
+    const choices = { g1: 'c2', g2: 'white', g3: 'matte', g4: 'left' };
+    const updated = candidates.map((candidate) => candidate.id === 'p1' ? { ...candidate, variantGroups: groups } : candidate);
+    expect(v25VariantSummary(updated[0], choices)).toBe('サイズ：大 ／ 色：白 ／ 仕上げ：マット ／ 方向：左');
+    expect(v25VariantSummary(updated[0], { g1: 'c2' })).toContain('色：未選択');
+    expect(v25VariantSummary(updated[0], { g1: 'does-not-exist' })).toContain('選択肢を確認');
+    const html = render(false, {
+      candidates: updated,
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, variant_choices: choices, slot_code: 'living', slot_label: 'リビング', selectable_option_ids: ['p2'] }
+          : slot),
+      },
+    });
+    expect(html).toContain('data-testid="v25-wb-variant-summary"');
+    expect(html).toContain('仕様を変更');
+    expect(html).toContain('サイズ：大 ／ 色：白');
+    expect(html).not.toContain('data-testid="v25-wb-variant-choice"');
+    expect(html).not.toContain('data-testid="v25-wb-variant-editor"');
+    expect(html).toContain('リビング');
+    expect(html).toContain('変更候補1件');
+    expect(html).toContain('data-testid="v25-wb-slot-position"');
+    expect(html).not.toContain('data-testid="v25-wb-slot-position-editor"');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('target.option_id === candidate.id');
+    expect(source).toContain('setSlot(target.key, { variant_choices: { ...choices } })');
+    expect(source).toContain('removePositionOnConfirm');
+    expect(source).toContain('clearV25Position(state, positionFor)');
+    expect(source).not.toContain("updatePosition({ slot_code: '', slot_label: '', selectable_option_ids: [] })");
+  });
+
+  it('位置名直接編集・別位置複製は設定済みの編集行だけにあり、公開版は閲覧のみ', () => {
+    const positioned = render(false, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビングの窓', selectable_option_ids: ['p2'] }
+          : slot),
+      },
+    });
+    expect(positioned).toContain('data-testid="v25-wb-duplicate-position"');
+    expect(positioned).toContain('別の位置に複製');
+    expect(positioned).toContain('位置名を直接編集');
+    expect(positioned).toContain('位置を設定');
+    expect(positioned).toContain('この商品を台帳で編集');
+    expect(positioned).not.toContain('v25-wb-duplicate-position-dialog');
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain('event.nativeEvent.isComposing');
+    expect(source).toContain('event.nativeEvent.keyCode');
+    expect(source).toContain('onCompositionStart=');
+    expect(source).toContain('onCompositionEnd=');
+    expect(source).toContain('v25PositionNameKeyAction(');
+    expect(source).toContain('renameV25Position(state, positionLabelEditor.slotKey');
+    expect(source).not.toContain('data-v25-excel-col="position"');
+    const published = render(true, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビングの窓' } : slot),
+      },
+    });
+    expect(published).not.toContain('v25-wb-duplicate-position');
+    expect(published).not.toContain('位置名を直接編集');
+    expect(published).toContain('リビングの窓');
+  });
+
+  it('位置名を直接編集中は保存・公開・原価更新・変更破棄を無効化し、理由を表示する', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;');
+    expect(source).toContain('data-testid="v25-wb-position-edit-save-blocked"');
+    expect(source).toContain('位置名を編集中のため、下書きの保存・公開はできません。Enterで確定するかEscで取り消してください。');
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
+    // 変更破棄は手で変えた分だけ（カテゴリーからの工事項目の自動の値は破棄できないため。2026-11-16 の先方の依頼）
+    expect(source).toContain('disabled={pending || (!editedDirty && !orderDirty) || positionInputActive} onClick={() => {');
+    expect(source).toContain('disabled={pending || dirty || positionInputActive} data-testid="v25-wb-refresh"');
+    expect(source).toContain('disabled={pending || blockers.length > 0 || positionInputActive}');
+    expect(source).toContain('const save = () => {\n    if (pending || positionInputActive) return;');
+    expect(source).toContain('const run = (task:');
+    expect(source).toContain('if (pending || positionInputActive) return;');
+  });
+
+  it('保存等の処理中は位置名Enter確定・複製モーダル・追加確定を止める', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('if (!positionLabelEditor || readOnly || pending) return;');
+    expect(source).toContain('if (!duplicateFor || readOnly || pending) return;');
+    expect(source).toContain('if (readOnly || pending || !positionFor || !positionDraft) return;');
+    expect(source).toContain('disabled={pending || positionInputActive}');
+    expect(source).toContain('if (pending || positionInputActive) return;');
+    expect(source).toContain('data-testid="v25-wb-duplicate-position-confirm" disabled={pending}');
+    expect(source).toContain('<V25PositionNameInput disabled={pending}');
+    expect(source).toContain('if (disabled) { event.preventDefault(); return; }');
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain('event.nativeEvent.isComposing');
+  });
+
+  it('位置名を編集中は別行の編集開始を無効化し、Enter確定・Esc取消まで入力途中の内容を守る', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    const labelButton = source.slice(
+      source.indexOf('data-testid="v25-wb-slot-position"'),
+      source.indexOf('data-testid="v25-wb-position-unset"')
+    );
+    expect(labelButton).toContain('disabled={pending || positionInputActive}');
+    expect(labelButton).toContain('if (pending || positionInputActive) return;');
+    expect(labelButton).toContain('setPositionLabelEditor({ slotKey: slot.key, label: slot.slot_label, error: null })');
+    expect(labelButton).toContain('編集中の位置名をEnterで確定するかEscで取り消してください');
+    // 同じ位置の入力部品は確定／取消まで維持し、他の行を開くことで置き換えられない。
+    expect(source).toContain('positionLabelEditor?.slotKey === slot.key && !readOnly');
+    expect(source).toContain('onConfirm={commitInlinePositionLabel}');
+    expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}');
+    expect(source).toContain('編集中は保存・行削除・位置設定・別の位置名編集ができません。Enterで確定するかEscで取り消してください。');
+  });
+
+  it('位置名編集中は行削除と位置を設定の両経路を無効化し、確定・取消後は再び操作・保存が可能', () => {
+    // pendingがない通常時は編集中だけロックし、Enter・Escで編集状態がnullに戻れば解除される。
+    expect(v25PositionActionsLocked(false, true)).toBe(true);
+    expect(v25PositionActionsLocked(false, false)).toBe(false); // Enter 確定後・Esc 取消後
+    expect(v25PositionActionsLocked(true, false)).toBe(true); // 保存などの処理中
+
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('const positionInputActive = positionLabelEditor !== null || duplicateFor !== null;');
+    expect(source).toContain('const positionActionsLocked = v25PositionActionsLocked(pending, positionInputActive);');
+    const openDetail = source.slice(source.indexOf('const openPosition ='), source.indexOf('const closePosition ='));
+    expect(openDetail).toContain('if (positionActionsLocked) return;');
+    const sashButton = source.slice(source.indexOf('data-testid="v25-wb-slot-position-toggle"'), source.indexOf('data-testid="v25-wb-slot-product-picker-icon"'));
+    expect(sashButton).toContain('disabled={positionActionsLocked}');
+    const menuButton = source.slice(source.indexOf('data-testid="v25-wb-slot-position-menu"'), source.indexOf('金額を入力する'));
+    expect(menuButton).toContain('disabled={positionActionsLocked}');
+    expect(menuButton).toContain('if (positionActionsLocked) return;');
+    const deleteButton = source.slice(source.indexOf('testId="v25-wb-slot-delete"'), source.indexOf('testId="v25-wb-line-delete"'));
+    expect(deleteButton).toContain('disabled={positionActionsLocked}');
+    expect(deleteButton).toContain('if (positionActionsLocked) return;');
+    expect(source).toContain('setPositionLabelEditor(null);'); // Enterが成功したとき
+    expect(source).toContain('onCancel={() => setPositionLabelEditor(null)}'); // Escのとき
+    expect(source).toContain('disabled={pending || !dirty || positionInputActive} data-testid="v25-wb-save"');
+    expect(source).toContain('編集中は保存・行削除・位置設定・別の位置名編集ができません。');
+    // 保存ボタンは dirty のままなら編集確定／取消で再び押せる。元から未変更なら無効のまま。
+    const canSave = (pending: boolean, dirty: boolean, editing: boolean) => !pending && dirty && !editing;
+    expect(canSave(false, true, true)).toBe(false);
+    expect(canSave(false, true, false)).toBe(true);
+    expect(canSave(false, false, false)).toBe(false);
+  });
+
+  it('読み取り専用でも仕様・位置を確認でき、保存や変更はできない', () => {
+    const html = render(true, {
+      initial: {
+        ...initial,
+        slots: initial.slots.map((slot) => slot.key === 'slot-b1'
+          ? { ...slot, slot_code: 'living', slot_label: 'リビング' } : slot),
+      },
+    });
+    expect(html).toContain('仕様を確認');
+    expect(html).toContain('位置・選べる商品を設定');
+    expect(html).not.toContain('data-testid="v25-wb-variant-confirm"');
+    expect(html).not.toContain('data-testid="v25-wb-position-confirm"');
+    expect(html).not.toContain('data-testid="v25-wb-save"');
+  });
   it('本体・内外装・オプション・別途を 1 つの表に並べ、試算の金額と状態を出す', () => {
     const html = render(false);
     expect(html).toContain('data-testid="v25-workbench-grid"');
@@ -250,10 +886,23 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('この仕様では選べなくなった商品の行が 1 件あります');
   });
 
-  it('原価の列は初期値では出さない（本部の画面でも切り替えて見る）', () => {
+  it('原価単価・原価金額・粗利を初期表示し、オフでは3列だけを非表示にできる', () => {
     const html = render(false);
-    expect(html).not.toContain('>原価単価<');
+    expect(html).toContain('>原価単価');
+    expect(html).toContain('>原価金額');
+    expect(html).toContain('>粗利');
     expect(html).toContain('原価を表示');
+    expect(html).toContain('data-testid="v25-wb-show-cost"');
+    expect(html).toMatch(/data-testid="v25-wb-show-cost"[^>]*checked=""/);
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('const columnPrefs = useV25GridPreferences();');
+    expect(source).toContain('const columnCount = displayedColumns.length;');
+    const headerSource = source.slice(source.indexOf('<thead className='), source.indexOf('</thead>'));
+    expect((headerSource.match(/{visible\.(cost_unit|cost_amount|sale_unit|gross|note) && <th /g) ?? []).length).toBe(5);
+    expect(source).toContain('v25GridWidth(columnPrefs.prefs)');
+    expect(source).toContain("}, [headerLayoutKey]);");
+    expect(source).toContain("overlay.scrollLeft = grid.scrollLeft");
+    expect(source).toContain("columns[index].style.width =");
   });
 
   it('編集できる下書きでは保存・最新原価の取り込み・公開を出し、公開中の版は読み取りだけ', () => {
@@ -261,10 +910,10 @@ describe('Excel 風の画面（描画）', () => {
     expect(editable).toContain('data-testid="v25-wb-save"');
     expect(editable).toContain('data-testid="v25-wb-refresh"');
     expect(editable).toContain('data-testid="v25-wb-publish"');
-    expect(editable).toContain('＋ 商品台帳から追加');
+    expect(editable).toContain('＋ 行を追加');
     const readOnly = render(true);
     expect(readOnly).not.toContain('data-testid="v25-wb-save"');
-    expect(readOnly).not.toContain('＋ 商品台帳から追加');
+    expect(readOnly).not.toContain('＋ 行を追加');
     expect(readOnly).toContain('disabled=""');
   });
 });
@@ -301,5 +950,211 @@ describe('見積書管理 ＞ 標準見積の画面（本部だけ・承認申�
     const action = read('lib/actions/standard-estimate-v25.ts');
     expect(action).toContain("formData.get('return_to') === 'workbench'");
     expect(action).toContain('/admin/estimate-templates?master=');
+  });
+});
+
+describe('v2.5数量保持：商品選択ポップアップの確定経路と#659の計上数量', () => {
+  const roof: V25WorkbenchCandidate = {
+    id: 'roof-original', name: '屋根材A', categoryId: 'cat-roof', categoryName: '屋根',
+    categoryCode: 'roof', singleSelect: true, section: 'interior_exterior', priceUnit: '㎡',
+    manufacturer: '', modelNo: '', variantGroups: [], defaultChoices: {},
+  };
+  const roofOther: V25WorkbenchCandidate = { ...roof, id: 'roof-other', name: '屋根材B' };
+  const wall: V25WorkbenchCandidate = {
+    ...roof, id: 'wall-original', name: '外壁材A', categoryId: 'cat-wall', categoryName: '外壁',
+    categoryCode: 'exterior-wall', singleSelect: false, priceUnit: '面',
+  };
+  const wallOther: V25WorkbenchCandidate = { ...wall, id: 'wall-other', name: '外壁材B' };
+  const sitework: V25WorkbenchCandidate = {
+    ...roof, id: 'sitework-original', name: '別途工事A', categoryId: 'cat-sitework',
+    categoryName: '別途工事', categoryCode: 'sitework', singleSelect: false, section: 'sitework', priceUnit: '式',
+  };
+  const siteworkOther: V25WorkbenchCandidate = { ...sitework, id: 'sitework-other', name: '別途工事B' };
+  const catalog = [roof, roofOther, wall, wallOther, sitework, siteworkOther];
+  const get = (id: string) => catalog.find((p) => p.id === id);
+  const getInCategory = (id: string) => catalog.filter((p) => p.categoryId === id);
+  const row = (option_id: string, quantity: string, extra: Partial<V25EditorState['slots'][number]> = {}) => ({
+    key: 'item-1', baseline_key: 'saved-1', option_id, variant_choices: { color: 'white' },
+    quantity, price_mode: 'auto' as const, manual_unit_price: '', slot_code: '', slot_label: '',
+    selectable_option_ids: [], row_order: 2, work_item: '2. 屋根工事', ...extra,
+  });
+  const editor = (slot: V25EditorState['slots'][number]): V25EditorState => ({
+    sales_fee_rate: '1', markup_rate: '1', expense_rate: '0',
+    adjustment: '0', adjustment_reason: '', slots: [slot], lines: [],
+  });
+  const costData: V25WorkbenchCosts = {
+    pinned: {},
+    currentProduct: { 'roof-original': 10500, 'roof-other': 12000, 'wall-original': 1000, 'wall-other': 1200 },
+    currentChoice: { white: 0, black: 750 },
+  };
+  const price = (data: V25EditorState) => {
+    const calc = calculateV25Workbench(rule, taxRule, data, [], costData, (id) => get(id)?.section);
+    expect(calc.error).toBeNull();
+    expect(calc.incomplete).toEqual([]);
+    return calc.result?.sections.find((section) => section.code === 'interior_exterior')?.lines[0];
+  };
+  const change = (
+    existing: V25EditorState, candidate: V25WorkbenchCandidate, choices: Record<string, string>
+  ) => {
+    const original = get(existing.slots[0].option_id)!;
+    const issue = v25ProductReplacementIssue(existing.slots[0], original, candidate, existing.slots, get, getInCategory);
+    if (issue) return { issue, state: existing };
+    const patch = v25ProductChangePatch(existing.slots[0], candidate, choices, get);
+    return { issue: null, patch, state: { ...existing, slots: [{ ...existing.slots[0], ...patch }] } };
+  };
+
+  it('同一屋根の色変更では23.5㎡・価格モード・行順・工事項目を保持し、色の金額差だけ反映する', () => {
+    const before = editor(row(roof.id, '23.5', { manual_unit_price: '9000' }));
+    expect(price(before)?.amount).toBe(246750);
+    const updated = change(before, roof, { color: 'black' });
+    expect(updated.issue).toBeNull();
+    expect(updated.patch).toEqual({ variant_choices: { color: 'black' } });
+    expect(updated.state.slots[0]).toEqual({ ...before.slots[0], variant_choices: { color: 'black' } });
+    expect(price(updated.state)?.sale_unit_price).toBe(11250);
+    expect(price(updated.state)?.amount).toBe(264375);
+    const save = buildV25SavePayload(updated.state).slots[0];
+    expect(save).toMatchObject({ option_id: roof.id, quantity: '23.5', variant_choice_ids: ['black'],
+      price_mode: 'auto', row_order: 1, work_item: '2. 屋根工事' });
+    expect(validateV25EditorState(updated.state, (id) => get(id)?.section)).toBeNull();
+  });
+
+  it('同一販売単位の別屋根材へ入替えても23.5㎡を保持し、変更前後の金額を数量分で計算する', () => {
+    const before = editor(row(roof.id, '23.5'));
+    const updated = change(before, roofOther, { color: 'white' });
+    expect(updated.issue).toBeNull();
+    expect(updated.patch).not.toHaveProperty('quantity');
+    expect(updated.state.slots[0].quantity).toBe('23.5');
+    expect(updated.state.slots[0].baseline_key).toBe('saved-1');
+    expect(price(before)?.amount).toBe(246750);
+    expect(price(updated.state)?.sale_unit_price).toBe(12000);
+    expect(price(updated.state)?.amount).toBe(282000);
+    const persisted = JSON.parse(JSON.stringify(buildV25SavePayload(updated.state)));
+    expect(persisted.slots[0]).toMatchObject({ option_id: roofOther.id, quantity: '23.5', price_mode: 'auto' });
+    // このテストはUI→RPC入力の再シリアライズ検査。実DB保存/再読込はDB Rehearsal側で別途行う。
+    expect(v25SlotRuleIssues(updated.state.slots, get, getInCategory)).toEqual([]);
+  });
+
+  it('単位の不一致・欠損・不正数量なら元の行と金額を変更せず保留する', () => {
+    const before = editor(row(roof.id, '23.5'));
+    const initialAmount = price(before)?.amount;
+    for (const candidate of [
+      { ...roofOther, priceUnit: '式' },
+      { ...roofOther, priceUnit: null },
+      { ...roofOther, priceUnit: '  ' },
+    ]) {
+      const invalid = change(before, candidate, { color: 'black' });
+      expect(invalid.issue).toContain('販売単位');
+      expect(invalid.state).toBe(before);
+      expect(price(invalid.state)?.amount).toBe(initialAmount);
+      expect(buildV25SavePayload(invalid.state).slots[0].quantity).toBe('23.5');
+    }
+    expect(v25ProductReplacementIssue(before.slots[0], { ...roof, priceUnit: null }, roofOther,
+      before.slots, get, getInCategory)).toContain('販売単位');
+    const invalidQuantity = editor(row(roof.id, 'abc'));
+    expect(change(invalidQuantity, roofOther, {}).issue).toContain('数量');
+  });
+
+  it('外壁4面は維持し、別の同単位外壁へ替えても数量4・単価×4・位置無しの規則を守る', () => {
+    const before = editor(row(wall.id, '4', { work_item: '3. 外壁工事' }));
+    expect(standardSlotQuantity('exterior-wall')).toBe(4);
+    expect(standardSlotQuantity('roof')).toBe(1);
+    const recolor = change(before, wall, { color: 'black' });
+    expect(recolor.state.slots[0].quantity).toBe('4');
+    const next = change(before, wallOther, { color: 'white' });
+    expect(next.issue).toBeNull();
+    expect(next.state.slots[0].quantity).toBe('4');
+    expect(price(before)?.amount).toBe(4000);
+    expect(price(next.state)?.amount).toBe(4800);
+    expect(buildV25SavePayload(next.state).slots[0].quantity).toBe('4');
+    expect(v25SlotRuleIssues(next.state.slots, get, getInCategory)).toEqual([]);
+    const mismatched = change(before, { ...wallOther, priceUnit: '㎡' }, {});
+    expect(mismatched.issue).toContain('販売単位');
+    expect(mismatched.state).toBe(before);
+  });
+
+  it('別商品でも手入力売価の既存設定と位置情報を勝手に変更しない', () => {
+    const before = editor(row(roof.id, '23.5', { price_mode: 'manual', manual_unit_price: '9000',
+      selectable_option_ids: [], work_item: '屋根工事' }));
+    const after = change(before, roofOther, {});
+    expect(after.issue).toBeNull();
+    expect(after.patch).not.toHaveProperty('price_mode');
+    expect(after.patch).not.toHaveProperty('quantity');
+    expect(after.state.slots[0]).toMatchObject({
+      price_mode: 'manual', manual_unit_price: '9000', quantity: '23.5',
+      baseline_key: 'saved-1', row_order: 2, work_item: '屋根工事',
+    });
+    expect(price(before)?.amount).toBe(211500);
+    expect(price(after.state)?.amount).toBe(211500);
+  });
+
+  it('別途工事の商品入替では既存のmanual/porと手入力売価・数量・混在行順を保持する', () => {
+    for (const mode of ['manual', 'por'] as const) {
+      const before = editor(row(sitework.id, '1', {
+        price_mode: mode, manual_unit_price: mode === 'manual' ? '180000' : '',
+        row_order: 2, work_item: '別途工事', slot_label: '',
+      }));
+      before.lines = [{
+        key: 'line-1', line_key: 'saved-line', section_code: 'sitework',
+        group_label: '追加工事', name: '追加費用', quantity: '1', unit: '式',
+        price_mode: 'manual', unit_price: '25000', remark: '', review_required: false, row_order: 1,
+      }];
+      const originalPayload = buildV25SavePayload(before);
+      expect(validateV25EditorState(before, (id) => get(id)?.section)).toBeNull();
+      const beforeSitework = calculateV25Workbench(rule, taxRule, before, [], costData,
+        (id) => get(id)?.section).result?.sections.find((section) => section.code === 'sitework');
+      if (mode === 'manual') expect(beforeSitework?.lines[0].amount).toBe(180000);
+
+      const changed = change(before, siteworkOther, { color: 'black' });
+      expect(changed.issue).toBeNull();
+      expect(changed.patch).not.toHaveProperty('price_mode');
+      expect(changed.patch).not.toHaveProperty('manual_unit_price');
+      expect(changed.patch).not.toHaveProperty('quantity');
+      expect(changed.state.slots[0]).toMatchObject({
+        option_id: siteworkOther.id, price_mode: mode,
+        manual_unit_price: before.slots[0].manual_unit_price,
+        quantity: '1', row_order: 2, work_item: '別途工事', baseline_key: 'saved-1',
+      });
+      expect(changed.state.lines).toEqual(before.lines);
+      const afterSitework = calculateV25Workbench(rule, taxRule, changed.state, [], costData,
+        (id) => get(id)?.section).result?.sections.find((section) => section.code === 'sitework');
+      expect(afterSitework?.lines).toEqual(beforeSitework?.lines);
+      expect(afterSitework?.subtotal).toBe(beforeSitework?.subtotal);
+      expect(afterSitework?.has_por).toBe(beforeSitework?.has_por);
+      expect(validateV25EditorState(changed.state, (id) => get(id)?.section)).toBeNull();
+      const payload = buildV25SavePayload(changed.state);
+      expect(payload.slots[0]).toMatchObject({
+        option_id: siteworkOther.id, price_mode: mode, quantity: '1', row_order: 2,
+        manual_unit_price: mode === 'manual' ? 180000 : null,
+      });
+      expect(payload.lines).toEqual(originalPayload.lines);
+      expect(payload.lines[0].row_order).toBe(1);
+      expect(buildV25SavePayload(JSON.parse(JSON.stringify(changed.state)))).toEqual(payload);
+    }
+    const unchanged = change(editor(row(sitework.id, '1', {
+      price_mode: 'manual', manual_unit_price: '180000',
+    })), sitework, { color: 'black' });
+    expect(unchanged.patch).toEqual({ variant_choices: { color: 'black' } });
+    expect(unchanged.state.slots[0].price_mode).toBe('manual');
+  });
+
+  it('同一商品は販売単位が未登録でも数量を変更しない（旧データの仕様変更を妨げない）', () => {
+    const previous = { ...roof, priceUnit: null };
+    const existing = editor(row(roof.id, '23.5'));
+    expect(v25ProductReplacementIssue(existing.slots[0], previous, previous,
+      existing.slots, get, getInCategory)).toBeNull();
+    expect(v25ProductChangePatch(existing.slots[0], previous, { color: 'black' }, get))
+      .toEqual({ variant_choices: { color: 'black' } });
+  });
+
+  it('親画面の全確定経路が安全判定を呼び、既存行は数量を上書きしない', () => {
+    const source = read('components/admin/standard-estimate-v25-workbench.tsx');
+    expect(source).toContain('v25ProductReplacementIssue(');
+    expect(source).toContain('v25ProductChangePatch(target, candidate, choices, (id) => candidateById.get(id))');
+    expect(source).toContain('if (issue) {');
+    expect(source).toContain('return; // 選択ポップアップを保持');
+    expect(source).toContain('quantity: initialQuantity,');
+    expect(source).not.toContain('quantity: String(standardSlotQuantity(candidate.categoryCode))');
+    const positionSource = read('lib/domain/standard-estimate-v25-position-ui.ts');
+    expect(positionSource).toContain('v25ProductReplacementIssue(');
   });
 });

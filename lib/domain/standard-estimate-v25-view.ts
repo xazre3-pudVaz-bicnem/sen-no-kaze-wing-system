@@ -4,6 +4,7 @@
  * ここは画面の状態を RPC の形に変え、DB と同じ入力の決まりを先に案内するだけ（金額は計算しない）。
  */
 import type { StandardLineSectionCode } from './standard-estimate-view';
+import { v25HasRowOrder, v25RowOrderRefs, v25WithRowOrder } from './standard-estimate-v25-row-persistence';
 
 export type V25SlotPriceMode = 'auto' | 'manual' | 'por';
 export type V25LinePriceMode = 'manual' | 'por';
@@ -55,6 +56,13 @@ export interface V25SlotRow {
   slot_label: string;
   /** 位置の枠で、お客様が標準の商品の代わりに選べる商品（標準の商品は常に選べるので入れない）。空なら標準の商品だけ */
   selectable_option_ids: string[];
+  /**
+   * 版の中で商品の行と手入力明細を通して並べる順（1 始まり。DB の display_order）。保存前の下書き・新しい行は null・省略
+   * （2026-11-16 の先方の依頼。並びを保存する画面は、保存の前に表示の順で全行に付け直す。1 行でも無ければ並び順は保存しない）
+   */
+  row_order?: number | null;
+  /** 工事項目（ラベル。DB の work_item）。空は未設定。画面がカテゴリーから自動で入れ、変えられる（2026-11-16 の先方の依頼） */
+  work_item?: string;
 }
 
 /** 位置・用途の選択枠の識別子の形（DB の check と同じ） */
@@ -73,6 +81,38 @@ export interface V25LineRow {
   unit_price: string;
   remark: string;
   review_required: boolean;
+  /** 版の中で商品の行と手入力明細を通して並べる順（1 始まり。DB の display_order）。保存前の下書き・新しい行は null・省略 */
+  row_order?: number | null;
+  /**
+   * 原価単価（税別・円。入力中の文字列。DB の cost_unit_price）。空・省略は原価未設定（0 円と区別する。0 円なら "0"）。
+   * 売価とは別に入力し、売価は変えない。別途見積の行は保存しない（2026-11-20 の先方の依頼「手入力明細の原価入力復活」）
+   */
+  cost_unit_price?: string;
+}
+
+/** 手入力明細の原価単価の上限（DB の save_standard_estimate_v25_draft・見積の明細の単価の上限と同じ 1 億円） */
+export const V25_LINE_COST_MAX = 100_000_000;
+/** 原価金額（数量 × 原価単価）の上限（DB の integer の上限） */
+const V25_LINE_AMOUNT_MAX = 2_147_483_647n;
+
+/** 手入力明細の原価単価の入力を数にする（空・省略は原価未設定の null。0 円は 0。整数でなければ NaN にして保存の確かめで止める） */
+export function v25LineCostValue(input: string | undefined): number | null {
+  const value = (input ?? '').trim();
+  if (!value) return null;
+  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
+}
+
+/**
+ * 原価金額 = trunc(数量 × 原価単価)（DB と同じ。数量は小数 4 桁まで。浮動小数点を使わない）。
+ * 原価未設定・数量や原価単価の形が正しくない・整数の上限を超えるときは null
+ */
+export function v25LineCostAmount(quantity: string, costUnitPrice: string | undefined): number | null {
+  const cost = v25LineCostValue(costUnitPrice);
+  const count = quantity.trim();
+  if (cost === null || !Number.isSafeInteger(cost) || cost < 0 || cost > V25_LINE_COST_MAX || !/^\d+(?:\.\d{1,4})?$/.test(count)) return null;
+  const [whole, fraction = ''] = count.split('.');
+  const amount = (BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0'))) * BigInt(cost) / 10000n;
+  return amount > V25_LINE_AMOUNT_MAX ? null : Number(amount);
 }
 
 export interface V25EditorState {
@@ -110,6 +150,8 @@ export interface V25Preview {
   rules_current: boolean;
   /** v2.5 以前から引き継いだ明細のうち「要見直し」が残っている行数（1 行でもあれば公開できない） */
   review_required_lines?: number;
+  /** 原価単価が未入力の手入力明細（別途見積でない行。1 行でもあれば公開できない。20261110150000 より前の DB には無い） */
+  missing_line_costs?: { line_key: string; name: string }[];
   publishable: boolean;
   calc_error: string | null;
   incomplete: { option_id: string; name: string; reason: 'missing_standard_cost' | 'missing_variant_cost' }[];
@@ -196,12 +238,26 @@ export function validateV25EditorState(
     if (line.price_mode === 'manual' && !NON_NEGATIVE_INTEGER.test(line.unit_price.trim())) {
       return `${label}の売価単価（税別・経費別、0 円以上の整数）を入力してください`;
     }
+    // 原価単価（任意。空は原価未設定。公開には別途見積でない行の原価単価が要る）
+    if (line.price_mode === 'manual') {
+      const cost = v25LineCostValue(line.cost_unit_price);
+      if (cost !== null && (!Number.isSafeInteger(cost) || cost > V25_LINE_COST_MAX)) {
+        return `${label}の原価単価（税別）は 0〜100,000,000 円の整数で入力してください（未定なら空欄）`;
+      }
+      if (cost !== null && v25LineCostAmount(line.quantity, line.cost_unit_price) === null) {
+        return `${label}の原価金額（数量 × 原価単価）が大きすぎます`;
+      }
+    }
   }
   return null;
 }
 
 /** 画面の状態を save_standard_estimate_v25_draft の p_payload にする（選択肢は選択項目の順に並べる） */
-export function buildV25SavePayload(state: V25EditorState) {
+export function buildV25SavePayload(input: V25EditorState) {
+  // 並び順（DB の display_order）：画面が全部の行に付けたときだけ、その順で 1 から詰め直して送る。
+  // 1 行でも無ければ送らない（今までどおり「商品→手入力」の順で保存。古い番号で並べ替え・追加を打ち消さないため）
+  const ordered = v25HasRowOrder(input);
+  const state = ordered ? v25WithRowOrder(input, v25RowOrderRefs(input)) : input;
   return {
     rates: {
       sales_fee_rate: state.sales_fee_rate.trim(),
@@ -223,6 +279,9 @@ export function buildV25SavePayload(state: V25EditorState) {
       selectable_option_ids: slot.slot_code.trim()
         ? [...new Set(slot.selectable_option_ids.filter((id) => id && id !== slot.option_id))]
         : [],
+      // 並び順と工事項目（2026-11-16 の先方の依頼）
+      row_order: ordered ? slot.row_order ?? null : null,
+      work_item: slot.work_item?.trim() || null,
     })),
     lines: state.lines.map((line) => ({
       line_key: line.line_key,
@@ -233,8 +292,15 @@ export function buildV25SavePayload(state: V25EditorState) {
       unit: line.unit.trim() || null,
       price_mode: line.price_mode,
       unit_price: line.price_mode === 'manual' ? Number(line.unit_price.trim()) : null,
+      // 原価単価（空は原価未設定の null。0 円は 0）。別途見積の行は原価を持たない。
+      // 原価を知らない行（cost_unit_price が無い。原価の列が無い DB から読んだ行・原価に触れていない新しい行）は項目を送らない。
+      // 項目が無ければ DB は同じ line_key の今の原価を残す（原価を読めなかった画面の保存で、写した原価を消さないため）
+      ...(line.price_mode === 'por'
+        ? { cost_unit_price: null }
+        : line.cost_unit_price === undefined ? {} : { cost_unit_price: v25LineCostValue(line.cost_unit_price) }),
       remark: line.remark.trim() || null,
       review_required: line.review_required,
+      row_order: ordered ? line.row_order ?? null : null,
     })),
   };
 }
@@ -247,6 +313,11 @@ export function v25PublishBlockers(preview: V25Preview | null, dirty: boolean): 
   if (!preview.rules_current) blockers.push('計算ルール・税ルールが更新されています。最新原価を取り込んでください');
   if ((preview.review_required_lines ?? 0) > 0) {
     blockers.push(`「要見直し」の明細が ${preview.review_required_lines} 行残っています。商品台帳の商品に置き換えるか、金額を確認して見直し済みにしてください`);
+  }
+  const missingCosts = preview.missing_line_costs ?? [];
+  if (missingCosts.length > 0) {
+    const names = missingCosts.slice(0, 5).map((line) => `「${line.name}」`).join('・');
+    blockers.push(`原価単価が未入力の明細が ${missingCosts.length} 行あります（${names}${missingCosts.length > 5 ? ' ほか' : ''}）。原価単価（税別。0 円なら 0）を入力して保存してください`);
   }
   for (const item of preview.incomplete) {
     blockers.push(

@@ -306,7 +306,7 @@ describe('シミュレーターと連携する選択枠の数量（2026-10-29 �
     ).toEqual([]);
   });
 
-  it('外壁が 4 でない・ほかが 1 でない・1 つだけ選べるカテゴリーに 2 枠、を挙げる（選べない商品の行は別の案内）', () => {
+  it('外壁が 4 でない・枠の数量を掛けない枠が 1 でない（#647）・1 つだけ選べるカテゴリーに 2 枠、を挙げる（選べない商品の行は別の案内）', () => {
     const issues = v25SlotRuleIssues(
       [
         { option_id: 'wall', quantity: '1' },
@@ -318,14 +318,15 @@ describe('シミュレーターと連携する選択枠の数量（2026-10-29 �
     );
     expect(issues).toEqual([
       '外壁の選択枠は数量 4（面）にしてください：「外壁A」',
-      '外壁以外の選択枠は数量 1 にしてください（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にします）：「サッシA」',
+      '外壁以外の選択枠の数量を 1 以外にできるのは、1 つだけ選べるカテゴリーにその選択枠だけがあるときです（位置・用途の選択枠とほかは数量 1 にし、個別に選ばない数量は明細にします）：「サッシA」',
       '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「sash」（位置ごとに分けるときは、位置・用途の選択枠にします）',
     ]);
   });
 
   it('編集画面は外壁の選択枠を数量 4 で足し、決まりに合わなければ公開できない。DB も公開とスイッチで止める', () => {
     const workbench = read('components/admin/standard-estimate-v25-workbench.tsx');
-    expect(workbench).toContain('const quantity = String(standardSlotQuantity(candidate.categoryCode));');
+    expect(workbench).toContain('const initialQuantity = String(standardSlotQuantity(candidate.categoryCode));');
+    expect(workbench).toContain('quantity: initialQuantity,');
     expect(workbench).toContain("...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),");
     const migration = read('supabase/migrations/20261029100000_simulator_v25_pricing.sql');
     expect(migration).toContain('create function public.standard_estimate_v25_slot_rule_issues(p_revision_id uuid)');

@@ -1,0 +1,74 @@
+name: PR 683 Safe V25 Browser Acceptance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/admin/standard-estimate-v25-selector.tsx'
+      - 'components/admin/standard-estimate-workspace-layout.tsx'
+      - 'app/admin/estimate-templates/page.tsx'
+      - 'e2e/pr683-v25-visual-browser.spec.ts'
+      - 'e2e/fixtures/pr683-v25-page.tsx.fixture'
+      - '.github/workflows/pr683-v25-browser-acceptance.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr683-v25-browser-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WING_LOCAL_MODE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: ''
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      NEXT_PUBLIC_SITE_URL: ''
+    steps:
+      - name: Checkout PR and current main combination
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install test-only Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Confirm no external database or browser endpoint
+        run: |
+          test "$WING_LOCAL_MODE" = '1'
+          test -z "$NEXT_PUBLIC_SUPABASE_URL"
+          test -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -z "$SUPABASE_SERVICE_ROLE_KEY"
+          test -z "${BASE_URL:-}"
+
+      - name: Create temporary visual fixture route (runner only)
+        run: |
+          mkdir -p app/pr683-local-visual
+          cp e2e/fixtures/pr683-v25-page.tsx.fixture app/pr683-local-visual/page.tsx
+          test -f app/pr683-local-visual/page.tsx
+
+      - name: Verify actual UI components with desktop and mobile Chromium
+        run: npx playwright test e2e/pr683-v25-visual-browser.spec.ts --project=desktop
+
+      - name: Upload PC and smartphone screenshots / failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr683-v25-desktop-mobile-screenshots
+          path: |
+            e2e/artifacts/pr683-*.png
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

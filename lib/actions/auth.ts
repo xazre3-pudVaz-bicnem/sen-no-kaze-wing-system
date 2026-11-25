@@ -7,6 +7,7 @@ import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 import { resetRequestSchema, signInSchema, signUpSchema, updatePasswordSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
 import { safeNextPath } from '@/lib/utils';
 import { PASSWORD_RESET_STALE_PAGE, passwordResetCanonicalUrl, passwordUpdateErrorMessage, requestHost } from '@/lib/auth/password-reset';
+import { CONFIRMATION_RESEND_RATE_LIMITED, EMAIL_NOT_CONFIRMED, isEmailNotConfirmed, isEmailRateLimited } from '@/lib/auth/email-confirm';
 import { getSiteUrl } from '@/lib/site';
 
 export interface AuthFormState {
@@ -104,12 +105,37 @@ export async function signInAction(_prev: AuthFormState, formData: FormData): Pr
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
-    const msg = /email not confirmed/i.test(error.message)
-      ? 'メールアドレスの確認が完了していません。受信した確認メールのリンクを開いてください。'
-      : 'メールアドレスまたはパスワードが正しくありません。';
-    return { ok: false, error: msg, values: valuesOf(formData, ['email']) };
+    // 確認が済んでいないときは、確認メールを送り直すボタンを出す（パスワードが合っているときだけ、この理由になる）
+    if (isEmailNotConfirmed(error)) return { ok: false, error: EMAIL_NOT_CONFIRMED, needsEmailConfirm: true, values: valuesOf(formData, ['email']) };
+    return { ok: false, error: 'メールアドレスまたはパスワードが正しくありません。', values: valuesOf(formData, ['email']) };
   }
   redirect(await landingPath(next));
+}
+
+/**
+ * 会員登録の確認メールを送り直す（登録の直後の画面と、確認が済んでいないアカウントでのログインの画面から）。
+ * そのアドレスが登録済みか・確認済みかは、応答で区別しない（アカウントの列挙を防ぐ）。続けて送ったときだけ、待つよう案内する
+ */
+export async function resendConfirmationAction(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const parsed = resetRequestSchema.safeParse({ email: formData.get('email') });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  const next = safeNextPath(String(formData.get('next') ?? ''), '/mypage');
+  // ローカル検証モードは確認メールを使わない（登録したらそのままログインする）
+  if (isLocalMode()) return { ok: true, sent: true };
+  if (!hasSupabaseEnv()) return notConfigured();
+  const supabase = await createClient();
+  const origin = await originUrl();
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: parsed.data.email,
+    options: { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` },
+  });
+  if (error) {
+    // 理由のコードだけをサーバーの記録に残す（メールアドレスは残さない）
+    console.error('[signup-confirm] resend failed', { code: error.code ?? null, status: error.status ?? null });
+    if (isEmailRateLimited(error)) return { ok: false, error: CONFIRMATION_RESEND_RATE_LIMITED };
+  }
+  return { ok: true, sent: true };
 }
 
 export async function signOutAction(): Promise<void> {

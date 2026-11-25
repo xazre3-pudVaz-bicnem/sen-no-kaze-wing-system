@@ -22,7 +22,17 @@ minimum_password_length = 8
 
 [auth.email]
 enable_signup = true
-# MVP: 確認メール（SMTP 未設定）を待たずにログインできるようにする
+# MVP: 確認メール（SMTP 未設定）を待たずにログインできるようにする。
+# 2026-11-25：本部先行の運用開始の時に true にする（本番の設定を変えるのと同じ時に、ここも変える。docs/mail-setup.md）
 enable_confirmations = false
 double_confirm_changes = true
 secure_password_change = false
+
+# 認証メールの日本語の文面（2026-11-25）。本番への反映は、SMTP の設定と一緒に本番の設定変更として行う（docs/mail-setup.md）
+[auth.email.template.confirmation]
+subject = "【千の風プロジェクト】メールアドレスの確認"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "【千の風プロジェクト】パスワードの再設定"
+content_path = "./supabase/templates/recovery.html"

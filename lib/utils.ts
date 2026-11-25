@@ -37,9 +37,14 @@ export function slugify(input: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** open redirect 防止: 同一オリジンのパスのみ許可 */
+/**
+ * open redirect 防止: 同一オリジンのパスのみ許可。
+ * バックスラッシュと制御文字（タブ・改行など）を含むものも許可しない。URL として読むときに / へ読み替えられたり
+ * 取り除かれたりして、// で始まる別のサイトの URL になることがあるため
+ */
 export function safeNextPath(next: string | null | undefined, fallback = '/mypage'): string {
   if (!next) return fallback;
   if (!next.startsWith('/') || next.startsWith('//')) return fallback;
+  if (/[\\\u0000-\u001f\u007f]/.test(next)) return fallback;
   return next;
 }

@@ -60,6 +60,7 @@ import {
   type OptionMediaExpected,
 } from '@/lib/domain/option-media-changes';
 import { INITIAL_WINDOW_TYPES } from '@/lib/seed/window-types';
+import { MANUFACTURER_PRODUCT_URL_ERROR, isValidManufacturerProductUrl } from '@/lib/domain/manufacturer-product-url';
 import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
   isCurrentIssuedQuote,
@@ -2279,6 +2280,11 @@ export class LocalStore implements DataStore {
         if (!windowType || (rest.window_type_code !== current && windowType.status !== 'active')) {
           throw new StoreError('VALIDATION', '使用中の窓タイプを選んでください');
         }
+      }
+      // メーカー公式商品ページURL（DB の options_manufacturer_product_url_https_check と同じ）
+      const productUrl = rest.manufacturer_product_url;
+      if (productUrl != null && !isValidManufacturerProductUrl(productUrl)) {
+        throw new StoreError('VALIDATION', MANUFACTURER_PRODUCT_URL_ERROR);
       }
       if (id) {
         const o = db.options.find((x) => x.id === id);

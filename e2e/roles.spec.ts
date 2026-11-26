@@ -29,7 +29,7 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     const ubHref = (await ubLink.getAttribute('href'))!;
     await ubLink.click();
     await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
-    await expect(page.getByRole('button', { name: '変更内容を確認' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '変更内容を確認', exact: true })).toBeVisible();
     await logout(page);
 
     // --- 代理店: 商品は見られるが、登録も編集もできない ---
@@ -51,7 +51,7 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     // 台帳の商品は閲覧専用（編集フォームを出さない）
     await page.goto(ubHref);
     await expect(page.getByText('この商品は閲覧専用です')).toBeVisible();
-    await expect(page.getByRole('button', { name: '変更内容を確認' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '変更内容を確認', exact: true })).toHaveCount(0);
     await logout(page);
   });
 

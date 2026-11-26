@@ -75,13 +75,13 @@ test.describe('PR #632: 商品登録と編集の完了後の遷移（ローカ�
     const nameInput = page.locator('#registered-name');
     const oldName = await nameInput.inputValue();
     await nameInput.fill('');
-    await page.getByRole('button', { name: '変更内容を確認' }).click();
+    await page.getByRole('button', { name: '変更内容を確認', exact: true }).click();
     await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
     await expect(page.getByText('商品名を入力してください。')).toBeVisible();
 
     await nameInput.fill(oldName + ' PR632');
     await page.locator('#registered-list-price').fill('-1'); // Zod validation must reject on save.
-    await page.getByRole('button', { name: '変更内容を確認' }).click();
+    await page.getByRole('button', { name: '変更内容を確認', exact: true }).click();
     await expect(page.getByTestId('registered-option-change-review')).toBeVisible();
     await page.getByRole('button', { name: 'この変更を反映' }).click();
     await expect(page).toHaveURL(/\/admin\/options\/[0-9a-f-]{36}/);
@@ -89,7 +89,7 @@ test.describe('PR #632: 商品登録と編集の完了後の遷移（ローカ�
 
     await page.getByRole('button', { name: '編集に戻る' }).first().click();
     await page.locator('#registered-list-price').fill('100000');
-    await page.getByRole('button', { name: '変更内容を確認' }).click();
+    await page.getByRole('button', { name: '変更内容を確認', exact: true }).click();
     await page.getByRole('button', { name: 'この変更を反映' }).click();
     await page.waitForURL((url) => url.pathname === '/admin/ledger' && url.searchParams.get('updated_option') === EXISTING_PRODUCT_ID);
     await expect(page.getByText('商品を更新しました。')).toBeVisible();

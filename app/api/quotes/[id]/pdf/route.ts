@@ -22,17 +22,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const fileName = `wing-quote-${detail.quote.quote_no}.pdf`;
   let bytes: Uint8Array;
-  const regenerate = req.nextUrl.searchParams.get('regenerate') === '1' && user.role === 'admin';
-  const existing = regenerate ? null : await store.getQuoteDocumentFile(id);
+  // Once a PDF has been issued, a GET must never silently replace its bytes.
+  // To change an issued estimate, issue a new Quote Revision instead.
+  if (req.nextUrl.searchParams.get('regenerate') === '1') {
+    return NextResponse.json({ error: '発行済みPDFの再生成はできません。見積Revisionを作成してください' }, { status: 409 });
+  }
+  const existing = await store.getQuoteDocumentFile(id);
   if (existing) {
     bytes = existing.bytes;
   } else {
     bytes = await renderQuotePdf(detail.quote, detail.items);
-    try {
-      await store.saveQuoteDocument(id, bytes, fileName);
-    } catch (e) {
-      console.warn('[wing] quote document save failed', e);
-    }
+    // Do not return bytes if immutable storage/metadata creation failed.
+    await store.saveQuoteDocument(id, bytes, fileName);
   }
   const download = req.nextUrl.searchParams.get('download') === '1';
   return new NextResponse(Buffer.from(bytes), {

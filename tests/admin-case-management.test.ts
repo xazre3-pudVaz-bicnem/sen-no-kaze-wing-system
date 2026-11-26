@@ -383,7 +383,8 @@ describe('Admin case management UI', () => {
     expect(quoteRevisionDraftForm).toContain('第{revision + 1}版の見積下書き');
     expect(quoteRevisionDraftForm).toContain('label="見積を編集"');
     expect(workspace).toContain('data-testid="admin-pdf-link"');
-    expect(workspace).toContain('PDF再生成');
+    expect(workspace).not.toContain('PDF再生成');
+    expect(workspace).not.toContain('pdf?regenerate=1');
     expect(workspace).not.toContain('この見積のPDF・画像');
     expect(workspace).toContain('金額はこの見積版の発行時点で保存された内容です。');
     expect(workspace).not.toContain('金額は発行時点のスナップショットです。');

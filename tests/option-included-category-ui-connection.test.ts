@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  decideIncludedCategoryRefresh, includedCategoryRpcError, sameCategoryIdSet, validateIncludedCategoryContract,
+  decideIncludedCategoryRefresh, includedCategoryStoreErrorCode, sameCategoryIdSet, validateIncludedCategoryContract,
 } from '@/lib/domain/included-equipment-action-contract';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -68,34 +68,52 @@ describe('設備包含の保存契約（独立RPC／期待集合）', () => {
     expect(validateIncludedCategoryContract(input({ expectedIds: ['invalid'] }))).toEqual({ ok: false, code: 'INVALID' });
   });
 
-  it('RPCの競合・ロック超過・権限エラーを分離し、勝手に再実行しない', () => {
-    expect(includedCategoryRpcError({ code: 'P0001', message: 'CONFLICT: updated' })).toBe('CONFLICT');
-    expect(includedCategoryRpcError({ code: '55P03', message: 'canceling due to lock timeout' })).toBe('TIMEOUT');
-    expect(includedCategoryRpcError({ code: '42501', message: 'forbidden' })).toBe('FORBIDDEN');
-    expect(includedCategoryRpcError({ code: 'P0001', message: 'VALIDATION: invalid' })).toBe('FAILED');
+  it('保存の競合・ロック超過・権限エラーを分離し、勝手に再実行しない', () => {
+    expect(includedCategoryStoreErrorCode('CONFLICT')).toBe('CONFLICT');
+    expect(includedCategoryStoreErrorCode('LOCKED')).toBe('TIMEOUT');
+    expect(includedCategoryStoreErrorCode('FORBIDDEN')).toBe('FORBIDDEN');
+    expect(includedCategoryStoreErrorCode('UNAUTHENTICATED')).toBe('FORBIDDEN');
+    expect(includedCategoryStoreErrorCode('VALIDATION')).toBe('FAILED');
+    expect(includedCategoryStoreErrorCode('NOT_FOUND')).toBe('FAILED');
+    expect(includedCategoryStoreErrorCode('INTERNAL')).toBe('FAILED');
   });
 });
 
 describe('設備包含のUI／Action接続の安全境界', () => {
-  it('書込みはユーザーセッションRPCのみ。admin直書き・service_roleを使わない', () => {
+  it('書込みは DataStore の保存だけ（本番はユーザーセッションの RPC）。admin直書き・service_roleを使わない', () => {
     const action = source('lib/actions/option-included-categories.ts');
     expect(action).toContain("actor.role !== 'admin'");
-    expect(action).toContain("supabase.rpc('set_option_included_categories'");
-    expect(action).toContain('p_expected_category_ids: input.expectedCategoryIds');
+    expect(action).toContain('store.setOptionIncludedCategories(actor, option.id, input.expectedCategoryIds, contract.ids)');
     expect(action).toContain('validateIncludedCategoryContract');
     expect(action).not.toContain('createAdminClient');
+    expect(action).not.toContain('createClient');
+    expect(action).not.toContain('.rpc(');
+    const supabaseStore = source('lib/data/supabase-store.ts');
+    const readImpl = supabaseStore.slice(
+      supabaseStore.indexOf('async listOptionIncludedCategoryIds('),
+      supabaseStore.indexOf('async setOptionIncludedCategories(')
+    );
+    const saveImpl = supabaseStore.slice(
+      supabaseStore.indexOf('async setOptionIncludedCategories('),
+      supabaseStore.indexOf('async upsertPreviewRule(')
+    );
+    expect(readImpl).toContain('await this.db()');
+    expect(readImpl).not.toContain('createAdminClient');
+    expect(saveImpl).toContain("db.rpc('set_option_included_categories'");
+    expect(saveImpl).toContain('p_expected_category_ids: expectedIds');
+    expect(saveImpl).not.toContain('createAdminClient');
     expect(action).not.toMatch(/\.insert\(|\.delete\(/);
   });
 
   it('STEP2ではDBの保存済み値を再読込し、読み込めないときは公開しない', () => {
     const page = source('app/admin/options/[id]/page.tsx');
     const publish = source('lib/actions/admin.ts');
-    expect(page).toContain('readOptionIncludedCategories(id)');
+    expect(page).toContain('readOptionIncludedCategories(actor, id)');
     expect(page).toContain('included-equipment-step2-saved');
     expect(page).toContain('canEditThisOption && category && inclusionReady');
     expect(page).toContain('blocked={!inclusionReady}');
     expect(source('components/admin/option-registration-save-boundary.tsx')).toContain('disabled={saving || blocked}');
-    expect(publish).toContain('await readOptionIncludedCategories(option.id)');
+    expect(publish).toContain('await readOptionIncludedCategories(actor, option.id)');
     expect(page).toContain('name="included_categories_expected_ids"');
     expect(publish).toContain('included_categories_expected_ids');
     expect(publish).toContain('sameCategoryIdSet(expectedIds, inclusion.ids)');

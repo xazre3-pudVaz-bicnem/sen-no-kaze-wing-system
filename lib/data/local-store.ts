@@ -73,6 +73,7 @@ import { allocateLocalProductNo, filesDir, loadDb, saveDb, type LocalDb } from '
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 import {
   StoreError,
+  includedCategoryIdsOf,
   type ContactInput,
   type CategoryInput,
   type WindowTypeInput,
@@ -2120,6 +2121,19 @@ export class LocalStore implements DataStore {
       if (id) {
         const c = db.categories.find((x) => x.id === id);
         if (!c) throw new StoreError('NOT_FOUND', 'カテゴリーが見つかりません');
+        // DB の option_categories_inclusion_master_update_guard と同じ：設備包含（#628）で使っているカテゴリーは、
+        // コード・公開状態を変えない（含まれる設備としても、含む浴室の商品のカテゴリーとしても）
+        const meaningChanged =
+          (rest.code !== undefined && rest.code !== c.code) || (rest.status !== undefined && rest.status !== c.status);
+        if (meaningChanged) {
+          const inclusions = db.optionIncludedCategories ?? [];
+          const referenced =
+            inclusions.some((row) => row.included_category_id === c.id) ||
+            inclusions.some((row) => db.options.find((option) => option.id === row.option_id)?.category_id === c.id);
+          if (referenced) {
+            throw new StoreError('VALIDATION', '設備包含で参照中のカテゴリーはコード・公開状態を変更できません。包含設定を先に解除してください');
+          }
+        }
         Object.assign(c, rest);
         return c;
       }
@@ -2190,6 +2204,14 @@ export class LocalStore implements DataStore {
         const { import_operation: _operation, ...optionInput } = input;
         if (existing) {
           const { id: _id, product_no: _productNo, ...patch } = optionInput;
+          // DB の options_inclusion_category_change_guard と同じ：含まれる設備（#628）が残っている商品はカテゴリーを変えない
+          if (
+            patch.category_id !== undefined &&
+            patch.category_id !== existing.category_id &&
+            (db.optionIncludedCategories ?? []).some((row) => row.option_id === existing.id)
+          ) {
+            throw new StoreError('VALIDATION', '包含設定が残っている商品はカテゴリーを変更できません。包含設定を先に解除してください');
+          }
           Object.assign(existing, patch, { updated_at: nowIso() });
         } else {
           if (!optionInput.id) throw new StoreError('VALIDATION', `商品「${optionInput.code}」の ID がありません`);
@@ -2285,6 +2307,14 @@ export class LocalStore implements DataStore {
           this.pushAudit(db, null, { action: 'create', entity: 'option', entity_id: created.id, summary: `商品を追加：${created.name}` });
           return created;
         }
+        // DB の options_inclusion_category_change_guard と同じ：含まれる設備（#628）が残っている商品はカテゴリーを変えない
+        if (
+          rest.category_id !== undefined &&
+          rest.category_id !== o.category_id &&
+          (db.optionIncludedCategories ?? []).some((row) => row.option_id === o.id)
+        ) {
+          throw new StoreError('VALIDATION', '包含設定が残っている商品はカテゴリーを変更できません。包含設定を先に解除してください');
+        }
         const before = { price: o.price, status: o.status };
         Object.assign(o, rest, { updated_at: nowIso() });
         if (before.price !== o.price) {
@@ -2326,6 +2356,10 @@ export class LocalStore implements DataStore {
       db.optionImages = db.optionImages.filter((image) => image.option_id !== id);
       db.dependencies = db.dependencies.filter((d) => d.option_id !== id && d.requires_option_id !== id);
       db.conflicts = db.conflicts.filter((c) => c.option_id !== id && c.conflicts_with_option_id !== id);
+      // DB の option_included_categories は商品の削除で一緒に消える（on delete cascade）
+      if (db.optionIncludedCategories) {
+        db.optionIncludedCategories = db.optionIncludedCategories.filter((row) => row.option_id !== id);
+      }
     });
   }
   async upsertOptionImage(input: OptionImageInput): Promise<OptionImage> {
@@ -2459,6 +2493,76 @@ export class LocalStore implements DataStore {
       db.conflicts = db.conflicts.filter((c) => c.option_id !== optionId);
       for (const d of dependencies) db.dependencies.push({ id: randomUUID(), option_id: optionId, ...d });
       for (const c of conflicts) db.conflicts.push({ id: randomUUID(), option_id: optionId, ...c });
+    });
+  }
+  async listOptionIncludedCategoryIds(actor: SessionUser | null, optionId: string): Promise<string[]> {
+    // DB の option_included_categories_read と同じ範囲：本部は全部、ほかは公開中の商品の、公開中のカテゴリーだけ
+    return this.read((db) => {
+      const rows = (db.optionIncludedCategories ?? []).filter((row) => row.option_id === optionId);
+      if (actor && hasRoleAtLeast(actor.role, 'admin')) return includedCategoryIdsOf(rows.map((row) => row.included_category_id));
+      const option = db.options.find((row) => row.id === optionId);
+      if (option?.status !== 'published') return [];
+      const visible = rows.filter((row) => db.categories.find((category) => category.id === row.included_category_id)?.status === 'published');
+      return includedCategoryIdsOf(visible.map((row) => row.included_category_id));
+    });
+  }
+  async setOptionIncludedCategories(actor: SessionUser, optionId: string, expectedIds: string[], nextIds: string[]): Promise<string[]> {
+    // DB の set_option_included_categories（20261110024245）と同じ判定・同じ順。途中で止まったら保存しない（mutate は例外のとき書き込まない）
+    return this.mutate((db) => {
+      if (!actor) throw new StoreError('UNAUTHENTICATED', 'ログインが必要です');
+      if (!canEditCatalog(actor.role) || !hasRoleAtLeast(actor.role, 'admin')) {
+        throw new StoreError('FORBIDDEN', '設備包含設定は本部管理者だけ編集できます');
+      }
+      if (!optionId || !Array.isArray(expectedIds) || !Array.isArray(nextIds)) {
+        throw new StoreError('VALIDATION', '商品と設備カテゴリーを指定してください');
+      }
+      // 重なり・空欄は勝手に直さずに止める
+      if (
+        [...expectedIds, ...nextIds].some((id) => typeof id !== 'string' || id === '') ||
+        new Set(expectedIds).size !== expectedIds.length ||
+        new Set(nextIds).size !== nextIds.length
+      ) {
+        throw new StoreError('VALIDATION', '設備カテゴリーの重複・空欄は指定できません');
+      }
+      const option = db.options.find((row) => row.id === optionId);
+      if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません');
+      const sorted = (ids: readonly string[]) => [...ids].sort();
+      const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+      const expected = sorted(expectedIds);
+      const next = sorted(nextIds);
+      db.optionIncludedCategories ??= [];
+      const current = sorted(
+        db.optionIncludedCategories.filter((row) => row.option_id === optionId).map((row) => row.included_category_id)
+      );
+      if (!same(current, expected)) {
+        throw new StoreError('CONFLICT', 'この商品の包含設備設定は別の操作で更新されました。再読み込みしてください');
+      }
+      // 含められるのは、公開中の浴室（ub）の商品だけ
+      const source = db.categories.find((row) => row.id === option.category_id);
+      if (source?.code !== 'ub' || source.status !== 'published') {
+        throw new StoreError('VALIDATION', '設備包含は公開済み浴室（ub）カテゴリーの商品だけに設定できます');
+      }
+      if (next.includes(option.category_id)) throw new StoreError('VALIDATION', '商品自身のカテゴリーは包含できません');
+      // 含まれる設備は、公開中のトイレ（toilet）・洗面（washbasin）だけ
+      const invalidTarget = next.some((id) => {
+        const category = db.categories.find((row) => row.id === id);
+        return !category || category.status !== 'published' || (category.code !== 'toilet' && category.code !== 'washbasin');
+      });
+      if (invalidTarget) throw new StoreError('VALIDATION', '包含対象はトイレ（toilet）・洗面（washbasin）だけです');
+      if (same(current, next)) return current;
+
+      const createdAt = nowIso();
+      db.optionIncludedCategories = [
+        ...db.optionIncludedCategories.filter((row) => row.option_id !== optionId),
+        ...next.map((id) => ({ option_id: optionId, included_category_id: id, created_at: createdAt })),
+      ];
+      this.pushAudit(db, actor, {
+        action: 'option.included_categories.save',
+        entity: 'options',
+        entity_id: optionId,
+        summary: '商品の設備包含カテゴリーを更新',
+      });
+      return next;
     });
   }
   async upsertPreviewRule(input: PreviewRuleInput): Promise<PreviewImageRule> {

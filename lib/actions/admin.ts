@@ -489,7 +489,7 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     const category = (await store.listCategories()).find((row) => row.id === option.category_id);
     if (category?.code === 'ub') {
       const { readOptionIncludedCategories } = await import('@/lib/data/option-included-categories');
-      const inclusion = await readOptionIncludedCategories(option.id);
+      const inclusion = await readOptionIncludedCategories(actor, option.id);
       const categories = await store.listCategories();
       const allowed = new Set(categories
         .filter((row) => row.status === 'published' && (row.code === 'toilet' || row.code === 'washbasin'))

@@ -50,9 +50,14 @@ export function decideIncludedCategoryRefresh(input: {
   return 'synchronize';
 }
 
-export function includedCategoryRpcError(error: { code?: string; message?: string }): 'CONFLICT' | 'TIMEOUT' | 'FORBIDDEN' | 'FAILED' {
-  if (error.message?.startsWith('CONFLICT:')) return 'CONFLICT';
-  if (error.code === '55P03' || error.message?.includes('lock timeout')) return 'TIMEOUT';
-  if (error.code === '42501' || error.message?.startsWith('FORBIDDEN:')) return 'FORBIDDEN';
+/**
+ * DataStore の保存の失敗（StoreError の code）を、画面の扱いに分ける。
+ * CONFLICT：開いた時点の集合と違う／TIMEOUT：ロックの待ち切れ（LOCKED）／FORBIDDEN：権限・未ログイン。
+ * そのほか（DB 側の検査で止まった・見つからない・想定外）は FAILED で、どれも自動では再送しない
+ */
+export function includedCategoryStoreErrorCode(code: string): 'CONFLICT' | 'TIMEOUT' | 'FORBIDDEN' | 'FAILED' {
+  if (code === 'CONFLICT') return 'CONFLICT';
+  if (code === 'LOCKED') return 'TIMEOUT';
+  if (code === 'FORBIDDEN' || code === 'UNAUTHENTICATED') return 'FORBIDDEN';
   return 'FAILED';
 }

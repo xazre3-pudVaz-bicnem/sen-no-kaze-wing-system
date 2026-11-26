@@ -98,6 +98,17 @@ export interface LocalDb {
   quotePorConfirmations?: LocalQuotePorConfirmation[];
   /** 窓タイプ（DB の window_types と同じ。v2.5 PR-S1/S2）。古い db.json に無ければ初期値 */
   windowTypes?: WindowType[];
+  /**
+   * 浴室（ub）の商品に含まれる設備のカテゴリー（DB の option_included_categories と同じ。#628・#631）。
+   * 書き込みは LocalStore.setOptionIncludedCategories だけ。古い db.json に無ければ空
+   */
+  optionIncludedCategories?: LocalOptionIncludedCategory[];
+}
+
+export interface LocalOptionIncludedCategory {
+  option_id: string;
+  included_category_id: string;
+  created_at: string;
 }
 
 export interface LocalQuotePorConfirmation {

@@ -66,7 +66,18 @@ export class StoreError extends Error {
   }
 }
 
-export type CaseDealer = Pick<Profile, 'id' | 'role_code' | 'full_name' | 'company_name'>;
+/**
+ * 読んだ・保存した設備包含の集合（#631）を確かめて id の昇順にする。
+ * 文字列でない値・重なりがあれば、勝手に直さずに止める（Supabase・ローカルの両方で使う）
+ */
+export function includedCategoryIdsOf(values: readonly unknown[]): string[] {
+  if (values.some((id) => typeof id !== 'string' || id === '') || new Set(values).size !== values.length) {
+    throw new StoreError('INTERNAL', '設備包含設定の保存内容に不整合があります。管理者に確認してください。');
+  }
+  return [...(values as string[])].sort();
+}
+
+export type CaseDealer =Pick<Profile, 'id' | 'role_code' | 'full_name' | 'company_name'>;
 export type QuoteRequestListItem = QuoteRequest & {
   quote_no: string | null;
   user_email: string;
@@ -676,6 +687,21 @@ export interface DataStore {
     dependencies: { requires_option_id: string; message: string | null }[],
     conflicts: { conflicts_with_option_id: string; message: string | null }[]
   ): Promise<void>;
+  /**
+   * 浴室（ub）の商品に含まれる設備のカテゴリー（DB の option_included_categories。#628・#631）。id の昇順。
+   * 見える範囲は DB の読み取りの決まりと同じ（本部は全部、ほかは公開中の商品の公開中のカテゴリーだけ）
+   */
+  listOptionIncludedCategoryIds(actor: SessionUser | null, optionId: string): Promise<string[]>;
+  /**
+   * 含まれる設備を置き換える（DB の set_option_included_categories。本部だけ）。
+   * 画面を開いた時点の集合（expectedIds）が今と違えば CONFLICT。戻り値は保存後の集合（id の昇順）
+   */
+  setOptionIncludedCategories(
+    actor: SessionUser,
+    optionId: string,
+    expectedIds: string[],
+    nextIds: string[]
+  ): Promise<string[]>;
   upsertPreviewRule(input: PreviewRuleInput): Promise<PreviewImageRule>;
   deletePreviewRule(id: string): Promise<void>;
   upsertHotspot(input: HotspotInput): Promise<PreviewHotspot>;

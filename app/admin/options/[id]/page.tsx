@@ -68,7 +68,7 @@ export default async function EditOptionPage({
   ]);
   const category = categories.find((row) => row.id === option.category_id);
   const canManageInclusion = actor.role === 'admin' && category?.code === 'ub' && category.status === 'published';
-  const inclusionRead = canManageInclusion ? await readOptionIncludedCategories(id) : null;
+  const inclusionRead = canManageInclusion ? await readOptionIncludedCategories(actor, id) : null;
   const inclusionCandidates = categories
     .filter((row) => row.status === 'published' && (row.code === 'toilet' || row.code === 'washbasin'))
     .map(({ id: categoryId, code, name }) => ({ id: categoryId, code, name }));

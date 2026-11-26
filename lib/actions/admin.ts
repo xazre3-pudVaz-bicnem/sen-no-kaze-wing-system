@@ -486,11 +486,11 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
   // 本部の浴室商品の設備包含はSTEP 2でDB保存済みの関係を確認する。
   // 読み取れない場合は画面制御だけでなく公開Actionでも止める（空集合は合法）。
   if (actor.role === 'admin') {
-    const category = (await store.listCategories()).find((row) => row.id === option.category_id);
+    const categories = await store.listCategories();
+    const category = categories.find((row) => row.id === option.category_id);
     if (category?.code === 'ub') {
       const { readOptionIncludedCategories } = await import('@/lib/data/option-included-categories');
       const inclusion = await readOptionIncludedCategories(actor, option.id);
-      const categories = await store.listCategories();
       const allowed = new Set(categories
         .filter((row) => row.status === 'published' && (row.code === 'toilet' || row.code === 'washbasin'))
         .map((row) => row.id));

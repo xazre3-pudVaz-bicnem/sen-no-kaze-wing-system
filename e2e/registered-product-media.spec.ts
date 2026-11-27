@@ -41,7 +41,7 @@ test('登録済み商品の追加画像・メーカー資料を確認してか�
   ]);
   await page.locator('#registered-pdf-change').selectOption('replace');
   await page.locator('#registered-new-document').setInputFiles({ name: 'catalog.pdf', mimeType: 'application/pdf', buffer: PDF });
-  await page.getByRole('button', { name: '変更内容を確認' }).click();
+  await page.getByRole('button', { name: '変更内容を確認', exact: true }).click();
   await expect(review(page)).toContainText('追加画像の追加');
   await expect(review(page)).toContainText('front.png');
   await expect(review(page)).toContainText('side.png');
@@ -55,7 +55,7 @@ test('登録済み商品の追加画像・メーカー資料を確認してか�
   await items.nth(startCount).getByRole('textbox').fill('正面から見たところ');
   await items.nth(startCount + 1).getByRole('button', { name: 'この追加画像を削除予定にする' }).click();
   await page.locator('#registered-pdf-change').selectOption('remove');
-  await page.getByRole('button', { name: '変更内容を確認' }).click();
+  await page.getByRole('button', { name: '変更内容を確認', exact: true }).click();
   await expect(review(page)).toContainText('追加画像の説明・表示順');
   await expect(review(page)).toContainText('正面から見たところ');
   await expect(review(page)).toContainText('追加画像の削除');
@@ -69,12 +69,12 @@ test('登録済み商品の追加画像・メーカー資料を確認してか�
   const other = await context.newPage();
   await openProduct(other);
   await gallery(page).locator('li').nth(startCount).getByRole('textbox').fill('先に反映した説明');
-  await page.getByRole('button', { name: '変更内容を確認' }).click();
+  await page.getByRole('button', { name: '変更内容を確認', exact: true }).click();
   await applyReviewed(page);
   await expect(gallery(page)).toContainText('先に反映した説明');
 
   await gallery(other).locator('li').nth(startCount).getByRole('textbox').fill('後から反映しようとした説明');
-  await other.getByRole('button', { name: '変更内容を確認' }).click();
+  await other.getByRole('button', { name: '変更内容を確認', exact: true }).click();
   await other.getByRole('button', { name: 'この変更を反映' }).click();
   await expect(review(other).getByText('画面を開いた後にほかの操作で変わりました')).toBeVisible();
   await openProduct(other);

@@ -373,6 +373,8 @@ export interface ProductOption {
   image_url: string | null;
   /** メーカー資料（PDF）の表示URL。未登録時は null / 未取得。 */
   manufacturer_document_url?: string | null;
+  /** メーカー公式商品ページ。画像URL・メーカー資料PDFとは独立。 */
+  manufacturer_product_url?: string | null;
   /** 商品詳細ギャラリーに表示するサブ画像。DB上は option_images で管理する。 */
   gallery_images?: OptionImage[];
   selection_type: 'checkbox' | 'radio';
@@ -947,6 +949,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   price: '価格変更',
   status: '公開状態',
   role: '権限変更',
+  media: '画像・資料',
 };
 export const AUDIT_ENTITY_LABELS: Record<string, string> = {
   option: '商品',

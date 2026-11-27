@@ -6,6 +6,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { isWashbasinStandardSet } from '@/lib/domain/washbasin-selection';
+import { hasPanasonicLightingAttribution } from '@/lib/domain/panasonic-lighting-attribution';
 import { cn } from '@/lib/utils';
 import { ManufacturerDocumentModal } from './manufacturer-document-modal';
 import { ProductImageLightbox } from './product-image-lightbox';
@@ -245,6 +246,11 @@ export function ProductDetail({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+          {hasPanasonicLightingAttribution(category.code, option.manufacturer, galleryImages.length) && (
+            <div className="mt-2 text-[11px] leading-relaxed text-muted" data-testid="panasonic-lighting-image-attribution">
+              画像提供元：パナソニック エレクトリックワークス株式会社
             </div>
           )}
           {isSekinoKosan && galleryImages.length > 0 && (

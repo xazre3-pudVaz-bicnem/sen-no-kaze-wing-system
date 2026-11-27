@@ -22,6 +22,7 @@ import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-di
 import { PlanBoard, ElevationStrip } from '@/components/simulator/plan-board';
 import { PreviewStage } from '@/components/simulator/preview-stage';
 import { EquipmentBoard } from '@/components/simulator/equipment-board';
+import { includedCategorySources } from '@/lib/domain/equipment-separate-room';
 import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-context';
 
 function sameSelection(a: string[], b: string[]) {
@@ -114,9 +115,14 @@ export function CasePlanBoard({
   );
   // 位置・用途の選択枠（v2.5 PR-S2b）：位置の明細は位置ごとのタイルに出し、そのカテゴリーはカテゴリー単位の選択・標準との比較に入れない
   // （位置の明細の無いカテゴリー・版の枠に合わない位置の明細は、カテゴリー単位のまま出す）
+  // 「別室に追加」の明細（#628 の続き・A 案）は、カテゴリー単位の選択と分けて「別室」のタイルに出す
+  const separateRoomOptions = useMemo(
+    () => bundle.options.filter((option) => items.some((item) => item.separate_room && item.option_id === option.id)),
+    [bundle.options, items]
+  );
   const slotView = useMemo(
     () =>
-      casePlanSlotView(positionSlots, items, {
+      casePlanSlotView(positionSlots, items.filter((item) => !item.separate_room), {
         options: bundle.options,
         variantGroups: bundle.variantGroups,
         variantChoices: bundle.variantChoices,
@@ -258,6 +264,16 @@ export function CasePlanBoard({
           readOnly
           onPickCategory={() => undefined}
           slotTiles={slotView.tiles}
+          // 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリーと、別室に追加した商品（表示だけ）
+          includedCategoryNames={
+            new Map(
+              [...includedCategorySources([...selected, ...items.filter((item) => item.slot_code).map((item) => item.option_id)], bundle.includedCategories)].map(([categoryId, ids]) => [
+                categoryId,
+                ids.map((id) => bundle.options.find((option) => option.id === id)?.name ?? '商品'),
+              ])
+            )
+          }
+          separateRoomOptions={separateRoomOptions}
         />
       </div>
     </SimulatorCaseImagesProvider>

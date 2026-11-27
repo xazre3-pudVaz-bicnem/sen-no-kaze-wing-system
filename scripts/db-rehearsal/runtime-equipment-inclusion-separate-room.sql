@@ -292,6 +292,14 @@ begin
   insert into public.option_included_categories (option_id, included_category_id) values (ub_inc, c_toilet), (ub_inc, c_wash);
   set local session_replication_role = origin;
 
+  -- 案件のプランボード（本部・担当者の画面）：明細ごとの「別室」の印
+  v_out := pg_temp.sr_run_as('authenticated', u_admin, format(
+    $q$ select (select string_agg((x.value ->> 'option_id') || ':' || coalesce(x.value ->> 'separate_room', '(none)'), '/'
+                                  order by x.value ->> 'option_id', x.value ->> 'separate_room')
+                  from jsonb_array_elements(public.get_case_plan_configuration(%L) -> 'items') as x(value)) $q$, v_quote));
+  perform pg_temp.sr_expect_eq('SR-29 案件のプランボードは、明細ごとに「別室」の印を返す（本部）',
+    ub_inc::text || ':false/' || toilet_a::text || ':true', v_out);
+
   -- ---------- 第 2 部：v2.5 の版とスイッチ ON ----------
   perform pg_temp.sr_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 300000, 0, ''検査'')', ub_plain));
   perform pg_temp.sr_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 400000, 0, ''検査'')', ub_inc));

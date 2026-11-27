@@ -1,7 +1,17 @@
-import { finishLevelRank, type FinishLevel, type OptionCategory, type OptionConflict, type OptionDependency, type ProductOption } from './types';
+import {
+  finishLevelRank,
+  type FinishLevel,
+  type OptionCategory,
+  type OptionConflict,
+  type OptionDependency,
+  type OptionIncludedCategory,
+  type ProductOption,
+} from './types';
 import { isSimulatorSelectableProduct, simulatorUnselectableReason } from './product-lifecycle';
+import { equipmentInclusionIssues } from './equipment-separate-room';
 
-export type RuleIssueType = 'conflict' | 'dependency' | 'required' | 'single';
+/** included：ユニットに含まれるカテゴリーの印の無い重複／separate_room：別室に追加できない商品（#628 の続き・A 案） */
+export type RuleIssueType = 'conflict' | 'dependency' | 'required' | 'single' | 'included' | 'separate_room';
 
 export interface RuleIssue {
   type: RuleIssueType;
@@ -21,6 +31,8 @@ export interface RuleContext {
    * 取扱終了・非表示の商品も options には残し（保存済みの明細の表示・保持のため）、新しい選択・初期選択・自動追加だけをこの判定で止める
    */
   canSelectNew?: (option: ProductOption) => boolean;
+  /** 商品に含まれる設備のカテゴリー（#628）。無ければ包含なし（今までどおり） */
+  includedCategories?: readonly OptionIncludedCategory[] | null;
 }
 
 const selectableNew = (ctx: RuleContext, option: ProductOption) =>
@@ -74,9 +86,19 @@ export function unsatisfiableDependencyOf(ctx: RuleContext, optionId: string): s
 const UNSATISFIABLE_DEPENDENCY = (name: string) =>
   `「${name}」に必要な商品が、このモデル・仕様では選択できないため選べません。`;
 
-/** 選択集合全体の整合性を検証する（サーバー側の保存・見積時にも使う） */
-export function validateSelection(ctx: RuleContext, selectedIds: string[], level: FinishLevel = 'full'): RuleIssue[] {
-  const selected = new Set(selectedIds);
+/**
+ * 選択集合全体の整合性を検証する（サーバー側の保存・見積時にも使う）。
+ * separateRoomIds は「別室に追加」した商品（#628 の続き・A 案）：競合・前提・必須・注文範囲には数え、「1 つだけ選択」には数えない。
+ * ユニットに含まれるカテゴリーの印の無い重複も確かめる（DB の validate_configuration_items と同じ）
+ */
+export function validateSelection(
+  ctx: RuleContext,
+  selectedIds: string[],
+  level: FinishLevel = 'full',
+  separateRoomIds: readonly string[] = [],
+): RuleIssue[] {
+  const unmarked = new Set(selectedIds);
+  const selected = new Set([...selectedIds, ...separateRoomIds]);
   const issues: RuleIssue[] = [];
   // 必須の判定は新しく選べる商品で数え、選ばれているかは保存済みの明細（取扱終了・非表示）も含めて数える
   const selectable = ctx.options.filter((o) => selectableNew(ctx, o));
@@ -109,11 +131,13 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[], level
   for (const cat of ctx.categories.filter((c) => c.status === 'published' && inScope.has(c.id))) {
     const inCat = selectable.filter((o) => o.category_id === cat.id);
     const chosen = ctx.options.filter((o) => o.category_id === cat.id && o.status === 'published' && selected.has(o.id));
-    if (cat.selection_mode === 'single' && chosen.length > 1) {
+    // 「1 つだけ選択」は印なしの選択だけで数える（別室の明細は数えない。DB と同じ）
+    const chosenUnmarked = chosen.filter((o) => unmarked.has(o.id));
+    if (cat.selection_mode === 'single' && chosenUnmarked.length > 1) {
       issues.push({
         type: 'single',
         message: `「${cat.name}」は 1 つだけ選択してください。`,
-        option_ids: chosen.map((o) => o.id),
+        option_ids: chosenUnmarked.map((o) => o.id),
       });
     }
     if (cat.is_required && inCat.length > 0 && chosen.length === 0) {
@@ -129,7 +153,7 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[], level
       issues.push({ type: 'required', message: `「${o.name}」は必須です。`, option_ids: [o.id] });
     }
   }
-  for (const id of selectedIds) {
+  for (const id of selected) {
     const o = ctx.options.find((x) => x.id === id);
     if (o && !inScope.has(o.category_id)) {
       const cat = ctx.categories.find((c) => c.id === o.category_id);
@@ -139,6 +163,15 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[], level
         option_ids: [o.id],
       });
     }
+  }
+  for (const issue of equipmentInclusionIssues({
+    options: ctx.options,
+    categories: ctx.categories,
+    relations: ctx.includedCategories,
+    selectedIds,
+    separateRoomIds,
+  })) {
+    issues.push({ type: issue.type, message: issue.message, option_ids: issue.option_ids });
   }
   return issues;
 }

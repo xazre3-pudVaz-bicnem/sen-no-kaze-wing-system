@@ -451,7 +451,8 @@ describe('corrective migration and simulator contract', () => {
     expect(simulator).not.toContain('if (activeEstimateTemplate || !hasPreset) return bundle.options;');
     expect(equipment).toContain("const shown = categories.filter((c) => c.code !== 'sitework');");
     expect(publicCatalog).toContain('applyCustomerCategoryApplicability');
-    expect(publicCatalog).toContain('public-catalog-v5-spec-matrix');
+    // v6：商品に含まれる設備のカテゴリー（#628 の続き）を足したので、キャッシュのキーを変えた（古い形を使わない）
+    expect(publicCatalog).toContain('public-catalog-v6-included-categories');
     // 本体の行は旧価格（v2.5 PR-C1b）を足した後のものを使う
     expect(publicCatalog).toContain('buildCustomerCategoryMatrix(specMatrix, categoryRows, priced.models)');
   });

@@ -6,6 +6,7 @@ import { equipmentCategoryPriceState } from '@/lib/domain/equipment-price-displa
 import type { SimulatorCardDelta, SimulatorCardTarget } from '@/lib/domain/simulator-card-price-delta';
 import { simulatorCardPricePresentation } from '@/lib/domain/simulator-card-price-presentation';
 import { isSimulatorSelectableProduct, productLedgerState } from '@/lib/domain/product-lifecycle';
+import { ADD_TO_SEPARATE_ROOM_LABEL, INCLUDED_IN_UNIT_LABEL, SEPARATE_ROOM_LABEL } from '@/lib/domain/equipment-separate-room';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,14 @@ interface Props {
   onPickSlot?: (slotCode: string) => void;
   /** 正式な見積総額の差による表示専用の税込影響額（PR #680）。 */
   getCardDelta?: (target: SimulatorCardTarget) => SimulatorCardDelta;
+  /** 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリー → 含んでいる商品の名前 */
+  includedCategoryNames?: Map<string, string[]>;
+  /** 別室に追加した商品（表示用の価格つき） */
+  separateRoomOptions?: ProductOption[];
+  onAddSeparateRoom?: (categoryId: string) => void;
+  onRemoveSeparateRoom?: (optionId: string) => void;
+  /** 前からある重複（ユニットに含まれるカテゴリーの印なしの選択）を直す：外すか、別の部屋の設備にする */
+  onResolveIncluded?: (categoryId: string, mode: 'remove' | 'separate') => void;
 }
 
 const INTERIOR_EXTERIOR_CATEGORY_ORDER = [
@@ -117,6 +126,11 @@ export function EquipmentBoard({
   slotTiles = [],
   onPickSlot,
   getCardDelta,
+  includedCategoryNames = new Map<string, string[]>(),
+  separateRoomOptions = [],
+  onAddSeparateRoom,
+  onRemoveSeparateRoom,
+  onResolveIncluded,
 }: Props) {
   const selectedSet = new Set(selected);
   // categories は上位で本体分類表の「選択 / ×」を解決済み。
@@ -374,6 +388,94 @@ export function EquipmentBoard({
     );
   };
 
+  /** ユニットに含まれるカテゴリー（#628 の続き・A 案）。前からある印なしの選択があれば、直す操作を出す */
+  const includedTile = (cat: OptionCategory, sourceNames: string[]) => {
+    const duplicates = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
+    if (duplicates.length > 0) {
+      return (
+        <li key={cat.id} className="bg-white" data-testid={`equip-included-duplicate-${cat.code}`}>
+          <div className="flex min-h-20 w-full flex-col gap-1 p-3 sm:p-4">
+            <span className="block truncate text-[0.65rem] font-semibold text-muted">{cat.name}</span>
+            <span className="block text-xs font-semibold leading-snug">{duplicates.map((o) => o.name).join('・')}</span>
+            <span className="block text-[0.62rem] font-semibold leading-relaxed text-warn">
+              「{sourceNames.join('・')}」に含まれています。選択を外すか、別の部屋の設備にしてください
+            </span>
+            {!readOnly && onResolveIncluded && (
+              <span className="mt-0.5 flex flex-wrap gap-x-3 text-[0.68rem] font-semibold">
+                <button type="button" className="text-brown underline underline-offset-2 hover:no-underline" onClick={() => onResolveIncluded(cat.id, 'remove')} data-testid={`equip-resolve-remove-${cat.code}`}>
+                  選択を外す
+                </button>
+                <button type="button" className="text-brown underline underline-offset-2 hover:no-underline" onClick={() => onResolveIncluded(cat.id, 'separate')} data-testid={`equip-resolve-separate-${cat.code}`}>
+                  別室の設備にする
+                </button>
+              </span>
+            )}
+          </div>
+        </li>
+      );
+    }
+    return (
+      <li key={cat.id} className="bg-white" data-testid={`equip-included-${cat.code}`}>
+        <div className="flex min-h-20 w-full flex-col gap-1 p-3 sm:p-4">
+          <span className="block truncate text-[0.65rem] font-semibold text-muted">{cat.name}</span>
+          <span className="inline-flex w-fit items-center rounded-full border border-gold/45 bg-sand/70 px-2 py-0.5 text-[0.62rem] font-semibold leading-none text-brown">
+            {INCLUDED_IN_UNIT_LABEL}
+          </span>
+          <span className="block text-[0.62rem] leading-relaxed text-muted">「{sourceNames.join('・')}」に含まれます</span>
+          {!readOnly && onAddSeparateRoom && (
+            <button type="button" className="mt-0.5 w-fit text-[0.68rem] font-semibold text-brown underline underline-offset-2 hover:no-underline" onClick={() => onAddSeparateRoom(cat.id)} data-testid={`equip-add-separate-${cat.code}`}>
+              {ADD_TO_SEPARATE_ROOM_LABEL}
+            </button>
+          )}
+        </div>
+      </li>
+    );
+  };
+
+  /** 別室に追加した商品（#628 の続き・A 案）。普通の追加の設備として金額に入る */
+  const separateTiles = (cat: OptionCategory) =>
+    separateRoomOptions
+      .filter((option) => option.category_id === cat.id)
+      .map((option) => (
+        <li key={`${cat.id}-separate-${option.id}`} className="bg-white" data-testid={`equip-separate-${cat.code}`}>
+          <div className="flex min-h-20 w-full items-center gap-3 p-3 sm:p-4">
+            <span className="relative block size-12 shrink-0 overflow-hidden rounded border border-line/60 bg-white">
+              {option.image_url ? (
+                <SmartImage src={option.image_url} alt={option.name} fill sizes="48px" className="object-contain p-1" />
+              ) : (
+                <span className="flex h-full items-center justify-center bg-ivory text-[0.55rem] text-muted">画像未登録</span>
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[0.65rem] font-semibold text-muted">{cat.name}</span>
+              <span className="mt-0.5 mb-1 inline-flex w-fit items-center rounded-full border border-brown/35 bg-ivory px-2 py-0.5 text-[0.62rem] font-semibold leading-none text-brown">
+                {SEPARATE_ROOM_LABEL}
+              </span>
+              <span className="block text-xs font-semibold leading-snug">{option.name}</span>
+              <span className="mt-0.5 block text-[0.72rem] font-semibold tabular-nums text-brown">
+                {option.price_on_request ? '別途お見積り' : `+${formatYen(option.price)}`}
+              </span>
+              {!readOnly && (
+                <span className="mt-1 flex flex-wrap gap-x-3 text-[0.68rem] font-semibold">
+                  <button type="button" className="text-brown underline underline-offset-2 hover:no-underline" onClick={() => onAddSeparateRoom?.(cat.id)} data-testid={`equip-change-separate-${cat.code}`}>
+                    変更
+                  </button>
+                  <button type="button" className="text-muted underline underline-offset-2 hover:no-underline" onClick={() => onRemoveSeparateRoom?.(option.id)} data-testid={`equip-remove-separate-${cat.code}`}>
+                    外す
+                  </button>
+                </span>
+              )}
+            </span>
+          </div>
+        </li>
+      ));
+
+  /** カテゴリーのタイル：ユニットに含まれるときは包含のタイル、それ以外は今までどおり。別室に追加した商品はその後ろに並べる */
+  const categoryTiles = (cat: OptionCategory) => {
+    const sourceNames = includedCategoryNames.get(cat.id);
+    return [sourceNames ? includedTile(cat, sourceNames) : normalTile(cat), ...separateTiles(cat)].flat();
+  };
+
   const sectionHeader = (id: string, title: string, description?: string) => (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gold/50 bg-white px-4 py-2">
       <div className="min-w-0">
@@ -394,7 +496,7 @@ export function EquipmentBoard({
         {sectionHeader('interior-exterior-heading', '内外装工事')}
         {interiorExteriorCats.length > 0 ? (
           <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-interior-exterior-list">
-            {interiorExteriorCats.map(normalTile)}
+            {interiorExteriorCats.map(categoryTiles)}
           </ul>
         ) : (
           emptyState
@@ -405,7 +507,7 @@ export function EquipmentBoard({
         {sectionHeader('option-heading', 'オプション')}
         {optionCats.length > 0 ? (
           <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-options">
-            {optionCats.map(normalTile)}
+            {optionCats.map(categoryTiles)}
           </ul>
         ) : (
           emptyState
@@ -416,7 +518,7 @@ export function EquipmentBoard({
         {sectionHeader('other-products-heading', 'その他の商品', '外構及びオリジナル制作家具など')}
         {otherProductCats.length > 0 ? (
           <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-other-products-list">
-            {otherProductCats.map(normalTile)}
+            {otherProductCats.map(categoryTiles)}
           </ul>
         ) : (
           emptyState

@@ -87,14 +87,19 @@ export function computeStandardEstimatePricing(
   selectedOptionIds: string[],
   variantChoiceIds: string[],
   exteriorFaces: ExteriorFaceSelection[],
-  finishLevel: FinishLevel
+  finishLevel: FinishLevel,
+  /** 「別室に追加」した商品（#628 の続き・A 案）。普通の明細として数え、差額に入る */
+  separateRoomOptionIds: string[] = []
 ): StandardEstimatePricingResult {
   const model = bundle.model;
   const current = computePricing(
     model,
     bundle.options,
     bundle.categories,
-    selectedOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+    [
+      ...selectedOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+      ...separateRoomOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds, separate_room: true })),
+    ],
     template.template.tax_rate,
     { groups: bundle.variantGroups, choices: bundle.variantChoices },
     0,
@@ -122,7 +127,12 @@ export function computeStandardEstimatePricing(
       model,
       bundle.options,
       bundle.categories,
-      currentDeltaOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+      [
+        ...currentDeltaOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+        ...separateRoomOptionIds
+          .filter((id) => customerOptionIds.has(id))
+          .map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds, separate_room: true })),
+      ],
       template.template.tax_rate,
       { groups: bundle.variantGroups, choices: bundle.variantChoices },
       0,

@@ -14,10 +14,13 @@ const mocks = vi.hoisted(() => {
     readOptionIncludedCategories: vi.fn(),
     save: vi.fn(),
     revalidatePath: vi.fn(),
+    updateTag: vi.fn(),
   };
 });
 
-vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath, updateTag: mocks.updateTag }));
+// 保存できたらシミュレーターの公開カタログのキャッシュを捨てる（#628 の続き）。公開カタログの読み込み自体は使わない
+vi.mock('@/lib/data/public-catalog', () => ({ CATALOG_TAG: 'catalog' }));
 vi.mock('@/lib/auth/session', () => ({ getSessionUser: mocks.getSessionUser }));
 vi.mock('@/lib/data/store', () => ({ getStore: mocks.getStore, StoreError: mocks.StoreError }));
 vi.mock('@/lib/data/option-included-categories', () => ({ readOptionIncludedCategories: mocks.readOptionIncludedCategories }));
@@ -86,6 +89,8 @@ describe('商品に含まれる設備：Server Actionの権限・競合・DataSt
     expect(mocks.save).toHaveBeenCalledWith(admin, optionId, [], []);
     expect(mocks.readOptionIncludedCategories).toHaveBeenCalledWith(admin, optionId);
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/admin/options/' + optionId);
+    // シミュレーターの公開カタログ（含まれる設備の表示・二重の選択の防止）にすぐ出す（#628 の続き）
+    expect(mocks.updateTag).toHaveBeenCalledWith('catalog');
   });
 
   it('両方を保存するとカテゴリーID配列だけを渡す', async () => {

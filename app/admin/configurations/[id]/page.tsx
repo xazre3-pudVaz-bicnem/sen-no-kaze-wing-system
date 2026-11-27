@@ -30,7 +30,13 @@ export default async function AdminConfigurationDetailPage({ params }: { params:
         ...splitConfigurationItems(items),
         exteriorFaces: await getExteriorFaces(c.id),
       })
-    : computePricing(bundle.model, bundle.options, bundle.categories, items.map((i) => ({ option_id: i.option_id, quantity: i.quantity })));
+    : computePricing(
+        bundle.model,
+        bundle.options,
+        bundle.categories,
+        // 「別室に追加」の明細（#628 の続き・A 案）は印なしの同じ商品と別に数える
+        items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, separate_room: Boolean(i.separate_room) }))
+      );
   const priceChanged = current.total !== c.total;
 
   return (
@@ -44,7 +50,7 @@ export default async function AdminConfigurationDetailPage({ params }: { params:
             <tbody className="divide-y divide-line">
               <tr><Td className="font-semibold">{bundle.model.name} 本体</Td><Td>—</Td><Td right>{formatYen(current.base_price)}</Td></tr>
               {current.lines.map((l) => (
-                <tr key={l.option_id}><Td>{l.name}</Td><Td>{l.category_name}</Td><Td right>{l.price_on_request ? '要見積' : formatYen(l.unit_price)}</Td></tr>
+                <tr key={l.code}><Td>{l.name}</Td><Td>{l.category_name}</Td><Td right>{l.price_on_request ? '要見積' : formatYen(l.unit_price)}</Td></tr>
               ))}
             </tbody>
           </Table>

@@ -9,8 +9,10 @@ const source = readFileSync(
 
 describe('シミュレーター商品カードの画像表示', () => {
   it('通常商品と位置別商品の両方で画像全体を切り抜かずに表示する', () => {
-    expect(source.match(/<SmartImage\b/g)).toHaveLength(2);
+    // 通常商品・位置別商品の 2 か所に、別室に追加した商品の小さな画像（#628 の続き・A 案）が加わった。どれも切り抜かない
+    expect(source.match(/<SmartImage\b/g)).toHaveLength(3);
     expect(source.match(/className="object-contain p-1\.5"/g)).toHaveLength(2);
+    expect(source.match(/className="object-contain p-1"/g)).toHaveLength(1);
     expect(source).not.toContain('className="object-cover"');
     expect(source.match(/alt=\{main\.name\}/g)).toHaveLength(2);
   });

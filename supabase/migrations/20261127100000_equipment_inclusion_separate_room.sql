@@ -33,6 +33,7 @@ begin
      or to_regprocedure('public.duplicate_configuration(uuid)') is null
      or to_regprocedure('public.create_guest_plan(text, uuid, jsonb)') is null
      or to_regprocedure('public.standard_estimate_v25_slot_rule_issues(uuid)') is null
+     or to_regprocedure('public.get_case_plan_configuration(uuid)') is null
      or to_regprocedure('public.estimate_section_for_option(text, boolean)') is null
      or to_regprocedure('public.simulator_standard_pricing_enabled()') is null
      or to_regprocedure('public.cf_uuid_array_valid(jsonb, integer)') is null then
@@ -201,7 +202,7 @@ begin
   v_def := pg_catalog.pg_get_functiondef(v_oid);
   v_from := array[
     -- 1. 引数を足す
-    $old1$p_slot_selections jsonb DEFAULT '[]'::jsonb)$old1$,
+    'p_slot_selections jsonb DEFAULT ''[]''::jsonb)',
     -- 2. 変数
     E'  v_missing text;\nbegin\n',
     -- 3. 別室の明細の形と商品の確かめ（バリエーションの重複の確かめの後）
@@ -216,14 +217,14 @@ begin
     E'    from unnest(v_options) input(option_id);\n'
   ];
   v_to := array[
-    $new1$p_slot_selections jsonb DEFAULT '[]'::jsonb, p_separate_room_option_ids uuid[] DEFAULT '{}'::uuid[])$new1$,
-    E'  -- 「別室に追加」の明細（#628 の続き・A 案）\n'
+    'p_slot_selections jsonb DEFAULT ''[]''::jsonb, p_separate_room_option_ids uuid[] DEFAULT ''{}''::uuid[])',
+    E'  /* 「別室に追加」の明細（#628 の続き・A 案） */\n'
     || E'  v_separate uuid[] := coalesce(p_separate_room_option_ids, ''{}''::uuid[]);\n'
     || E'  v_variant_options uuid[];\n'
     || E'  v_missing text;\nbegin\n',
     E'    raise exception ''VALIDATION: 同じバリエーションを複数回保存できません'' using errcode = ''P0001'';\n  end if;\n'
-    || E'  -- 「別室に追加」の明細（#628 の続き・A 案）：10 件まで・同じ商品は 1 回・選べる商品だけ。\n'
-    || E'  -- どのカテゴリーで別室に追加できるか・ユニットに含まれるカテゴリーとの関係は validate_configuration_items で確かめる\n'
+    || E'  /* 「別室に追加」の明細（#628 の続き・A 案）：10 件まで・同じ商品は 1 回・選べる商品だけ。\n'
+    || E'     どのカテゴリーで別室に追加できるか・ユニットに含まれるカテゴリーとの関係は validate_configuration_items で確かめる */\n'
     || E'  if cardinality(v_separate) > 10 then\n'
     || E'    raise exception ''VALIDATION: 別室に追加する設備は 10 件までです'' using errcode = ''P0001'';\n'
     || E'  end if;\n'
@@ -243,15 +244,15 @@ begin
     || E'  ) then\n'
     || E'    raise exception ''VALIDATION: 選択できないオプションが含まれています'' using errcode = ''P0001'';\n'
     || E'  end if;\n',
-    E'  -- 別室に追加した明細も、競合・前提・注文範囲・必須を確かめ、ユニットに含まれるカテゴリーの二重の選択を止める（#628 の続き・A 案）\n'
+    E'  /* 別室に追加した明細も、競合・前提・注文範囲・必須を確かめ、ユニットに含まれるカテゴリーの二重の選択を止める（#628 の続き・A 案） */\n'
     || E'  v_variant_options := v_options || v_separate;\n'
     || E'  perform public.validate_configuration_items(p_base_model_id, v_options, v_level, v_slot_option_ids, v_separate);',
     $new5$        or not (vg.option_id = any(v_variant_options))$new5$,
     E'     where vg.option_id = any(v_variant_options)\n       and vg.status = ''published''\n       and vg.is_required\n',
     E'    from unnest(v_options) input(option_id);\n'
     || E'\n'
-    || E'  -- 「別室に追加」の明細（#628 の続き・A 案）。選択肢は、その明細の商品の選択肢だけ\n'
-    || E'  -- （同じ商品をユニットの外と別室の両方で選んだときは、同じ選択肢になる）\n'
+    || E'  /* 「別室に追加」の明細（#628 の続き・A 案）。選択肢は、その明細の商品の選択肢だけ\n'
+    || E'     （同じ商品をユニットの外と別室の両方で選んだときは、同じ選択肢になる） */\n'
     || E'  insert into public.configuration_items (configuration_id, option_id, quantity, variant_choice_ids, separate_room)\n'
     || E'  select v_id, input.option_id, 1,\n'
     || E'    coalesce((\n'
@@ -467,17 +468,26 @@ select pg_temp.p5_patch_function(
 );
 select pg_temp.p5_patch_function(
   'public.standard_estimate_v25_slot_rule_issues(uuid)'::regprocedure,
-  $old$      where not public.customer_product_spec_selectable(rev.model_slug, rev.spec_code, x.spec_codes))
-  ), '');$old$,
-  $new$      where not public.customer_product_spec_selectable(rev.model_slug, rev.spec_code, x.spec_codes)),
-    -- 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリー（トイレ・洗面）の単体の商品を、そのユニットと同じ版の標準に置かない
-    -- （二重の計上を防ぐ。版の「別室」の印はまだ無いので、別の部屋の設備を標準にするときはご相談）
-    (select 'ユニットに含まれる設備と同じカテゴリーの単体の商品を、同じ版の標準にできません：'
-            || string_agg(distinct '「' || t.category_name || '」は「' || src.name || '」に含まれています', '・')
-       from slots src
-       join public.option_included_categories ic on ic.option_id = src.option_id
-       join slots t on t.category_id = ic.included_category_id)
-  ), '');$new$
+  -- 目印は、最後の判定の終わりと、全体の閉じ（片側だけの括弧を含むので、単一引用符の文字列で書く）
+  E'      where not public.customer_product_spec_selectable(rev.model_slug, rev.spec_code, x.spec_codes))\n  ), '''');',
+  -- 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリー（トイレ・洗面）の単体の商品を、そのユニットと同じ版の標準に置かない
+  -- （二重の計上を防ぐ。版の「別室」の印はまだ無いので、別の部屋の設備を標準にするときはご相談）
+  E'      where not public.customer_product_spec_selectable(rev.model_slug, rev.spec_code, x.spec_codes)),\n'
+  || E'    /* 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリー（トイレ・洗面）の単体の商品を、そのユニットと同じ版の標準に置かない */\n'
+  || E'    (select ''ユニットに含まれる設備と同じカテゴリーの単体の商品を、同じ版の標準にできません：''\n'
+  || E'            || string_agg(distinct ''「'' || t.category_name || ''」は「'' || src.name || ''」に含まれています'', ''・'')\n'
+  || E'       from slots src\n'
+  || E'       join public.option_included_categories ic on ic.option_id = src.option_id\n'
+  || E'       join slots t on t.category_id = ic.included_category_id)\n'
+  || E'  ), '''');'
+);
+
+-- 案件のプランボード（本部・担当者の画面）：明細ごとに「別室」の印も返す（印なしの選択と分けて「別室」のタイルに出す）
+select pg_temp.p5_patch_function(
+  'public.get_case_plan_configuration(uuid)'::regprocedure,
+  $old$'slot_code', ci.slot_code$old$,
+  $new$'slot_code', ci.slot_code,
+                          'separate_room', ci.separate_room$new$
 );
 
 drop function pg_temp.p5_patch_function(regprocedure, text, text);

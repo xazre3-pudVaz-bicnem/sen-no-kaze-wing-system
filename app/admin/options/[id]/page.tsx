@@ -26,6 +26,7 @@ import {
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import { sekinoRegistrationWarnings } from '@/lib/domain/sekino-registration-check';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
+import { optionMediaVersionOf } from '@/lib/domain/option-media-changes';
 import {
   OptionRegistrationPreviewButton,
   OptionRegistrationSaveBoundary,
@@ -129,7 +130,7 @@ export default async function EditOptionPage({
         {canEditThisOption ? (
           <>
             <RegisteredOptionEditFlow
-            key={option.updated_at}
+            key={`${option.updated_at}:${optionMediaVersionOf(option)}`}
             option={clientOption}
             canEditCost={canEditCost}
             windowTypes={windowTypes}

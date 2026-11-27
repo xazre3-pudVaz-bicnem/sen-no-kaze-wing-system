@@ -2,8 +2,8 @@
 
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireStaff } from '@/lib/auth/session';
-import { getStore, isLocalMode, StoreError, type OptionInput, type SessionUser } from '@/lib/data/store';
-import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
+import { getStore, isLocalMode, StoreError, type OptionInput } from '@/lib/data/store';
+import { draftMediaContext, editableOptionContext } from '@/lib/actions/option-media-access';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { fetchRemoteMedia } from '@/lib/http/remote-media';
 import { createClient } from '@/lib/supabase/server';
@@ -16,19 +16,6 @@ function errorState(error: unknown): AdminFormState {
   if (error instanceof StoreError) return { ok: false, error: error.message };
   if (error instanceof Error && error.message) return { ok: false, error: error.message };
   return { ok: false, error: 'URLからの登録中にエラーが発生しました。' };
-}
-
-async function editableOptionContext(actor: SessionUser, optionId: string) {
-  const store = await getStore();
-  const option = await store.getOption(optionId);
-  if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません。');
-  if (canEditCatalog(actor.role)) return { store, option };
-
-  const category = (await store.listCategories()).find((row) => row.id === option.category_id);
-  if (actor.role !== 'customer' && option.owner_id === actor.id && category?.code === FREE_PRODUCT_CATEGORY_CODE) {
-    return { store, option };
-  }
-  throw new StoreError('FORBIDDEN', 'この商品のメディアは編集できません。');
 }
 
 function sourceUrl(formData: FormData): string {
@@ -126,7 +113,7 @@ export async function addOptionImageFromUrlAction(
 
   let uploadedUrl: string | null = null;
   try {
-    const { store, option } = await editableOptionContext(actor, optionId);
+    const { store, option } = await draftMediaContext(actor, optionId);
     const remote = await fetchRemoteMedia(url, 'image', MAX_IMAGE_BYTES);
     uploadedUrl = await store.uploadOptionImage(
       { bytes: remote.bytes, contentType: remote.contentType, fileName: remote.fileName },
@@ -172,7 +159,7 @@ export async function uploadOptionManufacturerDocumentFromUrlAction(
 
   let uploadedUrl: string | null = null;
   try {
-    const { store, option } = await editableOptionContext(actor, optionId);
+    const { store, option } = await draftMediaContext(actor, optionId);
     const remote = await fetchRemoteMedia(url, 'pdf', MAX_PRODUCT_DOCUMENT_BYTES);
     uploadedUrl = await store.uploadProductDocument(
       { bytes: remote.bytes, contentType: remote.contentType, fileName: remote.fileName },

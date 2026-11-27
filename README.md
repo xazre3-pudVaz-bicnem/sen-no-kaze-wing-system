@@ -125,6 +125,41 @@ npm run dev
 
 パスワード再設定はメールを送らず、画面に再設定リンクを表示します。
 
+## Cloud での隔離検証（本番 DB に接続しない）
+
+独立したチェックアウトで作業し、まず `git fetch origin main` と
+`git rev-parse HEAD origin/main` で作業対象を確認します。未コミットの変更がある場合は上書きしないでください。
+Node.js と npm を用意し、ロックファイルに従って依存関係を導入します。
+
+```bash
+node --version
+npm --version
+npm ci
+# npm の既定キャッシュが書き込み不可の場合の例
+# npm ci --cache /tmp/wing-npm-cache
+```
+
+検証用チェックアウトには実環境の `.env.local` 等を置かず、本番の認証情報を設定しないでください。
+以下は同じシェルで実行する例です。Supabase の値を空にし、ローカルデータを一時領域に分離します。
+`seed:supabase`、`supabase db push`、管理者作成など、本番に接続・書込みし得る手順は実行しません。
+
+```bash
+export WING_LOCAL_MODE=1
+export WING_LOCAL_DIR=/tmp/wing-cloud-local
+export NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= SUPABASE_SERVICE_ROLE_KEY=
+unset BASE_URL
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+```
+
+ビルドには Google Fonts へのネットワーク接続が必要です。接続できない環境ではフォント取得エラーで失敗するため、成功扱いにせず結果を記録してください。
+ブラウザ試験は `npx playwright install chromium` でブラウザを導入後、`npm run test:e2e` で実行します。
+Playwright は `BASE_URL` が未設定の場合にローカルサーバーを起動し、`.wing-local/e2e` を初期化します。
+ブラウザをダウンロードできない場合や試験を実行していない場合は、その旨を区別して報告してください。
+これらの検証は合成・ローカルデータを対象とし、実公開 Revision の動作確認には代わりません。
+
 ## テスト
 
 ```bash

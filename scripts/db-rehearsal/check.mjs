@@ -43,6 +43,7 @@ import { runtimeAnonChildRows } from './runtime-anon-child-rows.mjs';
 import { runtimeMatrixAirconLightingSplit } from './runtime-matrix-aircon-lighting-split.mjs';
 import { runtimeManufacturerProductUrl } from './runtime-manufacturer-product-url.mjs';
 import { runtimeOptionMediaChanges } from './runtime-option-media-changes.mjs';
+import { runtimeEquipmentInclusionSeparateRoom } from './runtime-equipment-inclusion-separate-room.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -116,6 +117,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeManufacturerProductUrl(client));
     // 登録済み商品の追加画像・メーカー資料PDFの一括反映（PR #563。行ロック・開いた時点の状態の照合・Storage の置き場所・履歴）
     runtime = mergeRuntime(runtime, await runtimeOptionMediaChanges(client));
+    // 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリーの二重の選択の防止と「別室に追加」（2026-11-25 の工程表 P5）
+    runtime = mergeRuntime(runtime, await runtimeEquipmentInclusionSeparateRoom(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

@@ -85,6 +85,7 @@ import { latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft,
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
+import { dropIncludedSelections, includedCategorySources, reconcileIncludedSelection } from '@/lib/domain/equipment-separate-room';
 import { isSimulatorSelectableProduct, simulatorChoiceOptions } from '@/lib/domain/product-lifecycle';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
@@ -117,6 +118,8 @@ export interface SimulatorInitial {
   lock_version: number | null;
   /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2。保存した明細の slot_code つきの行）。無ければ版の標準 */
   slot_selections?: SlotSelection[];
+  /** 「別室に追加」した商品（#628 の続き・A 案。保存した明細の separate_room の行）。無ければ別室の明細なし */
+  separate_room_option_ids?: string[];
 }
 
 interface Props {
@@ -173,6 +176,8 @@ interface Draft {
   lockVersion?: number | null;
   /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。旧形式の下書きでは未設定（版の標準） */
   slotSelections?: SlotSelection[];
+  /** 「別室に追加」した商品（#628 の続き・A 案）。旧形式の下書きでは未設定（別室の明細なし） */
+  separateRoomIds?: string[];
   pending: 'save' | 'quote' | null;
   savedAt: number;
 }
@@ -223,6 +228,8 @@ export function SimulatorApp({
       dependencies: bundle.dependencies,
       conflicts: bundle.conflicts,
       customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
+      // 商品に含まれる設備のカテゴリー（#628）。ユニットに含まれるカテゴリーの印の無い重複を確かめる
+      includedCategories: bundle.includedCategories ?? [],
     }),
     [bundle]
   );
@@ -256,16 +263,20 @@ export function SimulatorApp({
         const slotOptionIds = v25Pricing ? v25SlotOptionIdsFor(saleViews, model.slug, choice.code, fire) : null;
         // 版の位置・用途の選択枠のカテゴリー（v2.5 PR-S2）は位置ごとに選ぶので、カテゴリー単位の標準構成には入れない
         const positionCategoryIds = v25Pricing ? v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, choice.code, fire), bundle.options) : undefined;
+        const rawIds = slotOptionIds
+          ? buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, fire ? fireProofOptionId : null, positionCategoryIds)
+          : choice.template
+            ? buildEstimateBaselineSelection(ctx, model, choice.template)
+            : buildEstimateSpecSelection(ctx, model, choice.code);
         return {
           code: choice.code,
-          ids: slotOptionIds
-            ? buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, fire ? fireProofOptionId : null, positionCategoryIds)
-            : choice.template
-              ? buildEstimateBaselineSelection(ctx, model, choice.template)
-              : buildEstimateSpecSelection(ctx, model, choice.code),
+          // 設備包含（#628 の続き・A 案）：標準のユニットが含むカテゴリー（トイレ・洗面）の単体の標準は、最初から「ユニットに含まれています」
+          ids: dropIncludedSelections({ options: bundle.options, relations: bundle.includedCategories, selectedIds: rawIds }).next,
+          /** 包含を外したときに戻す標準の単体（外す前の標準構成） */
+          rawIds,
         };
       }),
-    [bundle.options, ctx, fireProofOptionId, model, saleViews, simulatorSpecChoices, v25Pricing]
+    [bundle.includedCategories, bundle.options, ctx, fireProofOptionId, model, saleViews, simulatorSpecChoices, v25Pricing]
   );
   const nonFireSpecSelections = useMemo(() => specSelectionsFor(false), [specSelectionsFor]);
   // 防火仕様の商品が無いモデル・v2.5 以前は、防火の条件で標準構成が変わらない
@@ -400,6 +411,13 @@ export function SimulatorApp({
    * 選んでいない位置・選べなくなった商品は版の標準（activeSlotSelections でそろえる）
    */
   const [slotSelections, setSlotSelections] = useState<SlotSelection[]>(initialPlan?.slotSelections ?? []);
+  /**
+   * 「別室に追加」した商品（#628 の続き・A 案）。ユニットに含まれるカテゴリー（トイレ・洗面）の商品を、ユニットとは別の部屋の
+   * 追加の設備として選んだもの。カテゴリーごとに 1 つ（今の「1 つだけ選べる」と同じ）。普通の追加の設備として金額に入る
+   */
+  const [separateRoomIds, setSeparateRoomIds] = useState<string[]>(initial?.separate_room_option_ids ?? []);
+  /** 別室に追加する商品を選ぶダイアログ（開いているカテゴリー） */
+  const [separateRoomPicker, setSeparateRoomPicker] = useState<string | null>(null);
   const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() => {
     // 保存済み旧Configurationの exterior_faces=[] は従来1商品方式を表す互換状態。
     // 外壁を明示変更するまで [] を維持し、価格や保存内容を4面方式へ自動変換しない。
@@ -525,6 +543,11 @@ export function SimulatorApp({
     [bundle.variantChoices, bundle.variantGroups, canSelectSlotOption, finishLevel, positionSlots, readOnly, slotInScope, slotSelections]
   );
   const slotOptionIdsInUse = useMemo(() => activeSlotSelections.map((selection) => selection.option_id), [activeSlotSelections]);
+  /** 設備包含（#628 の続き・A 案）：印なしで選んだユニットが含むカテゴリー → 含んでいる商品の ID */
+  const includedSources = useMemo(
+    () => includedCategorySources([...selected, ...slotOptionIdsInUse], bundle.includedCategories),
+    [bundle.includedCategories, selected, slotOptionIdsInUse]
+  );
   /** 位置の枠の標準の選択（版の枠の順。注文範囲の内の位置だけ） */
   const standardSlotSelectionsFor = useCallback(
     (level: FinishLevel) =>
@@ -685,6 +708,12 @@ export function SimulatorApp({
           setSelected(restoredSelection);
           setVariantIds(normalizedVariantIds);
           setSlotSelections(restoredSlotSelections);
+          // 別室に追加した商品（#628 の続き・A 案）：今の仕様で選べるものだけ戻す（選べないものは保存で止まるため）
+          setSeparateRoomIds(
+            (Array.isArray(draft.separateRoomIds) ? draft.separateRoomIds : [])
+              .filter((id): id is string => typeof id === 'string' && allowedOptionIds.has(id))
+              .filter((id) => pruneToScope(restoredCtx, [id], restoredLevel).length > 0)
+          );
           setExteriorFaces(
             normalizeExteriorFaces(
               draft.exteriorFaces,
@@ -747,6 +776,7 @@ export function SimulatorApp({
         variantIds,
         exteriorFaces,
         slotSelections,
+        separateRoomIds,
         finishLevel,
         spec: specCode,
         sitePrefecture,
@@ -782,7 +812,7 @@ export function SimulatorApp({
         return null;
       }
     },
-    [selected, variantIds, exteriorFaces, slotSelections, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug, standardPreview]
+    [selected, variantIds, exteriorFaces, slotSelections, separateRoomIds, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug, standardPreview]
   );
 
   // Synchronization with external browser storage is intentional. persistDraft
@@ -871,7 +901,7 @@ export function SimulatorApp({
   const standardEstimatePricing = useMemo<StandardEstimatePricingResult | null>(
     () =>
       activeSaleView
-        ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces, v25Units, activeSlotSelections)
+        ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces, v25Units, activeSlotSelections, separateRoomIds)
         : activeEstimateTemplate && !v25Pricing
           ? computeStandardEstimatePricing(
               bundle,
@@ -879,10 +909,11 @@ export function SimulatorApp({
               selected,
               variantIds,
               exteriorFaces,
-              finishLevel
+              finishLevel,
+              separateRoomIds
             )
           : null,
-    [activeEstimateTemplate, activeSaleView, activeSlotSelections, bundle, exteriorFaces, finishLevel, selected, variantIds, v25Pricing, v25Units]
+    [activeEstimateTemplate, activeSaleView, activeSlotSelections, bundle, exteriorFaces, finishLevel, selected, separateRoomIds, variantIds, v25Pricing, v25Units]
   );
   /** v2.5：今の選択で、売価の表に無く、まだサーバーで計算していない「商品＋選択肢」 */
   const missingV25Units = useMemo<V25MissingUnit[]>(
@@ -902,7 +933,11 @@ export function SimulatorApp({
         model,
         bundle.options,
         bundle.categories,
-        selected.map((sid) => ({ option_id: sid, variant_choice_ids: variantIds })),
+        [
+          ...selected.map((sid) => ({ option_id: sid, variant_choice_ids: variantIds })),
+          // 「別室に追加」した商品は、印なしの同じ商品と別に数える（#628 の続き・A 案）
+          ...separateRoomIds.map((sid) => ({ option_id: sid, variant_choice_ids: variantIds, separate_room: true })),
+        ],
         undefined,
         { groups: bundle.variantGroups, choices: bundle.variantChoices },
         baseOverride,
@@ -910,7 +945,7 @@ export function SimulatorApp({
       );
     // v2.5 の標準見積が無い仕様は、原価から金額を出さない（価格は準備中・見積依頼でお見積り。DB の保存・見積依頼も同じ）
     return v25PricePending ? pendingSaleViewPricing(result) : result;
-  }, [model, bundle, selected, variantIds, baseOverride, exteriorFaces, standardEstimatePricing, v25PricePending]);
+  }, [model, bundle, selected, separateRoomIds, variantIds, baseOverride, exteriorFaces, standardEstimatePricing, v25PricePending]);
   /** v2.5 の売価を使う間は、画面に出す商品を、商品価格を売価にしたものに差し替える（原価は受け取っていない） */
   const withDisplayPrices = useCallback(
     (options: ProductOption[]) => (displayOptionById ? options.map((option) => displayOptionById.get(option.id) ?? option) : options),
@@ -939,7 +974,9 @@ export function SimulatorApp({
           lv === finishLevel ? exteriorFaces : [],
           v25Units,
           // 位置の枠：今の注文範囲は今の選択、ほかはその範囲の内の位置の標準
-          lv === finishLevel ? activeSlotSelections : standardSlotSelectionsFor(lv)
+          lv === finishLevel ? activeSlotSelections : standardSlotSelectionsFor(lv),
+          // 別室に追加した商品（#628 の続き・A 案）：今の注文範囲だけ
+          lv === finishLevel ? separateRoomIds : []
         );
         out[lv] = result.pricing.total;
         levelMissing.push(...(result.missing_units ?? []));
@@ -949,7 +986,10 @@ export function SimulatorApp({
         model,
         bundle.options,
         bundle.categories,
-        ids.map((sid) => ({ option_id: sid })),
+        [
+          ...ids.map((sid) => ({ option_id: sid })),
+          ...(lv === finishLevel ? separateRoomIds.map((sid) => ({ option_id: sid, separate_room: true })) : []),
+        ],
         undefined,
         undefined,
         baseBreakdownTotal(bundle, specCode),
@@ -957,7 +997,7 @@ export function SimulatorApp({
       ).total;
     }
     return { levelTotals: out, levelMissingUnits: levelMissing };
-  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces, v25Pricing, activeSaleView, variantIds, v25Units, standardVariantIdsFor, activeSlotSelections, standardSlotSelectionsFor]);
+  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, separateRoomIds, finishLevel, exteriorFaces, v25Pricing, activeSaleView, variantIds, v25Units, standardVariantIdsFor, activeSlotSelections, standardSlotSelectionsFor]);
   // 表に無い組み合わせ（今の選択と、注文範囲のカードの目安の分）は、サーバーで売価だけを計算してもらう
   // （200 件ずつ。失敗した組み合わせは目安のまま、もう一度は頼まない）
   useEffect(() => {
@@ -1002,13 +1042,14 @@ export function SimulatorApp({
     });
   // 位置・用途の選択枠の商品も、必須・前提・同時に選べないの確認に含める。「1 つだけ選択」はカテゴリー単位の選択だけで数える（DB と同じ）
   const validationIssues = useMemo<RuleIssue[]>(() => {
-    const categoryLevel = validateSelection(activeSpecCtx, selected, finishLevel);
+    // 「別室に追加」した商品も渡す（競合・前提・必須に数え、ユニットに含まれるカテゴリーの印の無い重複を確かめる。#628 の続き・A 案）
+    const categoryLevel = validateSelection(activeSpecCtx, selected, finishLevel, separateRoomIds);
     if (slotOptionIdsInUse.length === 0) return categoryLevel;
     return [
-      ...validateSelection(activeSpecCtx, [...selected, ...slotOptionIdsInUse], finishLevel).filter((issue) => issue.type !== 'single'),
+      ...validateSelection(activeSpecCtx, [...selected, ...slotOptionIdsInUse], finishLevel, separateRoomIds).filter((issue) => issue.type !== 'single'),
       ...categoryLevel.filter((issue) => issue.type === 'single'),
     ];
-  }, [activeSpecCtx, selected, finishLevel, slotOptionIdsInUse]);
+  }, [activeSpecCtx, selected, finishLevel, slotOptionIdsInUse, separateRoomIds]);
   const displayIssues = useMemo(() => {
     if (!legacyReadOnlyWithoutIndependentInsulation) return validationIssues;
 
@@ -1032,8 +1073,9 @@ export function SimulatorApp({
     validationIssues,
   ]);
   const blocked = useMemo(
-    () => explainBlocked(activeSpecCtx, [...selected, ...slotOptionIdsInUse]),
-    [activeSpecCtx, selected, slotOptionIdsInUse]
+    // 別室に追加した商品も、同時に選べない組み合わせ（旧排他）の理由に数える（#628 の続き・A 案）
+    () => explainBlocked(activeSpecCtx, [...selected, ...slotOptionIdsInUse, ...separateRoomIds]),
+    [activeSpecCtx, selected, slotOptionIdsInUse, separateRoomIds]
   );
   const activeSpecSelection = useMemo(
     () => specSelections.find((row) => row.code === specCode)?.ids ?? [],
@@ -1089,12 +1131,21 @@ export function SimulatorApp({
         variantChoiceIds: variantIds,
         exteriorFaces,
         slotSelections: activeSlotSelections,
+        // 別室に追加した商品（#628 の続き・A 案）。対象を標準に戻した総額にも同じく入る
+        separateRoomOptionIds: separateRoomIds,
       },
       standard: {
         optionIds: activeSpecSelection,
         variantChoiceIds: baselineVariantIds,
         exteriorFaces: baselineFaces,
         slotSelections: standardSlotSelectionsFor(finishLevel),
+      },
+      // 設備包含（#628 の続き・A 案）：対象を戻した仮のプランにも、選び直しと同じ整理（含まれれば外す・外れれば標準の単体に戻す）をかける
+      inclusion: {
+        relations: bundle.includedCategories ?? [],
+        slotOptionIds: activeSlotSelections.map((selection) => selection.option_id),
+        standardOptionIds: specSelections.find((row) => row.code === specCode)?.rawIds ?? [],
+        standardVariantChoiceIds: baselineVariantIds,
       },
     };
     return { priceInput, evaluator: createSimulatorCardDeltaEvaluator(priceInput) };
@@ -1103,6 +1154,7 @@ export function SimulatorApp({
     activeSpecSelection, baseOverride, baselineVariantIds, bundle, exteriorFaces,
     exteriorWallCat?.id, finishLevel, positionSlots, selected, slotInScope,
     standardSlotSelectionsFor, v25PricePending, v25Pricing, v25Units, variantIds,
+    separateRoomIds, specSelections, specCode,
   ]);
   const getCardDelta = useCallback((target: SimulatorCardTarget): SimulatorCardDelta =>
     // 公開済み価格がない場合は、たとえ商品の選択が標準と同じでも価格未確定とする。
@@ -1118,6 +1170,7 @@ export function SimulatorApp({
     const candidate = simulatePickerCategoryCandidate({
       bundle, ruleContext: activeSpecCtx, current: cardDeltaContext.priceInput.current,
       categoryId, nextInCategory, nextVariants, positionCategoryIds,
+      priceInput: cardDeltaContext.priceInput,
     });
     if (!candidate) return { kind: 'pending', reason: 'incomplete-selection' };
     return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
@@ -1315,6 +1368,8 @@ export function SimulatorApp({
     setExteriorFaces(next.faces);
     // 位置・用途の選択枠も、新しい仕様の版の標準から始める
     setSlotSelections([]);
+    // 別室に追加した商品も、新しい仕様の標準から始める（#628 の続き・A 案）
+    setSeparateRoomIds([]);
     setDirty(true);
     pushToast(`「${choice.name}」の標準見積を読み込みました`, 'success');
   };
@@ -1394,8 +1449,11 @@ export function SimulatorApp({
       }
     } else {
       const kept = pruneToScope(activeSpecCtx, selected, level);
-      const dropped = selected.length - kept.length;
+      // 別室に追加した商品も、範囲外なら外す（タイルが見えないまま金額に残さない。#628 の続き・A 案）
+      const keptSeparate = pruneToScope(activeSpecCtx, separateRoomIds, level);
+      const dropped = selected.length - kept.length + (separateRoomIds.length - keptSeparate.length);
       setSelected(kept);
+      setSeparateRoomIds(keptSeparate);
       if (dropped > 0) pushToast(`注文範囲を外れた ${dropped} 点を見積から外しました`, 'info');
     }
     setFinishLevel(level);
@@ -1407,6 +1465,81 @@ export function SimulatorApp({
    * adjustSelection は、選び直しの後のカテゴリー単位の選択をそろえる（防火の切り替えで使う版が変わるとき。v2.5 PR-S2）。
    * そろえて足した商品には標準の選択肢を選び、外した商品の選択肢は外す
    */
+  /**
+   * 設備包含（#628 の続き・A 案）：選び直しの後の印なしの選択を、包含の変化に合わせてそろえる（利用者の選び直しのときだけ。
+   * 読み込んだプランの重複は自動で消さず、タイルで直してもらう）。
+   * - 新しく含まれるカテゴリー：印なしの選択を外し、理由と「別室に追加する」を知らせる
+   * - 含まれなくなったカテゴリー：印なしの選択が無ければ、仕様の標準の単体に戻す
+   */
+  const reconcileInclusion = (next: string[], prev: string[]): { next: string[]; dropped: string[]; notices: string[] } => {
+    const result = reconcileIncludedSelection({
+      options: bundle.options,
+      relations: bundle.includedCategories,
+      prevIds: prev,
+      nextIds: next,
+      slotOptionIds: slotOptionIdsInUse,
+      standardIds: specSelections.find((row) => row.code === specCode)?.rawIds ?? [],
+      canRestore: (id) => activeSpecCtx.options.some((option) => option.id === id),
+    });
+    const categoryOf = (id: string) => optionById.get(id)?.category_id;
+    const nameOf = (id: string) => optionById.get(id)?.name ?? '商品';
+    const categoryName = (id: string) => bundle.categories.find((category) => category.id === id)?.name ?? '';
+    const notices: string[] = [];
+    for (const [categoryId, sourceIds] of result.newlyIncluded) {
+      const removed = result.dropped.filter((id) => categoryOf(id) === categoryId);
+      if (removed.length === 0) continue;
+      notices.push(
+        `「${categoryName(categoryId)}」は「${sourceIds.map(nameOf).join('・')}」に含まれるため、選んでいた「${removed.map(nameOf).join('・')}」を外しました。` +
+          '別の部屋に追加する場合は「別室に追加する」から選べます'
+      );
+    }
+    const restoredCategories = [...new Set(result.restored.map(categoryOf))].filter((id): id is string => Boolean(id));
+    for (const categoryId of restoredCategories) {
+      const restored = result.restored.filter((id) => categoryOf(id) === categoryId);
+      notices.push(`「${categoryName(categoryId)}」を標準の「${restored.map(nameOf).join('・')}」に戻しました`);
+    }
+    return { next: result.next, dropped: result.dropped, notices };
+  };
+
+  /**
+   * 別室に追加する商品を選ぶ（空なら外す）。1 つだけ選べるカテゴリーの決まりはダイアログが守る
+   * （洗面の標準セットは 2 つの商品で 1 つ）。選択肢はその商品の分を入れ替える
+   */
+  const applySeparateRoomPicker = (categoryId: string, nextInCategory: string[], nextVariants: string[] = []) => {
+    const inCategory = new Set(bundle.options.filter((option) => option.category_id === categoryId).map((option) => option.id));
+    const picked = nextInCategory.filter((id) => inCategory.has(id));
+    setSeparateRoomIds((prev) => [...prev.filter((id) => !inCategory.has(id)), ...picked]);
+    if (picked.length > 0) {
+      const groupIds = new Set(bundle.variantGroups.filter((group) => picked.includes(group.option_id)).map((group) => group.id));
+      const groupOf = (cid: string) => bundle.variantChoices.find((choice) => choice.id === cid)?.group_id ?? '';
+      const mine = nextVariants.filter((cid) => groupIds.has(groupOf(cid)));
+      // 同じ商品を印なしでも選んでいるときは、その選択肢を残す（選択肢は商品ごとに 1 つ）
+      if (!picked.some((id) => selected.includes(id))) setVariantIds((prev) => [...prev.filter((cid) => !groupIds.has(groupOf(cid))), ...mine]);
+    }
+    setDirty(true);
+    setSeparateRoomPicker(null);
+    if (picked.length > 0) pushToast(`「${picked.map((id) => optionById.get(id)?.name ?? '商品').join('・')}」を別室に追加しました`, 'info');
+  };
+
+  const removeSeparateRoom = (optionId: string) => {
+    if (readOnly) return;
+    setSeparateRoomIds((prev) => prev.filter((id) => id !== optionId));
+    setDirty(true);
+  };
+
+  /** 前からある重複（ユニットに含まれるカテゴリーの印なしの選択）を直す：外すか、別室の設備にする */
+  const resolveIncluded = (categoryId: string, mode: 'remove' | 'separate') => {
+    if (readOnly) return;
+    const duplicates = selected.filter((id) => optionById.get(id)?.category_id === categoryId);
+    if (duplicates.length === 0) return;
+    setSelected((prev) => prev.filter((id) => !duplicates.includes(id)));
+    if (mode === 'separate') {
+      const inCategory = new Set(bundle.options.filter((option) => option.category_id === categoryId).map((option) => option.id));
+      setSeparateRoomIds((prev) => [...prev.filter((id) => !inCategory.has(id)), ...duplicates]);
+    }
+    setDirty(true);
+  };
+
   const applyPicker = (
     categoryId: string,
     nextInCategory: string[],
@@ -1459,6 +1592,10 @@ export function SimulatorApp({
     const picked = cur;
     // 位置ごとに選ぶカテゴリーの商品は、前提の自動追加で入っても、カテゴリー単位の選択に残さない（v2.5 PR-S2。位置の選択で選ぶ）
     cur = adjustSelection ? adjustSelection(cur) : withoutPositionCategoryOptions(bundle.options, cur, positionCategoryIds);
+    // 設備包含（#628 の続き・A 案）：包含元を選んだら含まれるカテゴリーの印なしの選択を外し、包含を外したら標準の単体に戻す
+    const inclusionChange = reconcileInclusion(cur, selected);
+    cur = inclusionChange.next;
+    notices.push(...inclusionChange.notices);
     const adjustedIn = cur.filter((id) => !picked.includes(id));
     const adjustedOut = new Set(picked.filter((id) => !cur.includes(id)));
     const positionCategoryNames = [
@@ -1475,7 +1612,8 @@ export function SimulatorApp({
 
     // A dependency or scope change may also remove products outside the chosen
     // category. Ask before committing such a loss; the picker itself is intentional.
-    const automaticallyRemoved = selected.filter((id) => !cur.includes(id) && !inCategory.includes(id));
+    // ユニットに含まれるため外した商品は、理由を知らせるので確かめない（#628 の続き・A 案）
+    const automaticallyRemoved = selected.filter((id) => !cur.includes(id) && !inCategory.includes(id) && !inclusionChange.dropped.includes(id));
     if (automaticallyRemoved.length > 0) {
       const names = automaticallyRemoved.slice(0, 4).map((id) => optionById.get(id)?.name ?? '商品');
       if (!window.confirm(`この変更により、ほかの商品（${names.join('・')}）も選択から外れます。続けますか？`)) return;
@@ -1484,10 +1622,19 @@ export function SimulatorApp({
     setSelected(cur);
     // このカテゴリーの商品に紐づく選択肢を入れ替える（そろえて外した商品の選択肢も外し、足した商品は標準の選択肢）
     const catOptionIds = new Set(inCategory);
+    // 選択肢は商品ごとに 1 つで、同じ商品の印なしと別室の明細で共有する（#628 の続き・A 案）。別室で使っている商品の選択肢は、
+    // 印なしの明細を外す・戻すときに消さず、標準で上書きしない（このダイアログで選び直した選択項目だけ入れ替える）
+    const separateOptionIds = new Set(separateRoomIds);
+    const nextVariantGroupIds = new Set(nextVariants.map((cid) => bundle.variantChoices.find((c) => c.id === cid)?.group_id).filter(Boolean));
+    const keepForSeparate = (g: { id: string; option_id: string }) => separateOptionIds.has(g.option_id) && !nextVariantGroupIds.has(g.id);
     const groupIds = new Set(
-      bundle.variantGroups.filter((g) => catOptionIds.has(g.option_id) || adjustedOut.has(g.option_id)).map((g) => g.id)
+      bundle.variantGroups
+        .filter((g) => (catOptionIds.has(g.option_id) || adjustedOut.has(g.option_id)) && !keepForSeparate(g))
+        .map((g) => g.id)
     );
-    const addedGroupIds = new Set(bundle.variantGroups.filter((g) => adjustedIn.includes(g.option_id)).map((g) => g.id));
+    const addedGroupIds = new Set(
+      bundle.variantGroups.filter((g) => adjustedIn.includes(g.option_id) && !separateOptionIds.has(g.option_id)).map((g) => g.id)
+    );
     const addedVariants =
       adjustedIn.length > 0
         ? standardVariantIdsFor(specCode, cur).filter((cid) => addedGroupIds.has(bundle.variantChoices.find((c) => c.id === cid)?.group_id ?? ''))
@@ -1560,6 +1707,11 @@ export function SimulatorApp({
       setExteriorFacePicker('front');
       return;
     }
+    // ユニットに含まれるカテゴリー（#628 の続き・A 案）は、別室に追加する商品を選ぶ（前からある重複はタイルで直す）
+    if (includedSources.has(categoryId) && !selected.some((id) => optionById.get(id)?.category_id === categoryId)) {
+      setSeparateRoomPicker(categoryId);
+      return;
+    }
     // 位置ごとに選ぶカテゴリー（v2.5 PR-S2）は、カテゴリー単位では選ばない。最初の位置の選択を開く
     if (positionCategoryIds.has(categoryId)) {
       const first = slotRows.find((row) => row.categoryId === categoryId);
@@ -1608,9 +1760,14 @@ export function SimulatorApp({
 
   /** 保存する選択肢：選んでいる商品の選択項目のものだけ（外した商品の選択肢は DB が受け付けない） */
   const savableVariantIds = useMemo(() => {
-    const groupIds = new Set(bundle.variantGroups.filter((group) => selected.includes(group.option_id)).map((group) => group.id));
+    // 別室に追加した商品の選択肢も保存する（#628 の続き・A 案）
+    const groupIds = new Set(
+      bundle.variantGroups
+        .filter((group) => selected.includes(group.option_id) || separateRoomIds.includes(group.option_id))
+        .map((group) => group.id)
+    );
     return variantIds.filter((id) => groupIds.has(bundle.variantChoices.find((choice) => choice.id === id)?.group_id ?? ''));
-  }, [bundle.variantChoices, bundle.variantGroups, selected, variantIds]);
+  }, [bundle.variantChoices, bundle.variantGroups, selected, separateRoomIds, variantIds]);
 
   const doSave = (saveName: string, then: 'stay' | 'quote') => {
     // 本部プレビューは確認用。保存すると DB（これまでの計算）と金額が食い違うため保存しない
@@ -1629,6 +1786,8 @@ export function SimulatorApp({
         exterior_faces: exteriorFaces,
         // 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。注文範囲の内の位置をすべて 1 つずつ（DB が版と照らして確かめる）
         slot_selections: activeSlotSelections,
+        // 別室に追加した商品（#628 の続き・A 案。DB がユニットに含まれるカテゴリーとの関係を確かめる）
+        separate_room_option_ids: separateRoomIds,
         spec_code: specCode,
         site_prefecture: sitePrefecture,
         site_municipality: siteMunicipality,
@@ -2058,6 +2217,11 @@ export function SimulatorApp({
           slotTiles={slotTiles}
           onPickSlot={openSlotPicker}
           getCardDelta={getCardDelta}
+          includedCategoryNames={new Map([...includedSources].map(([categoryId, ids]) => [categoryId, ids.map((id) => optionById.get(id)?.name ?? '商品')]))}
+          separateRoomOptions={displayAllOptions.filter((option) => separateRoomIds.includes(option.id))}
+          onAddSeparateRoom={(categoryId) => (readOnly ? undefined : setSeparateRoomPicker(categoryId))}
+          onRemoveSeparateRoom={removeSeparateRoom}
+          onResolveIncluded={resolveIncluded}
         />
 
         {displayIssues.length > 0 && (
@@ -2128,6 +2292,22 @@ export function SimulatorApp({
           onApply={(next, nextVariants) => applyPicker(picker, next, nextVariants)}
         />
       )}
+      {separateRoomPicker && bundle.categories.some((c) => c.id === separateRoomPicker) && (
+        <OptionPickerDialog
+          category={bundle.categories.find((c) => c.id === separateRoomPicker)!}
+          separateRoom
+          options={displayScopedOptions.filter((o) => o.category_id === separateRoomPicker)}
+          selectedIds={separateRoomIds.filter((id) => optionById.get(id)?.category_id === separateRoomPicker)}
+          baselineSelectedIds={[]}
+          blocked={blocked}
+          variantGroups={bundle.variantGroups}
+          variantChoices={displayVariantChoices}
+          selectedVariantIds={variantIds}
+          baselineVariantIds={baselineVariantIds}
+          onClose={() => setSeparateRoomPicker(null)}
+          onApply={(next, nextVariants) => applySeparateRoomPicker(separateRoomPicker, next, nextVariants)}
+        />
+      )}
       {slotPickerRow && slotPickerCategory && (
         <OptionPickerDialog
           category={slotPickerCategory}
@@ -2196,6 +2376,7 @@ export function SimulatorApp({
             site_municipality: siteMunicipality,
             site_location_undecided: siteLocationUndecided,
             slot_selections: activeSlotSelections,
+            separate_room_option_ids: separateRoomIds,
           }}
           onLogin={() => {
             setGuestSave(false);

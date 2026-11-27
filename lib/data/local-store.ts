@@ -44,6 +44,7 @@ import {
   type StandardEstimatePricingResult,
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection, type RuleContext } from '@/lib/domain/rules';
+import { inclusionQuoteNoteLines, SEPARATE_ROOM_MAX_ITEMS } from '@/lib/domain/equipment-separate-room';
 import { buildCustomerCategoryMatrix, effectiveCustomerSpecCodes } from '@/lib/domain/customer-category-applicability';
 import { ruleContextForSpec } from '@/lib/domain/estimate-template';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, hasRoleAtLeast } from '@/lib/domain/types';
@@ -192,6 +193,12 @@ export class LocalStore implements DataStore {
           .filter((b) => b.base_model_id === modelId)
           .sort((a, b) => a.sort_order - b.sort_order),
         customerCategoryMatrix: buildCustomerCategoryMatrix(db.matrix, db.categories, db.models),
+        // 商品に含まれる設備のカテゴリー（#628）。DB の読み取りの決まりと同じく、公開中の商品・公開中のカテゴリーの分だけ
+        // （下書きも読む画面（includeDraft）は本部の画面なので全件）
+        includedCategories: (db.optionIncludedCategories ?? [])
+          .filter((row) => ids.has(row.option_id))
+          .filter((row) => opts?.includeDraft || db.categories.some((c) => c.id === row.included_category_id && c.status === 'published'))
+          .map(({ option_id, included_category_id }) => ({ option_id, included_category_id })),
       };
     });
   }
@@ -896,6 +903,8 @@ export class LocalStore implements DataStore {
             quantity: item.quantity,
             variant_choice_ids: item.variant_choice_ids ?? [],
             slot_code: item.slot_code ?? null,
+            // 「別室に追加」の明細（#628 の続き・A 案。DB の get_case_plan_configuration と同じ）
+            separate_room: Boolean(item.separate_room),
           })),
         exterior_faces: Array.isArray(exteriorFaces) ? exteriorFaces : [],
         position_slots: [],
@@ -974,10 +983,12 @@ export class LocalStore implements DataStore {
       standardPricing = computeStandardEstimatePricing(
         bundle,
         templateBundle,
-        items.map((item) => item.option_id),
+        items.filter((item) => !item.separate_room).map((item) => item.option_id),
         items.flatMap((item) => item.variant_choice_ids ?? []),
         exteriorFaces,
-        cfg.finish_level
+        cfg.finish_level,
+        // 「別室に追加」の明細（#628 の続き・A 案）は別に数える（同じ商品の印なしの明細と 2 行になることがある）
+        items.filter((item) => item.separate_room).map((item) => item.option_id)
       );
       pricing = standardPricing.pricing;
     } else {
@@ -994,6 +1005,7 @@ export class LocalStore implements DataStore {
           option_id: i.option_id,
           quantity: i.quantity,
           variant_choice_ids: i.variant_choice_ids ?? [],
+          separate_room: Boolean(i.separate_room),
         })),
         undefined,
         { groups: db.variantGroups, choices: db.variantChoices },
@@ -1028,12 +1040,24 @@ export class LocalStore implements DataStore {
    *   - 必須カテゴリーは「選択」かつ適合商品が 1 件以上ある場合だけ必須
    *   - 依存ルールは候補の絞り込みで消さない
    */
+  /** 選択肢の表示（DB の見積の写しと同じ「項目：選択肢」を「／」でつなぐ。項目・選択肢の並び順） */
+  private static variantLabel(db: LocalDb, optionId: string, choiceIds: string[]): string | null {
+    const picked = db.variantChoices
+      .filter((c) => choiceIds.includes(c.id))
+      .map((c) => ({ choice: c, group: db.variantGroups.find((g) => g.id === c.group_id && g.option_id === optionId) }))
+      .filter((x): x is { choice: (typeof db.variantChoices)[number]; group: (typeof db.variantGroups)[number] } => Boolean(x.group))
+      .sort((a, b) => a.group.sort_order - b.group.sort_order || a.choice.sort_order - b.choice.sort_order);
+    return picked.length ? picked.map((x) => `${x.group.name}：${x.choice.name}`).join('／') : null;
+  }
+
   private static ruleContextFor(db: LocalDb, model: BaseModel, specCode: string | null): RuleContext {
     const full: RuleContext = {
       options: db.options,
       categories: db.categories,
       dependencies: db.dependencies,
       conflicts: db.conflicts,
+      // 商品に含まれる設備のカテゴリー（#628）。DB の validate_configuration_items と同じく全件で判定する
+      includedCategories: db.optionIncludedCategories ?? [],
     };
     if (!specCode) return full;
     const customerMatrix = buildCustomerCategoryMatrix(db.matrix, db.categories, db.models);
@@ -1156,12 +1180,33 @@ export class LocalStore implements DataStore {
       const specCode = input.spec_code ?? db.configurations.find((c) => c.id === input.id)?.spec_code ?? null;
       const ruleCtx = LocalStore.ruleContextFor(db, model, specCode);
       LocalStore.assertSelectableForSpec(ruleCtx, ids, specCode);
-      const issues = validateSelection(ruleCtx, ids, level);
+      // 「別室に追加」した商品（#628 の続き・A 案。DB の save_configuration_atomic と同じ確かめ）
+      const separateIds = input.separate_room_option_ids ?? [];
+      if (separateIds.length > SEPARATE_ROOM_MAX_ITEMS) throw new StoreError('VALIDATION', '別室に追加する設備は 10 件までです');
+      if (new Set(separateIds).size !== separateIds.length) {
+        throw new StoreError('VALIDATION', '別室に追加する同じ設備を複数回保存できません');
+      }
+      if (
+        separateIds.some(
+          (id) =>
+            !db.options.some(
+              (o) =>
+                o.id === id &&
+                o.status === 'published' &&
+                (o.base_model_id === null || o.base_model_id === model.id) &&
+                scope.has(o.category_id)
+            )
+        )
+      ) {
+        throw new StoreError('VALIDATION', '選択できないオプションが含まれています');
+      }
+      LocalStore.assertSelectableForSpec(ruleCtx, separateIds, specCode);
+      const issues = validateSelection(ruleCtx, ids, level, separateIds);
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
       // 商品の状態（DB の 20261015113000 と同じ）：保存前の明細・外壁の面と照合してから書き込む
       {
         const wanted = new Set(input.variant_choice_ids ?? []);
-        const nextItems = ids.map((id) => ({
+        const nextItems = [...ids, ...separateIds].map((id) => ({
           option_id: id,
           variant_choice_ids: db.variantChoices
             .filter((c) => wanted.has(c.id) && db.variantGroups.some((g) => g.id === c.group_id && g.option_id === id))
@@ -1243,6 +1288,20 @@ export class LocalStore implements DataStore {
           .filter((c) => wantVariants.has(c.id) && db.variantGroups.some((g) => g.id === c.group_id && g.option_id === id))
           .map((c) => c.id);
         db.configurationItems.push({ id: randomUUID(), configuration_id: cfg.id, option_id: id, quantity: 1, variant_choice_ids: mine });
+      }
+      // 「別室に追加」の明細（#628 の続き・A 案）。選択肢は、その商品の選択肢だけ（印なしの同じ商品と同じ選択肢になる）
+      for (const id of separateIds) {
+        const mine = db.variantChoices
+          .filter((c) => wantVariants.has(c.id) && db.variantGroups.some((g) => g.id === c.group_id && g.option_id === id))
+          .map((c) => c.id);
+        db.configurationItems.push({
+          id: randomUUID(),
+          configuration_id: cfg.id,
+          option_id: id,
+          quantity: 1,
+          variant_choice_ids: mine,
+          separate_room: true,
+        });
       }
       const { pricing } = this.recalc(db, cfg);
       db.snapshots.push({
@@ -1382,7 +1441,13 @@ export class LocalStore implements DataStore {
         (names) => `${names} は販売停止中のため、この内容では見積を依頼できません。販売の再開を待つか、別の商品へ変更してください`
       );
       LocalStore.assertSelectableForSpec(ruleCtx, itemOptionIds, cfgModel ? (cfg.spec_code ?? null) : null);
-      const issues = validateSelection(ruleCtx, itemOptionIds, cfg.finish_level ?? 'full');
+      // 「別室に追加」の明細は別に渡し、ユニットに含まれるカテゴリーの二重の選択を確かめる（DB の見積依頼と同じ。#628 の続き・A 案）
+      const issues = validateSelection(
+        ruleCtx,
+        items.filter((i) => !i.separate_room).map((i) => i.option_id),
+        cfg.finish_level ?? 'full',
+        items.filter((i) => i.separate_room).map((i) => i.option_id)
+      );
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
       const { pricing, model, standardPricing } = this.recalc(db, cfg);
 
@@ -1578,9 +1643,11 @@ export class LocalStore implements DataStore {
             id: randomUUID(),
             quote_id: quote.id,
             kind: l.is_free_product ? 'free' : l.is_installation ? 'installation' : 'option',
-            name: l.variants.length
-              ? `${l.name}（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）`
-              : l.name,
+            // 別室に追加した明細は、選択肢の後ろに「（別室）」（DB の見積依頼と同じ並び）
+            name:
+              (l.separate_room ? l.name.replace(/（別室）$/, '') : l.name) +
+              (l.variants.length ? `（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）` : '') +
+              (l.separate_room ? '（別室）' : ''),
             description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
             unit: '式',
             remark: null,
@@ -1604,6 +1671,35 @@ export class LocalStore implements DataStore {
           amount: pricing.option_expense,
           image_url: null,
           sort_order: 9000,
+        });
+      }
+      // 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリーの 0 円の注記と、別室に追加した明細の 0 円の写し
+      // （DB の write_configuration_inclusion_quote_notes と同じ。明細を 1 行ずつ写す旧仕様（標準見積なし）は写さない）
+      for (const note of inclusionQuoteNoteLines({
+        options: db.options,
+        categories: db.categories,
+        relations: db.optionIncludedCategories ?? [],
+        items: items.map((i) => ({
+          option_id: i.option_id,
+          separate_room: Boolean(i.separate_room),
+          quantity: i.quantity,
+          variant_label: LocalStore.variantLabel(db, i.option_id, i.variant_choice_ids ?? []),
+        })),
+        copySeparateRoom: Boolean(standardPricing),
+      })) {
+        db.quoteItems.push({
+          id: randomUUID(),
+          quote_id: quote.id,
+          kind: note.kind,
+          name: note.name,
+          description: note.description,
+          unit: note.unit,
+          remark: note.remark,
+          unit_price: 0,
+          quantity: note.quantity,
+          amount: 0,
+          image_url: note.image_url,
+          sort_order: note.sort_order,
         });
       }
       cfg.status = 'quote_requested';

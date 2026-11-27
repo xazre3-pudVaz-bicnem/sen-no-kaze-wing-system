@@ -18,13 +18,16 @@ import {
   type V25UnitLookup,
 } from './standard-estimate-sale-view';
 import type { ExteriorFaceCode, ExteriorFaceSelection } from './exterior-wall';
-import type { CatalogBundle, EstimateTemplateBundle, FinishLevel, SlotSelection } from './types';
+import type { CatalogBundle, EstimateTemplateBundle, FinishLevel, OptionIncludedCategory, SlotSelection } from './types';
+import { reconcileIncludedSelection } from './equipment-separate-room';
 
 export interface SimulatorCardPlanSelection {
   optionIds: string[];
   variantChoiceIds: string[];
   exteriorFaces: ExteriorFaceSelection[];
   slotSelections?: SlotSelection[];
+  /** 「別室に追加」した商品（#628 の続き・A 案）。普通の追加の設備として総額に入る */
+  separateRoomOptionIds?: string[];
 }
 
 /** SimulatorApp で実際に選んだ価格計算経路を、そのまま呼び出し元から指定する。 */
@@ -66,6 +69,16 @@ export interface SimulatorCardPriceInput {
   current: SimulatorCardPlanSelection;
   /** 対象を戻す標準選択。v2.5 の位置別標準だけは公開版の枠を正本として参照する。 */
   standard: SimulatorCardPlanSelection;
+  /**
+   * 設備包含（#628 の続き・A 案）：対象を戻した仮のプランにも、選び直しと同じ整理（含まれれば外す・外れれば標準の単体に戻す）をかける。
+   * standardOptionIds は標準のユニットが含むカテゴリーを外す前の標準構成、standardVariantChoiceIds はその標準の選択肢
+   */
+  inclusion?: {
+    relations: OptionIncludedCategory[];
+    slotOptionIds?: string[];
+    standardOptionIds: string[];
+    standardVariantChoiceIds?: string[];
+  };
 }
 
 const FACE_CODES = ['front', 'right', 'back', 'left'] as const;
@@ -252,12 +265,48 @@ function restoreTarget(input: SimulatorCardPriceInput, target: SimulatorCardTarg
 
   return {
     kind: 'restored',
-    plan: {
+    plan: withInclusionReconciled(input, current, {
       ...current,
       optionIds: [...current.optionIds.filter((id) => !ids.has(id)), ...standardIds],
       variantChoiceIds: [...current.variantChoiceIds.filter((id) => !choiceIds.has(id)), ...standardChoices],
       exteriorFaces: isExteriorWall ? [...standard.exteriorFaces] : current.exteriorFaces,
-    },
+    }),
+  };
+}
+
+/**
+ * 設備包含（#628 の続き・A 案）：仮のプランに、選び直しと同じ整理をかける（含まれれば外す・外れれば標準の単体に戻す）。
+ * 外した商品の選択肢は外し、戻した商品は標準の選択肢。別室に追加した商品の選択肢は残す（同じ商品の印なしの明細と共有するため）
+ */
+export function withInclusionReconciled(
+  input: SimulatorCardPriceInput,
+  before: SimulatorCardPlanSelection,
+  plan: SimulatorCardPlanSelection
+): SimulatorCardPlanSelection {
+  if (!input.inclusion || input.inclusion.relations.length === 0) return plan;
+  const { bundle } = input;
+  const result = reconcileIncludedSelection({
+    options: bundle.options,
+    relations: input.inclusion.relations,
+    prevIds: before.optionIds,
+    nextIds: plan.optionIds,
+    slotOptionIds: input.inclusion.slotOptionIds,
+    standardIds: input.inclusion.standardOptionIds,
+  });
+  if (result.dropped.length === 0 && result.restored.length === 0) return plan;
+  const separate = new Set(plan.separateRoomOptionIds ?? []);
+  const groupsOf = (optionIds: string[]) =>
+    new Set(bundle.variantGroups.filter((group) => optionIds.includes(group.option_id) && !separate.has(group.option_id)).map((group) => group.id));
+  const changedGroups = groupsOf([...result.dropped, ...result.restored]);
+  const restoredGroups = groupsOf(result.restored);
+  const groupOf = (choiceId: string) => bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id ?? '';
+  return {
+    ...plan,
+    optionIds: result.next,
+    variantChoiceIds: [
+      ...plan.variantChoiceIds.filter((id) => !changedGroups.has(groupOf(id))),
+      ...(input.inclusion.standardVariantChoiceIds ?? []).filter((id) => restoredGroups.has(groupOf(id))),
+    ],
   };
 }
 
@@ -275,17 +324,20 @@ function exactPrice(
   try {
     const priced = source.kind === 'sale-view'
       ? computeSaleViewPricing(bundle, source.view, plan.optionIds, plan.variantChoiceIds,
-          plan.exteriorFaces, source.unitLookup, plan.slotSelections ?? [])
+          plan.exteriorFaces, source.unitLookup, plan.slotSelections ?? [], plan.separateRoomOptionIds ?? [])
       : source.kind === 'legacy-template'
         ? computeStandardEstimatePricing(bundle, source.template, plan.optionIds,
-            plan.variantChoiceIds, plan.exteriorFaces, source.finishLevel)
+            plan.variantChoiceIds, plan.exteriorFaces, source.finishLevel, plan.separateRoomOptionIds ?? [])
         : null;
 
     if (priced?.missing_units?.length) return { kind: 'pending', reason: 'unresolved-unit' };
 
     const pricing = priced?.pricing ?? computePricing(
       bundle.model, bundle.options, bundle.categories,
-      plan.optionIds.map((option_id) => ({ option_id, variant_choice_ids: plan.variantChoiceIds })),
+      [
+        ...plan.optionIds.map((option_id) => ({ option_id, variant_choice_ids: plan.variantChoiceIds })),
+        ...(plan.separateRoomOptionIds ?? []).map((option_id) => ({ option_id, variant_choice_ids: plan.variantChoiceIds, separate_room: true })),
+      ],
       undefined,
       { groups: bundle.variantGroups, choices: bundle.variantChoices },
       source.kind === 'legacy' ? source.baseOverride : null,

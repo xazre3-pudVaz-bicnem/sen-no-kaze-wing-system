@@ -7,6 +7,7 @@ import { getStore } from '@/lib/data/store';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { buildEstimateSpecSelection, buildV25SpecSelection } from '@/lib/domain/estimate-template';
+import { dropIncludedSelections } from '@/lib/domain/equipment-separate-room';
 import { defaultVariantIdsFor } from '@/lib/domain/preset';
 import { summarizePlanChanges, type PlanChangeSummary, type PlanPositionChange } from '@/lib/domain/plan-change-summary';
 import { mergeOrphanSlotSelections, standardSlotSelection, withoutPositionCategoryOptions } from '@/lib/domain/simulator-position-slots';
@@ -265,9 +266,14 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
         positionCodes: new Set(v25PositionSlots(view).map((slot) => slot.slot_code)),
         positionCategoryIds,
       });
-      const baselineIds = slotOptionIds
-        ? buildV25SpecSelection(ctx, bundle.model, specCode, slotOptionIds, fire ? fireOptionId : null, positionCategoryIds)
-        : buildEstimateSpecSelection(ctx, bundle.model, specCode, template?.baseline_option_ids ?? []);
+      // 標準のユニットが含むカテゴリー（トイレ・洗面）の単体の標準は外す（シミュレーターの標準構成と同じ。#628 の続き・A 案）
+      const baselineIds = dropIncludedSelections({
+        options: bundle.options,
+        relations: bundle.includedCategories,
+        selectedIds: slotOptionIds
+          ? buildV25SpecSelection(ctx, bundle.model, specCode, slotOptionIds, fire ? fireOptionId : null, positionCategoryIds)
+          : buildEstimateSpecSelection(ctx, bundle.model, specCode, template?.baseline_option_ids ?? []),
+      }).next;
       const baselineVariants = view
         ? v25StandardVariantIds(bundle.variantGroups, bundle.variantChoices, view, baselineIds)
         : defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds);

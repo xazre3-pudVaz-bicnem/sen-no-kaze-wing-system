@@ -68,6 +68,8 @@ export function readBrowserDraft(storage: Pick<DraftStorageReader, 'getItem'>, k
         (face.variant_choice_ids == null || (Array.isArray(face.variant_choice_ids) &&
           face.variant_choice_ids.every((id: unknown) => typeof id === 'string')))))) return null;
     if (record.slotSelections != null && !Array.isArray(record.slotSelections)) return null;
+    // 「別室に追加」した商品（#628 の続き・A 案）。旧形式の下書きでは未設定（別室の明細なし）
+    if (record.separateRoomIds != null && (!Array.isArray(record.separateRoomIds) || !record.separateRoomIds.every((id) => typeof id === 'string'))) return null;
     if (record.spec != null && typeof record.spec !== 'string') return null;
     if (record.name != null && typeof record.name !== 'string') return null;
     if (record.sitePrefecture != null && typeof record.sitePrefecture !== 'string') return null;

@@ -211,12 +211,16 @@ export function v25StandardSlotSelections(view: StandardEstimateSaleView | null 
  * 位置の行を商品の選択として混ぜると、同じ商品の 2 つの位置がまとまり、金額も版の枠の売価と照らせない
  */
 export function splitConfigurationItems(
-  items: { option_id: string; variant_choice_ids?: string[] | null; slot_code?: string | null }[]
-): { optionIds: string[]; variantChoiceIds: string[]; slotSelections: SlotSelection[] } {
-  const categoryItems = items.filter((item) => !item.slot_code);
+  items: { option_id: string; variant_choice_ids?: string[] | null; slot_code?: string | null; separate_room?: boolean | null }[]
+): { optionIds: string[]; variantChoiceIds: string[]; slotSelections: SlotSelection[]; separateRoomOptionIds: string[] } {
+  // 「別室に追加」の明細（#628 の続き・A 案）は、印なしのカテゴリー単位の選択と分ける（同じ商品が両方にあることがある）
+  const categoryItems = items.filter((item) => !item.slot_code && !item.separate_room);
+  const separateItems = items.filter((item) => !item.slot_code && item.separate_room);
   return {
     optionIds: categoryItems.map((item) => item.option_id),
-    variantChoiceIds: categoryItems.flatMap((item) => item.variant_choice_ids ?? []),
+    // 同じ商品の印なしと別室の明細は同じ選択肢を持つので、重ねて数えない（保存し直すと DB が重複として止めるため）
+    variantChoiceIds: [...new Set([...categoryItems, ...separateItems].flatMap((item) => item.variant_choice_ids ?? []))],
+    separateRoomOptionIds: separateItems.map((item) => item.option_id),
     slotSelections: items
       .filter((item): item is typeof item & { slot_code: string } => Boolean(item.slot_code))
       .map((item) => ({ slot_code: item.slot_code, option_id: item.option_id, variant_choice_ids: [...(item.variant_choice_ids ?? [])] })),
@@ -616,7 +620,9 @@ export function computeSaleViewPricing(
   variantChoiceIds: string[],
   exteriorFaces: ExteriorFaceSelection[],
   lookup?: V25UnitLookup,
-  slotSelections: SlotSelection[] = []
+  slotSelections: SlotSelection[] = [],
+  /** 「別室に追加」した商品（#628 の続き・A 案）。普通のカテゴリー単位の明細として売価を数え、差額に入る（DB と同じ） */
+  separateRoomOptionIds: string[] = []
 ): StandardEstimatePricingResult {
   const model = bundle.model;
   const taxRate = Number(view.tax_rate);
@@ -687,7 +693,10 @@ export function computeSaleViewPricing(
     model,
     bundle.options,
     bundle.categories,
-    selectedOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+    [
+      ...selectedOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+      ...separateRoomOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds, separate_room: true })),
+    ],
     taxRate,
     { groups: bundle.variantGroups, choices: bundle.variantChoices },
     0,
@@ -798,6 +807,8 @@ export function v25ConfigurationPricing(
     exteriorFaces: ExteriorFaceSelection[];
     /** 位置・用途の選択枠ごとの選択（v2.5 PR-S1。保存した明細の slot_code つきの行） */
     slotSelections?: SlotSelection[];
+    /** 「別室に追加」した商品（#628 の続き・A 案。保存した明細の separate_room の行） */
+    separateRoomOptionIds?: string[];
   },
   lookup?: V25UnitLookup
 ): { pricing: PricingResult; missing: V25MissingUnit[] } {
@@ -812,7 +823,8 @@ export function v25ConfigurationPricing(
       input.variantChoiceIds,
       input.exteriorFaces,
       lookup,
-      input.slotSelections ?? []
+      input.slotSelections ?? [],
+      input.separateRoomOptionIds ?? []
     );
     return { pricing: result.pricing, missing: result.missing_units ?? [] };
   }
@@ -821,7 +833,10 @@ export function v25ConfigurationPricing(
       bundle.model,
       bundle.options,
       bundle.categories,
-      input.optionIds.map((option_id) => ({ option_id, variant_choice_ids: input.variantChoiceIds })),
+      [
+        ...input.optionIds.map((option_id) => ({ option_id, variant_choice_ids: input.variantChoiceIds })),
+        ...(input.separateRoomOptionIds ?? []).map((option_id) => ({ option_id, variant_choice_ids: input.variantChoiceIds, separate_room: true })),
+      ],
       undefined,
       { groups: bundle.variantGroups, choices: bundle.variantChoices },
       null,

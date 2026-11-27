@@ -9,6 +9,7 @@ import type {
   OptionImage,
   OptionConflict,
   OptionDependency,
+  OptionIncludedCategory,
   OptionVariantChoice,
   OptionVariantGroup,
   PreviewImageRule,
@@ -46,7 +47,8 @@ function assemble(
   variantGroups: OptionVariantGroup[],
   variantChoices: OptionVariantChoice[],
   baseBreakdowns: BaseBreakdownItem[],
-  customerMatrix: CustomerCategoryMatrix | null
+  customerMatrix: CustomerCategoryMatrix | null,
+  includedCategories: OptionIncludedCategory[] = []
 ): PublicCatalog {
   const bundles: Record<string, CatalogBundle> = {};
   for (const model of models) {
@@ -74,6 +76,10 @@ function assemble(
       variantChoices: variantChoices.filter((c) => variantGroups.some((g) => g.id === c.group_id && ids.has(g.option_id))),
       baseBreakdowns: baseBreakdowns.filter((b) => b.base_model_id === model.id),
       customerCategoryMatrix: customerMatrix,
+      // 商品に含まれる設備のカテゴリー（#628）。このモデルで選べる商品・公開中のカテゴリーの分だけ
+      includedCategories: includedCategories.filter(
+        (row) => ids.has(row.option_id) && categories.some((category) => category.id === row.included_category_id)
+      ),
     });
   }
   return { models, bundles };
@@ -153,6 +159,8 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
   const err = [models, images, categories, options, dependencies, conflicts, rules].find((r) => r.error)?.error;
   if (err) throw new Error(`public catalog: ${err.message}`);
 
+  // 商品に含まれる設備のカテゴリー（#628）。匿名で読めるのは公開中の商品・公開中のカテゴリーの行だけ。表が無い DB では包含なし
+  const inclusionPromise = db.from('option_included_categories').select('option_id, included_category_id');
   // 本体仕様マトリクス（PR A）。表が無い DB（migration 未適用）では可否表なし＝カテゴリーを制限しない（DB 側も同じ）
   const matrixResults = await Promise.all([
     db.from('matrix_specs').select('code, label, sort_order, status'),
@@ -175,6 +183,9 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
         cells: mCells as SpecMatrix['cells'],
         categoryItems: mCategoryItems as SpecMatrix['categoryItems'],
       };
+  const inclusion = await inclusionPromise;
+  if (inclusion.error && !isMissingRelation(inclusion.error)) throw new Error(`public catalog option_included_categories: ${inclusion.error.message}`);
+  const inclusionRows = isMissingRelation(inclusion.error) ? [] : ((inclusion.data ?? []) as OptionIncludedCategory[]);
   const categoryRows = normalizeCategories((categories.data ?? []) as OptionCategory[]);
   const priced = await withPublicLegacyPrices(
     (models.data ?? []) as unknown as BaseModel[],
@@ -196,11 +207,13 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
     groupRows,
     priced.choices,
     priced.breakdowns,
-    buildCustomerCategoryMatrix(specMatrix, categoryRows, priced.models)
+    buildCustomerCategoryMatrix(specMatrix, categoryRows, priced.models),
+    inclusionRows
   );
 }
 
-const PUBLIC_CATALOG_CACHE_KEY = 'public-catalog-v5-spec-matrix';
+// v6：商品に含まれる設備のカテゴリー（#628 の続き）を足した。古い形のキャッシュを使わない
+const PUBLIC_CATALOG_CACHE_KEY = 'public-catalog-v6-included-categories';
 const PUBLIC_CATALOG_CACHE_OPTIONS = { tags: [CATALOG_TAG], revalidate: 300 };
 const cachedPublicCatalog = unstable_cache(fetchPublicCatalog, [PUBLIC_CATALOG_CACHE_KEY], PUBLIC_CATALOG_CACHE_OPTIONS);
 

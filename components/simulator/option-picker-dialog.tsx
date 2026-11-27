@@ -76,6 +76,11 @@ interface Props {
    * options はその位置で選べる商品、selectedIds・baselineSelectedIds はその位置の今の商品と標準の商品
    */
   slot?: { label: string } | null;
+  /**
+   * 「別室に追加する」商品を選ぶ（#628 の続き・A 案）。ユニットに含まれるカテゴリーを、ユニットとは別の部屋の追加の設備として選ぶ。
+   * 選んだ商品は普通の追加の設備として金額に入る
+   */
+  separateRoom?: boolean;
 }
 
 /**
@@ -98,6 +103,7 @@ export function OptionPickerDialog({
   onApply,
   getCandidateDelta,
   slot = null,
+  separateRoom = false,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [detailOptionId, setDetailOptionId] = useState<string | null>(null);
@@ -135,7 +141,11 @@ export function OptionPickerDialog({
   const isSingleSelection = Boolean(slot) || isSimulatorSingleProductCategory(category);
   const baseCategoryName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
-  const categoryDisplayName = slot ? `${slot.label}（${baseCategoryName}）` : baseCategoryName;
+  const categoryDisplayName = slot
+    ? `${slot.label}（${baseCategoryName}）`
+    : separateRoom
+      ? `別室に追加する${baseCategoryName}`
+      : baseCategoryName;
 
   const detailOption = displayOptions.find((option) => option.id === detailOptionId) ?? null;
   const detailGroups = detailOption
@@ -347,8 +357,12 @@ export function OptionPickerDialog({
           </h2>
           {!detailOption && (
             <p className="text-xs text-muted">
-              {isSingleSelection ? '1つ選択' : '複数選択可'}
-              {category.description ? `・${category.description}` : ''}
+              {separateRoom
+                ? 'ユニットとは別の部屋に追加する設備です（ユニットに含まれる分とは別に、金額に入ります）'
+                : isSingleSelection
+                  ? '1つ選択'
+                  : '複数選択可'}
+              {!separateRoom && category.description ? `・${category.description}` : ''}
             </p>
           )}
         </div>

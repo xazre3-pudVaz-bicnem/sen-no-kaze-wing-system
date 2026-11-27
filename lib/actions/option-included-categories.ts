@@ -1,6 +1,7 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
+import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
 import { readOptionIncludedCategories } from '@/lib/data/option-included-categories';
@@ -73,6 +74,8 @@ export async function saveIncludedCategoriesAction(input: SaveIncludedCategoryIn
       return { ok: false, code: 'FAILED', error: '保存結果を確認できません。再読み込みして現在の設定を確認してください。' };
     }
     revalidatePath('/admin/options/' + option.id);
+    // シミュレーターの公開カタログ（含まれる設備の表示・二重の選択の防止）にすぐ出す（#628 の続き）
+    updateTag(CATALOG_TAG);
     return { ok: true, savedIds: [...savedIds].sort() };
   } catch (error) {
     if (error instanceof StoreError) {

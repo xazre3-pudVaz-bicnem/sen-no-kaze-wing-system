@@ -67,6 +67,8 @@ export function ruleContextForSpec(
     options,
     customerCategoryMatrix: ctx.customerCategoryMatrix,
     canSelectNew: ctx.canSelectNew,
+    // 商品に含まれる設備のカテゴリー（#628）は仕様で変わらない。包含の判定に使うのでそのまま渡す
+    includedCategories: ctx.includedCategories,
     // 依存ルールは、依存元が候補に残る限り保持する。前提商品が候補から外れたときにルールごと消すと
     // 「前提なしで選べる」状態になるため、rules.ts 側で選択拒否・明示エラーとして扱う。
     dependencies: ctx.dependencies.filter((dependency) => ids.has(dependency.option_id)),

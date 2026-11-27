@@ -1133,6 +1133,8 @@ export interface GuestPlanInput {
   site_location_undecided: boolean;
   /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。版との照らし合わせは、ログインして保存するとき（DB の create_guest_plan は形だけ確かめる） */
   slot_selections?: { slot_code: string; option_id: string; variant_choice_ids: string[] }[];
+  /** 「別室に追加」した商品（#628 の続き・A 案）。中身の確かめは、ログインして保存するとき（DB の create_guest_plan は形だけ確かめる） */
+  separate_room_option_ids?: string[];
 }
 
 export interface GuestPlan {
@@ -1175,6 +1177,8 @@ export function normalizeGuestPlanInput(raw: Record<string, unknown>): GuestPlan
     const [optionId] = uuidList([slot?.option_id], 1, '位置ごとの選択');
     return { slot_code: code, option_id: optionId, variant_choice_ids: uuidList(slot?.variant_choice_ids, 20, '位置ごとの選択') };
   });
+  // 「別室に追加」した商品（DB の create_guest_plan と同じく 10 件まで）
+  const separateRoomIds = uuidList(raw.separate_room_option_ids, 10, '別室に追加する設備');
   const finish = typeof raw.finish_level === 'string' ? raw.finish_level : 'full';
   if (!['shell', 'equipment', 'full'].includes(finish)) fail('仕上げの形式が正しくありません');
   const spec = cfText(raw.spec_code, 40, '仕様');
@@ -1190,6 +1194,7 @@ export function normalizeGuestPlanInput(raw: Record<string, unknown>): GuestPlan
     site_municipality: cfText(raw.site_municipality, 60, '設置予定地（市区町村）'),
     site_location_undecided: raw.site_location_undecided === true,
     ...(slot_selections.length > 0 ? { slot_selections } : {}),
+    ...(separateRoomIds.length > 0 ? { separate_room_option_ids: separateRoomIds } : {}),
   };
 }
 

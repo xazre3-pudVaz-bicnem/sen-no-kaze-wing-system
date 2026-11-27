@@ -104,6 +104,8 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           option_ids: items.optionIds,
           variant_choice_ids: items.variantChoiceIds,
           slot_selections: items.slotSelections,
+          // 「別室に追加」の明細（#628 の続き・A 案）
+          separate_room_option_ids: items.separateRoomOptionIds,
           exterior_faces: exteriorFaces,
           status: found.configuration.status,
           finish_level: found.configuration.finish_level ?? 'full',
@@ -141,6 +143,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
         site_location_undecided: guest.plan.site_location_undecided,
         lock_version: null,
         slot_selections: guest.plan.slot_selections ?? [],
+        separate_room_option_ids: guest.plan.separate_room_option_ids ?? [],
       };
       guestPlanExpiresAt = guest.expires_at;
     }

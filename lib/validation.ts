@@ -100,6 +100,15 @@ export const saveConfigurationSchema = z.object({
     )
     .max(100)
     .default([]),
+  /**
+   * 「別室に追加」した商品（#628 の続き・A 案）。同じ商品は 1 回・10 件まで。
+   * どのカテゴリーで別室に追加できるか・ユニットに含まれるカテゴリーとの関係は DB（save_configuration_atomic）が確かめる
+   */
+  separate_room_option_ids: z
+    .array(z.uuid())
+    .max(10, '別室に追加する設備は 10 件までです')
+    .refine((ids) => new Set(ids).size === ids.length, '別室に追加する同じ設備を複数回保存できません')
+    .default([]),
   /** 既存の Draft を保存するとき、読み込んだ時点の版（同時編集の検知） */
   expected_lock_version: z.number().int().min(1).nullable().default(null),
 });

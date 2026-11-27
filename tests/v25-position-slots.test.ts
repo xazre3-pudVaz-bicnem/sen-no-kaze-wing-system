@@ -180,6 +180,8 @@ describe('v2.5 PR-S1：位置・用途ごとの選択枠（シミュレーター
         { slot_code: 'hiraki-1', option_id: 's1', variant_choice_ids: ['white'] },
         { slot_code: 'hiraki-2', option_id: 's1', variant_choice_ids: ['black'] },
       ],
+      // 「別室に追加」の明細（#628 の続き・A 案）は無い
+      separateRoomOptionIds: [],
     });
     for (const page of ['app/(site)/mypage/configurations/[id]/request-quote/page.tsx', 'app/admin/configurations/[id]/page.tsx']) {
       expect(read(page)).toContain('...splitConfigurationItems(items),');

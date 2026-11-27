@@ -61,7 +61,13 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
         bundle.model,
         bundle.options,
         bundle.categories,
-        items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
+        // 「別室に追加」の明細（#628 の続き・A 案）は印なしの同じ商品と別に数え、名前に「（別室）」を付ける
+        items.map((i) => ({
+          option_id: i.option_id,
+          quantity: i.quantity,
+          variant_choice_ids: i.variant_choice_ids ?? [],
+          separate_room: Boolean(i.separate_room),
+        })),
         undefined,
         { groups: bundle.variantGroups, choices: bundle.variantChoices },
         null,

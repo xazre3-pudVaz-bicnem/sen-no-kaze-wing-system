@@ -519,6 +519,17 @@ export interface CatalogBundle {
    * マトリクスの表が無い DB（migration 未適用）では null・未設定で、カテゴリーを制限しない。
    */
   customerCategoryMatrix?: import('./customer-category-applicability').CustomerCategoryMatrix | null;
+  /**
+   * 商品に含まれる設備のカテゴリー（#628。浴室のユニット → トイレ・洗面）。公開中の商品・公開中のカテゴリーの分だけ。
+   * 未取得・空は包含なし（今までどおり）
+   */
+  includedCategories?: OptionIncludedCategory[];
+}
+
+/** 商品に含まれる設備のカテゴリー（option_included_categories の 1 行） */
+export interface OptionIncludedCategory {
+  option_id: string;
+  included_category_id: string;
 }
 
 export type ConfigurationStatus = 'draft' | 'quote_requested' | 'quoted' | 'closed';
@@ -579,6 +590,11 @@ export interface ConfigurationItem {
    * 位置の枠ごとに 1 行なので、同じ商品が別の位置で複数行になることがある
    */
   slot_code?: string | null;
+  /**
+   * 「別室に追加」の印（#628 の続き・A 案。20261127100000）。ユニットに含まれるカテゴリー（トイレ・洗面）の商品を、
+   * ユニットとは別の部屋の追加の設備として選んだ明細。未取得は false（印なし）
+   */
+  separate_room?: boolean;
 }
 
 export interface ConfigurationSnapshot {
@@ -883,6 +899,8 @@ export interface PricingLine {
   variants: { group: string; choice: string; extra_price: number }[];
   price_on_request: boolean;
   image_url: string | null;
+  /** 「別室に追加」の明細（#628 の続き・A 案）。名前に「（別室）」を付けて出す */
+  separate_room?: boolean;
 }
 
 export interface PricingResult {

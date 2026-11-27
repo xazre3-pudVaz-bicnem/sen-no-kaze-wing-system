@@ -12,6 +12,7 @@ import type {
   ConfigurationItem,
   OptionCategory,
   OptionImage,
+  OptionIncludedCategory,
   PreviewImageRule,
   PreviewHotspot,
   ProductImage,
@@ -283,6 +284,11 @@ export class SupabaseStore implements DataStore {
     // 本体内訳マスター（0016 未適用の DB では「内訳なし」として扱う）
     const bb = await db.from('base_breakdown_items').select(legacyTableColumns('base_breakdown_items')).eq('base_model_id', modelId).order('sort_order');
     if (bb.error && !isMissingRelation(bb.error)) mapPgError(bb.error);
+    // 商品に含まれる設備のカテゴリー（#628）。読める行は DB の読み取りの決まりのまま（公開中の商品・カテゴリー、本部は全件）。表が無い DB では包含なし
+    const inc = ids.length
+      ? await db.from('option_included_categories').select('option_id, included_category_id').in('option_id', ids)
+      : { data: [], error: null };
+    if (inc.error && !isMissingRelation(inc.error)) mapPgError(inc.error);
     const idSet = new Set(ids);
     return {
       model,
@@ -297,6 +303,7 @@ export class SupabaseStore implements DataStore {
       variantGroups: (vg.error ? [] : (vg.data ?? [])) as OptionVariantGroup[],
       variantChoices: await withLegacyChoicePrices((vc.error ? [] : (vc.data ?? [])) as unknown as OptionVariantChoice[], scope),
       baseBreakdowns: (await withLegacyBreakdownPrices((bb.error ? [] : (bb.data ?? [])) as unknown as BaseBreakdownItem[], scope)) as BaseBreakdownItem[],
+      includedCategories: (inc.error ? [] : (inc.data ?? [])) as OptionIncludedCategory[],
     };
   }
 
@@ -706,6 +713,10 @@ export class SupabaseStore implements DataStore {
       p_expected_lock_version: input.expected_lock_version ?? null,
       // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。位置の選択があるときだけ渡す（20261102100000 が無い DB でも、これまでの保存は動く）
       ...(input.slot_selections && input.slot_selections.length > 0 ? { p_slot_selections: input.slot_selections } : {}),
+      // 「別室に追加」した商品（#628 の続き・A 案。20261127100000）。別室の明細があるときだけ渡す
+      ...(input.separate_room_option_ids && input.separate_room_option_ids.length > 0
+        ? { p_separate_room_option_ids: input.separate_room_option_ids }
+        : {}),
     };
     const atomic = await db.rpc('save_configuration_atomic', atomicInput);
     if (!atomic.error) return atomic.data as Configuration;
@@ -713,6 +724,10 @@ export class SupabaseStore implements DataStore {
     // 位置ごとの選択（v2.5 PR-S1）は、古い保存の経路では持てない。黙って落とさずに止める（DB の更新の直後で関数の一覧が古いときも）
     if ((input.slot_selections ?? []).length > 0) {
       throw new StoreError('VALIDATION', '位置ごとの選択を保存できませんでした。時間をおいてもう一度保存してください。');
+    }
+    // 別室に追加した明細（#628 の続き・A 案）も、古い保存の経路では持てない。黙って落とさずに止める
+    if ((input.separate_room_option_ids ?? []).length > 0) {
+      throw new StoreError('VALIDATION', '別室に追加した設備を保存できませんでした。時間をおいてもう一度保存してください。');
     }
 
     // Temporary deployment compatibility: only a definitely missing RPC uses

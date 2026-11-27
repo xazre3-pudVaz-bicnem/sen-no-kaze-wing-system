@@ -224,6 +224,11 @@ export interface SaveConfigurationInput {
    * 版に位置の枠があるときは、すべての位置を 1 つずつ（DB が版と照らして確かめる）。空・未指定は位置の選択なし
    */
   slot_selections?: SlotSelection[];
+  /**
+   * 「別室に追加」した商品（#628 の続き・A 案）。ユニットに含まれるカテゴリー（トイレ・洗面）の商品だけ・同じ商品は 1 回・10 件まで。
+   * option_ids（印なし）と同じ商品を含んでよい。空・未指定は別室の明細なし
+   */
+  separate_room_option_ids?: string[];
 }
 
 /** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */
@@ -408,7 +413,8 @@ export interface CasePlanConfigurationHeader {
 
 export type CasePlanConfigurationItem = Pick<
   ConfigurationItem,
-  'option_id' | 'quantity' | 'variant_choice_ids' | 'slot_code'
+  // separate_room：「別室に追加」の明細（#628 の続き・A 案。DB が返さない古い環境では無い＝印なし）
+  'option_id' | 'quantity' | 'variant_choice_ids' | 'slot_code' | 'separate_room'
 >;
 
 export interface CasePlanConfiguration {

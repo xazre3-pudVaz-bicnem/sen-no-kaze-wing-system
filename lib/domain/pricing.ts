@@ -20,6 +20,10 @@ export interface SelectionInput {
   quantity?: number;
   /** 選ばれたバリエーション（選択肢 ID）。商品に紐づかないものは無視される */
   variant_choice_ids?: string[];
+  /**
+   * 「別室に追加」の明細（#628 の続き・A 案）。同じ商品を印なしと別室の両方で選んだときは 2 行として数える（DB と同じ）
+   */
+  separate_room?: boolean;
 }
 
 const EXTERIOR_FACE_ORDER = [
@@ -90,13 +94,16 @@ export function computePricing(
 
   for (const sel of selections) {
     const opt = byId.get(sel.option_id);
-    if (!opt || seen.has(opt.id)) continue;
+    // 同じ商品は 1 回だけ数える。ただし「別室に追加」の明細は印なしの明細と別に数える（DB の明細の行と同じ。#628 の続き・A 案）
+    const separateRoom = Boolean(sel.separate_room);
+    const seenKey = opt ? `${opt.id}:${separateRoom ? 'separate' : 'unit'}` : '';
+    if (!opt || seen.has(seenKey)) continue;
     if (opt.status !== 'published') continue;
     if (opt.base_model_id && opt.base_model_id !== model.id) continue;
     const code = categoryCode.get(opt.category_id) ?? '';
     // 4面指定がある場合は、正面だけ同期されている従来の外壁1件を二重計上しない。
     if (hasFourExteriorFaces && code === 'exterior-wall') continue;
-    seen.add(opt.id);
+    seen.add(seenKey);
     const quantity = Math.max(1, Math.floor(sel.quantity ?? 1));
     // 選ばれたバリエーションのうち、この商品の選択項目に属するものだけを採用する
     const picked = (sel.variant_choice_ids ?? [])
@@ -115,8 +122,8 @@ export function computePricing(
     const isFree = code === FREE_PRODUCT_CATEGORY_CODE;
     lines.push({
       option_id: opt.id,
-      code: opt.code,
-      name: opt.name,
+      code: separateRoom ? `${opt.code}__separate_room` : opt.code,
+      name: separateRoom ? `${opt.name}（別室）` : opt.name,
       category_name: categoryName.get(opt.category_id) ?? '',
       category_code: code,
       unit_price: unit,
@@ -127,6 +134,7 @@ export function computePricing(
       variants: variantLines,
       price_on_request: priceOnRequest,
       image_url: opt.image_url,
+      ...(separateRoom ? { separate_room: true } : {}),
     });
   }
 

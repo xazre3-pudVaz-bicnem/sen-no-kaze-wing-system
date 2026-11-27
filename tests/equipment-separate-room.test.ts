@@ -5,7 +5,9 @@ import {
   includedCategorySources,
   includedDuplicateMessage,
   inclusionQuoteNoteLines,
+  reconcileIncludedSelection,
 } from '@/lib/domain/equipment-separate-room';
+import { simulatorCardDelta, withInclusionReconciled } from '@/lib/domain/simulator-card-price-delta';
 import { computePricing } from '@/lib/domain/pricing';
 import { validateSelection, type RuleContext } from '@/lib/domain/rules';
 import { splitConfigurationItems } from '@/lib/domain/standard-estimate-sale-view';
@@ -90,6 +92,59 @@ describe('設備包含：ユニットに含まれるカテゴリーの判定', (
     expect(dropIncludedSelections({ options, relations, selectedIds: [O.ubPlain.id, O.toiletA.id] })).toEqual({
       next: [O.ubPlain.id, O.toiletA.id],
       dropped: [],
+    });
+  });
+});
+
+describe('設備包含：選び直しの後の整理（シミュレーターとカード・候補の差額で共通）', () => {
+  const standardIds = [O.ubPlain.id, O.toiletA.id, O.washA.id];
+
+  it('包含元を選ぶと含まれるカテゴリーの印なしの選択を外し、包含元を外すと標準の単体に戻す', () => {
+    const toUnit = reconcileIncludedSelection({
+      options, relations, prevIds: standardIds, nextIds: [O.ubInc.id, O.toiletA.id, O.washA.id], standardIds,
+    });
+    expect(toUnit.next).toEqual([O.ubInc.id]);
+    expect(toUnit.dropped).toEqual([O.toiletA.id, O.washA.id]);
+    expect([...toUnit.newlyIncluded.keys()].sort()).toEqual([C.toilet.id, C.washbasin.id].sort());
+
+    const back = reconcileIncludedSelection({ options, relations, prevIds: [O.ubInc.id], nextIds: [O.ubPlain.id], standardIds });
+    expect(back.next).toEqual([O.ubPlain.id, O.toiletA.id, O.washA.id]);
+    expect(back.restored).toEqual([O.toiletA.id, O.washA.id]);
+  });
+
+  it('前から含まれているカテゴリーの印なしの選択（読み込んだプランの重複）は変えず、選べない標準は戻さない', () => {
+    const duplicate = reconcileIncludedSelection({
+      options, relations, prevIds: [O.ubInc.id, O.toiletB.id], nextIds: [O.ubInc.id, O.toiletB.id, O.air.id], standardIds,
+    });
+    expect(duplicate.next).toEqual([O.ubInc.id, O.toiletB.id, O.air.id]);
+    const notSelectable = reconcileIncludedSelection({
+      options, relations, prevIds: [O.ubInc.id], nextIds: [O.ubPlain.id], standardIds, canRestore: (id) => id !== O.toiletA.id,
+    });
+    expect(notSelectable.restored).toEqual([O.washA.id]);
+  });
+
+  it('カードの差額：ユニットを標準に戻した仮のプランでは、含まれていたトイレ・洗面も標準に戻し、別室の商品はそのまま数える', () => {
+    const model = { ...({} as object), id: 'model', slug: 'm', base_price: 1000000, expense_rate: 0.15 };
+    const bundle = { model, options, categories, variantGroups: [], variantChoices: [], includedCategories: relations } as unknown as Parameters<typeof withInclusionReconciled>[0]['bundle'];
+    const current = { optionIds: [O.ubInc.id], variantChoiceIds: [], exteriorFaces: [], separateRoomOptionIds: [O.toiletB.id] };
+    const input = {
+      bundle,
+      source: { kind: 'legacy' as const, baseOverride: null },
+      current,
+      standard: { optionIds: [O.ubPlain.id, O.toiletA.id, O.washA.id], variantChoiceIds: [], exteriorFaces: [] },
+      inclusion: { relations, standardOptionIds: standardIds, standardVariantChoiceIds: [] },
+    };
+    const restored = withInclusionReconciled(input, current, { ...current, optionIds: [O.ubPlain.id] });
+    expect(restored.optionIds).toEqual([O.ubPlain.id, O.toiletA.id, O.washA.id]);
+    expect(restored.separateRoomOptionIds).toEqual([O.toiletB.id]);
+    // 差額 = 今（3 点 600,000 ＋別室のトイレB 150,000）− 戻した仮のプラン（450,000 ＋ 120,000 ＋ 80,000 ＋別室 150,000）の税込
+    const delta = simulatorCardDelta(input, { kind: 'category', categoryId: C.ub.id });
+    const totalOf = (ids: { option_id: string; separate_room?: boolean }[]) => computePricing(model, options, categories, ids).total;
+    expect(delta).toEqual({
+      kind: 'changed',
+      deltaIncludingTax:
+        totalOf([{ option_id: O.ubInc.id }, { option_id: O.toiletB.id, separate_room: true }]) -
+        totalOf([{ option_id: O.ubPlain.id }, { option_id: O.toiletA.id }, { option_id: O.washA.id }, { option_id: O.toiletB.id, separate_room: true }]),
     });
   });
 });

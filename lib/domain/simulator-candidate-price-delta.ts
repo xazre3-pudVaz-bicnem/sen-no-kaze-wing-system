@@ -6,6 +6,7 @@ import { toggleOption, type RuleContext } from './rules';
 import { withoutPositionCategoryOptions } from './simulator-position-slots';
 import {
   createSimulatorCardDeltaEvaluator,
+  withInclusionReconciled,
   type SimulatorCardDelta,
   type SimulatorCardPlanSelection,
   type SimulatorCardPriceInput,
@@ -31,6 +32,8 @@ export function simulatePickerCategoryCandidate(args: {
   nextInCategory: string[];
   nextVariants: string[];
   positionCategoryIds: ReadonlySet<string>;
+  /** 設備包含（#628 の続き・A 案）：選び直しと同じ整理をかけるための入力（カードの差額と同じ） */
+  priceInput?: SimulatorCardPriceInput;
 }): SimulatorCardPlanSelection | null {
   const { bundle, ruleContext, current, categoryId, nextInCategory, nextVariants, positionCategoryIds } = args;
   const categoryOptions = ruleContext.options.filter((option) => option.category_id === categoryId).map((option) => option.id);
@@ -66,7 +69,7 @@ export function simulatePickerCategoryCandidate(args: {
   const groups = new Set(bundle.variantGroups.filter((group) => categoryIds.has(group.option_id)).map((group) => group.id));
   const choiceGroup = new Map(bundle.variantChoices.map((choice) => [choice.id, choice.group_id]));
   if (nextVariants.some((id) => !groups.has(choiceGroup.get(id) ?? ''))) return null;
-  return {
+  const candidate = {
     ...current,
     optionIds: next,
     variantChoiceIds: [
@@ -74,6 +77,8 @@ export function simulatePickerCategoryCandidate(args: {
       ...nextVariants,
     ],
   };
+  // 設備包含：選び直しで知らせて行う決まった整理（含まれれば外す・外れれば標準の単体に戻す）は、差額に入れる
+  return args.priceInput ? withInclusionReconciled(args.priceInput, current, candidate) : candidate;
 }
 
 /** 対象を標準に戻す比較も、現在の商品カードと同じ正式な税込総額評価器を使用する。 */

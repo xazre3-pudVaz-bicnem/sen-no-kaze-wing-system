@@ -416,14 +416,32 @@ select pg_temp.p5_patch_function(
 );
 
 -- 見積依頼：どの作り方でも最後に、ユニットに含まれるカテゴリーの注記と、別室に追加した明細の 0 円の写しを残す
--- （標準見積の無い旧仕様は、別室の明細が価格つきで並ぶので写さない）
+-- （明細を 1 行ずつ写す旧仕様（標準見積なし）は、別室の明細が価格つきで並ぶので写さない）。
+-- どの作り方を通ったかは、条件を計算し直さず、実際に通った分岐で記録する（v2.5 の写しの関数が将来変わっても食い違わない）
+select pg_temp.p5_patch_function(
+  'public.create_quote_from_configuration(uuid, jsonb, text, integer)'::regprocedure,
+  $old$  v_template public.estimate_templates;$old$,
+  $new$  v_template public.estimate_templates;
+  -- 明細を 1 行ずつ写す旧仕様の分岐を通ったか（#628 の続き・A 案）
+  v_per_line_copy boolean := false;$new$
+);
+select pg_temp.p5_patch_function(
+  'public.create_quote_from_configuration(uuid, jsonb, text, integer)'::regprocedure,
+  $old$  if public.write_standard_estimate_quote_items(cfg.id, v_quote) then
+    null;
+  elsif v_template.id is null then
+$old$,
+  $new$  if public.write_standard_estimate_quote_items(cfg.id, v_quote) then
+    null;
+  elsif v_template.id is null then
+    v_per_line_copy := true;
+$new$
+);
 select pg_temp.p5_patch_function(
   'public.create_quote_from_configuration(uuid, jsonb, text, integer)'::regprocedure,
   $old$  update public.quote_requests set quote_id = v_quote where id = v_req;$old$,
   $new$  -- 設備包含（#628 の続き・A 案）：ユニットに含まれるカテゴリーの 0 円の注記と、別室に追加した明細の 0 円の写し
-  perform public.write_configuration_inclusion_quote_notes(
-    cfg.id, v_quote, public.simulator_standard_pricing_enabled() or v_template.id is not null
-  );
+  perform public.write_configuration_inclusion_quote_notes(cfg.id, v_quote, not v_per_line_copy);
   update public.quote_requests set quote_id = v_quote where id = v_req;$new$
 );
 

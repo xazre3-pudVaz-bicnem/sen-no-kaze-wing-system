@@ -22,7 +22,7 @@ import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-di
 import { PlanBoard, ElevationStrip } from '@/components/simulator/plan-board';
 import { PreviewStage } from '@/components/simulator/preview-stage';
 import { EquipmentBoard } from '@/components/simulator/equipment-board';
-import { includedCategorySources } from '@/lib/domain/equipment-separate-room';
+import { dropIncludedSelections, includedCategorySources } from '@/lib/domain/equipment-separate-room';
 import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-context';
 
 function sameSelection(a: string[], b: string[]) {
@@ -72,12 +72,15 @@ export function CasePlanBoard({
     [configuration.finish_level, ctx]
   );
   const baselineSelected = useMemo(() => {
-    if (estimateTemplate?.template.spec_code === specCode) {
-      return buildEstimateBaselineSelection(ctx, bundle.model, estimateTemplate);
-    }
-    if (activePreset) return buildPresetSelection(ctx, activePreset, defaults);
-    return buildEstimateSpecSelection(ctx, bundle.model, specCode);
-  }, [activePreset, bundle.model, ctx, defaults, estimateTemplate, specCode]);
+    const raw =
+      estimateTemplate?.template.spec_code === specCode
+        ? buildEstimateBaselineSelection(ctx, bundle.model, estimateTemplate)
+        : activePreset
+          ? buildPresetSelection(ctx, activePreset, defaults)
+          : buildEstimateSpecSelection(ctx, bundle.model, specCode);
+    // 標準のユニットが含むカテゴリー（トイレ・洗面）の単体の標準は外す（シミュレーターの標準構成と同じ。#628 の続き・A 案）
+    return dropIncludedSelections({ options: bundle.options, relations: bundle.includedCategories, selectedIds: raw }).next;
+  }, [activePreset, bundle.includedCategories, bundle.model, bundle.options, ctx, defaults, estimateTemplate, specCode]);
   const baselineVariantIds = useMemo(
     () => defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineSelected),
     [baselineSelected, bundle.variantChoices, bundle.variantGroups]

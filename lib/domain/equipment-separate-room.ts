@@ -198,6 +198,50 @@ export function inclusionQuoteNoteLines(input: {
 }
 
 /**
+ * 選び直しの後の印なしの選択を、包含の変化に合わせてそろえる（シミュレーターの選び直しと、カード・候補の差額の仮計算で共通）。
+ * - 新しく含まれるカテゴリー：印なしの選択を外す
+ * - 含まれなくなったカテゴリー：印なしの選択が無ければ、標準の単体（standardIds のうちそのカテゴリーの商品）に戻す
+ * 前から含まれているカテゴリーの印なしの選択（読み込んだプランの重複）は変えない（画面で直してもらう）
+ */
+export function reconcileIncludedSelection(input: {
+  options: readonly ProductOption[];
+  relations: readonly OptionIncludedCategory[] | null | undefined;
+  prevIds: readonly string[];
+  nextIds: readonly string[];
+  /** 位置の枠で選んでいる商品（包含元になりうる。ここでは変えない） */
+  slotOptionIds?: readonly string[];
+  /** 戻す標準の単体（標準のユニットが含むカテゴリーを外す前の標準構成） */
+  standardIds?: readonly string[];
+  /** 戻してよい商品か（今の仕様で選べるか）。省略時はすべて戻す */
+  canRestore?: (id: string) => boolean;
+}): { next: string[]; dropped: string[]; restored: string[]; newlyIncluded: Map<string, string[]> } {
+  const nextIds = [...input.nextIds];
+  const relations = input.relations ?? [];
+  if (relations.length === 0) return { next: nextIds, dropped: [], restored: [], newlyIncluded: new Map() };
+  const optionById = new Map(input.options.map((option) => [option.id, option]));
+  const categoryOf = (id: string) => optionById.get(id)?.category_id;
+  const slots = input.slotOptionIds ?? [];
+  const before = includedCategorySources([...input.prevIds, ...slots], relations);
+  const after = includedCategorySources([...nextIds, ...slots], relations);
+  const dropped = nextIds.filter((id) => {
+    const categoryId = categoryOf(id);
+    return Boolean(categoryId && after.has(categoryId) && !before.has(categoryId));
+  });
+  let next = nextIds.filter((id) => !dropped.includes(id));
+  const restored: string[] = [];
+  for (const categoryId of before.keys()) {
+    if (after.has(categoryId) || next.some((id) => categoryOf(id) === categoryId)) continue;
+    const standard = (input.standardIds ?? []).filter(
+      (id) => categoryOf(id) === categoryId && !next.includes(id) && (input.canRestore?.(id) ?? true)
+    );
+    if (standard.length === 0) continue;
+    next = [...next, ...standard];
+    restored.push(...standard);
+  }
+  return { next, dropped, restored, newlyIncluded: new Map([...after].filter(([categoryId]) => !before.has(categoryId))) };
+}
+
+/**
  * 包含元を選んだときの選択の整理（シミュレーターの操作）：含まれるカテゴリーの印なしの選択を外す。
  * 外した商品を返す（画面で「ユニットに含まれるため外しました」と知らせ、別室に追加し直せるようにする）
  */

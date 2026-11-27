@@ -85,7 +85,7 @@ import { latestResumableBrowserDraft, legacySimulatorDraftKey, readBrowserDraft,
 import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
-import { dropIncludedSelections, includedCategorySources } from '@/lib/domain/equipment-separate-room';
+import { dropIncludedSelections, includedCategorySources, reconcileIncludedSelection } from '@/lib/domain/equipment-separate-room';
 import { isSimulatorSelectableProduct, simulatorChoiceOptions } from '@/lib/domain/product-lifecycle';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
@@ -712,6 +712,7 @@ export function SimulatorApp({
           setSeparateRoomIds(
             (Array.isArray(draft.separateRoomIds) ? draft.separateRoomIds : [])
               .filter((id): id is string => typeof id === 'string' && allowedOptionIds.has(id))
+              .filter((id) => pruneToScope(restoredCtx, [id], restoredLevel).length > 0)
           );
           setExteriorFaces(
             normalizeExteriorFaces(
@@ -1072,8 +1073,9 @@ export function SimulatorApp({
     validationIssues,
   ]);
   const blocked = useMemo(
-    () => explainBlocked(activeSpecCtx, [...selected, ...slotOptionIdsInUse]),
-    [activeSpecCtx, selected, slotOptionIdsInUse]
+    // 別室に追加した商品も、同時に選べない組み合わせ（旧排他）の理由に数える（#628 の続き・A 案）
+    () => explainBlocked(activeSpecCtx, [...selected, ...slotOptionIdsInUse, ...separateRoomIds]),
+    [activeSpecCtx, selected, slotOptionIdsInUse, separateRoomIds]
   );
   const activeSpecSelection = useMemo(
     () => specSelections.find((row) => row.code === specCode)?.ids ?? [],
@@ -1129,12 +1131,21 @@ export function SimulatorApp({
         variantChoiceIds: variantIds,
         exteriorFaces,
         slotSelections: activeSlotSelections,
+        // 別室に追加した商品（#628 の続き・A 案）。対象を標準に戻した総額にも同じく入る
+        separateRoomOptionIds: separateRoomIds,
       },
       standard: {
         optionIds: activeSpecSelection,
         variantChoiceIds: baselineVariantIds,
         exteriorFaces: baselineFaces,
         slotSelections: standardSlotSelectionsFor(finishLevel),
+      },
+      // 設備包含（#628 の続き・A 案）：対象を戻した仮のプランにも、選び直しと同じ整理（含まれれば外す・外れれば標準の単体に戻す）をかける
+      inclusion: {
+        relations: bundle.includedCategories ?? [],
+        slotOptionIds: activeSlotSelections.map((selection) => selection.option_id),
+        standardOptionIds: specSelections.find((row) => row.code === specCode)?.rawIds ?? [],
+        standardVariantChoiceIds: baselineVariantIds,
       },
     };
     return { priceInput, evaluator: createSimulatorCardDeltaEvaluator(priceInput) };
@@ -1143,6 +1154,7 @@ export function SimulatorApp({
     activeSpecSelection, baseOverride, baselineVariantIds, bundle, exteriorFaces,
     exteriorWallCat?.id, finishLevel, positionSlots, selected, slotInScope,
     standardSlotSelectionsFor, v25PricePending, v25Pricing, v25Units, variantIds,
+    separateRoomIds, specSelections, specCode,
   ]);
   const getCardDelta = useCallback((target: SimulatorCardTarget): SimulatorCardDelta =>
     // 公開済み価格がない場合は、たとえ商品の選択が標準と同じでも価格未確定とする。
@@ -1158,6 +1170,7 @@ export function SimulatorApp({
     const candidate = simulatePickerCategoryCandidate({
       bundle, ruleContext: activeSpecCtx, current: cardDeltaContext.priceInput.current,
       categoryId, nextInCategory, nextVariants, positionCategoryIds,
+      priceInput: cardDeltaContext.priceInput,
     });
     if (!candidate) return { kind: 'pending', reason: 'incomplete-selection' };
     return simulatorCandidatePriceDelta(cardDeltaContext.priceInput,
@@ -1436,8 +1449,11 @@ export function SimulatorApp({
       }
     } else {
       const kept = pruneToScope(activeSpecCtx, selected, level);
-      const dropped = selected.length - kept.length;
+      // 別室に追加した商品も、範囲外なら外す（タイルが見えないまま金額に残さない。#628 の続き・A 案）
+      const keptSeparate = pruneToScope(activeSpecCtx, separateRoomIds, level);
+      const dropped = selected.length - kept.length + (separateRoomIds.length - keptSeparate.length);
       setSelected(kept);
+      setSeparateRoomIds(keptSeparate);
       if (dropped > 0) pushToast(`注文範囲を外れた ${dropped} 点を見積から外しました`, 'info');
     }
     setFinishLevel(level);
@@ -1456,37 +1472,33 @@ export function SimulatorApp({
    * - 含まれなくなったカテゴリー：印なしの選択が無ければ、仕様の標準の単体に戻す
    */
   const reconcileInclusion = (next: string[], prev: string[]): { next: string[]; dropped: string[]; notices: string[] } => {
-    const relations = bundle.includedCategories ?? [];
-    if (relations.length === 0) return { next, dropped: [], notices: [] };
-    const before = includedCategorySources([...prev, ...slotOptionIdsInUse], relations);
-    const after = includedCategorySources([...next, ...slotOptionIdsInUse], relations);
+    const result = reconcileIncludedSelection({
+      options: bundle.options,
+      relations: bundle.includedCategories,
+      prevIds: prev,
+      nextIds: next,
+      slotOptionIds: slotOptionIdsInUse,
+      standardIds: specSelections.find((row) => row.code === specCode)?.rawIds ?? [],
+      canRestore: (id) => activeSpecCtx.options.some((option) => option.id === id),
+    });
     const categoryOf = (id: string) => optionById.get(id)?.category_id;
     const nameOf = (id: string) => optionById.get(id)?.name ?? '商品';
     const categoryName = (id: string) => bundle.categories.find((category) => category.id === id)?.name ?? '';
     const notices: string[] = [];
-    const dropped = next.filter((id) => {
-      const categoryId = categoryOf(id);
-      return Boolean(categoryId && after.has(categoryId) && !before.has(categoryId));
-    });
-    let out = next.filter((id) => !dropped.includes(id));
-    for (const [categoryId, sourceIds] of after) {
-      if (before.has(categoryId)) continue;
-      const removed = dropped.filter((id) => categoryOf(id) === categoryId);
+    for (const [categoryId, sourceIds] of result.newlyIncluded) {
+      const removed = result.dropped.filter((id) => categoryOf(id) === categoryId);
       if (removed.length === 0) continue;
       notices.push(
         `「${categoryName(categoryId)}」は「${sourceIds.map(nameOf).join('・')}」に含まれるため、選んでいた「${removed.map(nameOf).join('・')}」を外しました。` +
           '別の部屋に追加する場合は「別室に追加する」から選べます'
       );
     }
-    const rawStandard = specSelections.find((row) => row.code === specCode)?.rawIds ?? [];
-    for (const categoryId of before.keys()) {
-      if (after.has(categoryId) || out.some((id) => categoryOf(id) === categoryId)) continue;
-      const standard = rawStandard.filter((id) => categoryOf(id) === categoryId && activeSpecCtx.options.some((option) => option.id === id));
-      if (standard.length === 0) continue;
-      out = [...out, ...standard];
-      notices.push(`「${categoryName(categoryId)}」を標準の「${standard.map(nameOf).join('・')}」に戻しました`);
+    const restoredCategories = [...new Set(result.restored.map(categoryOf))].filter((id): id is string => Boolean(id));
+    for (const categoryId of restoredCategories) {
+      const restored = result.restored.filter((id) => categoryOf(id) === categoryId);
+      notices.push(`「${categoryName(categoryId)}」を標準の「${restored.map(nameOf).join('・')}」に戻しました`);
     }
-    return { next: out, dropped, notices };
+    return { next: result.next, dropped: result.dropped, notices };
   };
 
   /**
@@ -1610,10 +1622,19 @@ export function SimulatorApp({
     setSelected(cur);
     // このカテゴリーの商品に紐づく選択肢を入れ替える（そろえて外した商品の選択肢も外し、足した商品は標準の選択肢）
     const catOptionIds = new Set(inCategory);
+    // 選択肢は商品ごとに 1 つで、同じ商品の印なしと別室の明細で共有する（#628 の続き・A 案）。別室で使っている商品の選択肢は、
+    // 印なしの明細を外す・戻すときに消さず、標準で上書きしない（このダイアログで選び直した選択項目だけ入れ替える）
+    const separateOptionIds = new Set(separateRoomIds);
+    const nextVariantGroupIds = new Set(nextVariants.map((cid) => bundle.variantChoices.find((c) => c.id === cid)?.group_id).filter(Boolean));
+    const keepForSeparate = (g: { id: string; option_id: string }) => separateOptionIds.has(g.option_id) && !nextVariantGroupIds.has(g.id);
     const groupIds = new Set(
-      bundle.variantGroups.filter((g) => catOptionIds.has(g.option_id) || adjustedOut.has(g.option_id)).map((g) => g.id)
+      bundle.variantGroups
+        .filter((g) => (catOptionIds.has(g.option_id) || adjustedOut.has(g.option_id)) && !keepForSeparate(g))
+        .map((g) => g.id)
     );
-    const addedGroupIds = new Set(bundle.variantGroups.filter((g) => adjustedIn.includes(g.option_id)).map((g) => g.id));
+    const addedGroupIds = new Set(
+      bundle.variantGroups.filter((g) => adjustedIn.includes(g.option_id) && !separateOptionIds.has(g.option_id)).map((g) => g.id)
+    );
     const addedVariants =
       adjustedIn.length > 0
         ? standardVariantIdsFor(specCode, cur).filter((cid) => addedGroupIds.has(bundle.variantChoices.find((c) => c.id === cid)?.group_id ?? ''))

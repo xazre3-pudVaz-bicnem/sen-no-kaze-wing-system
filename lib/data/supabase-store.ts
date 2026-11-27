@@ -51,6 +51,7 @@ import {
 import { IMPORT_CONFLICT_MESSAGE, isImportConflict } from '@/lib/import/errors';
 import {
   StoreError,
+  includedCategoryIdsOf,
   type ContactInput,
   type CategoryInput,
   type WindowTypeInput,
@@ -1688,6 +1689,34 @@ export class SupabaseStore implements DataStore {
       const r = await db.from('option_conflicts').insert(conflicts.map((c) => ({ option_id: optionId, ...c })));
       if (r.error) mapPgError(r.error);
     }
+  }
+  async listOptionIncludedCategoryIds(_actor: SessionUser | null, optionId: string): Promise<string[]> {
+    // ログインした利用者として読む（見える範囲は DB の読み取りの決まりが決める。管理用のキーは使わない）
+    const db = await this.db();
+    const { data, error } = await db
+      .from('option_included_categories')
+      .select('included_category_id')
+      .eq('option_id', optionId);
+    if (error) mapPgError(error);
+    // 読めた形でなければ「無し」とみなさずに止める（無しと誤って公開・保存しない）
+    if (!Array.isArray(data)) throw new StoreError('INTERNAL', '設備包含設定を読み込めません。');
+    return includedCategoryIdsOf(data.map((row: { included_category_id: unknown }) => row.included_category_id));
+  }
+  async setOptionIncludedCategories(_actor: SessionUser, optionId: string, expectedIds: string[], nextIds: string[]): Promise<string[]> {
+    // 権限・開いた時点の集合の照合・候補の確かめ・変更の履歴は DB の関数が 1 回のトランザクションで行う（ログインした利用者として呼ぶ）
+    const db = await this.db();
+    const { data, error } = await db.rpc('set_option_included_categories', {
+      p_option_id: optionId,
+      p_expected_category_ids: expectedIds,
+      p_next_category_ids: nextIds,
+    });
+    if (error) {
+      // 開いた時点の集合と違う：やり直しの案内にする（ほかの CONFLICT: と違い、入力の誤りではない）
+      if (error.message?.startsWith('CONFLICT:')) throw new StoreError('CONFLICT', error.message.replace(/^CONFLICT:\s*/, ''));
+      mapPgError(error);
+    }
+    if (!Array.isArray(data)) throw new StoreError('INTERNAL', '設備包含設定の保存結果を確認できません。');
+    return includedCategoryIdsOf(data);
   }
   async upsertPreviewRule(input: PreviewRuleInput) {
     return this.upsert<PreviewImageRule>('preview_image_rules', input);

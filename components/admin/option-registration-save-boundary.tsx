@@ -20,17 +20,28 @@ type SaveHandler = () => Promise<boolean>;
 
 type OptionRegistrationSaveContextValue = {
   registerSaveHandler: (handler: SaveHandler) => () => void;
+  registerIndependentSaveHandler: (handler: SaveHandler, isDirty: () => boolean) => () => void;
+  markIndependentDirty: () => void;
   markDirty: () => void;
   markClean: () => void;
   saveIfDirty: () => Promise<boolean>;
+  /** 保存できていない変更があるため移動・送信を止めたことを画面に出す（false で消す） */
+  setNavigationBlocked: (blocked: boolean) => void;
   saving: boolean;
 };
 
+/** 未保存の変更を保存できず、移動・送信を止めたときの案内（黙って何も起きないようにしない） */
+export const NAVIGATION_BLOCKED_MESSAGE =
+  '保存できていない変更があるため、移動・送信を止めました。画面の案内を確認し、もう一度押すか、ページを再読み込みしてください。';
+
 const OptionRegistrationSaveContext = createContext<OptionRegistrationSaveContextValue>({
   registerSaveHandler: () => () => undefined,
+  registerIndependentSaveHandler: () => () => undefined,
+  markIndependentDirty: () => undefined,
   markDirty: () => undefined,
   markClean: () => undefined,
   saveIfDirty: async () => true,
+  setNavigationBlocked: () => undefined,
   saving: false,
 });
 
@@ -41,60 +52,94 @@ export function useOptionRegistrationSave() {
 export function OptionRegistrationSaveBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();
   const saveHandlersRef = useRef(new Set<SaveHandler>());
+  const independentHandlersRef = useRef(new Set<{ handler: SaveHandler; isDirty: () => boolean }>());
   const dirtyRef = useRef(false);
+  const dirtyEpochRef = useRef(0);
+  const savingEpochRef = useRef<number | null>(null);
   const bypassFormRef = useRef<HTMLFormElement | null>(null);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [hasSaveHandler, setHasSaveHandler] = useState(false);
+  const [extraDirty, setExtraDirty] = useState(false);
+  const [navigationBlocked, setNavigationBlocked] = useState(false);
+
+  const hasIndependentDirty = useCallback(() => [...independentHandlersRef.current].some((item) => item.isDirty()), []);
+  const hasAnyDirty = useCallback(() => dirtyRef.current || hasIndependentDirty(), [hasIndependentDirty]);
+  // Re-render the shared save indicator without clearing the product form's own dirty bit.
+  const markIndependentDirty = useCallback(() => setExtraDirty(hasIndependentDirty()), [hasIndependentDirty]);
+  const registerIndependentSaveHandler = useCallback((handler: SaveHandler, isDirty: () => boolean) => {
+    const item = { handler, isDirty };
+    independentHandlersRef.current.add(item);
+    setHasSaveHandler(true);
+    setExtraDirty(hasIndependentDirty());
+    return () => {
+      independentHandlersRef.current.delete(item);
+      setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
+      setExtraDirty(hasIndependentDirty());
+    };
+  }, [hasIndependentDirty]);
 
   const registerSaveHandler = useCallback((handler: SaveHandler) => {
     saveHandlersRef.current.add(handler);
-    setHasSaveHandler(saveHandlersRef.current.size > 0);
+    setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
     return () => {
       saveHandlersRef.current.delete(handler);
-      setHasSaveHandler(saveHandlersRef.current.size > 0);
+      setHasSaveHandler(saveHandlersRef.current.size + independentHandlersRef.current.size > 0);
     };
   }, []);
 
   const markDirty = useCallback(() => {
+    dirtyEpochRef.current += 1;
     dirtyRef.current = true;
     setDirty(true);
   }, []);
 
   const markClean = useCallback(() => {
+    if (savingEpochRef.current !== null && dirtyEpochRef.current !== savingEpochRef.current) return;
     dirtyRef.current = false;
     setDirty(false);
   }, []);
 
   const saveIfDirty = useCallback(async () => {
-    if (!dirtyRef.current) return true;
-    const handlers = [...saveHandlersRef.current];
-    if (handlers.length === 0) return false;
+    if (!hasAnyDirty()) return true;
+    const handlers = dirtyRef.current ? [...saveHandlersRef.current] : [];
+    const independentHandlers = [...independentHandlersRef.current].filter((item) => item.isDirty());
+    if (dirtyRef.current && handlers.length === 0) return false;
     if (savePromiseRef.current) return savePromiseRef.current;
 
     setSaving(true);
+    savingEpochRef.current = dirtyEpochRef.current;
     const promise = (async () => {
       for (const handler of handlers) {
         const ok = await handler();
         if (!ok) return false;
       }
+      if (dirtyRef.current && dirtyEpochRef.current !== savingEpochRef.current) return false;
+      // Product details and inclusion are separate DB operations, never an all-or-nothing transaction.
+      for (const item of independentHandlers) {
+        if (!item.isDirty()) continue;
+        const ok = await item.handler();
+        if (!ok) return false;
+      }
       return true;
     })()
       .then((ok) => {
-        if (ok) {
+        if (ok && dirtyEpochRef.current === savingEpochRef.current) {
           dirtyRef.current = false;
           setDirty(false);
+          markIndependentDirty();
         }
-        return ok;
+        return ok && dirtyEpochRef.current === savingEpochRef.current;
       })
       .finally(() => {
+        savingEpochRef.current = null;
         savePromiseRef.current = null;
         setSaving(false);
       });
     savePromiseRef.current = promise;
     return promise;
-  }, []);
+  }, [hasAnyDirty, markIndependentDirty]);
 
   const handleSubmitCapture = useCallback(
     (event: FormEvent<HTMLDivElement>) => {
@@ -105,12 +150,16 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
         bypassFormRef.current = null;
         return;
       }
-      if (!dirtyRef.current) return;
+      if (!hasAnyDirty()) return;
 
       event.preventDefault();
       const submitter = (event.nativeEvent as SubmitEvent).submitter;
+      setNavigationBlocked(false);
       void saveIfDirty().then((ok) => {
-        if (!ok) return;
+        if (!ok) {
+          setNavigationBlocked(true);
+          return;
+        }
         bypassFormRef.current = form;
         if (submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement) {
           form.requestSubmit(submitter);
@@ -119,12 +168,12 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
         }
       });
     },
-    [saveIfDirty]
+    [saveIfDirty, hasAnyDirty]
   );
 
   const handleClickCapture = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!dirtyRef.current || event.defaultPrevented || event.button !== 0) return;
+      if (!hasAnyDirty() || event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -139,34 +188,47 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
 
       event.preventDefault();
       event.stopPropagation();
+      setNavigationBlocked(false);
       void saveIfDirty().then((ok) => {
         if (ok) router.push(href);
+        else setNavigationBlocked(true);
       });
     },
-    [router, saveIfDirty]
+    [router, saveIfDirty, hasAnyDirty]
   );
+
+  const pendingChanges = dirty || extraDirty;
 
   return (
     <OptionRegistrationSaveContext.Provider
-      value={{ registerSaveHandler, markDirty, markClean, saveIfDirty, saving }}
+      value={{ registerSaveHandler, registerIndependentSaveHandler, markIndependentDirty, markDirty, markClean, saveIfDirty, setNavigationBlocked, saving }}
     >
       <OptionRegistrationUiEnhancer scrollAfterCreate />
       <OptionRegistrationFinalUiEnhancer />
       <OptionRegistrationPriceUiSync />
+      {navigationBlocked && (
+        <div
+          role="alert"
+          data-testid="option-registration-navigation-blocked"
+          className="fixed bottom-16 right-4 z-50 max-w-sm rounded-lg border border-[#e3b4ad] bg-[#fff4f2] px-3 py-2 text-xs leading-5 text-[#8a2a1f] shadow-sm"
+        >
+          {NAVIGATION_BLOCKED_MESSAGE}
+        </div>
+      )}
       {hasSaveHandler && (
         <div
           data-testid="option-registration-save-status"
           className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold shadow-sm ${
             saving
               ? 'border-line bg-white text-ink-soft'
-              : dirty
+              : pendingChanges
                 ? 'border-[#d9a441] bg-[#fff8e8] text-[#7c5a18]'
                 : 'border-[#b7d1c2] bg-[#f0f7f3] text-[#245a48]'
           }`}
           aria-live="polite"
         >
           {saving && <Spinner />}
-          {saving ? '保存中…' : dirty ? '未保存の変更があります' : '✓ 保存済み'}
+          {saving ? '保存中…' : pendingChanges ? '未保存の変更があります' : '✓ 保存済み'}
         </div>
       )}
       <div onClickCapture={handleClickCapture} onSubmitCapture={handleSubmitCapture}>{children}</div>
@@ -179,26 +241,31 @@ export function OptionRegistrationPreviewButton({
   className,
   children,
   ariaCurrent,
+  blocked = false,
 }: {
   href: string;
   className?: string;
   children: ReactNode;
   ariaCurrent?: 'step';
+  blocked?: boolean;
 }) {
   const router = useRouter();
-  const { saveIfDirty, saving } = useOptionRegistrationSave();
+  const { saveIfDirty, setNavigationBlocked, saving } = useOptionRegistrationSave();
 
   return (
     <button
       type="button"
       className={className}
       aria-current={ariaCurrent}
-      disabled={saving}
+      disabled={saving || blocked}
       onClick={() => {
+        if (blocked) return;
         const form = document.getElementById('option-main-form');
         if (form instanceof HTMLFormElement && !form.reportValidity()) return;
+        setNavigationBlocked(false);
         void saveIfDirty().then((ok) => {
           if (ok) router.push(href);
+          else setNavigationBlocked(true);
         });
       }}
     >

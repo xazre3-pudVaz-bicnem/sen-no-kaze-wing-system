@@ -79,7 +79,7 @@ export function includedCategoryIdsOf(values: readonly unknown[]): string[] {
   return [...(values as string[])].sort();
 }
 
-export type CaseDealer =Pick<Profile, 'id' | 'role_code' | 'full_name' | 'company_name'>;
+export type CaseDealer = Pick<Profile, 'id' | 'role_code' | 'full_name' | 'company_name'>;
 export type QuoteRequestListItem = QuoteRequest & {
   quote_no: string | null;
   user_email: string;

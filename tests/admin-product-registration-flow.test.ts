@@ -142,6 +142,10 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(saveBoundary).toContain('form.requestSubmit');
     expect(saveBoundary).toContain('saveIfDirty');
     expect(saveBoundary).toContain('option-registration-save-status');
+    // 保存できずに移動・送信を止めたときは、黙って何も起きないようにせず理由を出す（リンク・フォーム・STEP 2 のボタンの 3 か所）
+    expect(saveBoundary).toContain('option-registration-navigation-blocked');
+    expect(saveBoundary).toContain('{NAVIGATION_BLOCKED_MESSAGE}');
+    expect(saveBoundary.match(/setNavigationBlocked\(true\)/g)?.length).toBe(3);
     expect(adminActions).toContain('savedImageUrl?: string');
     expect(adminActions).toContain("savedImageUrl: image_url");
   });

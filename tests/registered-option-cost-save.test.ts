@@ -198,12 +198,12 @@ describe('選択肢保存と公開の部分成功', () => {
   const TOILET_ID = '55555555-5555-4555-8555-555555555555';
   const WASHBASIN_ID = '66666666-6666-4666-8666-666666666666';
   // 公開（本部）は、商品のカテゴリーが浴室（ub）なら含まれる設備（#631）を DataStore から読み直して確かめる
-  function publishStore(categoryCode = 'kitchen', includedIds: string[] = []) {
+  function publishStore(categoryCode = 'kitchen', includedIds: string[] = [], categoryStatus = 'published') {
     return {
       getOption: vi.fn(async () => option({ status: 'draft' })),
       upsertOption: vi.fn(async (x: unknown) => x),
       listCategories: vi.fn(async () => [
-        { id: CATEGORY_ID, code: categoryCode, status: 'published' },
+        { id: CATEGORY_ID, code: categoryCode, status: categoryStatus },
         { id: TOILET_ID, code: 'toilet', status: 'published' },
         { id: WASHBASIN_ID, code: 'washbasin', status: 'published' },
       ]),
@@ -297,6 +297,16 @@ describe('選択肢保存と公開の部分成功', () => {
     const url = new URL(String(mocks.redirect.mock.calls[0][0]), 'https://wing.invalid');
     expect(url.pathname).toBe('/admin/ledger');
     expect(url.searchParams.get('created_option')).toBe(OPTION_ID);
+    expect(store.upsertOption).toHaveBeenCalledOnce();
+  });
+  it('浴室のカテゴリーが非公開なら、画面と同じく含まれる設備の確認なしで公開へ進む（確認情報が無くても止めない）', async () => {
+    const store = publishStore('ub', [], 'draft'); mocks.getStore.mockResolvedValue(store);
+    const form = new FormData(); form.set('id', OPTION_ID); form.set('return_to', '/admin/ledger');
+    await expect(publishOptionAction(form)).rejects.toThrow('REDIRECT:');
+    const url = new URL(String(mocks.redirect.mock.calls[0][0]), 'https://wing.invalid');
+    expect(url.pathname).toBe('/admin/ledger');
+    expect(url.searchParams.get('created_option')).toBe(OPTION_ID);
+    expect(store.listOptionIncludedCategoryIds).not.toHaveBeenCalled();
     expect(store.upsertOption).toHaveBeenCalledOnce();
   });
 });

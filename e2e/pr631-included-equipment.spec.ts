@@ -107,4 +107,60 @@ test.describe('P4（#631）：浴室の商品に含まれる設備（ローカ�
     await page.goto('/admin/options/' + optionId);
     await expect(page.getByTestId('included-equipment-editor')).toHaveCount(0);
   });
+
+  test('新しい浴室の商品：別のタブで設備が先に保存されたら、STEP 2 へ進むのを止めて理由を出し、再読み込みすれば進める', async ({ page }) => {
+    await signInOrRegister(page, ADMIN_EMAIL, '/admin/options/new', '管理者');
+    const name = 'P4 E2E 浴室 競合 ' + Date.now().toString(36) + Math.floor(Math.random() * 10000);
+    await page.goto('/admin/options/new');
+    await page.getByRole('combobox', { name: 'カテゴリー', exact: true }).selectOption(UB_CATEGORY_ID);
+    await page.getByTestId('option-name').fill(name);
+    await page.getByRole('button', { name: '次へ：画像・資料' }).click();
+    await page.waitForURL(/\/admin\/options\/[0-9a-f-]{36}.*step=info/);
+    const optionId = new URL(page.url()).pathname.split('/').at(-1)!;
+    const infoUrl = page.url();
+    await page.locator('#product-main-media input[name="image_url"]').fill('/images/equipment/unit-bath.png');
+    await page.getByTestId('option-price').fill('480000');
+
+    // 別のタブで同じ下書きを開き、先にトイレを保存する
+    const other = await page.context().newPage();
+    await other.goto(infoUrl);
+    const otherEditor = other.getByTestId('included-equipment-editor');
+    await openInclusion(other);
+    await otherEditor.getByRole('checkbox', { name: 'トイレ' }).check();
+    await otherEditor.getByRole('button', { name: '設備設定だけを保存' }).click();
+    await expect(otherEditor).toContainText('設備包含設定：保存済み');
+    await other.close();
+
+    // 元のタブは開いた時点（なし）のまま洗面を保存しようとして、やり直しになる
+    const editor = page.getByTestId('included-equipment-editor');
+    await openInclusion(page);
+    await editor.getByRole('checkbox', { name: '洗面' }).check();
+    await editor.getByRole('button', { name: '設備設定だけを保存' }).click();
+    await expect(editor).toContainText('別の操作で変更されました。再読み込みしてください。');
+
+    // STEP 2 へ進もうとしても止まり、止めた理由が出る（黙って何も起きない、にしない）
+    await page.getByRole('button', { name: /登録内容確認/ }).first().click();
+    await expect(page.getByTestId('option-registration-navigation-blocked')).toContainText('移動・送信を止めました');
+    expect(page.url()).toContain('step=info');
+
+    // 再読み込みすると保存済み（トイレ）が出て、STEP 2 へ進める
+    await page.reload();
+    await expect(page.getByTestId('included-equipment-categories-summary')).toContainText('トイレ');
+    await page.locator('#product-main-media input[name="image_url"]').fill('/images/equipment/unit-bath.png');
+    await page.getByTestId('option-price').fill('480000');
+    await page.getByRole('button', { name: /登録内容確認/ }).first().click();
+    await page.waitForURL(/step=preview/);
+    await expect(page.getByTestId('included-equipment-step2-saved')).toContainText('含まれる設備：トイレ');
+
+    // 後始末：登録してから未使用の登録済み商品として消す（下書きを残さない。試験 2 と同じ消し方）
+    await page.getByRole('button', { name: 'この内容で登録' }).click();
+    await page.getByRole('dialog', { name: 'この内容で登録しますか？' })
+      .getByRole('button', { name: 'この内容で登録' }).click();
+    await page.waitForURL((url) => url.pathname === '/admin/ledger' && url.searchParams.get('created_option') === optionId);
+    await page.goto('/admin/options/' + optionId);
+    await page.getByTestId('published-option-delete-control').locator('summary').click();
+    await page.getByTestId('published-option-delete-control').getByRole('button', { name: 'この商品を削除' }).click();
+    await page.getByRole('dialog').getByRole('button').last().click();
+    await page.waitForURL((url) => !url.pathname.endsWith(optionId));
+  });
 });

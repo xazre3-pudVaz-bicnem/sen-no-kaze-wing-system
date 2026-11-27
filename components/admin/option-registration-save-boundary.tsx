@@ -25,8 +25,14 @@ type OptionRegistrationSaveContextValue = {
   markDirty: () => void;
   markClean: () => void;
   saveIfDirty: () => Promise<boolean>;
+  /** 保存できていない変更があるため移動・送信を止めたことを画面に出す（false で消す） */
+  setNavigationBlocked: (blocked: boolean) => void;
   saving: boolean;
 };
+
+/** 未保存の変更を保存できず、移動・送信を止めたときの案内（黙って何も起きないようにしない） */
+export const NAVIGATION_BLOCKED_MESSAGE =
+  '保存できていない変更があるため、移動・送信を止めました。画面の案内を確認し、もう一度押すか、ページを再読み込みしてください。';
 
 const OptionRegistrationSaveContext = createContext<OptionRegistrationSaveContextValue>({
   registerSaveHandler: () => () => undefined,
@@ -35,6 +41,7 @@ const OptionRegistrationSaveContext = createContext<OptionRegistrationSaveContex
   markDirty: () => undefined,
   markClean: () => undefined,
   saveIfDirty: async () => true,
+  setNavigationBlocked: () => undefined,
   saving: false,
 });
 
@@ -55,6 +62,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
   const [dirty, setDirty] = useState(false);
   const [hasSaveHandler, setHasSaveHandler] = useState(false);
   const [extraDirty, setExtraDirty] = useState(false);
+  const [navigationBlocked, setNavigationBlocked] = useState(false);
 
   const hasIndependentDirty = useCallback(() => [...independentHandlersRef.current].some((item) => item.isDirty()), []);
   const hasAnyDirty = useCallback(() => dirtyRef.current || hasIndependentDirty(), [hasIndependentDirty]);
@@ -146,8 +154,12 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
 
       event.preventDefault();
       const submitter = (event.nativeEvent as SubmitEvent).submitter;
+      setNavigationBlocked(false);
       void saveIfDirty().then((ok) => {
-        if (!ok) return;
+        if (!ok) {
+          setNavigationBlocked(true);
+          return;
+        }
         bypassFormRef.current = form;
         if (submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement) {
           form.requestSubmit(submitter);
@@ -176,8 +188,10 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
 
       event.preventDefault();
       event.stopPropagation();
+      setNavigationBlocked(false);
       void saveIfDirty().then((ok) => {
         if (ok) router.push(href);
+        else setNavigationBlocked(true);
       });
     },
     [router, saveIfDirty, hasAnyDirty]
@@ -187,11 +201,20 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
 
   return (
     <OptionRegistrationSaveContext.Provider
-      value={{ registerSaveHandler, registerIndependentSaveHandler, markIndependentDirty, markDirty, markClean, saveIfDirty, saving }}
+      value={{ registerSaveHandler, registerIndependentSaveHandler, markIndependentDirty, markDirty, markClean, saveIfDirty, setNavigationBlocked, saving }}
     >
       <OptionRegistrationUiEnhancer scrollAfterCreate />
       <OptionRegistrationFinalUiEnhancer />
       <OptionRegistrationPriceUiSync />
+      {navigationBlocked && (
+        <div
+          role="alert"
+          data-testid="option-registration-navigation-blocked"
+          className="fixed bottom-16 right-4 z-50 max-w-sm rounded-lg border border-[#e3b4ad] bg-[#fff4f2] px-3 py-2 text-xs leading-5 text-[#8a2a1f] shadow-sm"
+        >
+          {NAVIGATION_BLOCKED_MESSAGE}
+        </div>
+      )}
       {hasSaveHandler && (
         <div
           data-testid="option-registration-save-status"
@@ -227,7 +250,7 @@ export function OptionRegistrationPreviewButton({
   blocked?: boolean;
 }) {
   const router = useRouter();
-  const { saveIfDirty, saving } = useOptionRegistrationSave();
+  const { saveIfDirty, setNavigationBlocked, saving } = useOptionRegistrationSave();
 
   return (
     <button
@@ -239,8 +262,10 @@ export function OptionRegistrationPreviewButton({
         if (blocked) return;
         const form = document.getElementById('option-main-form');
         if (form instanceof HTMLFormElement && !form.reportValidity()) return;
+        setNavigationBlocked(false);
         void saveIfDirty().then((ok) => {
           if (ok) router.push(href);
+          else setNavigationBlocked(true);
         });
       }}
     >

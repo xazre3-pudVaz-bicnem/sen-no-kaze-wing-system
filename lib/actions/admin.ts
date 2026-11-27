@@ -474,10 +474,12 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
 
   // 本部の浴室商品の設備包含はSTEP 2でDB保存済みの関係を確認する。
   // 読み取れない場合は画面制御だけでなく公開Actionでも止める（空集合は合法）。
+  // 対象は画面（STEP 2 の確認情報を出す条件）・DB の保存関数と同じ「公開中の浴室カテゴリー」の商品だけ。
+  // 浴室カテゴリーが非公開の間は包含を保存できず、包含が残る間はカテゴリーの公開状態も変えられない（DB の守り）ので、関係は必ず空。
   if (actor.role === 'admin') {
     const categories = await store.listCategories();
     const category = categories.find((row) => row.id === option.category_id);
-    if (category?.code === 'ub') {
+    if (category?.code === 'ub' && category.status === 'published') {
       const { readOptionIncludedCategories } = await import('@/lib/data/option-included-categories');
       const inclusion = await readOptionIncludedCategories(actor, option.id);
       const allowed = new Set(categories
